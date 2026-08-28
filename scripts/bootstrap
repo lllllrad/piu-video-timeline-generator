@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+PIU_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$PIU_ROOT/scripts/env.sh"
+cd "$PIU_ROOT"
+if [ ! -x "$PIU_ROOT/.local/bin/mise" ]; then
+  mkdir -p "$PIU_ROOT/.local/bin"
+  curl -fsSL --retry 3 https://mise.run -o "$TMPDIR/mise-install.sh"
+  MISE_VERSION=v2026.8.14 MISE_INSTALL_PATH="$PIU_ROOT/.local/bin/mise" \
+    sh "$TMPDIR/mise-install.sh"
+fi
+./scripts/mise trust "$PIU_ROOT/mise.toml"
+./scripts/mise install
+./scripts/mise reshim
+./scripts/mise exec -- python scripts/configure_codex.py
+./scripts/mise run check

@@ -1,0 +1,19 @@
+[tools]
+just = "1.58.0"
+python = "3.12.14"
+uv = "0.12.6"
+deno = "2.9.5"
+"github:yt-dlp/yt-dlp" = "2026.08.19"
+"conda:ffmpeg" = "8.1.2"
+
+[tasks.check]
+description = "Check installed tools and project scripts (offline)"
+run = ["just --version", "just --summary", "python --version", "uv --version", "deno --version", "yt-dlp --version", "ffmpeg -version", "ffprobe -version", "python -m unittest discover -s tests -v"]
+
+[tasks.fetch]
+description = "Download a YouTube URL or seed ID; --metadata-only skips video"
+run = "python scripts/media.py fetch"
+
+[tasks.probe]
+description = "Inspect a local video, including a YouTube Studio download"
+run = "python scripts/media.py probe"

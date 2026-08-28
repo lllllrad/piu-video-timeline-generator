@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+PIU_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+. "$PIU_ROOT/scripts/env.sh"
+cd "$PIU_ROOT"
+if [ ! -x "$PIU_ROOT/.local/bin/mise" ]; then
+  echo 'Run ./scripts/bootstrap first.' >&2
+  exit 1
+fi
+exec "$PIU_ROOT/.local/bin/mise" "$@"
