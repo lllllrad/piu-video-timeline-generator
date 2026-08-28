@@ -40,7 +40,11 @@ frames +args:
 detect +args:
     ./scripts/mise exec -- python scripts/detect.py "$@"
 
-# Automatically find the HUD, refine segments and OCR song/chart labels locally.
+# Analyze video into structured JSON/evidence only; optional --judgments.
+analyze +args:
+    ./scripts/mise exec -- python scripts/analyze.py "$@"
+
+# Convenience: analyze and immediately render a timeline.
 auto +args:
     ./scripts/mise exec -- python scripts/auto_timeline.py "$@"
 
@@ -51,3 +55,11 @@ evaluate +args:
 # Exercise the real local Vision OCR engine (may require host permission).
 check-ocr:
     ./scripts/mise exec -- python tests/ocr_integration.py
+
+# Enrich saved analysis frames with judgments; rendering is opt-in.
+results +args:
+    ./scripts/mise exec -- python scripts/enrich_results.py "$@"
+
+# Render analysis or legacy timeline JSON with player selection/templates (offline).
+render +args:
+    ./scripts/mise exec -- python scripts/rendering.py "$@"

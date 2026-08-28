@@ -8,7 +8,9 @@ import subprocess
 from detect import detect, roi_value, similarity
 from media import ROOT, fetch_command, resolve_url
 from recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, ocr_images, summary_chart
-from timeline import media_record, render_text, write_json
+from timeline import media_record, write_json
+from rendering import add_render_arguments, config_from_args, needs_results, render, report_review, validate_config, write_rendered
+from result_stats import extract_stats
 
 
 def resolve_source(source):
@@ -183,7 +185,8 @@ def recognize_segment(record, roi, start, end, directory):
     return labels, confidence, str(directory / "ocr.json")
 
 
-def run(video, output, game_roi=None, provenance=None):
+def analyze(video, output, game_roi=None, provenance=None, judgments=False):
+    """Persist recognition data independently of player selection or presentation."""
     record = media_record(video)
     stream = record["video_streams"][0]
     # Existing seed stream layout; explicit crop supports direct game captures.
@@ -222,35 +225,65 @@ def run(video, output, game_roi=None, provenance=None):
                          "needs_review": any(labels[key] is None for key in labels)
                                          or not start_evidence["refined"] or not end_evidence["refined"]
                                          or any(value and value["mean_ocr_confidence"] < .7 for value in support.values())})
+        if judgments:
+            observations = json.loads(Path(ocr_file).read_text())
+            stats = extract_stats(observations, evidence_dir / f"stats-{index + 1:03}", width, height)
+            segments[-1]["results"] = stats
+            segments[-1]["needs_review"] |= stats["needs_review"]
         write_json(output / f"segment-{index + 1:03}.json", segments[-1])
     stat = video.resolve().stat()
     if (stat.st_size, stat.st_mtime_ns) != (record["size_bytes"], record["mtime_ns"]):
         raise ValueError("Source changed during automatic processing")
-    result = {"schema_version": 1, "method": "automatic_hud_ocr", "media": record,
+    result = {"schema_version": 1, "artifact_type": "video_analysis", "method": "automatic_hud_ocr", "media": record,
+              "analysis_options": {"judgments": judgments},
               "provenance": provenance or {"kind": "local", "network_used": False},
               "game_roi": list(roi), "alignment": {"youtube_url": None, "offset_seconds": None},
-              "text_timestamp_basis": "local_playback", "segments": segments,
+              "timestamp_basis": "local_playback", "segments": segments,
               "warnings": ["OCR confidence is not calibrated correctness probability.",
                            "Unknown or conflicting labels remain null; inspect evidence before publication.",
                            "YouTube alignment is not inferred from local filenames or duration metadata."]}
-    write_json(output / "timeline.json", result)
-    with (output / "timeline.txt").open("x", encoding="utf-8") as target:
-        target.write(render_text(result))
-    print(f"Generated {len(segments)} automatic segments in {output}")
+    write_json(output / "analysis.json", result)
+    print(f"Analyzed {len(segments)} gameplay segments in {output}; render separately when ready")
     return result
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def run(video, output, game_roi=None, provenance=None, judgments=False, render_config=None):
+    """Compatibility convenience workflow: analyze, then render.
+
+    Only this wrapper infers optional extraction from presentation requirements.
+    Completed analysis remains usable even if presentation fails.
+    """
+    config = validate_config(render_config or {})
+    result = analyze(video, output, game_roi, provenance, judgments or needs_results(config))
+    rendered = render(result, config)
+    write_rendered(output, rendered)
+    write_json(output / "timeline.json", {**result, "text_timestamp_basis": "local_playback"})
+    report_review(rendered)
+    return result
+
+
+def main(analysis_only=False):
+    parser = argparse.ArgumentParser(description="Analyze video into JSON and evidence without rendering." if analysis_only else __doc__)
     parser.add_argument("source", help="Local video, seed ID, or YouTube URL")
     parser.add_argument("output_dir", type=Path)
     parser.add_argument("--game-roi", type=roi_value, help="x,y,width,height of game screen, excluding chat/cameras")
+    extraction = parser.add_mutually_exclusive_group()
+    extraction.add_argument("--judgments", action="store_true", help="Extract per-player counts" if analysis_only else "Extract per-player counts; auto-enabled when a template needs them")
+    extraction.add_argument("--no-judgments", action="store_true", help="Skip optional counts (default)" if analysis_only else "Disable counts; incompatible templates fail before downloading")
+    if not analysis_only:
+        add_render_arguments(parser)
     args = parser.parse_args()
     try:
+        config = {} if analysis_only else config_from_args(args, default_details=args.judgments)
+        if not analysis_only and args.no_judgments and needs_results(config):
+            raise ValueError("Template/player selection requires judgments but --no-judgments was given")
         if args.output_dir.exists():
             raise ValueError("Output directory already exists")
         video, provenance = resolve_source(args.source)
-        run(video, args.output_dir, args.game_roi, provenance)
+        if analysis_only:
+            analyze(video, args.output_dir, args.game_roi, provenance, args.judgments)
+        else:
+            run(video, args.output_dir, args.game_roi, provenance, args.judgments, config)
     except (ValueError, OSError) as error:
         parser.error(str(error))
     except subprocess.CalledProcessError as error:

@@ -1,5 +1,6 @@
 """Offline automatic orchestration and decoded-boundary tests."""
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -16,6 +17,54 @@ sys.path.pop(0)
 
 
 class AutoTest(unittest.TestCase):
+    def test_template_auto_enables_results_and_writes_separate_details(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            video = root / "source.mp4"
+            video.write_bytes(b"source")
+            evidence = root / "ocr.json"
+            evidence.write_text("[]")
+            record = {"path": str(video), "size_bytes": video.stat().st_size,
+                      "mtime_ns": video.stat().st_mtime_ns, "duration_seconds": 100,
+                      "video_streams": [{"width": 1920, "height": 1080}]}
+            detection = {"candidates": [{"start_seconds": 10, "end_seconds": 30, "mean_match_score": 1}]}
+            profile = {"hud": (180, 0, 70, 20), "at": 20, "detection": detection}
+            player = {"player_id": "p2", "side": "right", "presence": "recognized", "fields": {
+                "perfect": {"status": "recognized", "value": 500},
+                "chart": {"status": "recognized", "value": "D21"}}}
+            stats = {"players": {"p2": player}, "needs_review": True}
+            with patch.object(auto, "media_record", return_value=record), \
+                 patch.object(auto, "find_reference", return_value=(20, profile["hud"], {})), \
+                 patch.object(auto, "detect", return_value=detection), \
+                 patch.object(auto, "discover_profiles", return_value=[profile]), \
+                 patch.object(auto, "reference_patch", return_value=b"reference"), \
+                 patch.object(auto, "refine_boundary", side_effect=[(10, {"refined": True}), (30, {"refined": True})] * 4), \
+                 patch.object(auto, "recognize_segment", return_value=({"song": "Song", "chart": "D21"}, {}, str(evidence))), \
+                 patch.object(auto, "extract_stats", return_value=stats) as extract:
+                result = auto.run(video, root / "out", render_config={"details": [{"text": "P {player.perfect}"}]})
+                extract.assert_called_once()
+                extract.reset_mock()
+                with patch.object(auto, "render", side_effect=AssertionError("Analysis must not render")):
+                    plain = auto.analyze(video, root / "plain")
+                    extract.assert_not_called()
+                    counted = auto.analyze(video, root / "counted", judgments=True)
+                    extract.assert_called_once()
+                self.assertNotIn("results", plain["segments"][0])
+                self.assertEqual(counted["segments"][0]["results"], stats)
+                for name in ("plain", "counted"):
+                    self.assertTrue((root / name / "analysis.json").is_file())
+                    self.assertFalse((root / name / "timeline.json").exists())
+                    self.assertFalse((root / name / "timeline.txt").exists())
+                    self.assertFalse((root / name / "rendered.json").exists())
+                with patch.object(auto, "render", side_effect=ValueError("Presentation failed")):
+                    with self.assertRaisesRegex(ValueError, "Presentation failed"):
+                        auto.run(video, root / "failed-render")
+                self.assertTrue((root / "failed-render/analysis.json").is_file())
+                self.assertFalse((root / "failed-render/timeline.json").exists())
+            self.assertEqual(result["segments"][0]["results"], stats)
+            self.assertIn("P 500", (root / "out/details.txt").read_text())
+            self.assertEqual(json.loads((root / "out/rendered.json").read_text())["entries"][0]["player"], "p2")
+
     def test_alternate_hud_discovery_reaches_beyond_first_ten_minutes(self):
         record = {"duration_seconds": 1200}
         initial = {"hud": (180, 0, 70, 20), "detection": {"candidates": [

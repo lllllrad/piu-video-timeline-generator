@@ -8,9 +8,33 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from recognition import focused_lines, frame_labels, ocr_images
+from result_stats import focused_stats, parse_result, COUNT_FIELDS, ROW_Y
 
 
 class VisionIntegrationTest(unittest.TestCase):
+    def test_two_player_result_keeps_counts_separate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            image = root / "two-player.png"
+            filters = []
+            def label(text, x, y, size=24):
+                filters.append(f"drawtext=text='{text}':fontsize={size}:fontcolor=white:x={x}:y={y}")
+            for cx, score_x, base in ((.335, .185, 100), (.665, .815, 200)):
+                label("DOUBLE", round(cx * 1300 - 35), 207, 17)
+                label("23", round(cx * 1300 - 18), 230, 26)
+                label("SCORE", round(score_x * 1300 - 30), 254, 18)
+                label("0987654", round(score_x * 1300 - 87), 288, 32)
+                for i, y in enumerate(ROW_Y.values()):
+                    label(str(base + i), round(cx * 1300 - 25), round(y * 730 - 10), 24)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=1300x730",
+                            "-vf", ",".join(filters), "-frames:v", "1", str(image)], check=True)
+            lines = focused_stats(image, root, 0, 1300, 730)
+            parsed = parse_result(lines)
+            for player, base in (("p1", 100), ("p2", 200)):
+                self.assertTrue(parsed[player]["present"])
+                for i, field in enumerate(COUNT_FIELDS):
+                    self.assertEqual(parsed[player]["fields"][field]["value"], base + i)
+
     def test_result_title_does_not_include_dim_background_credits(self):
         with tempfile.TemporaryDirectory() as temporary:
             image = Path(temporary) / "result.png"

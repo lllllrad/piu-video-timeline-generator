@@ -6,7 +6,34 @@ Run `just check` offline. The suite covers environment isolation, input preparat
 
 Validation host: macOS 26.5.1 (25F80), native Vision, with the pinned tools in `mise.toml`. Direct `just`, `python`, and `ffmpeg` commands resolve to this checkout's mise shims without an extra `zsh -c` invocation. Host OCR results may vary with OS/Vision versions.
 
-## Automatic pipeline evaluation
+## Analysis/presentation separation validation
+
+`just check` passes 75 tests after separating analysis from output. Regression coverage checks analysis with and without judgments (including explicit `--no-judgments`), absence of presentation files, explicit enrichment rendering, legacy JSON compatibility, repeated JSON-only rendering, input preservation, and successful analysis remaining available after a presentation failure.
+
+The existing 145-second derived local test clip was processed with `just analyze .local/tmp/judgments-cli-sample.mkv outputs/analysis-separated-v1 --judgments` using real Vision OCR. It produced one play and `analysis.json`, with no `timeline.json`, `timeline.txt`, `details.txt` or `rendered.json` in the analysis directory. Its timing, song/chart and all seven P2 numeric fields matched the earlier combined workflow fixture. The same analysis was rendered twice without OCR into `outputs/analysis-separated-report-v1/` (bundled conditional template) and `outputs/analysis-separated-report-v2/` (one-off detail template). This is a workflow regression, not new recognition-accuracy evidence; the derived clip has local test timestamps, not publication-ready original-video timestamps.
+
+## Player judgment and template validation
+
+The optional result extension was exercised through `just results` on all 30 existing segments of the second recording (`outputs/judgments-full-v1/`). It detected one result slot in 28 plays and retained empty/unknown result data for two failed plays without usable result screens. All five judgment fields were populated in those 28 slots; five scores and one max-combo value remained unknown. This is a completeness count, not an accuracy measurement for all 140 judgment values.
+
+Six result screens were directly read to check numeric accuracy, covering right single/double and left basic/double results. All 42 numeric fields below (five judgments, max combo and score per play) matched the OCR output. Most of these examples informed implementation, so this is development validation, not an untouched benchmark.
+
+| Original segment | Slot | PERFECT | GREAT | GOOD | BAD | MISS | Max combo | Score |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 10 | P2/right | 1099 | 57 | 12 | 5 | 39 | 281 | 933848 |
+| 18 | P2/right | 439 | 7 | 0 | 0 | 0 | 446 | 993753 |
+| 19 | P1/left | 765 | 34 | 8 | 4 | 14 | 346 | 951749 |
+| 23 | P2/right | 895 | 8 | 0 | 0 | 2 | 367 | 991310 |
+| 25 | P1/left | 298 | 19 | 2 | 1 | 0 | 307 | 968392 |
+| 26 | P1/left | 621 | 14 | 0 | 0 | 7 | 429 | 978813 |
+
+Evidence comes from the original game-only result frames under `outputs/auto-heldout-v4/evidence/` and the enlarged crops/raw numeric OCR under `outputs/judgments-full-v1/evidence/`. Numeric-only score crops initially caused reversed digit recognition; retaining the SCORE-label context corrected the inspected case. Bright-text isolation in count columns removed background letters that had merged with zero digits. Unknowns are not coerced to zero.
+
+`outputs/judgments-verified-v1/` exercises enrichment of selected segments; `outputs/judgments-rerender-v1/` exercises JSON-only re-rendering with the same selected-player placeholders across P2 and P1 plays. `outputs/judgments-p1-v1/` confirms that explicitly selecting an absent P1 prints unknowns/warnings rather than using P2's counts. Conditional missing-count behavior, first-match rules, separate player namespaces and two-player selection are covered by unit tests. Native OCR also reads distinct left/right counts from a synthetic simultaneous two-player result fixture. Genuine simultaneous two-player recordings have not yet been validated.
+
+The complete `just auto ... --template templates/judgments.toml` flow was additionally exercised on a 145-second derived local test copy (`outputs/judgments-auto-cli-v1/`). No `--judgments` flag was necessary: template fields activated extraction and produced the title/detail files. This copy is only a CLI fixture, not a retimed replacement for the original recording or a publishable original-video timeline. Its source recording was left intact. CV game-screen localization is not part of this extension.
+
+## First-milestone automatic pipeline evaluation
 
 The URL-input workflow was exercised on `uqM7H-OJp68`, reusing the intact downloaded media. The local-input workflow performs no network request. All image OCR runs locally on the game crop, excluding chat and cameras. No comments were used as detector inputs or evaluation labels.
 

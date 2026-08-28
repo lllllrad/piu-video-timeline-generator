@@ -11,6 +11,7 @@ Detect song segments in Pump It Up gameplay recordings and produce a timeline fo
 - Implemented: URL/local media preparation, automatic Phoenix HUD discovery, gameplay candidate detection and decoded-frame boundary refinement, local song/chart OCR with multi-frame agreement, evidence-backed JSON/text output, independent-review evaluation, and the original manual-review workflow.
 - Milestone 1 is implemented and validated on two development recordings: all 45 directly reviewed plays and song/chart pairs matched, with no unknown labels in the final runs. This is measured coverage of the reviewed set, not a universal accuracy claim. See [validation](docs/validation.md) for artifacts, timing uncertainty and known limits.
 - Automatic recognition currently targets Phoenix game-screen layouts and runs on macOS with Vision OCR. It is not a universal camera-only or arbitrary-HUD detector. Unknown/conflicting labels remain unknown. See the validation notes before treating automatic output as publication-ready.
+- Optional player-separated judgment counts, score/max combo, conditional title/detail templates, saved-frame result enrichment and JSON-only re-rendering are implemented. The default `single` selector follows the sole detected player on either side; see [result/template usage](docs/result-templates.md).
 
 ## Development environment
 
@@ -87,11 +88,27 @@ Comments are noisy references, not ground truth. Keep them separate from detecto
 
 ## Next milestones
 
-1. Expand validation to untouched recordings and exhaustively annotated short plays.
-2. Extend beyond the tested Phoenix layouts and add a portable OCR backend.
-3. Extend to chart/replay extraction only after timeline accuracy is established.
+1. Locate the game screen with CV without predefined stream layouts, then normalize it to game-relative coordinates with YAML configuration and optional ROI overrides.
+2. Broaden judgment/player-attribution validation, including genuine simultaneous two-player recordings; validate localization on unseen stream compositions and exhaustively annotated short plays.
+3. Extend beyond the tested Phoenix layouts, add a portable OCR backend, and pursue chart/replay extraction after timeline accuracy is established.
 
-## Generate an automatic timeline
+Implementation knowledge is recorded in [scene and OCR field notes](docs/scene-and-ocr-notes.md): scene flow, player-side result differences, coordinate conventions, failure/summary handling and OCR regressions. See [game-screen and result design](docs/layout-and-result-design.md) for the remaining CV/YAML layout proposals, and [result/template usage](docs/result-templates.md) for implemented TOML/JSON presentation options.
+
+## Analyze first, render when ready
+
+```sh
+# Store song/chart/timing/player evidence, without generating timeline text.
+just analyze '/path/to/video.mkv' outputs/analysis --judgments
+
+# Review the structured result and its evidence, then choose presentation.
+just render outputs/analysis/analysis.json outputs/presentation --template templates/judgments.toml
+```
+
+`analyze` writes `analysis.json`, checkpoints and evidence only. Without `--judgments`, it skips optional player-statistics OCR. It does not accept templates or output player selectors: analysis retains all detected slots, and presentation selects them later. To add judgments later, run `just results outputs/analysis/analysis.json outputs/enriched`; render `outputs/enriched/analysis.json` when needed. No immediate timeline is required.
+
+The analysis keeps the existing `segments` structure and `automatic_hud_ocr` method for compatibility, with `artifact_type: video_analysis`. It records detected gameplay intervals and sampled scene/OCR evidence, not an exhaustive classification of every scene in the video. The same JSON can be consumed by other tools; it is not a rendered timeline. `render` also accepts older `timeline.json` files without migration.
+
+## Generate an automatic timeline (convenience)
 
 ```sh
 # Offline local input: does not contact YouTube or upload frames.
@@ -114,7 +131,7 @@ Each new output directory contains `timeline.json`, `timeline.txt`, candidate/re
 
 Result-title OCR preserves centered original text. If it fails or merges off-center background credits, a bright-text isolation pass can supply a centered title instead. Wholly Latin titles are additionally checked with English OCR. These heuristics preserve image evidence; they do not use a song-name dictionary or replace uncertain labels with reference annotations.
 
-Outputs must be new directories. If a run fails, its partial directory is retained for diagnosis and contains no completed `timeline.json`; use a new directory on retry. Large recordings take time and may need several gigabytes for the original media plus evidence. Keep output and reference artifacts in ignored directories.
+Outputs must be new directories. Analysis completion is marked by `analysis.json`, saved before any rendering. The `auto` convenience command additionally writes `timeline.json`, `timeline.txt`, `details.txt` and `rendered.json`. If analysis fails, partial evidence/checkpoints remain but no completed `analysis.json` is written. If rendering fails, the completed analysis remains usable with `just render`; a completed compatibility `timeline.json` is written only after rendering succeeds. Use a new output directory on retry. Large recordings take time and may need several gigabytes for the original media plus evidence. Keep output and reference artifacts in ignored directories.
 
 To measure automatic output against a separately prepared video review:
 
@@ -123,6 +140,22 @@ just evaluate 'outputs/automatic-run/timeline.json' 'data/derived/reference.json
 ```
 
 Reference files declare `method: independent_video_review`, source identity (`path`, `size_bytes`, `mtime_ns`), `coverage_seconds`, and reviewed `segments` with `start_range`, `end_range`, `song`, `chart`, and `evidence`. Boundary ranges preserve reviewer uncertainty. The evaluator reports misses, false positives, unknown fields, label correctness and distances outside those ranges. It does not treat unreviewed portions as verified or comment timestamps as ground truth.
+
+## Player judgments and custom output
+
+```sh
+# Template fields automatically enable judgment extraction. No P1/P2 choice needed for one player.
+just auto '/path/to/video.mkv' outputs/with-counts --template templates/judgments.toml
+
+# Add judgments to a previous run using its saved game-result frames.
+just results outputs/automatic-run/timeline.json outputs/enriched --template templates/judgments.toml
+
+# Change presentation without video decoding, OCR or network access.
+just render outputs/enriched/timeline.json outputs/reformatted \
+  --detail 'P {player.perfect} / G {player.great} / Miss {player.miss}'
+```
+
+`--player single` (default) selects the only recognized player regardless of side. Use `p1`, `p2` or `all` for explicit output. Counts remain separate; an unavailable or ambiguous player never borrows another player's data. Titles are written to `timeline.txt`, title/detail blocks to `details.txt`, and selection/missing-field warnings to `rendered.json`. See [the full guide](docs/result-templates.md) for conditions, placeholders, unknown policies and real-use workflows. Game-screen CV localization remains unimplemented; the existing default crop or `--game-roi` still applies.
 
 ## Generate a review-assisted timeline
 
