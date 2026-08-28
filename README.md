@@ -8,7 +8,9 @@ Detect song segments in Pump It Up gameplay recordings and produce a timeline fo
 
 - First milestone: YouTube URL or local video → gameplay segment detection → song/chart recognition → timestamped text and JSON.
 - Long-term goal: extract chart data and playable replays from video analysis.
-- Implemented: development environment, seed manifest, yt-dlp video/metadata/comment collection, normalized local media records, timestamped review frames, experimental fixed-layout HUD candidate detection, and review-assisted JSON/text timeline generation. **General-purpose gameplay detection and song/chart OCR are not implemented yet.**
+- Implemented: URL/local media preparation, automatic Phoenix HUD discovery, gameplay candidate detection and decoded-frame boundary refinement, local song/chart OCR with multi-frame agreement, evidence-backed JSON/text output, independent-review evaluation, and the original manual-review workflow.
+- Milestone 1 is implemented and validated on two development recordings: all 45 directly reviewed plays and song/chart pairs matched, with no unknown labels in the final runs. This is measured coverage of the reviewed set, not a universal accuracy claim. See [validation](docs/validation.md) for artifacts, timing uncertainty and known limits.
+- Automatic recognition currently targets Phoenix game-screen layouts and runs on macOS with Vision OCR. It is not a universal camera-only or arbitrary-HUD detector. Unknown/conflicting labels remain unknown. See the validation notes before treating automatic output as publication-ready.
 
 ## Development environment
 
@@ -85,9 +87,42 @@ Comments are noisy references, not ground truth. Keep them separate from detecto
 
 ## Next milestones
 
-1. Evaluate and extend the experimental HUD matcher across representative layouts and gameplay modes.
-2. Add OCR for song, mode, and level candidates, retaining unknown values and confidence scores.
-3. Validate on a manually reviewed set independent of comments, then extend to chart/replay extraction.
+1. Expand validation to untouched recordings and exhaustively annotated short plays.
+2. Extend beyond the tested Phoenix layouts and add a portable OCR backend.
+3. Extend to chart/replay extraction only after timeline accuracy is established.
+
+## Generate an automatic timeline
+
+```sh
+# Offline local input: does not contact YouTube or upload frames.
+just auto '/absolute/path/to/recording.mp4' 'outputs/automatic-run'
+
+# URL/seed input: fetches or reuses the untrimmed media, then analyzes it.
+just auto 'https://www.youtube.com/watch?v=uqM7H-OJp68' 'outputs/url-run'
+
+# Direct game capture with no cameras/chat: specify the actual game rectangle.
+just auto '/absolute/path/to/game-only.mp4' 'outputs/fullscreen-run' --game-roi 0,0,1920,1080
+```
+
+Automatic OCR requires macOS Vision and the existing `swiftc` command from Xcode Command Line Tools. The small helper is compiled into `.local/bin/` with module caches under `.local/cache/swift/`. No OCR service, account, model download or image upload is used. A restricted host may need permission to execute Vision; the CLI reports this instead of pretending OCR succeeded. `just check` runs offline unit/integration checks without Vision; `just check-ocr` separately exercises the actual host OCR engine.
+
+The default crop is the seed stream's top-left game panel (1300x730 within a 1920x1080 recording, scaled with resolution). Pass `--game-roi` for another layout and exclude chat/cameras. HUD reference time is discovered automatically using STAGE text; no per-song timestamps or comments are inputs. The first ten minutes are sampled to locate the initial reference. Uncovered parts of the entire recording are then sampled every 30 seconds for alternate HUD positions, including the centered single-mode HUD. Each discovered position is scanned separately and overlapping candidates are checked for agreement. Short appearances between discovery samples can still be missed. An unsupported/missing initial HUD stops the run with an explicit error.
+
+The pipeline scans keyframes for candidates, refines each boundary on a 0.1-second decoded-frame grid, and reads multiple selection/result screens. Title and chart areas are enlarged and recognized separately, with Korean/English title OCR and English chart OCR. Both left and right result badges are read; conflicting player charts remain unknown. Basic-mode `VERY HARD` badges retain their displayed label rather than being silently converted to a SINGLE chart. A confirmed result screen is preferred over selection; failed plays can use a matching song row in the play-summary screen. Labels require at least two agreeing frames; ambiguous or unavailable values are `null`. OCR engine confidence and agreement counts are evidence, not calibrated correctness probabilities.
+
+Each new output directory contains `timeline.json`, `timeline.txt`, candidate/reference records, per-segment checkpoints and cropped evidence images with OCR results and source timestamps. The automatic schema is labeled `automatic_hud_ocr`, never `manual_video_review`. `needs_review` flags unknown labels, low OCR confidence or unrefined boundaries. Even unflagged labels can be wrong; inspect measured validation and supporting images. Automatic text uses local playback times; URL provenance is recorded, but a local-to-YouTube offset is not silently inferred. Original media is never trimmed, retimed or overwritten.
+
+Result-title OCR preserves centered original text. If it fails or merges off-center background credits, a bright-text isolation pass can supply a centered title instead. Wholly Latin titles are additionally checked with English OCR. These heuristics preserve image evidence; they do not use a song-name dictionary or replace uncertain labels with reference annotations.
+
+Outputs must be new directories. If a run fails, its partial directory is retained for diagnosis and contains no completed `timeline.json`; use a new directory on retry. Large recordings take time and may need several gigabytes for the original media plus evidence. Keep output and reference artifacts in ignored directories.
+
+To measure automatic output against a separately prepared video review:
+
+```sh
+just evaluate 'outputs/automatic-run/timeline.json' 'data/derived/reference.json' 'outputs/evaluation.json'
+```
+
+Reference files declare `method: independent_video_review`, source identity (`path`, `size_bytes`, `mtime_ns`), `coverage_seconds`, and reviewed `segments` with `start_range`, `end_range`, `song`, `chart`, and `evidence`. Boundary ranges preserve reviewer uncertainty. The evaluator reports misses, false positives, unknown fields, label correctness and distances outside those ranges. It does not treat unreviewed portions as verified or comment timestamps as ground truth.
 
 ## Generate a review-assisted timeline
 
@@ -143,7 +178,7 @@ Create the output parent directory first. Defaults: 2-second sampling grid, matc
 
 The candidate JSON deliberately uses method `experimental_hud_template`, which the final generator rejects. Use `just frames` and direct video inspection to establish actual boundaries, then enter reviewed intervals and evidence in a separately created review manifest. Synthetic tests verify matching mechanics, not real-world detection accuracy.
 
-See [initial validation](docs/validation.md) for the real-video smoke test, observed timing errors, local artifacts and remaining limitations.
+See [validation](docs/validation.md) for automatic-pipeline measurements, observed timing errors, local artifacts and remaining limitations.
 
 ## References
 

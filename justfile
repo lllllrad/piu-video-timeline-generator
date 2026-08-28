@@ -39,3 +39,15 @@ frames +args:
 # Experimental fixed-layout HUD matching; outputs unreviewed candidates only.
 detect +args:
     ./scripts/mise exec -- python scripts/detect.py "$@"
+
+# Automatically find the HUD, refine segments and OCR song/chart labels locally.
+auto +args:
+    ./scripts/mise exec -- python scripts/auto_timeline.py "$@"
+
+# Compare automatic output with independent direct-video review.
+evaluate +args:
+    ./scripts/mise exec -- python scripts/evaluate.py "$@"
+
+# Exercise the real local Vision OCR engine (may require host permission).
+check-ocr:
+    ./scripts/mise exec -- python tests/ocr_integration.py
