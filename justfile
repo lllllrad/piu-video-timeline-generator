@@ -19,3 +19,23 @@ fetch +args:
 # Inspect a local video without a network request.
 probe path:
     ./scripts/mise run probe -- "$1"
+
+# Print a normalized media record (offline).
+record path:
+    ./scripts/mise exec -- python scripts/timeline.py record "$1"
+
+# Create an empty direct-video-review manifest (output must not exist).
+review video output:
+    ./scripts/mise exec -- python scripts/timeline.py review "$1" "$2"
+
+# Generate JSON and text from reviewed segments; accepts --youtube.
+timeline +args:
+    ./scripts/mise exec -- python scripts/timeline.py generate "$@"
+
+# Extract review frames; accepts repeated --at SECONDS.
+frames +args:
+    ./scripts/mise exec -- python scripts/timeline.py frames "$@"
+
+# Experimental fixed-layout HUD matching; outputs unreviewed candidates only.
+detect +args:
+    ./scripts/mise exec -- python scripts/detect.py "$@"

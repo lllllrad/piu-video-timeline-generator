@@ -1,4 +1,4 @@
-"""Input preparation only; timeline detection is intentionally not implemented yet."""
+"""Prepare media inputs; review-assisted generation lives in timeline.py."""
 import argparse
 import json
 from pathlib import Path
@@ -21,7 +21,9 @@ def resolve_url(source):
     return source
 
 
-def fetch_command(source, metadata_only=False, comments=False):
+def fetch_command(source, metadata_only=False, comments=False, concurrent_fragments=4):
+    if isinstance(concurrent_fragments, bool) or not isinstance(concurrent_fragments, int) or not 1 <= concurrent_fragments <= 16:
+        raise ValueError("concurrent_fragments must be an integer between 1 and 16")
     # Ignore machine-wide settings and cookies; preserve the original timebase.
     command = [
         "yt-dlp", "--ignore-config", "--no-playlist", "--no-overwrites",
@@ -34,7 +36,8 @@ def fetch_command(source, metadata_only=False, comments=False):
     elif metadata_only:
         command += ["--skip-download"]
     else:
-        command += ["--format", "bv*+ba/b", "--merge-output-format", "mkv"]
+        command += ["--format", "bv*+ba/b", "--merge-output-format", "mkv",
+                    "--concurrent-fragments", str(concurrent_fragments), "--progress-delta", "5"]
     return command + ["--", resolve_url(source)]
 
 
@@ -45,12 +48,13 @@ def main():
     fetch.add_argument("source")
     fetch.add_argument("--metadata-only", action="store_true")
     fetch.add_argument("--comments", action="store_true", help="Fetch reference comments separately, without video")
+    fetch.add_argument("--concurrent-fragments", type=int, default=4, help="Parallel fragment downloads (1-16; default 4)")
     probe = commands.add_parser("probe")
     probe.add_argument("path", type=Path)
     args = parser.parse_args()
     try:
         if args.action == "fetch":
-            command = fetch_command(args.source, args.metadata_only, args.comments)
+            command = fetch_command(args.source, args.metadata_only, args.comments, args.concurrent_fragments)
         else:
             path = args.path.expanduser().resolve()
             if not path.is_file():

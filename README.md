@@ -8,7 +8,7 @@ Detect song segments in Pump It Up gameplay recordings and produce a timeline fo
 
 - First milestone: YouTube URL or local video → gameplay segment detection → song/chart recognition → timestamped text and JSON.
 - Long-term goal: extract chart data and playable replays from video analysis.
-- Implemented: development environment, seed manifest, yt-dlp video/metadata/comment collection, and local media inspection. **Automatic timeline detection is not implemented yet.**
+- Implemented: development environment, seed manifest, yt-dlp video/metadata/comment collection, normalized local media records, timestamped review frames, experimental fixed-layout HUD candidate detection, and review-assisted JSON/text timeline generation. **General-purpose gameplay detection and song/chart OCR are not implemented yet.**
 
 ## Development environment
 
@@ -54,6 +54,9 @@ just fetch _OE47GBOvB0 --metadata-only
 just fetch _OE47GBOvB0
 just fetch 'https://www.youtube.com/live/uqM7H-OJp68'
 
+# Optional: increase fragment concurrency (default 4, maximum 16).
+just fetch _OE47GBOvB0 --concurrent-fragments 8
+
 # Collect reference comments separately, without downloading the video.
 just fetch 5l0xgojfQGs --comments
 
@@ -82,11 +85,65 @@ Comments are noisy references, not ground truth. Keep them separate from detecto
 
 ## Next milestones
 
-1. Normalize downloads and local files into media records with duration, frame rate, timebase, and provenance.
-2. Review gameplay start/end screens in representative videos and define segment boundaries.
-3. Sample frames and use OCR to identify song, mode, and level candidates. Preserve uncertainty as unknown values and confidence scores.
-4. Save source-relative start times and supporting evidence in JSON; render `MM:SS / H:MM:SS Song [Chart]` text.
-5. Validate on a manually reviewed set independent of comments, then extend to chart/replay extraction.
+1. Evaluate and extend the experimental HUD matcher across representative layouts and gameplay modes.
+2. Add OCR for song, mode, and level candidates, retaining unknown values and confidence scores.
+3. Validate on a manually reviewed set independent of comments, then extend to chart/replay extraction.
+
+## Generate a review-assisted timeline
+
+This offline workflow renders **directly reviewed video segments**, not comments or automatically detected songs. No model, OCR package, or network request is needed for local inputs.
+
+```sh
+just record '/absolute/path/to/studio-download.mp4'
+just review '/absolute/path/to/studio-download.mp4' '.local/review.json'
+just frames '/absolute/path/to/studio-download.mp4' 'outputs/review-frames' --at 120 --at 130.5
+# Edit .local/review.json using direct video inspection, then:
+just timeline '/absolute/path/to/studio-download.mp4' '.local/review.json' 'outputs/run-001'
+```
+
+`review` creates a manifest with an empty `segments` list. Replace that list with reviewed entries such as:
+
+```json
+[
+  {
+    "start_seconds": 120.25,
+    "end_seconds": 241.5,
+    "song": "Example song",
+    "chart": "D20",
+    "confidence": null,
+    "evidence": "Direct video review: gameplay begins at 120.25s; result transition at 241.5s."
+  }
+]
+```
+
+The example values are illustrative, not labels for the seed videos. Use `null` for an unknown song, chart, or confidence. Confidence, when supplied, is a reviewer estimate in [0, 1], not a calibrated detector probability. Evidence is required; the program cannot verify that the reviewer actually inspected the video.
+
+Boundary convention: start at the first visible playable gameplay frame (not song selection or the loading screen); end at the first frame after gameplay disappears. Intervals are `[start, end)`, ordered and non-overlapping. Record any ambiguity in evidence. Frame sampling is for inspection and does not establish exact boundaries automatically.
+
+The outputs are `timeline.json` and `timeline.txt`. JSON retains fractional seconds, source path, size, modification time, original container start, video timebases and frame rates, and evidence. Text floors timestamps to whole seconds, rendering `MM:SS Song [Chart]` or `H:MM:SS Song [Chart]`. Unknown songs render as `Unknown song`; unknown charts are omitted. Empty reviewed lists produce empty text, not invented detections. This is timestamp-list text, not a guarantee that YouTube will activate chapters.
+
+All review times are seconds from **local playback start**, not frame indices or absolute packet timestamps. Container duration metadata can include an initial offset, so playback duration is derived from video stream end times, falling back to a streaming packet scan when necessary. The original container duration and origin are retained separately. Variable-frame-rate media is not converted to constant frame rate. `frames.json` distinguishes requested times from the decoded frame's actual source PTS and playback time. Frame images retain source resolution; rotated media follows FFmpeg's default display orientation.
+
+For a YouTube-aligned text list, set both `alignment.youtube_url` and a manually verified `alignment.offset_seconds` in the review, then append `--youtube` to `just timeline`. The relationship is `YouTube time = local playback time + offset`. Zero must be explicitly entered when the timelines match; no alignment is inferred from a filename or metadata. A single offset cannot describe edited/reordered videos. JSON always preserves local times, additionally recording aligned times when supplied.
+
+Review files and output directories must not already exist; the commands never overwrite them or the source media. Invalid reviews are rejected before output creation. Media identity uses path, size, modification time and probe fields, not a cryptographic hash: moving or touching the media requires renewed review. Incomplete `.part` downloads are rejected. A failed frame extraction can leave a partial directory; it has no completed `frames.json` and should not be used as a finished sample set. Store reviews under `.local/` or `data/derived/` and outputs under `outputs/` to keep them out of Git.
+
+## Experimental gameplay candidates
+
+`detect` compares a small, fixed HUD region to a directly inspected gameplay reference frame. It uses grayscale mean absolute difference, short-gap merging and minimum-length filtering. It does not read comments, recognize songs, calibrate confidence, or produce final timestamps. Select a distinctive, static HUD patch (not a camera feed, chat, or changing score). Pixel coordinates refer to the encoded frame without auto-rotation.
+
+```sh
+# Example for the inspected 1920x1080 layout of seed _OE47GBOvB0 only.
+# Do not assume this ROI/reference applies to other recordings.
+just detect 'data/raw/_OE47GBOvB0/_OE47GBOvB0.mkv' 'outputs/candidates.json' \
+  --roi 180,0,76,20 --reference-at 140 --limit 600
+```
+
+Create the output parent directory first. Defaults: 2-second sampling grid, match threshold 0.9, minimum run 20 seconds, maximum internal gap 4 seconds. `--limit` bounds an exploratory scan; omit it to scan the entire video. The matcher decodes keyframes only, so its grid timestamps are approximate and can shift by the source keyframe spacing in addition to the sampling step. Long keyframe gaps, seeking, VFR, HUD animation, layout changes and single/double transitions can cause misses or false positives. `mean_match_score` is image similarity, **not a probability**. Inspect `samples` and missed sections as well as detected intervals.
+
+The candidate JSON deliberately uses method `experimental_hud_template`, which the final generator rejects. Use `just frames` and direct video inspection to establish actual boundaries, then enter reviewed intervals and evidence in a separately created review manifest. Synthetic tests verify matching mechanics, not real-world detection accuracy.
+
+See [initial validation](docs/validation.md) for the real-video smoke test, observed timing errors, local artifacts and remaining limitations.
 
 ## References
 

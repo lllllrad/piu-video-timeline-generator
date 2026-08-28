@@ -35,6 +35,13 @@ class MediaTest(unittest.TestCase):
     def test_metadata_only(self):
         self.assertIn("--skip-download", media.fetch_command("_OE47GBOvB0", metadata_only=True))
 
+    def test_fragment_concurrency(self):
+        command = media.fetch_command("_OE47GBOvB0", concurrent_fragments=8)
+        self.assertEqual(command[command.index("--concurrent-fragments") + 1], "8")
+        for value in (0, 17, True, "4", 1.5):
+            with self.assertRaises(ValueError):
+                media.fetch_command("_OE47GBOvB0", concurrent_fragments=value)
+
     def test_labels_are_separate(self):
         command = media.fetch_command("5l0xgojfQGs", comments=True)
         self.assertIn("--skip-download", command)
