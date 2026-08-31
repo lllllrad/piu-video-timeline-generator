@@ -91,7 +91,7 @@ class TimelineTest(unittest.TestCase):
             self.build()
 
     def test_wrong_source_or_schema(self):
-        for key, value in [("schema_version", 2), ("schema_version", True), ("method", "comments"), ("media", {}),
+        for key, value in [("schema_version", 2), ("schema_version", True), ("method", "wrong_method"), ("media", {}),
                            ("segments", {}), ("segments", [None])]:
             review = copy.deepcopy(self.review)
             review[key] = value
@@ -131,18 +131,18 @@ class TimelineTest(unittest.TestCase):
             subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
                             "color=c=black:s=64x64:r=10", "-t", "2", "-c:v", "mpeg4", str(video)], check=True)
             original = video.read_bytes()
-            record = json.loads(subprocess.run(["just", "record", str(video)], cwd=ROOT,
+            record = json.loads(subprocess.run(["just", "_record", str(video)], cwd=ROOT,
                                                check=True, capture_output=True, text=True).stdout)
             self.assertEqual(record["duration_seconds"], 2)
             self.assertEqual(record["video_streams"][0]["avg_frame_rate"], "10/1")
             review_path = directory / "review.json"
-            result = subprocess.run(["just", "review", str(video), str(review_path)], cwd=ROOT,
+            result = subprocess.run(["just", "_review", str(video), str(review_path)], cwd=ROOT,
                                     check=True, capture_output=True, text=True)
             review = json.loads(review_path.read_text())
             review["segments"] = [self.segment(0.25, 1.5)]
             review_path.write_text(json.dumps(review), encoding="utf-8")
             output = directory / "results"
-            command = ["just", "timeline", str(video), str(review_path), str(output)]
+            command = ["just", "_timeline", str(video), str(review_path), str(output)]
             subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True)
             self.assertEqual((output / "timeline.txt").read_text(),
                              "00:00 auto-generated timeline started\n00:00 한글 Song D20 start\n00:01 한글 Song D20 end\n")
@@ -151,7 +151,7 @@ class TimelineTest(unittest.TestCase):
             self.assertEqual(result["text_timestamp_basis"], "local_playback")
             self.assertNotEqual(subprocess.run(command, cwd=ROOT, capture_output=True).returncode, 0)
             for target in (review_path, video):
-                result = subprocess.run(["just", "review", str(video), str(target)], cwd=ROOT, capture_output=True)
+                result = subprocess.run(["just", "_review", str(video), str(target)], cwd=ROOT, capture_output=True)
                 self.assertNotEqual(result.returncode, 0)
             self.assertEqual(video.read_bytes(), original)
 
@@ -165,7 +165,7 @@ class TimelineTest(unittest.TestCase):
             self.assertEqual(record["container_start_seconds"], 5)
             self.assertAlmostEqual(record["duration_seconds"], 1)
             frames = directory / "frames"
-            subprocess.run(["just", "frames", str(video), str(frames), "--at", "0.45"],
+            subprocess.run(["just", "_frames", str(video), str(frames), "--at", "0.45"],
                            cwd=ROOT, capture_output=True, check=True)
             sampled = json.loads((frames / "frames.json").read_text())["frames"][0]
             self.assertAlmostEqual(sampled["source_pts_seconds"], 5.5)
@@ -174,7 +174,7 @@ class TimelineTest(unittest.TestCase):
             review_path = directory / "review.json"
             review_path.write_text("not JSON")
             output = directory / "results"
-            result = subprocess.run(["just", "timeline", str(video), str(review_path), str(output)],
+            result = subprocess.run(["just", "_timeline", str(video), str(review_path), str(output)],
                                     cwd=ROOT, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn("Traceback", result.stderr)

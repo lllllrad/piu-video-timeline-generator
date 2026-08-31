@@ -1,0 +1,131 @@
+"""One-command media preparation, analysis, and TypeScript presentation."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import re
+import subprocess
+from urllib.parse import parse_qs, urlparse
+
+from .auto_timeline import analyze, resolve_source
+from .detect import roi_value
+ROOT = Path(__file__).resolve().parents[2]
+LOCAL_DATA = ROOT / ".local/data"
+LOCAL_FORMATS = ROOT / ".local/formats"
+BUILTIN_FORMATS = ROOT / "formats"
+
+
+def source_id(source):
+    local = Path(source).expanduser()
+    if local.is_file():
+        stem = re.sub(r"[^A-Za-z0-9._-]+", "-", local.stem).strip("-.") or "video"
+        digest = hashlib.sha256(str(local.resolve()).encode()).hexdigest()[:8]
+        return f"{stem}-{digest}"
+    parsed = urlparse(source)
+    if parsed.hostname == "youtu.be":
+        candidate = parsed.path.strip("/").split("/", 1)[0]
+    elif parsed.hostname in {"youtube.com", "www.youtube.com", "m.youtube.com"}:
+        candidate = parse_qs(parsed.query).get("v", [None])[0]
+        if candidate is None and parsed.path.startswith(("/live/", "/shorts/", "/embed/")):
+            candidate = parsed.path.split("/", 3)[2]
+    else:
+        candidate = source if re.fullmatch(r"[A-Za-z0-9_-]{11}", source) else None
+    if not candidate or not re.fullmatch(r"[A-Za-z0-9_-]{11}", candidate):
+        raise ValueError("Could not determine a stable video ID from the source")
+    return candidate
+
+
+def formatter(name):
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or name in {".", ".."}:
+        raise ValueError("Format name may contain letters, numbers, dot, underscore, and hyphen")
+    local = LOCAL_FORMATS / name / "index.ts"
+    built_in = BUILTIN_FORMATS / name / "index.ts"
+    path = local if local.is_file() else built_in
+    if not path.is_file():
+        raise ValueError(f"Unknown format {name!r}; create {local}")
+    return path
+
+
+def run_formatter(script, analysis_file):
+    result = subprocess.run(["node", str(script), str(analysis_file)], check=True, capture_output=True, text=True)
+    if not result.stdout.endswith("\n"):
+        raise ValueError("Formatter output must end with a newline")
+    return result.stdout
+
+
+def fetch(source):
+    local = Path(source).expanduser()
+    if local.is_file():
+        raise ValueError("fetch accepts a YouTube URL or video ID, not a local file")
+    identifier = source_id(source)
+    raw = LOCAL_DATA / identifier / "raw"
+    video, _ = resolve_source(source, raw)
+    print(video)
+    return video
+
+
+def run(source, format_name="default", game_roi=None):
+    identifier = source_id(source)
+    directory = LOCAL_DATA / identifier
+    raw = directory / "raw"
+    analysis_dir = directory / "analysis"
+    analysis_file = analysis_dir / "analysis.json"
+    output = directory / "output" / f"{format_name}.txt"
+    script = formatter(format_name)
+    if not analysis_file.is_file():
+        if analysis_dir.exists():
+            raise ValueError(f"Incomplete analysis exists: {analysis_dir}")
+        raw.mkdir(parents=True, exist_ok=True)
+        video, provenance = resolve_source(source, raw)
+        if provenance.get("kind") == "local":
+            link = raw / video.name
+            if not link.exists():
+                link.symlink_to(video.resolve())
+            video = link
+        analyze(video, analysis_dir, game_roi, provenance)
+    document = json.loads(analysis_file.read_text(encoding="utf-8"))
+    if document.get("method") != "automatic_hud_ocr":
+        raise ValueError("Saved analysis is not an automatic HUD analysis")
+    text = run_formatter(script, analysis_file)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(text, encoding="utf-8")
+    print(text, end="")
+    print(f"Saved: {output}")
+    return output
+
+
+def auto_main(arguments):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("source", help="Local video, YouTube URL, or 11-character video ID")
+    parser.add_argument("format", nargs="?", default="default")
+    parser.add_argument("--game-roi", type=roi_value, help="x,y,width,height of the game screen")
+    args = parser.parse_args(arguments)
+    try:
+        run(args.source, args.format, args.game_roi)
+    except (ValueError, OSError, json.JSONDecodeError) as error:
+        parser.error(str(error))
+    except subprocess.CalledProcessError as error:
+        parser.error(f"External tool failed: {error.stderr or error}")
+
+
+def fetch_main(arguments):
+    parser = argparse.ArgumentParser(description="Download or reuse a YouTube video in .local/data.")
+    parser.add_argument("source", help="YouTube URL or 11-character video ID")
+    args = parser.parse_args(arguments)
+    try:
+        fetch(args.source)
+    except (ValueError, OSError) as error:
+        parser.error(str(error))
+    except subprocess.CalledProcessError as error:
+        parser.error(f"Download failed: {error.stderr or error}")
+
+
+def main():
+    import sys
+    if len(sys.argv) < 2 or sys.argv[1] not in {"auto", "fetch"}:
+        raise SystemExit("usage: workflow.py {auto|fetch} ...")
+    {"auto": auto_main, "fetch": fetch_main}[sys.argv[1]](sys.argv[2:])
+
+
+if __name__ == "__main__":
+    main()

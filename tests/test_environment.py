@@ -31,14 +31,22 @@ class EnvironmentTest(unittest.TestCase):
         self.assertEqual(overrides["MISE_STATE_DIR"], f"{local}/mise_home/state")
         self.assertEqual(overrides["XDG_CACHE_HOME"], f"{local}/cache")
         self.assertEqual(overrides["PIP_CACHE_DIR"], f"{local}/cache/pip")
+        self.assertNotIn("DENO_DIR", overrides)
 
-    def test_just_fetch_help(self):
+    def test_public_auto_help(self):
+        result = subprocess.run(
+            ["just", "auto", "--help"], cwd=ROOT,
+            check=True, capture_output=True, text=True,
+        )
+        self.assertIn("Local video, YouTube URL", result.stdout)
+        self.assertIn("--game-roi", result.stdout)
+
+    def test_public_fetch_help(self):
         result = subprocess.run(
             ["just", "fetch", "--help"], cwd=ROOT,
             check=True, capture_output=True, text=True,
         )
-        self.assertIn("--metadata-only", result.stdout)
-        self.assertIn("--comments", result.stdout)
+        self.assertIn("YouTube URL or 11-character video ID", result.stdout)
 
     def test_just_probe_preserves_path_arguments(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -48,7 +56,7 @@ class EnvironmentTest(unittest.TestCase):
                 "color=c=black:s=64x64:r=10", "-t", "1", "-c:v", "mpeg4", str(video)
             ], check=True)
             result = subprocess.run(
-                ["just", "probe", str(video)], cwd=ROOT,
+                ["just", "_probe", str(video)], cwd=ROOT,
                 check=True, capture_output=True, text=True,
             )
             self.assertEqual(json.loads(result.stdout)["format"]["filename"], str(video))

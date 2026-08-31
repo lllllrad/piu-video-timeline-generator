@@ -4,9 +4,6 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-data/raw/
-data/labels/
-data/derived/
 .DS_Store
 .env
 .env.*

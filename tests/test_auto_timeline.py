@@ -22,7 +22,7 @@ class AutoTest(unittest.TestCase):
         self.assertEqual(auto.corroborated_result_title(result, "D18")["text"], "Result title")
         self.assertIsNone(auto.corroborated_result_title(result, "D19"))
 
-    def test_template_auto_enables_results_and_writes_separate_details(self):
+    def test_analysis_includes_player_results(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             video = root / "source.mp4"
@@ -46,29 +46,11 @@ class AutoTest(unittest.TestCase):
                  patch.object(auto, "refine_boundary", side_effect=[(10, {"refined": True}), (30, {"refined": True})] * 4), \
                  patch.object(auto, "recognize_segment", return_value=({"song": "Song", "chart": "D21"}, {}, str(evidence))), \
                  patch.object(auto, "extract_stats", return_value=stats) as extract:
-                result = auto.run(video, root / "out", render_config={"details": [{"text": "P {player.perfect}"}]})
+                result = auto.analyze(video, root / "out")
                 extract.assert_called_once()
                 extract.reset_mock()
-                with patch.object(auto, "render", side_effect=AssertionError("Analysis must not render")):
-                    plain = auto.analyze(video, root / "plain")
-                    extract.assert_not_called()
-                    counted = auto.analyze(video, root / "counted", judgments=True)
-                    extract.assert_called_once()
-                self.assertNotIn("results", plain["segments"][0])
-                self.assertEqual(counted["segments"][0]["results"], stats)
-                for name in ("plain", "counted"):
-                    self.assertTrue((root / name / "analysis.json").is_file())
-                    self.assertFalse((root / name / "timeline.json").exists())
-                    self.assertFalse((root / name / "timeline.txt").exists())
-                    self.assertFalse((root / name / "rendered.json").exists())
-                with patch.object(auto, "render", side_effect=ValueError("Presentation failed")):
-                    with self.assertRaisesRegex(ValueError, "Presentation failed"):
-                        auto.run(video, root / "failed-render")
-                self.assertTrue((root / "failed-render/analysis.json").is_file())
-                self.assertFalse((root / "failed-render/timeline.json").exists())
             self.assertEqual(result["segments"][0]["results"], stats)
-            self.assertIn("P 500", (root / "out/details.txt").read_text())
-            self.assertEqual(json.loads((root / "out/rendered.json").read_text())["entries"][0]["player"], "p2")
+            self.assertTrue((root / "out/analysis.json").is_file())
 
     def test_alternate_hud_discovery_reaches_beyond_first_ten_minutes(self):
         record = {"duration_seconds": 1200}
@@ -108,15 +90,27 @@ class AutoTest(unittest.TestCase):
             self.assertFalse(provenance["network_used"])
 
     def test_url_download_path_is_checked(self):
-        with patch.object(auto.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "PIU_FILE:/outside.mp4\n", "")):
+        with tempfile.TemporaryDirectory() as temporary, \
+             patch.object(auto.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "PIU_FILE:/outside.mp4\n", "")):
             with self.assertRaises(ValueError):
-                auto.resolve_source("https://www.youtube.com/watch?v=_OE47GBOvB0")
+                auto.resolve_source("https://www.youtube.com/watch?v=_OE47GBOvB0", Path(temporary))
+
+    def test_cached_youtube_video_skips_download(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            raw = Path(temporary)
+            video = raw / "abc123XYZ00.mkv"
+            video.write_bytes(b"video")
+            with patch.object(auto.subprocess, "run") as invoke:
+                path, provenance = auto.resolve_source("abc123XYZ00", raw)
+            invoke.assert_not_called()
+            self.assertEqual(path, video.resolve())
+            self.assertEqual(provenance["kind"], "cached_youtube")
 
     def test_corrupt_or_missing_inputs_do_not_create_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             with self.assertRaises(FileNotFoundError):
-                auto.run(directory / "missing.mp4", directory / "output")
+                auto.analyze(directory / "missing.mp4", directory / "output")
             self.assertFalse((directory / "output").exists())
 
     def test_decode_refinement_and_no_transition(self):

@@ -18,7 +18,6 @@ def render(root):
         "MISE_CONFIG_DIR": str(root / ".local/mise_home/config"),
         "XDG_CACHE_HOME": str(root / ".local/cache"),
         "PIP_CACHE_DIR": str(root / ".local/cache/pip"),
-        "DENO_DIR": str(root / ".local/cache/deno"),
         "TMPDIR": str(root / ".local/tmp"),
         "PYTHONPYCACHEPREFIX": str(root / ".local/cache/pycache"),
     }
@@ -45,7 +44,7 @@ def configure(root):
         if not unchanged_generated and not equivalent:
             raise ValueError(
                 f"Preserving customized {target}. Back it up and move it aside, "
-                "then rerun bootstrap and merge your customizations manually."
+                "then rerun the Codex setup and merge your customizations manually."
             )
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(desired)

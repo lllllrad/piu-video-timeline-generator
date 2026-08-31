@@ -1,103 +1,59 @@
-# Development guide
+# Development
 
-## Project structure
+## Setup
 
-The pipeline is intentionally split into reusable stages:
-
-1. `media.py` prepares or inspects local and YouTube inputs.
-2. `detect.py` and `auto_timeline.py` discover gameplay candidates and refine boundaries.
-3. `recognition.py` and `result_stats.py` extract song, chart and optional player-result evidence.
-4. `analysis.json` persists the result independently of presentation.
-5. `timeline.py`, `rendering.py` or an executable TypeScript formatter produce user-facing text.
-6. `evaluate.py` compares automatic output with an independent video review.
-
-The main package is under `src/piu_timeline/`. Tests mirror the modules under `tests/`. Native macOS Vision OCR lives in `native/ocr.swift`. TypeScript formatting examples live in `templates/`.
-
-## Development setup
-
-The normal setup expects Python 3.12, FFmpeg, Deno and `just`:
+The project requires Python 3.12, FFmpeg, Node.js 24 or newer and `just`.
 
 ```sh
-./scripts/bootstrap
+python3.12 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
 just check
 ```
 
-Bootstrap creates `.venv/`, installs the pinned requirements and verifies the checkout. If the required tools are unavailable, opt into project-local pinned tools:
+No shell activation is required; recipes use `scripts/run.sh` to apply project-local cache paths and invoke `.venv` explicitly.
+
+Codex-only environment generation and optional mise installation are documented in [codex-environment.md](codex-environment.md). They are not part of normal project setup.
+
+## Architecture
+
+- `workflow.py` owns the public `just auto` flow, stable source IDs and `.local/data/` layout.
+- `media.py` prepares YouTube media with yt-dlp or inspects local input.
+- `auto_timeline.py` detects gameplay, refines boundaries and saves structured evidence.
+- `recognition.py` and `result_stats.py` recognize labels and per-player result fields.
+- `formats/` contains Node.js TypeScript presentation programs.
+- `timeline.py`, `evaluate.py` and `relabel_analysis.py` are internal review and diagnostic tools.
+
+Analysis is authoritative and presentation is disposable. A format reads `analysis.json`; it does not trigger recognition or mutate evidence.
+
+## Commands
+
+The public interface intentionally stays small:
 
 ```sh
-PIU_USE_MISE=1 ./scripts/bootstrap
-```
-
-Mise data, caches, compiled OCR helpers and temporary artifacts remain under `.local/`. No shell activation is required because `just` recipes run through `scripts/run.sh`.
-
-Dependency sources:
-
-- Python project metadata: `pyproject.toml`
-- Reproducible Python installs: `requirements.txt` and `requirements-dev.txt`
-- Optional pinned tools: `mise.toml`
-
-## Verification
-
-Run the offline suite after every change:
-
-```sh
+just auto SOURCE [FORMAT]
+just fetch URL_OR_ID
 just check
-```
-
-It includes unit tests and synthetic FFmpeg integration coverage. The real Vision OCR integration is separate because it depends on the macOS host:
-
-```sh
 just check-ocr
 ```
 
-Check an executable formatter independently with:
+Private recipes beginning with `_` support direct review and diagnostics without appearing in `just --list`.
+
+## Verification
 
 ```sh
-deno check templates/timeline.ts
+just check
+node formats/default/index.ts PATH/TO/analysis.json
 ```
 
-## Artifact and data policy
+`just check` is offline and includes unit tests plus synthetic FFmpeg integration. `just check-ocr` separately exercises the host Vision implementation.
 
-- Put generated artifacts under `.local/outputs/`.
-- Keep downloaded originals under the ignored `data/raw/` tree.
-- Keep comments and other noisy reference material under `data/labels/`.
-- Put reviewed/evaluation fixtures under `data/derived/` only when they are suitable for version control.
-- Never commit credentials, downloaded video, private comments or generated reports.
-- Never overwrite source media or silently change its timebase.
+## Data and recognition rules
 
-Output commands normally require a new destination. This protects earlier evidence and makes failed or partial runs distinguishable from completed artifacts.
+- Keep downloaded media, analysis output, caches and personal formats under `.local/`.
+- Never overwrite or retime source media.
+- Preserve unknown and conflicting OCR values as `null` or explicit field states.
+- Keep P1 and P2 result evidence separate.
+- Keep local playback time distinct from YouTube time unless an explicit reviewed offset exists.
+- Automatic gameplay boundaries do not establish silent publication boundaries.
 
-## Recognition invariants
-
-- Comments are not detector inputs and are not ground truth.
-- Unknown, conflicting or insufficient OCR evidence remains `null`.
-- Player slots remain separate; one player's values must not fill another player's missing fields.
-- OCR confidence is evidence, not a calibrated correctness probability.
-- Local playback time and YouTube time remain distinct unless a review supplies an explicit offset.
-- Automatic gameplay boundaries do not establish the silent publication boundaries described in the README.
-
-## Common development commands
-
-```sh
-just --list
-just probe VIDEO
-just analyze VIDEO OUTPUT
-just auto VIDEO OUTPUT
-just relabel OLD_ANALYSIS NEW_OUTPUT
-just results OLD_ANALYSIS NEW_OUTPUT
-just format ANALYSIS_JSON OUTPUT_TEXT
-just evaluate PREDICTION REFERENCE OUTPUT_JSON
-```
-
-Use `just analyze` when changing detection or recognition so completed analysis survives presentation failures. Use `just relabel` when retained OCR evidence is sufficient and decoding the full video again would add no information.
-
-## Design and validation records
-
-- [Scene and OCR notes](scene-and-ocr-notes.md) records observed scene flow and recognition behavior.
-- [Layout and result design](layout-and-result-design.md) records implemented and proposed layout decisions.
-- [Validation](validation.md) records measured behavior and known limits.
-- [Timeline presentation](result-templates.md) documents executable formatting and saved player results.
-
-Keep measured validation claims in `validation.md`, not in the README. Keep proposals clearly separated from implemented interfaces.
-
-Codex-specific shell and sandbox behavior is documented separately in [Codex development environment](codex-environment.md).
+Design observations are in [scene-and-ocr-notes.md](scene-and-ocr-notes.md) and [layout-and-result-design.md](layout-and-result-design.md). Validation measurements belong in [validation.md](validation.md), not the README.

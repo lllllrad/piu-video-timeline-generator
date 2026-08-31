@@ -1,4 +1,4 @@
-"""Experimental fixed-layout HUD matching; emits candidates, never reviewed labels."""
+"""Experimental fixed-layout HUD matching; emits unreviewed candidates."""
 import argparse
 from pathlib import Path
 import subprocess

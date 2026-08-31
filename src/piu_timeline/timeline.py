@@ -115,7 +115,7 @@ def build_timeline(review, record):
     if not isinstance(review, dict) or type(review.get("schema_version")) is not int or review.get("schema_version") != 1:
         raise ValueError("Expected review schema_version 1")
     if review.get("method") != "manual_video_review":
-        raise ValueError("Only manual_video_review inputs are supported; comments are not inputs")
+        raise ValueError("Only manual_video_review inputs are supported")
     saved = review.get("media")
     if not isinstance(saved, dict) or any(saved.get(k) != record[k] for k in (
         "path", "size_bytes", "mtime_ns", "duration_seconds", "container_start_seconds",

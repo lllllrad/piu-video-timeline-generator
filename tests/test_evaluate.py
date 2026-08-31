@@ -37,7 +37,7 @@ class EvaluationTest(unittest.TestCase):
         self.assertEqual(result["song_correct"], 1)
         self.assertEqual(result["chart_correct"], 0)
         self.assertEqual(result["matches"][0]["end_outside_review_range_seconds"], 1)
-        reference["method"] = "comments"
+        reference["method"] = "wrong_method"
         with self.assertRaises(ValueError):
             evaluation.evaluate(predicted, reference)
 

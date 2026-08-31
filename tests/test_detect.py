@@ -41,7 +41,7 @@ class DetectTest(unittest.TestCase):
                 "-c:v", "mpeg4", "-g", "10", str(video),
             ], check=True)
             output = directory / "candidates.json"
-            command = ["just", "detect", str(video), str(output), "--roi", "0,0,64,64",
+            command = ["just", "_detect", str(video), str(output), "--roi", "0,0,64,64",
                        "--reference-at", "3", "--step", "1", "--min-duration", "1", "--max-gap", "0"]
             subprocess.run(command, cwd=ROOT, capture_output=True, check=True)
             result = json.loads(output.read_text())
@@ -61,7 +61,7 @@ class DetectTest(unittest.TestCase):
             root = Path(temporary)
             video = root / "corrupt.mp4"
             video.write_bytes(b"not video")
-            result = subprocess.run(["just", "detect", str(video), str(root / "output.json"),
+            result = subprocess.run(["just", "_detect", str(video), str(root / "output.json"),
                                      "--roi", "0,0,64,64", "--reference-at", "0"],
                                     cwd=ROOT, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)

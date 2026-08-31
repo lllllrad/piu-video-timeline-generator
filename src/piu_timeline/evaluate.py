@@ -19,7 +19,7 @@ def outside_range(value, interval):
 
 def evaluate(prediction, reference):
     if reference.get("method") != "independent_video_review":
-        raise ValueError("Reference must be independent_video_review, not comments or detector output")
+        raise ValueError("Reference must use method independent_video_review")
     for key in ("path", "size_bytes", "mtime_ns"):
         value = reference.get("media", {}).get(key)
         if value is None or value != prediction.get("media", {}).get(key):

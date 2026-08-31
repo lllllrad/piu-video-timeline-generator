@@ -2,7 +2,19 @@
 
 This document applies only when the repository is opened as a trusted project in Codex. It is not required for normal use or development.
 
-Bootstrap generates a Git-ignored `.codex/config.toml` for the current checkout. The file contains checkout-specific absolute paths and environment variables so Codex can find project-local tools and caches.
+Run the Codex-only setup explicitly through `sh`:
+
+```sh
+sh scripts/setup-codex.sh
+```
+
+If the required tools are not installed, allow the script to install the versions in `mise.toml` under `.local/`:
+
+```sh
+PIU_USE_MISE=1 sh scripts/setup-codex.sh
+```
+
+The setup creates the Python environment, verifies the project and generates a Git-ignored `.codex/config.toml` for the current checkout. The configuration contains checkout-specific absolute paths so Codex can find project-local tools and caches.
 
 ## Shell execution
 
@@ -12,10 +24,10 @@ Once the generated configuration is loaded, commands can run directly:
 
 ```sh
 just check
-just probe '/absolute/path/to/video.mp4'
+just auto '/absolute/path/to/video.mp4'
 ```
 
-An already-open Codex session may still have the previous environment. Reload the project after bootstrap, or use this fallback in the stale session:
+An already-open Codex session may still have the previous environment. Reload the project after setup, or use this fallback in the stale session:
 
 ```sh
 sh scripts/run.sh just check
