@@ -32,6 +32,7 @@ The public interface intentionally stays small:
 ```sh
 just auto SOURCE [FORMAT]
 just fetch URL_OR_ID
+just import-studio URL_OR_ID VIDEO_PATH
 just check
 just check-ocr
 ```

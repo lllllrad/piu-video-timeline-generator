@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 from urllib.parse import parse_qs, urlparse
 
@@ -40,10 +41,13 @@ def formatter(name):
         raise ValueError("Format name may contain letters, numbers, dot, underscore, and hyphen")
     local = LOCAL_FORMATS / name / "index.ts"
     built_in = BUILTIN_FORMATS / name / "index.ts"
-    path = local if local.is_file() else built_in
-    if not path.is_file():
-        raise ValueError(f"Unknown format {name!r}; create {local}")
-    return path
+    if local.parent.exists():
+        if not local.is_file():
+            raise ValueError(f"Local format {name!r} is missing its entry point: {local}")
+        return local
+    if built_in.is_file():
+        return built_in
+    raise ValueError(f"Unknown format {name!r}; create {local}")
 
 
 def run_formatter(script, analysis_file):
@@ -62,6 +66,28 @@ def fetch(source):
     video, _ = resolve_source(source, raw)
     print(video)
     return video
+
+
+def import_studio(source, video_path):
+    identifier = source_id(source)
+    video = Path(video_path).expanduser().resolve()
+    if not video.is_file():
+        raise ValueError(f"Video not found: {video}")
+    if video.suffix.lower() not in {".mkv", ".mp4", ".webm", ".mov"}:
+        raise ValueError("Studio export must be an MKV, MP4, WebM, or MOV video")
+    raw = LOCAL_DATA / identifier / "raw"
+    existing = [path for path in raw.iterdir()
+                if path.is_file() and path.suffix.lower() in {".mkv", ".mp4", ".webm", ".mov"}] if raw.is_dir() else []
+    destination = raw / f"{identifier}{video.suffix.lower()}"
+    if video == destination:
+        print(destination)
+        return destination
+    if existing or destination.exists():
+        raise ValueError(f"A cached video already exists in {raw}")
+    raw.mkdir(parents=True, exist_ok=True)
+    shutil.move(video, destination)
+    print(destination)
+    return destination
 
 
 def run(source, format_name="default", game_roi=None):
@@ -86,8 +112,9 @@ def run(source, format_name="default", game_roi=None):
     document = json.loads(analysis_file.read_text(encoding="utf-8"))
     if document.get("method") != "automatic_hud_ocr":
         raise ValueError("Saved analysis is not an automatic HUD analysis")
-    text = run_formatter(script, analysis_file)
     output.parent.mkdir(parents=True, exist_ok=True)
+    output.unlink(missing_ok=True)
+    text = run_formatter(script, analysis_file)
     output.write_text(text, encoding="utf-8")
     print(text, end="")
     print(f"Saved: {output}")
@@ -120,11 +147,23 @@ def fetch_main(arguments):
         parser.error(f"Download failed: {error.stderr or error}")
 
 
+def import_studio_main(arguments):
+    parser = argparse.ArgumentParser(description="Move a YouTube Studio export into the cache used by auto.")
+    parser.add_argument("source", help="YouTube URL or 11-character video ID")
+    parser.add_argument("video", help="Path to the downloaded Studio export")
+    args = parser.parse_args(arguments)
+    try:
+        import_studio(args.source, args.video)
+    except (ValueError, OSError) as error:
+        parser.error(str(error))
+
+
 def main():
     import sys
-    if len(sys.argv) < 2 or sys.argv[1] not in {"auto", "fetch"}:
-        raise SystemExit("usage: workflow.py {auto|fetch} ...")
-    {"auto": auto_main, "fetch": fetch_main}[sys.argv[1]](sys.argv[2:])
+    commands = {"auto": auto_main, "fetch": fetch_main, "import-studio": import_studio_main}
+    if len(sys.argv) < 2 or sys.argv[1] not in commands:
+        raise SystemExit("usage: workflow.py {auto|fetch|import-studio} ...")
+    commands[sys.argv[1]](sys.argv[2:])
 
 
 if __name__ == "__main__":

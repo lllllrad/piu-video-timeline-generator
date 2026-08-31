@@ -24,8 +24,6 @@ Local files work the same way:
 just auto '/absolute/path/to/recording.mp4'
 ```
 
-Local files, including YouTube Studio exports, are processed without a network request.
-
 Download without starting analysis when needed:
 
 ```sh
@@ -33,6 +31,15 @@ just fetch 'https://www.youtube.com/watch?v=VIDEO_ID'
 ```
 
 `fetch` and `auto` share the same cache. A later `auto` call reuses the completed video under `.local/data/<video-id>/raw/` without downloading it again.
+
+To use a video downloaded from YouTube Studio as that cached source, move it into place with its URL or ID:
+
+```sh
+just import-studio VIDEO_ID '/absolute/path/to/studio-export.mp4'
+just auto VIDEO_ID
+```
+
+The import refuses to overwrite an existing cached video. It moves the export to `.local/data/<video-id>/raw/`; the following `auto` command therefore makes no network request.
 
 Automatic OCR currently requires macOS Vision and a clearly visible Phoenix game screen. For a direct game capture or a different stream layout, specify the game rectangle:
 

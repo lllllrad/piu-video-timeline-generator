@@ -25,6 +25,8 @@ just auto VIDEO my-format
 
 The result is printed and saved as `.local/data/<video-id>/output/my-format.txt`. Running the format again reuses analysis and replaces only that derived text file.
 
+If `.local/formats/<name>/` exists, it owns that format name. A missing `index.ts` or a formatter error stops the command; the workflow does not silently fall back to a bundled format. A failed run also removes the previous derived text file so stale output cannot be mistaken for the new result.
+
 ## Shared utilities
 
 [formats/lib/timeline.ts](../formats/lib/timeline.ts) defines the analysis types and small optional helpers:

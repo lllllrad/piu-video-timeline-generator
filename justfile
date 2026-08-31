@@ -8,6 +8,10 @@ auto +args:
 fetch +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.workflow fetch "$@"
 
+# Move a YouTube Studio export into the cache used by `auto`.
+import-studio +args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.workflow import-studio "$@"
+
 # Run the offline test suite.
 check:
     sh scripts/run.sh .venv/bin/python -m unittest discover -s tests -v

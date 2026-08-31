@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -41,8 +42,40 @@ class WorkflowTest(unittest.TestCase):
                 local.parent.mkdir(parents=True)
                 local.write_text("local")
                 self.assertEqual(workflow.formatter("default"), local)
+                local.unlink()
+                with self.assertRaisesRegex(ValueError, "missing its entry point"):
+                    workflow.formatter("default")
                 with self.assertRaises(ValueError):
                     workflow.formatter("../bad")
+
+    def test_import_studio_moves_video_into_shared_cache(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "Studio export.MP4"
+            source.write_bytes(b"video")
+            with patch.object(workflow, "LOCAL_DATA", root / "data"):
+                destination = workflow.import_studio("abc123XYZ00", source)
+                self.assertEqual(destination, root / "data/abc123XYZ00/raw/abc123XYZ00.mp4")
+                self.assertEqual(destination.read_bytes(), b"video")
+                self.assertFalse(source.exists())
+                with patch("piu_timeline.auto_timeline.subprocess.run") as download:
+                    cached, provenance = workflow.resolve_source("abc123XYZ00", destination.parent)
+                self.assertEqual(cached, destination)
+                self.assertFalse(provenance["network_used"])
+                download.assert_not_called()
+
+    def test_import_studio_refuses_to_overwrite_cached_video(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = root / "data/abc123XYZ00/raw"
+            raw.mkdir(parents=True)
+            (raw / "abc123XYZ00.mkv").write_bytes(b"cached")
+            source = root / "new.mp4"
+            source.write_bytes(b"new")
+            with patch.object(workflow, "LOCAL_DATA", root / "data"):
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    workflow.import_studio("abc123XYZ00", source)
+            self.assertTrue(source.exists())
 
     def test_auto_reuses_analysis_and_writes_named_output(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -77,6 +110,26 @@ class WorkflowTest(unittest.TestCase):
                 self.assertEqual(workflow.run(str(video)).read_text(), "timeline\n")
                 resolve.assert_called_once()
                 analyze.assert_called_once()
+
+    def test_formatter_failure_removes_stale_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            identifier = "abc123XYZ00"
+            analysis = root / "data" / identifier / "analysis/analysis.json"
+            analysis.parent.mkdir(parents=True)
+            analysis.write_text(json.dumps({"method": "automatic_hud_ocr", "segments": []}))
+            script = root / "formats/default/index.ts"
+            script.parent.mkdir(parents=True)
+            script.write_text("throw new Error('broken')")
+            output = root / "data" / identifier / "output/default.txt"
+            output.parent.mkdir(parents=True)
+            output.write_text("stale\n")
+            with patch.object(workflow, "LOCAL_DATA", root / "data"), \
+                 patch.object(workflow, "BUILTIN_FORMATS", root / "formats"), \
+                 patch.object(workflow, "LOCAL_FORMATS", root / "local-formats"), \
+                 self.assertRaises(subprocess.CalledProcessError):
+                workflow.run(identifier)
+            self.assertFalse(output.exists())
 
     def test_auto_uses_cached_youtube_video_without_downloading(self):
         with tempfile.TemporaryDirectory() as temporary:
