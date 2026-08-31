@@ -1,8 +1,6 @@
 # Scene, layout and OCR field notes
 
-This is reusable implementation knowledge from the first milestone, not a universal PIU specification. Observations cover the two Phoenix recordings listed in [validation](validation.md). Current behavior refers to commit `7865c69`; proposed changes belong in [the next-step design](layout-and-result-design.md).
-
-Later implementation update: optional player-separated judgment OCR and templates are now available. The first-milestone descriptions below remain a historical record, including statements that counts/player slots were not yet implemented. For current behavior, field names and limitations, use [result/template usage](result-templates.md).
+These notes record reusable observations from the Phoenix recordings described in [validation](validation.md). They are implementation guidance, not a universal PIU specification. Proposed layout changes belong in [layout and result design](layout-and-result-design.md).
 
 ## Scene progression
 
@@ -32,9 +30,9 @@ These offsets worked on the tested material; they are not game timing constants.
 
 Player-dependent P1/P2 layouts require both sides to be supported. Directly observed: the chart badge, score/grade and judgment values can occupy the left or right part of the result screen while the title stays centered. Judgment labels may remain near the center while their associated values move to the active side. Do not mirror the entire screen or assume every field uses the same transform.
 
-Keep three concepts separate: the image-side slot (`left`/`right`), the logical game player (`P1`/`P2`), and the person being analyzed. The current code reads both chart-badge regions, but does **not** establish player identity, output a player identifier or follow a player across scenes. Do not treat its single chart value as proof of P1/P2 attribution. A profile can declare a verified side-to-player mapping; mirrored captures and unfamiliar layouts require renewed verification.
+Keep three concepts separate: the image-side slot (`left`/`right`), the logical game player (`P1`/`P2`), and the person being analyzed. The current result model retains P1/P2 slots separately but does not follow a person's identity across scenes. Mirrored captures and unfamiliar layouts require renewed verification.
 
-Current result parsing accepts a chart only when recognized full-size badges agree on one chart value. Different left/right charts yield an unknown chart for that frame; identical values do not prove there was only one player. There is no multi-player result model yet. Simultaneous two-player screens, independent player failures, and transitions between one/two players need additional labeled tests before support is claimed.
+Current result parsing keeps recognized left/right slots separate. A single-player output selector resolves automatically only when one slot is confidently present. Simultaneous two-player screens, independent player failures and transitions between one/two players still need broader real-video validation.
 
 For future score extraction, bind the chart, score, grade and judgments to the **same result slot and play interval**. Never combine a left-player chart with right-player judgment numbers. Double mode is a chart mode, not evidence that two players are present.
 
@@ -71,24 +69,12 @@ The STAGE patch moved from approximately x=180 to x=613 in the tested 1300-wide 
 - The summary fallback matches a known title to a unique row and its nearby chart badge. Repeated occurrences of the same title make the row ambiguous; current code returns unknown instead of assuming the last row. It does not recover an unknown title from a summary.
 - Failed plays can lack a usable per-song result. Missing statistics must remain missing, not zero; summary chart recovery is not recovery of the full judgment table.
 
-## Judgment counts: observed versus implemented
+## Judgment counts
 
-Result frames visibly contain `PERFECT`, `GREAT`, `GOOD`, `BAD`, `MISS`, `MAX COMBO`, `SCORE` and `KCAL` in the inspected layouts. Raw OCR can contain these strings and numbers, but the current final JSON exposes **no parsed or validated judgment counts, score, grade or calories**. The result gate reads labels, not the associated values. Do not build a report by treating arbitrary raw OCR numbers as verified statistics.
+Optional result extraction reads `PERFECT`, `GREAT`, `GOOD`, `BAD`, `MISS`, `MAX COMBO` and `SCORE` into separate player slots. Each value needs corroborating stable frames; unreadable, conflicting or weak evidence remains unknown. Calories and grades are not implemented output fields.
 
-Examples for future annotation include right-side S13 results, left-side basic-mode results, and normal left/right double results. Need tests for leading zeros, partially obscured digits, labels confused with numbers, unstable result animations, missing rows and conflicting players. `MAX COMBO` is not a total-judgment count, and a judgment total is not automatically a chart note count; no such scoring invariant was established here.
+Leading zeros, partially obscured digits, unstable animations, missing rows and genuine simultaneous-player results need continued validation. `MAX COMBO` is not a total-judgment count, and a judgment total is not automatically a chart note count.
 
-## Evidence and operational handoff
+## Evidence
 
-Useful local artifacts are ignored by Git and are not required to run the source code:
-
-- `outputs/heldout-survey/`: whole-recording survey sheets, including plays missed by the original fixed-HUD detector.
-- `outputs/mode-inspection/`: single/basic-mode gameplay frames.
-- `outputs/heldout-results/`: result/summary samples, including left-side double badges.
-- `outputs/missing-results/`: right S13/S19, left VERY HARD results, and an unobscured title after an overlay.
-- `outputs/alternate-boundary-review/`: decoded single/basic-mode boundary samples with original timestamps.
-- `outputs/title-regression-v4/`: original versus selectively processed title evidence.
-- Final `evidence/segment-*/ocr.json` files under the two runs in [validation](validation.md): per-frame phase, eligibility, raw/focused OCR, source PTS and label evidence.
-
-Use the original media plus `frames.json`/OCR metadata to reproduce a check; a contact-sheet cell is not an exact timestamp. Keyframe proposals can be seconds away from a decoded boundary. Preserve source PTS, distinguish local playback from YouTube time, and never derive an offset from duration metadata alone.
-
-Direct mise-shim commands work in the configured project environment; no extra `zsh -c` is needed. Vision OCR may require host execution permission even when FFmpeg and offline unit tests work in the sandbox. Do not interpret that permission failure as unreadable media or bypass it. Keep OCR binary/module caches local. Keep prior output directories when retrying; they explain regressions and must not be silently overwritten. Run `just check`, and `just check-ocr` when changing OCR behavior. Record the host OS/Vision version when comparing measurements.
+Use the original media plus `frames.json` and OCR metadata to reproduce a check; a contact-sheet cell is not an exact timestamp. Keyframe proposals can be seconds away from a decoded boundary. Preserve source PTS, distinguish local playback from YouTube time, and never derive an offset from duration metadata alone. Keep prior output directories when comparing regressions, and record the host OS/Vision version when comparing OCR measurements.

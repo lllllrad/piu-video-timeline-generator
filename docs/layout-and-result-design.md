@@ -1,6 +1,6 @@
 # Game-screen localization, result statistics and output templates
 
-Status: **design record with a partially implemented subset**. Player judgments and conditional title/detail rendering are implemented, while arbitrary presentation logic uses the executable TypeScript example; [the usage guide](result-templates.md) is authoritative for the current workflow. CV localization and YAML game-layout configuration remain proposals. YAML examples and other syntax below are illustrative, not accepted configuration. See [field notes](scene-and-ocr-notes.md) for observations and current limitations.
+This document separates implemented data-model decisions from proposed game-screen localization work. Player judgments and executable TypeScript presentation are implemented. CV localization and YAML game-layout configuration are proposals; their examples are not accepted configuration. See [timeline presentation](result-templates.md) for current usage and [field notes](scene-and-ocr-notes.md) for observed layouts.
 
 ## Direction and implementation order
 
@@ -139,4 +139,4 @@ The changing background video is not a useful fixed appearance template for the 
 - Measure per-field exact count accuracy, player attribution, unknown/conflict rates and wrong-but-accepted values separately from song/chart accuracy. The existing evaluator does not yet measure statistics.
 - Test templates with known zero, unknown, conflicts, absent players, empty details, illegal fields, embedded newlines and multiple matching rules. Verify re-rendering from JSON needs no media/network access.
 - Evaluate game-rectangle localization on unseen stream compositions, including no-game scenes, overlays, letterboxing, composition changes and competing game feeds. Measure rectangle overlap/edge errors, downstream OCR accuracy, abstentions and false selections. Synthetic transformations supplement, but do not replace, real recordings.
-- Retain source-time preservation, offline local inputs, comment separation, evidence storage and safe non-overwriting outputs from milestone 1.
+- Retain source-time preservation, offline local inputs, comment separation, evidence storage and safe non-overwriting outputs.

@@ -2,9 +2,9 @@
 
 ## Automated checks
 
-Run `just check` offline. The suite covers environment isolation, input preparation, synthetic media probing, review validation, safe output creation, timestamp rendering, non-zero container origins, actual sampled-frame PTS, synthetic HUD matching/refinement, multiple HUD profile merging, positional OCR parsing, conflicting player badges, multi-frame agreement, and evaluation integrity. Synthetic checks verify mechanics, not PIU accuracy. Run `just check-ocr` separately for the native macOS Vision engine; a restricted sandbox may need host execution approval.
+Run `just check` offline. The suite covers environment isolation, input preparation, synthetic media probing, review validation, safe output creation, timestamp rendering, non-zero container origins, actual sampled-frame PTS, synthetic HUD matching/refinement, multiple HUD profile merging, positional OCR parsing, conflicting player badges, multi-frame agreement, and evaluation integrity. Synthetic checks verify mechanics, not PIU accuracy. Run `just check-ocr` separately for the native macOS Vision engine.
 
-Validation host: macOS 26.5.1 (25F80), native Vision, with optional tools pinned in `mise.toml` and Python packages installed into `.venv`. Direct `just`, `python`, and `ffmpeg` commands resolve through the checkout-local environment without an extra `zsh -c` invocation. Host OCR results may vary with OS/Vision versions.
+Validation host: macOS 26.5.1 (25F80), native Vision. Host OCR results may vary with OS/Vision versions.
 
 Historical artifact names below that start with `outputs/` now live under `.local/outputs/`; the names are retained in this report to identify the original runs.
 
@@ -37,7 +37,7 @@ Evidence comes from the original game-only result frames under `outputs/auto-hel
 
 The complete `just auto ... --judgments` flow was additionally exercised on a 145-second derived local test copy (`outputs/judgments-auto-cli-v1/`). It produced the title/detail files. This copy is only a CLI fixture, not a retimed replacement for the original recording or a publishable original-video timeline. Its source recording was left intact. CV game-screen localization is not part of this extension.
 
-## First-milestone automatic pipeline evaluation
+## Automatic pipeline evaluation
 
 The URL-input workflow was exercised on `uqM7H-OJp68`, reusing the intact downloaded media. The local-input workflow performs no network request. All image OCR runs locally on the game crop, excluding chat and cameras. No comments were used as detector inputs or evaluation labels.
 
@@ -86,4 +86,4 @@ Local artifacts (not committed):
 - Validate additional layouts, HUD skins, edits, variable frame rates, long keyframe intervals and camera-only recordings. Current real-video validation covers the tested Phoenix panel and its double, single, basic and left/right result layouts.
 - Extend validation to untouched recordings before claiming generalization. Automatic OCR is implemented, but engine confidence and multi-frame agreement are not calibrated correctness probabilities.
 - Verify local-to-YouTube alignment visually before publishing timestamps. Do not infer an offset from the duration discrepancy or silently shift the local timestamps.
-- Retain unknown fields and human review until accuracy has been measured on an independent set. Chart/replay extraction remains out of scope for this milestone.
+- Retain unknown fields and human review until accuracy has been measured on an independent set. Chart/replay extraction remains outside the current timeline generator.
