@@ -83,6 +83,10 @@ Machine-readable manifest: [`data/seeds.json`](data/seeds.json). Mobile/live URL
 | [5l0xgojfQGs](https://www.youtube.com/watch?v=5l0xgojfQGs) | Approximate reference labels in comments |
 | [6DqcuWMLIE4](https://www.youtube.com/watch?v=6DqcuWMLIE4) | Approximate reference labels in comments |
 | [01n1Q6W0jOo](https://www.youtube.com/watch?v=01n1Q6W0jOo) | Approximate reference labels in comments |
+| [jYuRHc_D8zY](https://www.youtube.com/watch?v=jYuRHc_D8zY) | Unlabeled |
+| [7BLKTVDLeYo](https://www.youtube.com/watch?v=7BLKTVDLeYo) | Unlabeled |
+| [J0f9V-Qpijs](https://www.youtube.com/watch?v=J0f9V-Qpijs) | Unlabeled |
+| [Q6ubf9mM2Q0](https://www.youtube.com/watch?v=Q6ubf9mM2Q0) | Unlabeled |
 
 Comments are noisy references, not ground truth. Keep them separate from detector inputs. Do not copy their timestamps or optimize for exact agreement. Evaluate timing errors, missed segments, and false detections against manually reviewed video segments; choose tolerances after inspection. If a local export and YouTube VOD have different starting points or edits, verify alignment and record offsets.
 
@@ -108,6 +112,33 @@ just render outputs/analysis/analysis.json outputs/presentation --template templ
 
 The analysis keeps the existing `segments` structure and `automatic_hud_ocr` method for compatibility, with `artifact_type: video_analysis`. It records detected gameplay intervals and sampled scene/OCR evidence, not an exhaustive classification of every scene in the video. The same JSON can be consumed by other tools; it is not a rendered timeline. `render` also accepts older `timeline.json` files without migration.
 
+### Batch workflow and clean reruns
+
+Keep a plain-text file containing one seed ID per line, with no Markdown escaping. Download/resume every input first, then analyze sequentially. Sequential processing makes the first failure visible and avoids running several full-video decoders and Vision OCR jobs at once.
+
+```sh
+while IFS= read -r video_id; do
+  just fetch "$video_id" || break
+done < .local/video-ids.txt
+
+while IFS= read -r video_id; do
+  just analyze "data/raw/$video_id/$video_id.mkv" "outputs/$video_id-analysis-v1" || break
+done < .local/video-ids.txt
+
+while IFS= read -r video_id; do
+  just render "outputs/$video_id-analysis-v1/analysis.json" "outputs/$video_id-publish-v1" || break
+done < .local/video-ids.txt
+```
+
+Each output directory must be new. To start over without immediately deleting evidence, move the whole `outputs` directory to a specifically named backup under ignored `.local/`, then create a fresh directory. Verify the backup before deleting it later.
+
+```sh
+mv outputs .local/outputs-before-rerun
+mkdir outputs
+```
+
+If `.local/outputs-before-rerun` already exists, choose a different explicit name; do not overwrite it. Downloaded originals under `data/raw/` are independent and need not be fetched again. `just fetch` is resumable and preserves completed files. If analysis has missing labels but retained evidence, try `just relabel OLD_ANALYSIS NEW_OUTPUT` before decoding the full video again. Add `--judgments` to `analyze` only when player result statistics are needed; it is unnecessary for a simple YouTube timestamp list.
+
 ## Generate an automatic timeline (convenience)
 
 ```sh
@@ -126,6 +157,8 @@ Automatic OCR requires macOS Vision and the existing `swiftc` command from Xcode
 The default crop is the seed stream's top-left game panel (1300x730 within a 1920x1080 recording, scaled with resolution). Pass `--game-roi` for another layout and exclude chat/cameras. HUD reference time is discovered automatically using STAGE text; no per-song timestamps or comments are inputs. The first ten minutes are sampled to locate the initial reference. Uncovered parts of the entire recording are then sampled every 30 seconds for alternate HUD positions, including the centered single-mode HUD. Each discovered position is scanned separately and overlapping candidates are checked for agreement. Short appearances between discovery samples can still be missed. An unsupported/missing initial HUD stops the run with an explicit error.
 
 The pipeline scans keyframes for candidates, refines each boundary on a 0.1-second decoded-frame grid, and reads multiple selection/result screens. Title and chart areas are enlarged and recognized separately, with Korean/English title OCR and English chart OCR. Both left and right result badges are read; conflicting player charts remain unknown. Basic-mode `VERY HARD` badges retain their displayed label rather than being silently converted to a SINGLE chart. A confirmed result screen is preferred over selection; failed plays can use a matching song row in the play-summary screen. Labels require at least two agreeing frames; ambiguous or unavailable values are `null`. OCR engine confidence and agreement counts are evidence, not calibrated correctness probabilities.
+
+Title agreement also accepts long, highly similar multi-frame OCR strings when one cluster has strictly greater support; short text, charts and tied clusters still require exact agreement. A single high-confidence title may be retained as review-required evidence so a uniquely matching summary row can recover its chart. Conversely, a known chart can recover a title only from a unique summary row. `just relabel OLD_ANALYSIS NEW_OUTPUT` applies these rules to retained OCR evidence without decoding media or changing already recognized labels.
 
 Each new output directory contains `timeline.json`, `timeline.txt`, candidate/reference records, per-segment checkpoints and cropped evidence images with OCR results and source timestamps. The automatic schema is labeled `automatic_hud_ocr`, never `manual_video_review`. `needs_review` flags unknown labels, low OCR confidence or unrefined boundaries. Even unflagged labels can be wrong; inspect measured validation and supporting images. Automatic text uses local playback times; URL provenance is recorded, but a local-to-YouTube offset is not silently inferred. Original media is never trimmed, retimed or overwritten.
 

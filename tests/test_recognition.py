@@ -69,6 +69,19 @@ class RecognitionTest(unittest.TestCase):
         ], "song")
         self.assertEqual(support["supporting_frames"], 2)
 
+    def test_similar_title_consensus_is_bounded_and_rejects_competition(self):
+        def song(text, confidence=.8):
+            return {"song": {"text": text, "confidence": confidence}}
+        value, support = recognition.consensus([
+            song("비코즈 오븐 유", .6), song("비코즈 오브 유", .9)], "song")
+        self.assertEqual(value, "비코즈 오브 유")
+        self.assertEqual(support["agreement"], "similar_title_ocr")
+        self.assertEqual(recognition.consensus([song("Song A"), song("Song B")], "song"), (None, None))
+        self.assertEqual(recognition.consensus([
+            song("비코즈 오븐 유"), song("비코즈 오브 유"), song("전혀 다른 곡명"), song("전혀 다른 공명")], "song"),
+            (None, None))
+        self.assertEqual(recognition.consensus([song("ABC"), song("ABD")], "song"), (None, None))
+
     def test_small_single_option_chart(self):
         result = recognition.frame_labels([line("D", .14, .86, .02), line("25", .14, .9, .025)], "selection")
         self.assertEqual(result["chart"]["text"], "D25")
@@ -79,6 +92,14 @@ class RecognitionTest(unittest.TestCase):
                  line("DOUBLE", .72, .44), line("25", .72, .47)]
         self.assertEqual(recognition.summary_chart(lines, "Song B")["text"], "D25")
         self.assertIsNone(recognition.summary_chart(lines, "Unknown"))
+
+    def test_summary_song_uses_unique_known_chart(self):
+        lines = [line("First", .4, .22, .2), line("Hidden title", .4, .49, .2),
+                 line("DOUBLE", .72, .17), line("21", .72, .20),
+                 line("DOUBLE", .72, .44), line("24", .72, .47)]
+        self.assertEqual(recognition.summary_song(lines, "D24")["text"], "Hidden title")
+        duplicate = lines + [line("Another", .4, .72, .2), line("DOUBLE", .72, .67), line("24", .72, .70)]
+        self.assertIsNone(recognition.summary_song(duplicate, "D24"))
 
 
 if __name__ == "__main__":

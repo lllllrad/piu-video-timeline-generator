@@ -17,6 +17,17 @@ sys.path.pop(0)
 
 
 class AutoTest(unittest.TestCase):
+    def test_one_high_confidence_title_can_enable_summary_recovery_but_needs_review(self):
+        observations = [{"song": {"text": "Visible once", "confidence": .95}},
+                        {"song": None}]
+        self.assertEqual(auto.singleton_title(observations)["text"], "Visible once")
+        self.assertIsNone(auto.singleton_title([*observations, observations[0]]))
+        self.assertIsNone(auto.singleton_title([{"song": {"text": "Weak", "confidence": .89}}]))
+        result = [{"phase": "result", "song": {"text": "Result title", "confidence": .5},
+                   "chart": {"text": "D18"}}]
+        self.assertEqual(auto.corroborated_result_title(result, "D18")["text"], "Result title")
+        self.assertIsNone(auto.corroborated_result_title(result, "D19"))
+
     def test_template_auto_enables_results_and_writes_separate_details(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

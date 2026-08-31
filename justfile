@@ -40,7 +40,7 @@ frames +args:
 detect +args:
     ./scripts/mise exec -- python scripts/detect.py "$@"
 
-# Analyze video into structured JSON/evidence only; optional --judgments.
+# Analyze one video into a new structured JSON/evidence directory; optional --judgments.
 analyze +args:
     ./scripts/mise exec -- python scripts/analyze.py "$@"
 
@@ -60,6 +60,10 @@ check-ocr:
 results +args:
     ./scripts/mise exec -- python scripts/enrich_results.py "$@"
 
-# Render analysis or legacy timeline JSON with player selection/templates (offline).
+# Render analysis into a new publishable text/JSON directory (offline).
 render +args:
     ./scripts/mise exec -- python scripts/rendering.py "$@"
+
+# Re-evaluate missing labels from retained OCR evidence without decoding media.
+relabel +args:
+    ./scripts/mise exec -- python scripts/relabel_analysis.py "$@"

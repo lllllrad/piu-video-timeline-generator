@@ -7,7 +7,7 @@ import subprocess
 
 from detect import detect, roi_value, similarity
 from media import ROOT, fetch_command, resolve_url
-from recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, ocr_images, summary_chart
+from recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, ocr_images, summary_chart, summary_song
 from timeline import media_record, write_json
 from rendering import add_render_arguments, config_from_args, needs_results, render, report_review, validate_config, write_rendered
 from result_stats import extract_stats
@@ -137,10 +137,23 @@ def refine_boundary(record, roi, reference, approximate, kind, threshold=.9, rad
                      "note": "Decoded frame sampling; allow one sampling step of quantization error"}
 
 
+def singleton_title(observations):
+    candidates = [item["song"] for item in observations if item.get("song")]
+    return candidates[0] if len(candidates) == 1 and candidates[0]["confidence"] >= .9 else None
+
+
+def corroborated_result_title(observations, chart):
+    candidates = [item["song"] for item in observations if item.get("phase") == "result"
+                  and item.get("song") and item.get("chart", {}).get("text") == chart
+                  and item["song"]["confidence"] >= .5]
+    keys = {"".join(item["text"].split()).casefold() for item in candidates}
+    return max(candidates, key=lambda item: item["confidence"]) if len(keys) == 1 else None
+
+
 def recognize_segment(record, roi, start, end, directory):
     directory.mkdir()
     frames = []
-    for phase, times in [("selection", [start - 8, start - 6, start - 4, start - 3]),
+    for phase, times in [("selection", [start - 14, start - 12, start - 10, start - 8, start - 6, start - 4, start - 3]),
                          ("result", [end + offset for offset in (3, 5, 7, 8, 9, 10, 11, 12)])]:
         for index, seconds in enumerate(times):
             if not 0 <= seconds < record["duration_seconds"]:
@@ -165,7 +178,16 @@ def recognize_segment(record, roi, start, end, directory):
                 break
         else:
             labels[field], confidence[field] = None, None
-    if labels["song"] and labels["chart"] is None:
+    if labels["song"] is None:
+        candidate = corroborated_result_title(observations, labels.get("chart")) or singleton_title(observations)
+        if candidate:
+            labels["song"] = candidate["text"].strip()
+            confidence["song"] = {"supporting_frames": 1, "recognized_frames": 1,
+                                  "mean_ocr_confidence": candidate["confidence"],
+                                  "alternatives": {labels["song"]: 1},
+                                  "phase": "selection_or_result",
+                                  "agreement": "high_confidence_single_frame"}
+    if labels["song"] is None or labels["chart"] is None:
         summary_observations = []
         for index, seconds in enumerate((end + 12, end + 14, end + 16)):
             if seconds >= record["duration_seconds"]:
@@ -175,11 +197,15 @@ def recognize_segment(record, roi, start, end, directory):
             is_summary = any("".join(line["text"].upper().split()) == "PLAYRESULT" for line in raw)
             focused = focused_lines(frame["file"], "summary", roi[2], roi[3]) if is_summary else []
             item = {**frame, "phase": "summary", "ocr": raw, "focused_ocr": focused,
-                    "song": None, "chart": summary_chart(focused, labels["song"]) if is_summary else None}
+                    "song": summary_song(focused, labels["chart"]) if is_summary and labels["chart"] else None,
+                    "chart": summary_chart(focused, labels["song"]) if is_summary and labels["song"] else None}
             summary_observations.append(item)
-        value, support = consensus(summary_observations, "chart")
-        if value:
-            labels["chart"], confidence["chart"] = value, {**support, "phase": "summary"}
+        for field in ("song", "chart"):
+            if labels[field] is not None:
+                continue
+            value, support = consensus(summary_observations, field)
+            if value:
+                labels[field], confidence[field] = value, {**support, "phase": "summary"}
         observations.extend(summary_observations)
     write_json(directory / "ocr.json", observations)
     return labels, confidence, str(directory / "ocr.json")
@@ -224,7 +250,9 @@ def analyze(video, output, game_roi=None, provenance=None, judgments=False):
                          "ocr_evidence": ocr_file,
                          "needs_review": any(labels[key] is None for key in labels)
                                          or not start_evidence["refined"] or not end_evidence["refined"]
-                                         or any(value and value["mean_ocr_confidence"] < .7 for value in support.values())})
+                                         or any(value and (value["mean_ocr_confidence"] < .7
+                                                           or value.get("supporting_frames", 0) < 2)
+                                                for value in support.values())})
         if judgments:
             observations = json.loads(Path(ocr_file).read_text())
             stats = extract_stats(observations, evidence_dir / f"stats-{index + 1:03}", width, height)

@@ -1,5 +1,6 @@
 """Local game-screen OCR with positional evidence and multi-frame agreement."""
 from collections import Counter
+from difflib import SequenceMatcher
 import json
 from pathlib import Path
 import re
@@ -181,7 +182,7 @@ def summary_chart(lines, song):
     for line in lines:
         mode = chart_mode(line["text"])
         cx, cy = center(line)
-        if mode and .69 < cx < .8 and -.09 < cy - title_y < .02:
+        if mode and .69 < cx < .8 and -.09 < cy - title_y < -.025:
             digits = [item for item in lines if re.fullmatch(r"\d{1,2}", item["text"])
                       and 1 <= int(item["text"]) <= 99 and item["confidence"] >= .5
                       and abs(center(item)[0] - cx) < .04 and 0 < center(item)[1] - cy < .075]
@@ -192,6 +193,29 @@ def summary_chart(lines, song):
     return None
 
 
+def summary_song(lines, chart):
+    """Recover a title only when exactly one summary row has the known chart."""
+    matches = []
+    titles = [line for line in lines if .25 < center(line)[0] < .7
+              and not re.fullmatch(r"[\d\W]+", line["text"])]
+    for title in titles:
+        title_y = center(title)[1]
+        for line in lines:
+            mode = chart_mode(line["text"])
+            cx, cy = center(line)
+            if not mode or not (.69 < cx < .8 and -.09 < cy - title_y < -.025):
+                continue
+            digits = [item for item in lines if re.fullmatch(r"\d{1,2}", item["text"])
+                      and 1 <= int(item["text"]) <= 99 and item["confidence"] >= .5
+                      and abs(center(item)[0] - cx) < .04 and 0 < center(item)[1] - cy < .075]
+            if len(digits) == 1 and mode + str(int(digits[0]["text"])) == chart:
+                matches.append({"text": title["text"], "confidence": min(
+                    title["confidence"], line["confidence"], digits[0]["confidence"]),
+                                "evidence": [title, line, digits[0]]})
+    unique = {re.sub(r"\s+", "", item["text"]).casefold() for item in matches}
+    return max(matches, key=lambda item: item["confidence"]) if len(unique) == 1 else None
+
+
 def consensus(observations, field):
     candidates = [item[field] for item in observations if item.get(field)]
     # Spacing is unstable in small Korean UI labels; keep the most common display form below.
@@ -200,6 +224,29 @@ def consensus(observations, field):
     if not counts:
         return None, None
     ordered = counts.most_common()
+    # Titles can differ by one OCR glyph between otherwise agreeing frames.
+    # Cluster only long, highly similar song strings. Charts remain exact, and
+    # equally supported clusters still abstain rather than guessing a title.
+    if field == "song" and ordered[0][1] < 2:
+        unique = list(counts)
+        groups = []
+        for key in unique:
+            matches = [group for group in groups if any(
+                min(len(key), len(other)) >= 4
+                and SequenceMatcher(None, key, other).ratio() >= .82 for other in group)]
+            if len(matches) == 1:
+                matches[0].add(key)
+            elif not matches:
+                groups.append({key})
+        grouped = sorted(((sum(counts[key] for key in group), group) for group in groups), reverse=True,
+                         key=lambda item: item[0])
+        if grouped and grouped[0][0] >= 2 and (len(grouped) == 1 or grouped[0][0] > grouped[1][0]):
+            votes, group = grouped[0]
+            selected = [item for item, key in zip(candidates, keys) if key in group]
+            display = max(selected, key=lambda item: item["confidence"])["text"].strip()
+            return display, {"supporting_frames": votes, "recognized_frames": len(candidates),
+                             "mean_ocr_confidence": sum(item["confidence"] for item in selected) / votes,
+                             "alternatives": dict(counts), "agreement": "similar_title_ocr"}
     best, votes = ordered[0]
     if votes < 2 or (len(ordered) > 1 and ordered[1][1] == votes):
         return None, None
