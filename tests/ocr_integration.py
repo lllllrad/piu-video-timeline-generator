@@ -1,14 +1,11 @@
 """Explicit host-side OCR smoke check; not part of sandbox-only unit checks."""
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from recognition import focused_lines, frame_labels, ocr_images
-from result_stats import focused_stats, parse_result, COUNT_FIELDS, ROW_Y
+from piu_timeline.recognition import focused_lines, frame_labels, ocr_images
+from piu_timeline.result_stats import focused_stats, parse_result, COUNT_FIELDS, ROW_Y
 
 
 class VisionIntegrationTest(unittest.TestCase):

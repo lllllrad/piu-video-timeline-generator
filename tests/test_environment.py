@@ -1,7 +1,6 @@
 """Offline checks for the checkout-specific Codex environment and just recipes."""
 import json
 import importlib.util
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -19,17 +18,19 @@ class EnvironmentTest(unittest.TestCase):
         config = tomllib.loads(generator.render(ROOT))
         self.assertFalse(config["allow_login_shell"])
         overrides = config["shell_environment_policy"]["set"]
-        env = {**os.environ, **overrides}
+        env = overrides
         result = subprocess.run(
             ["/bin/sh", "-c", "command -v just && just --version"],
             cwd=ROOT, env=env, check=True, capture_output=True, text=True,
         )
-        self.assertEqual(result.stdout.splitlines()[0], str(ROOT / ".local/share/mise/shims/just"))
+        self.assertEqual(result.stdout.splitlines()[0], str(ROOT / ".local/mise_home/data/shims/just"))
         self.assertIn("just 1.58.0", result.stdout)
-        # Keep Codex's local storage paths aligned with the wrapper environment.
-        for key, value in overrides.items():
-            if key != "PATH":
-                self.assertEqual(value, os.environ[key], key)
+        local = str(ROOT / ".local")
+        self.assertEqual(overrides["MISE_DATA_DIR"], f"{local}/mise_home/data")
+        self.assertEqual(overrides["MISE_CACHE_DIR"], f"{local}/mise_home/cache")
+        self.assertEqual(overrides["MISE_STATE_DIR"], f"{local}/mise_home/state")
+        self.assertEqual(overrides["XDG_CACHE_HOME"], f"{local}/cache")
+        self.assertEqual(overrides["PIP_CACHE_DIR"], f"{local}/cache/pip")
 
     def test_just_fetch_help(self):
         result = subprocess.run(
@@ -59,7 +60,7 @@ class EnvironmentTest(unittest.TestCase):
             original = target.read_text()
             self.assertEqual(generator.configure(root).read_text(), original)
             config = tomllib.loads(original)
-            self.assertEqual(config["shell_environment_policy"]["set"]["MISE_DATA_DIR"], str(root.resolve() / ".local/share/mise"))
+            self.assertEqual(config["shell_environment_policy"]["set"]["MISE_DATA_DIR"], str(root.resolve() / ".local/mise_home/data"))
 
     def test_regenerate_after_move(self):
         with tempfile.TemporaryDirectory() as directory:

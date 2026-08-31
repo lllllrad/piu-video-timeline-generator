@@ -6,20 +6,20 @@ Implemented commands: `just analyze`, `just results`, `just render`, and the com
 
 ```sh
 # Analysis does not require a timeline, template, or P1/P2 output choice.
-just analyze '/path/to/video.mkv' outputs/analysis --judgments
+just analyze '/path/to/video.mkv' .local/outputs/analysis --judgments
 
 # After inspecting the evidence, choose presentation independently.
-just render outputs/analysis/analysis.json outputs/report --template templates/judgments.toml
+just render .local/outputs/analysis/analysis.json .local/outputs/report --template templates/judgments.toml
 
 # Optional combined workflow:
 # The template requests player fields, so judgment OCR turns on automatically.
-just auto '/path/to/video.mkv' outputs/run --template templates/judgments.toml
+just auto '/path/to/video.mkv' .local/outputs/run --template templates/judgments.toml
 
 # Or request the default count report without writing a template.
-just auto '/path/to/video.mkv' outputs/run-with-counts --judgments
+just auto '/path/to/video.mkv' .local/outputs/run-with-counts --judgments
 
 # A quick one-off detail template also automatically enables count extraction.
-just auto '/path/to/video.mkv' outputs/quick --detail 'P {player.perfect} / G {player.great} / Miss {player.miss}'
+just auto '/path/to/video.mkv' .local/outputs/quick --detail 'P {player.perfect} / G {player.great} / Miss {player.miss}'
 ```
 
 `--player single` is the default. For each play, `{player.perfect}`, `{player.great}`, etc. refer to the **only confidently detected player**, whether that player is P1 or P2. The selection may change sides between plays; it does not track a person's identity. `{perfect}`, `{great}`, etc. are shorthand aliases for the selected player.
@@ -34,13 +34,13 @@ For the combined `auto` command, no template and no judgment flag preserves the 
 
 ```sh
 # Add counts using the retained game-only result frames; no original video needed.
-just results outputs/old-run/timeline.json outputs/with-counts
+just results .local/outputs/old-run/timeline.json .local/outputs/with-counts
 
 # Inspect a few one-based segment numbers first. The output contains only these plays.
-just results outputs/old-run/timeline.json outputs/sample-counts --segment 18 --segment 25
+just results .local/outputs/old-run/timeline.json .local/outputs/sample-counts --segment 18 --segment 25
 
 # Change presentation without OCR, FFmpeg, Vision or network access.
-just render outputs/with-counts/analysis.json outputs/new-format \
+just render .local/outputs/with-counts/analysis.json .local/outputs/new-format \
   --detail 'Perfect {player.perfect}, Great {player.great}, Miss {player.miss}'
 ```
 

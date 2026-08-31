@@ -1,14 +1,6 @@
-import importlib.util
-from pathlib import Path
-import sys
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-spec = importlib.util.spec_from_file_location("evaluate", ROOT / "scripts/evaluate.py")
-evaluation = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(evaluation)
-sys.path.pop(0)
+from piu_timeline import evaluate as evaluation
 
 
 class EvaluationTest(unittest.TestCase):

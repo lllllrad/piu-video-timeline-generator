@@ -7,7 +7,7 @@ import string
 import tomllib
 import unicodedata
 
-from timeline import timestamp, write_json
+from .timeline import timestamp, write_json
 
 PLAYER_FIELDS = {"perfect", "great", "good", "bad", "miss", "max_combo", "score", "chart", "player_id", "side"}
 NUMERIC = {"perfect", "great", "good", "bad", "miss", "max_combo", "score"}

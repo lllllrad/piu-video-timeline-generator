@@ -1,6 +1,5 @@
 """Offline timeline validation and real FFmpeg/CLI integration checks."""
 import copy
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -8,9 +7,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("timeline", ROOT / "scripts/timeline.py")
-timeline = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(timeline)
+from piu_timeline import timeline
 
 
 class TimelineTest(unittest.TestCase):

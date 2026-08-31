@@ -7,9 +7,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-import rendering as r
-from timeline import render_text
+from piu_timeline import rendering as r
+from piu_timeline.timeline import render_text
 
 
 def player(identifier="p2", **values):
@@ -124,7 +123,7 @@ class RenderingTest(unittest.TestCase):
             root = Path(temporary)
             source = root / "timeline.json"
             source.write_text(json.dumps(timeline({"p2": player()})))
-            command = [sys.executable, str(ROOT / "scripts/rendering.py"), str(source), str(root / "render"),
+            command = [sys.executable, "-m", "piu_timeline.rendering", str(source), str(root / "render"),
                        "--template", str(ROOT / "templates/judgments.toml")]
             subprocess.run(command, check=True, capture_output=True)
             self.assertIn("P 500", (root / "render/details.txt").read_text())
@@ -134,7 +133,7 @@ class RenderingTest(unittest.TestCase):
     def test_invalid_auto_config_fails_before_media_fetch(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "out"
-            result = subprocess.run([sys.executable, str(ROOT / "scripts/auto_timeline.py"),
+            result = subprocess.run([sys.executable, "-m", "piu_timeline.auto_timeline",
                                      "https://www.youtube.com/watch?v=_OE47GBOvB0", str(output),
                                      "--title", "{evil}", "--no-judgments"], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
@@ -144,7 +143,7 @@ class RenderingTest(unittest.TestCase):
     def test_explicitly_disabled_results_error_before_fetch(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "out"
-            result = subprocess.run([sys.executable, str(ROOT / "scripts/auto_timeline.py"),
+            result = subprocess.run([sys.executable, "-m", "piu_timeline.auto_timeline",
                                      "https://www.youtube.com/watch?v=_OE47GBOvB0", str(output),
                                      "--detail", "{player.perfect}", "--no-judgments"], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)

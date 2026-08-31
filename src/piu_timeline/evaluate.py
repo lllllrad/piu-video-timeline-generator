@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import unicodedata
 
-from timeline import number, write_json
+from .timeline import number, write_json
 
 
 def normalized(text):

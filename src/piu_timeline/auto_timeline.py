@@ -5,12 +5,12 @@ import math
 from pathlib import Path
 import subprocess
 
-from detect import detect, roi_value, similarity
-from media import ROOT, fetch_command, resolve_url
-from recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, ocr_images, summary_chart, summary_song
-from timeline import media_record, write_json
-from rendering import add_render_arguments, config_from_args, needs_results, render, report_review, validate_config, write_rendered
-from result_stats import extract_stats
+from .detect import detect, roi_value, similarity
+from .media import ROOT, fetch_command, resolve_url
+from .recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, ocr_images, summary_chart, summary_song
+from .timeline import media_record, write_json
+from .rendering import add_render_arguments, config_from_args, needs_results, render, report_review, validate_config, write_rendered
+from .result_stats import extract_stats
 
 
 def resolve_source(source):

@@ -4,9 +4,9 @@ import copy
 import json
 from pathlib import Path
 
-from auto_timeline import corroborated_result_title, singleton_title
-from recognition import consensus, summary_chart, summary_song
-from timeline import write_json
+from .auto_timeline import corroborated_result_title, singleton_title
+from .recognition import consensus, summary_chart, summary_song
+from .timeline import write_json
 
 
 def relabel(source, output):

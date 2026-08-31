@@ -4,8 +4,8 @@ from pathlib import Path
 import re
 import subprocess
 
-from recognition import center, frame_labels, is_result_screen, ocr_images
-from timeline import write_json
+from .recognition import center, frame_labels, is_result_screen, ocr_images
+from .timeline import write_json
 
 COUNT_FIELDS = ("perfect", "great", "good", "bad", "miss", "max_combo")
 FIELDS = (*COUNT_FIELDS, "score", "chart")

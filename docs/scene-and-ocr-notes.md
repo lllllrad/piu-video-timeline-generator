@@ -18,7 +18,7 @@ The useful working sequence is song/chart selection, loading or song introductio
 | Failure screen | Failure message, e.g. `HEY!` | Do not accept message text as a song title. No usable score result is guaranteed. |
 | Multi-song summary | `PLAY RESULT`, multiple song rows and chart badges | It contains previous plays too. Do not attach the first readable row to the latest play. |
 
-The current implementation does not track this whole sequence. `scripts/auto_timeline.py` detects HUD intervals and samples relative to their boundaries:
+The current implementation does not track this whole sequence. `piu_timeline.auto_timeline` detects HUD intervals and samples relative to their boundaries:
 
 - Selection: start minus 8, 6, 4 and 3 seconds.
 - Result: end plus 3, 5, 7, 8, 9, 10, 11 and 12 seconds.
@@ -42,7 +42,7 @@ For future score extraction, bind the chart, score, grade and judgments to the *
 
 The default game rectangle is the top-left 1300x730 area of a 1920x1080 source. It excludes the camera below and chat/camera content to the right. `--game-roi x,y,width,height` overrides it in source pixels. Internal OCR boxes are normalized to the cropped game image, with origin at the top left. Focused OCR is mapped back into that space. Do not confuse source pixels, game-relative fractions and enlarged OCR-image coordinates.
 
-The following are current implementation crops, not a calibrated layout schema. Each tuple is `(x, y, width, height)` relative to the game image; see `focused_lines()` in `scripts/recognition.py`.
+The following are current implementation crops, not a calibrated layout schema. Each tuple is `(x, y, width, height)` relative to the game image; see `focused_lines()` in `src/piu_timeline/recognition.py`.
 
 | Region | Normalized crop |
 | --- | --- |

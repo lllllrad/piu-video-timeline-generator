@@ -1,19 +1,13 @@
 """Synthetic checks for experimental candidate matching, not accuracy benchmarks."""
-import importlib.util
 import argparse
 import json
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-spec = importlib.util.spec_from_file_location("detect", ROOT / "scripts/detect.py")
-detect = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(detect)
-sys.path.pop(0)
+from piu_timeline import detect
 
 
 class DetectTest(unittest.TestCase):

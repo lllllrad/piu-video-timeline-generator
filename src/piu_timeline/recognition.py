@@ -9,13 +9,13 @@ import subprocess
 import sys
 import unicodedata
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def ocr_binary():
     if sys.platform != "darwin" or not shutil.which("swiftc"):
         raise ValueError("Automatic OCR currently requires macOS Vision and swiftc (Xcode Command Line Tools)")
-    source = ROOT / "scripts/ocr.swift"
+    source = ROOT / "native/ocr.swift"
     binary = ROOT / ".local/bin/piu-ocr"
     cache = ROOT / ".local/cache/swift"
     cache.mkdir(parents=True, exist_ok=True)

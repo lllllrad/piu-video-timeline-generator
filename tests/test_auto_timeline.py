@@ -1,19 +1,13 @@
 """Offline automatic orchestration and decoded-boundary tests."""
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-spec = importlib.util.spec_from_file_location("auto_timeline", ROOT / "scripts/auto_timeline.py")
-auto = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(auto)
-sys.path.pop(0)
+from piu_timeline import auto_timeline as auto
 
 
 class AutoTest(unittest.TestCase):

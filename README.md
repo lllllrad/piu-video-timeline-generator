@@ -19,14 +19,22 @@ Run from the project root on macOS/Linux:
 
 ```sh
 ./scripts/bootstrap
-./scripts/mise exec -- just check
+just check
 ```
 
-The bootstrap installs mise into `.local/bin/mise` and pinned versions of just, Python, uv, Deno, yt-dlp, and FFmpeg/ffprobe under `.local/`. Deno supports yt-dlp's YouTube JavaScript processing. Installations, caches, state, and temporary files stay inside the project; no global shell files or HOME changes are required.
+Bootstrap creates `.venv`, installs Python packages from `requirements-dev.txt`, generates the checkout-local Codex configuration, and runs the tests. It uses system Python 3.12, FFmpeg/ffprobe, Deno, and `just` by default.
+
+If any of those executables are unavailable, opt into mise for pinned tool installation:
+
+```sh
+PIU_USE_MISE=1 ./scripts/bootstrap
+```
+
+Mise is only a tool installer here; it does not manage Python packages or project tasks. Its data lives under `.local/mise_home/`, while pip dependencies live in `.venv/`. Deno supports yt-dlp's YouTube JavaScript processing. Tools, caches, state, and temporary files remain inside the project; no global shell files or HOME changes are required.
 
 Installation and YouTube access need network access and may require sandbox approval. Once installed, checks and local media processing work offline in the default sandbox. `check` includes unit tests and an integration test that generates a synthetic video and probes it.
 
-Tool versions are pinned in `mise.toml`. To update a tool, edit its version and rerun `./scripts/bootstrap`.
+Tool versions are pinned in `mise.toml`; Python dependencies are pinned in `pyproject.toml` and installed through the requirements files. To update a tool, edit `mise.toml` and rerun bootstrap with `PIU_USE_MISE=1`.
 
 ### Codex command environment
 
@@ -39,13 +47,13 @@ just fetch _OE47GBOvB0 --metadata-only
 just probe '/absolute/path/to/studio-download.mp4'
 ```
 
-Use non-login tool calls (`login: false`). Existing sessions may retain their previous environment: reload/restart the session if `command -v just` does not resolve to this project's `.local/share/mise/shims/just`. Project configuration is ignored for untrusted projects; this setup does not change trust, sandbox, or approval policies.
+Use non-login tool calls (`login: false`). Existing sessions may retain their previous environment: reload/restart the session after bootstrap if needed, or use `sh scripts/run.sh just check` in that stale session. With optional mise, `command -v just` resolves under `.local/mise_home/data/shims/`. Ordinary system commands such as `git add` need no wrapper. Project configuration is ignored for untrusted projects; this setup does not change trust, sandbox, or approval policies.
 
 The generated configuration uses absolute paths discovered at bootstrap time, not committed machine-specific paths or shell-expanded `$PATH`/`$PWD`. Run `./scripts/bootstrap` once in each fresh clone or worktree. Rerunning it is safe: unchanged generated settings can be refreshed after relocation, while customized settings are preserved and bootstrap stops with instructions for manual merging. Installed binaries may also be location-dependent; a fresh checkout and bootstrap are preferable to copying `.local/` between machines. PATH includes project tools and standard system directories.
 
-The entire `.codex/` directory is ignored by Git. The portable generator is `scripts/configure_codex.py`; after installing tools, you can rerun it with `./scripts/mise exec -- python scripts/configure_codex.py`. Writing the protected `.codex/` directory may require approval in Codex. This does not grant broader sandbox permissions.
+The entire `.codex/` directory is ignored by Git. The portable generator is `scripts/configure_codex.py`; after creating the venv, you can rerun it with `.venv/bin/python scripts/configure_codex.py`. Writing the protected `.codex/` directory may require approval in Codex. This does not grant broader sandbox permissions.
 
-Outside Codex, or before configuration reload, use `./scripts/mise exec -- just ...`. The wrapper applies the local environment on every invocation, without persistent `activate` state. Avoid calling `.local/bin/mise` directly unless the project environment is already set. The just recipes delegate to this wrapper as well.
+No shell activation is required. Just recipes invoke `sh scripts/run.sh ...`, which applies the project-local environment and then uses `.venv/bin/python`. The helper intentionally has no executable-bit requirement.
 
 ## Prepare inputs
 
@@ -102,13 +110,13 @@ Implementation knowledge is recorded in [scene and OCR field notes](docs/scene-a
 
 ```sh
 # Store song/chart/timing/player evidence, without generating timeline text.
-just analyze '/path/to/video.mkv' outputs/analysis --judgments
+just analyze '/path/to/video.mkv' .local/outputs/analysis --judgments
 
 # Review the structured result and its evidence, then choose presentation.
-just render outputs/analysis/analysis.json outputs/presentation --template templates/judgments.toml
+just render .local/outputs/analysis/analysis.json .local/outputs/presentation --template templates/judgments.toml
 ```
 
-`analyze` writes `analysis.json`, checkpoints and evidence only. Without `--judgments`, it skips optional player-statistics OCR. It does not accept templates or output player selectors: analysis retains all detected slots, and presentation selects them later. To add judgments later, run `just results outputs/analysis/analysis.json outputs/enriched`; render `outputs/enriched/analysis.json` when needed. No immediate timeline is required.
+`analyze` writes `analysis.json`, checkpoints and evidence only. Without `--judgments`, it skips optional player-statistics OCR. It does not accept templates or output player selectors: analysis retains all detected slots, and presentation selects them later. To add judgments later, run `just results .local/outputs/analysis/analysis.json .local/outputs/enriched`; render `.local/outputs/enriched/analysis.json` when needed. No immediate timeline is required.
 
 The analysis keeps the existing `segments` structure and `automatic_hud_ocr` method for compatibility, with `artifact_type: video_analysis`. It records detected gameplay intervals and sampled scene/OCR evidence, not an exhaustive classification of every scene in the video. The same JSON can be consumed by other tools; it is not a rendered timeline. `render` also accepts older `timeline.json` files without migration.
 
@@ -122,19 +130,19 @@ while IFS= read -r video_id; do
 done < .local/video-ids.txt
 
 while IFS= read -r video_id; do
-  just analyze "data/raw/$video_id/$video_id.mkv" "outputs/$video_id-analysis-v1" || break
+  just analyze "data/raw/$video_id/$video_id.mkv" ".local/outputs/$video_id-analysis-v1" || break
 done < .local/video-ids.txt
 
 while IFS= read -r video_id; do
-  just render "outputs/$video_id-analysis-v1/analysis.json" "outputs/$video_id-publish-v1" || break
+  just render ".local/outputs/$video_id-analysis-v1/analysis.json" ".local/outputs/$video_id-publish-v1" || break
 done < .local/video-ids.txt
 ```
 
-Each output directory must be new. To start over without immediately deleting evidence, move the whole `outputs` directory to a specifically named backup under ignored `.local/`, then create a fresh directory. Verify the backup before deleting it later.
+Each output directory must be new. Generated artifacts belong under the ignored `.local/outputs/` directory. To start over without immediately deleting evidence, move it to a specifically named sibling and recreate it. Verify the backup before deleting it later.
 
 ```sh
-mv outputs .local/outputs-before-rerun
-mkdir outputs
+mv .local/outputs .local/outputs-before-rerun
+mkdir -p .local/outputs
 ```
 
 If `.local/outputs-before-rerun` already exists, choose a different explicit name; do not overwrite it. Downloaded originals under `data/raw/` are independent and need not be fetched again. `just fetch` is resumable and preserves completed files. If analysis has missing labels but retained evidence, try `just relabel OLD_ANALYSIS NEW_OUTPUT` before decoding the full video again. Add `--judgments` to `analyze` only when player result statistics are needed; it is unnecessary for a simple YouTube timestamp list.
@@ -143,13 +151,13 @@ If `.local/outputs-before-rerun` already exists, choose a different explicit nam
 
 ```sh
 # Offline local input: does not contact YouTube or upload frames.
-just auto '/absolute/path/to/recording.mp4' 'outputs/automatic-run'
+just auto '/absolute/path/to/recording.mp4' '.local/outputs/automatic-run'
 
 # URL/seed input: fetches or reuses the untrimmed media, then analyzes it.
-just auto 'https://www.youtube.com/watch?v=uqM7H-OJp68' 'outputs/url-run'
+just auto 'https://www.youtube.com/watch?v=uqM7H-OJp68' '.local/outputs/url-run'
 
 # Direct game capture with no cameras/chat: specify the actual game rectangle.
-just auto '/absolute/path/to/game-only.mp4' 'outputs/fullscreen-run' --game-roi 0,0,1920,1080
+just auto '/absolute/path/to/game-only.mp4' '.local/outputs/fullscreen-run' --game-roi 0,0,1920,1080
 ```
 
 Automatic OCR requires macOS Vision and the existing `swiftc` command from Xcode Command Line Tools. The small helper is compiled into `.local/bin/` with module caches under `.local/cache/swift/`. No OCR service, account, model download or image upload is used. A restricted host may need permission to execute Vision; the CLI reports this instead of pretending OCR succeeded. `just check` runs offline unit/integration checks without Vision; `just check-ocr` separately exercises the actual host OCR engine.
@@ -169,7 +177,7 @@ Outputs must be new directories. Analysis completion is marked by `analysis.json
 To measure automatic output against a separately prepared video review:
 
 ```sh
-just evaluate 'outputs/automatic-run/timeline.json' 'data/derived/reference.json' 'outputs/evaluation.json'
+just evaluate '.local/outputs/automatic-run/timeline.json' 'data/derived/reference.json' '.local/outputs/evaluation.json'
 ```
 
 Reference files declare `method: independent_video_review`, source identity (`path`, `size_bytes`, `mtime_ns`), `coverage_seconds`, and reviewed `segments` with `start_range`, `end_range`, `song`, `chart`, and `evidence`. Boundary ranges preserve reviewer uncertainty. The evaluator reports misses, false positives, unknown fields, label correctness and distances outside those ranges. It does not treat unreviewed portions as verified or comment timestamps as ground truth.
@@ -178,13 +186,13 @@ Reference files declare `method: independent_video_review`, source identity (`pa
 
 ```sh
 # Template fields automatically enable judgment extraction. No P1/P2 choice needed for one player.
-just auto '/path/to/video.mkv' outputs/with-counts --template templates/judgments.toml
+just auto '/path/to/video.mkv' .local/outputs/with-counts --template templates/judgments.toml
 
 # Add judgments to a previous run using its saved game-result frames.
-just results outputs/automatic-run/timeline.json outputs/enriched --template templates/judgments.toml
+just results .local/outputs/automatic-run/timeline.json .local/outputs/enriched --template templates/judgments.toml
 
 # Change presentation without video decoding, OCR or network access.
-just render outputs/enriched/timeline.json outputs/reformatted \
+just render .local/outputs/enriched/timeline.json .local/outputs/reformatted \
   --detail 'P {player.perfect} / G {player.great} / Miss {player.miss}'
 ```
 
@@ -197,9 +205,9 @@ This offline workflow renders **directly reviewed video segments**, not comments
 ```sh
 just record '/absolute/path/to/studio-download.mp4'
 just review '/absolute/path/to/studio-download.mp4' '.local/review.json'
-just frames '/absolute/path/to/studio-download.mp4' 'outputs/review-frames' --at 120 --at 130.5
+just frames '/absolute/path/to/studio-download.mp4' '.local/outputs/review-frames' --at 120 --at 130.5
 # Edit .local/review.json using direct video inspection, then:
-just timeline '/absolute/path/to/studio-download.mp4' '.local/review.json' 'outputs/run-001'
+just timeline '/absolute/path/to/studio-download.mp4' '.local/review.json' '.local/outputs/run-001'
 ```
 
 `review` creates a manifest with an empty `segments` list. Replace that list with reviewed entries such as:
@@ -227,7 +235,7 @@ All review times are seconds from **local playback start**, not frame indices or
 
 For a YouTube-aligned text list, set both `alignment.youtube_url` and a manually verified `alignment.offset_seconds` in the review, then append `--youtube` to `just timeline`. The relationship is `YouTube time = local playback time + offset`. Zero must be explicitly entered when the timelines match; no alignment is inferred from a filename or metadata. A single offset cannot describe edited/reordered videos. JSON always preserves local times, additionally recording aligned times when supplied.
 
-Review files and output directories must not already exist; the commands never overwrite them or the source media. Invalid reviews are rejected before output creation. Media identity uses path, size, modification time and probe fields, not a cryptographic hash: moving or touching the media requires renewed review. Incomplete `.part` downloads are rejected. A failed frame extraction can leave a partial directory; it has no completed `frames.json` and should not be used as a finished sample set. Store reviews under `.local/` or `data/derived/` and outputs under `outputs/` to keep them out of Git.
+Review files and output directories must not already exist; the commands never overwrite them or the source media. Invalid reviews are rejected before output creation. Media identity uses path, size, modification time and probe fields, not a cryptographic hash: moving or touching the media requires renewed review. Incomplete `.part` downloads are rejected. A failed frame extraction can leave a partial directory; it has no completed `frames.json` and should not be used as a finished sample set. Store reviews under `.local/` or `data/derived/` and generated outputs under `.local/outputs/` to keep them out of Git. A repository-root `outputs/` directory is deliberately visible to Git status.
 
 ## Experimental gameplay candidates
 
@@ -236,7 +244,7 @@ Review files and output directories must not already exist; the commands never o
 ```sh
 # Example for the inspected 1920x1080 layout of seed _OE47GBOvB0 only.
 # Do not assume this ROI/reference applies to other recordings.
-just detect 'data/raw/_OE47GBOvB0/_OE47GBOvB0.mkv' 'outputs/candidates.json' \
+just detect 'data/raw/_OE47GBOvB0/_OE47GBOvB0.mkv' '.local/outputs/candidates.json' \
   --roi 180,0,76,20 --reference-at 140 --limit 600
 ```
 

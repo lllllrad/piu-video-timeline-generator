@@ -1,12 +1,7 @@
 """Pure OCR parsing tests; real Vision checks are run separately on a host."""
-import importlib.util
-from pathlib import Path
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("recognition", ROOT / "scripts/recognition.py")
-recognition = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(recognition)
+from piu_timeline import recognition
 
 
 def line(text, x, y, width=.05, height=.025, confidence=1):

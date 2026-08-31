@@ -1,4 +1,3 @@
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -6,9 +5,7 @@ import sys
 import tempfile
 import unittest
 
-spec = importlib.util.spec_from_file_location("media", Path(__file__).resolve().parents[1] / "scripts/media.py")
-media = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(media)
+from piu_timeline import media
 
 
 class MediaTest(unittest.TestCase):
@@ -56,7 +53,7 @@ class MediaTest(unittest.TestCase):
                 "color=c=black:s=64x64:r=10", "-t", "1", "-c:v", "mpeg4", str(video)
             ], check=True)
             result = subprocess.run([
-                sys.executable, str(media.ROOT / "scripts/media.py"), "probe", str(video)
+                sys.executable, "-m", "piu_timeline.media", "probe", str(video)
             ], check=True, capture_output=True, text=True)
             info = json.loads(result.stdout)
             self.assertAlmostEqual(float(info["format"]["duration"]), 1, places=1)
@@ -65,7 +62,7 @@ class MediaTest(unittest.TestCase):
     def test_missing_local_video(self):
         with tempfile.TemporaryDirectory() as temporary:
             result = subprocess.run([
-                sys.executable, str(media.ROOT / "scripts/media.py"),
+                sys.executable, "-m", "piu_timeline.media",
                 "probe", str(Path(temporary) / "missing.mp4")
             ], capture_output=True, text=True)
             self.assertEqual(result.returncode, 2)

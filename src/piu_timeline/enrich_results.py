@@ -5,9 +5,9 @@ import json
 from pathlib import Path
 import subprocess
 
-from rendering import add_render_arguments, config_from_args, render, report_review, validate_config, write_rendered
-from result_stats import extract_stats
-from timeline import write_json
+from .rendering import add_render_arguments, config_from_args, render, report_review, validate_config, write_rendered
+from .result_stats import extract_stats
+from .timeline import write_json
 
 
 def enrich(source, output, config=None, selected=None):

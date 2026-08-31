@@ -1,11 +1,7 @@
 import copy
-from pathlib import Path
-import sys
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-import result_stats as stats
+from piu_timeline import result_stats as stats
 
 
 def line(text, cx, cy, width=.03, height=.02):

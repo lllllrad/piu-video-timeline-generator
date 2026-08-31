@@ -3,8 +3,8 @@ set -eu
 PIU_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 . "$PIU_ROOT/scripts/env.sh"
 cd "$PIU_ROOT"
-if [ ! -x "$PIU_ROOT/.local/bin/mise" ]; then
-  echo 'Run ./scripts/bootstrap first.' >&2
+if [ ! -x "$PIU_ROOT/.local/mise_home/bin/mise" ]; then
+  echo 'Local mise is optional and not installed. Run PIU_USE_MISE=1 ./scripts/bootstrap.' >&2
   exit 1
 fi
-exec "$PIU_ROOT/.local/bin/mise" "$@"
+exec "$PIU_ROOT/.local/mise_home/bin/mise" "$@"

@@ -8,9 +8,8 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from enrich_results import enrich
-import auto_timeline
+from piu_timeline.enrich_results import enrich
+from piu_timeline import auto_timeline
 
 
 class AnalysisWorkflowTest(unittest.TestCase):
@@ -35,7 +34,7 @@ class AnalysisWorkflowTest(unittest.TestCase):
                             {"start_seconds": 10, "end_seconds": 30, "song": "Song", "chart": "D21",
                              "ocr_evidence": str(evidence)}]}
             source.write_text(json.dumps(document))
-            with patch("enrich_results.render", side_effect=AssertionError("Must not render")):
+            with patch("piu_timeline.enrich_results.render", side_effect=AssertionError("Must not render")):
                 result = enrich(source, root / "enriched")
             self.assertEqual(result["artifact_type"], "video_analysis")
             self.assertEqual(result["segments"][0]["results"]["players"], {})
@@ -43,7 +42,7 @@ class AnalysisWorkflowTest(unittest.TestCase):
             self.assertFalse((root / "enriched/timeline.txt").exists())
             self.assertFalse((root / "enriched/timeline.json").exists())
             self.assertTrue(result["analysis_options"]["judgments"])
-            with patch("enrich_results.render", side_effect=ValueError("Presentation failed")):
+            with patch("piu_timeline.enrich_results.render", side_effect=ValueError("Presentation failed")):
                 with self.assertRaisesRegex(ValueError, "Presentation failed"):
                     enrich(source, root / "failed-render", config={})
             self.assertTrue((root / "failed-render/analysis.json").is_file())
@@ -51,19 +50,19 @@ class AnalysisWorkflowTest(unittest.TestCase):
             saved = root / "enriched/analysis.json"
             before = saved.read_bytes()
             for index, title in enumerate(("{timestamp} {song}", "{timestamp} Again {song}")):
-                completed = subprocess.run([sys.executable, str(ROOT / "scripts/rendering.py"),
+                completed = subprocess.run([sys.executable, "-m", "piu_timeline.rendering",
                                             str(saved), str(root / f"render-{index}"), "--title", title],
                                            capture_output=True, text=True)
                 self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertIn("Again Song", (root / "render-1/timeline.txt").read_text())
             self.assertEqual(saved.read_bytes(), before)
             # The CLI default also keeps enrichment independent of rendering.
-            completed = subprocess.run([sys.executable, str(ROOT / "scripts/enrich_results.py"),
+            completed = subprocess.run([sys.executable, "-m", "piu_timeline.enrich_results",
                                         str(saved), str(root / "cli-enriched")], capture_output=True, text=True)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertTrue((root / "cli-enriched/analysis.json").is_file())
             self.assertFalse((root / "cli-enriched/timeline.txt").exists())
-            completed = subprocess.run([sys.executable, str(ROOT / "scripts/enrich_results.py"),
+            completed = subprocess.run([sys.executable, "-m", "piu_timeline.enrich_results",
                                         str(saved), str(root / "cli-report"), "--render"], capture_output=True, text=True)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertTrue((root / "cli-report/analysis.json").is_file())
@@ -72,7 +71,7 @@ class AnalysisWorkflowTest(unittest.TestCase):
                 enrich(source, root / "enriched")
 
     def test_analyze_rejects_presentation_before_media_access(self):
-        completed = subprocess.run([sys.executable, str(ROOT / "scripts/analyze.py"),
+        completed = subprocess.run([sys.executable, "-m", "piu_timeline.analyze",
                                     "not-a-video", "unused", "--title", "{song}"], capture_output=True, text=True)
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("unrecognized arguments", completed.stderr)
