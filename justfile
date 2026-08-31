@@ -64,6 +64,10 @@ results +args:
 render +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.rendering "$@"
 
+# Run an executable TypeScript formatter over saved analysis JSON.
+format input output script="templates/timeline.ts":
+    sh scripts/run.sh deno run --quiet --allow-read --allow-write="$2" "$3" "$1" "$2"
+
 # Re-evaluate missing labels from retained OCR evidence without decoding media.
 relabel +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.relabel_analysis "$@"

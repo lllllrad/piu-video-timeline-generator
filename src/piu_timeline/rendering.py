@@ -4,17 +4,17 @@ import json
 import math
 from pathlib import Path
 import string
-import tomllib
 import unicodedata
 
 from .timeline import timestamp, write_json
 
 PLAYER_FIELDS = {"perfect", "great", "good", "bad", "miss", "max_combo", "score", "chart", "player_id", "side"}
 NUMERIC = {"perfect", "great", "good", "bad", "miss", "max_combo", "score"}
-BASE = {"timestamp", "song", "chart", "chart_suffix", "player_id", "side", *NUMERIC}
+BASE = {"timestamp", "end_timestamp", "song", "chart", "chart_suffix", "player_id", "side", *NUMERIC}
 FIELDS = BASE | {f"{prefix}.{field}" for prefix in ("player", "p1", "p2") for field in PLAYER_FIELDS}
 SELECTORS = ("single", "p1", "p2", "all")
-DEFAULT_TITLE = "{timestamp} {song}{chart_suffix}"
+DEFAULT_TITLE = "{timestamp} {song} {chart} start"
+DEFAULT_END_TITLE = "{end_timestamp} {song} {chart} end"
 DEFAULT_DETAIL = "P {player.perfect} / G {player.great} / Good {player.good} / Bad {player.bad} / Miss {player.miss}"
 
 
@@ -71,12 +71,13 @@ def validate_condition(condition):
 
 
 def validate_config(config):
-    keys(config, {"version", "player", "title", "details", "rules"}, "template configuration")
+    keys(config, {"version", "player", "title", "end_title", "details", "rules"}, "template configuration")
     if type(config.get("version", 1)) is not int or config.get("version", 1) != 1:
         raise ValueError("Unsupported template version")
     if config.get("player", "single") not in SELECTORS:
         raise ValueError("player must be single, p1, p2 or all")
     placeholders(config.get("title", DEFAULT_TITLE))
+    placeholders(config.get("end_title", DEFAULT_END_TITLE))
     def details(blocks):
         if not isinstance(blocks, list) or len(blocks) > 50:
             raise ValueError("details must be a list of at most 50 blocks")
@@ -103,7 +104,8 @@ def validate_config(config):
             placeholders(rule["title"])
         if "details" in rule:
             details(rule["details"])
-    return {"version": 1, "player": "single", "title": DEFAULT_TITLE, "details": [], "rules": [], **config}
+    return {"version": 1, "player": "single", "title": DEFAULT_TITLE,
+            "end_title": DEFAULT_END_TITLE, "details": [], "rules": [], **config}
 
 
 def reject_duplicates(pairs):
@@ -118,15 +120,14 @@ def reject_duplicates(pairs):
 def load_config(path=None):
     if path is None:
         return validate_config({})
-    raw = Path(path).read_bytes()
+    path = Path(path)
+    raw = path.read_bytes()
     if len(raw) > 65536:
         raise ValueError("Template file exceeds 64 KiB")
-    if Path(path).suffix.lower() == ".toml":
-        value = tomllib.loads(raw.decode("utf-8"))
-    elif Path(path).suffix.lower() == ".json":
+    if path.suffix.lower() == ".json":
         value = json.loads(raw, object_pairs_hook=reject_duplicates)
     else:
-        raise ValueError("Use a .toml or .json template file")
+        raise ValueError("Declarative renderer configuration must be a .json file")
     return validate_config(value)
 
 
@@ -138,7 +139,7 @@ def needs_results(config):
                     return True
                 if key == "requires" and any(f not in {"song", "timestamp", "chart", "chart_suffix"} for f in child):
                     return True
-                if key in {"text", "title"} and any(f not in {"song", "timestamp", "chart", "chart_suffix"} for f in placeholders(child)):
+                if key in {"text", "title", "end_title"} and any(f not in {"song", "timestamp", "end_timestamp", "chart", "chart_suffix"} for f in placeholders(child)):
                     return True
                 if isinstance(child, (dict, list)) and scan(child):
                     return True
@@ -190,6 +191,7 @@ def context_for(segment, player_id, players, config):
         chart = clean(segment["chart"]) if segment.get("chart") else None
     context = {field: None for field in FIELDS}
     context.update(timestamp=timestamp(segment["start_seconds"]),
+                   end_timestamp=timestamp(segment["end_seconds"]),
                    song=clean(segment["song"]) if segment.get("song") else None,
                    chart=chart, chart_suffix=f" [{chart}]" if chart else "")
     for prefix, player in (("player", selected), ("p1", players.get("p1")), ("p2", players.get("p2"))):
@@ -261,6 +263,7 @@ def render(timeline, config):
             if missing_title:
                 warnings.append("Unknown title fields: " + ", ".join(missing_title))
             text = substitute(title, context)
+            end_text = substitute(config["end_title"], context)
             if selector == "all" and player_id:
                 text += f" [{player_id.upper()}]"
             details = []
@@ -277,8 +280,9 @@ def render(timeline, config):
                     if policy == "omit":
                         continue
                 details.append(substitute(block["text"], context))
-            entries.append({"segment_index": index, "start_seconds": start, "player": player_id,
-                            "title": text, "details": details, "rule_index": rule_index,
+            entries.append({"segment_index": index, "start_seconds": start, "end_seconds": end,
+                            "player": player_id, "title": text, "end_title": end_text,
+                            "details": details, "rule_index": rule_index,
                             "warnings": warnings,
                             "needs_review": bool(warnings) or segment.get("needs_review", False)
                                             or segment.get("results", {}).get("needs_review", False)})
@@ -289,7 +293,8 @@ def write_rendered(directory, rendered):
     write_json(directory / "rendered.json", rendered)
     entries = rendered["entries"]
     with (directory / "timeline.txt").open("x", encoding="utf-8") as stream:
-        stream.write("".join(entry["title"] + "\n" for entry in entries))
+        stream.write("00:00 auto-generated timeline started\n")
+        stream.write("".join(entry["title"] + "\n" + entry["end_title"] + "\n" for entry in entries))
     with (directory / "details.txt").open("x", encoding="utf-8") as stream:
         stream.write("\n\n".join("\n".join([entry["title"], *entry["details"]]) for entry in entries) + ("\n" if entries else ""))
 
@@ -302,7 +307,7 @@ def report_review(rendered):
 
 
 def add_render_arguments(parser):
-    parser.add_argument("--template", type=Path, help="TOML/JSON conditional title/detail configuration")
+    parser.add_argument("--template", type=Path, help="Legacy JSON title/detail configuration; use just format for executable TypeScript")
     parser.add_argument("--player", choices=SELECTORS, help="single (default): sole player on either side; p1/p2: fixed slot; all: both")
     parser.add_argument("--title", help="Override title; e.g. {timestamp} {song} [{player.chart}]")
     parser.add_argument("--detail", action="append", help="Repeatable detail template; selected-player fields work on either side")

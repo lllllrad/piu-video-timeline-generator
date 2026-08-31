@@ -32,15 +32,18 @@ class TimelineTest(unittest.TestCase):
         result = self.build()
         self.assertEqual(result["segments"][0]["start_seconds"], 59.9)
         self.assertEqual(result["media"]["container_start_seconds"], 12.5)
-        self.assertEqual(timeline.render_text(result), "00:59 한글 Song [D20]\n1:00:01 한글 Song [D20]\n")
+        self.assertEqual(timeline.render_text(result),
+                         "00:00 auto-generated timeline started\n00:59 한글 Song D20 start\n02:00 한글 Song D20 end\n"
+                         "1:00:01 한글 Song D20 start\n1:01:40 한글 Song D20 end\n")
         for seconds, expected in [(0, "00:00"), (60, "01:00"), (3599.99, "59:59"), (3600, "1:00:00")]:
             self.assertEqual(timeline.timestamp(seconds), expected)
 
     def test_unknowns_and_empty_timeline(self):
         self.review["segments"] = [{**self.segment(0, 1), "song": None, "chart": None, "confidence": None}]
-        self.assertEqual(timeline.render_text(self.build()), "00:00 Unknown song\n")
+        self.assertEqual(timeline.render_text(self.build()),
+                         "00:00 auto-generated timeline started\n00:00 Unknown song start\n00:01 Unknown song end\n")
         self.review["segments"] = []
-        self.assertEqual(timeline.render_text(self.build()), "")
+        self.assertEqual(timeline.render_text(self.build()), "00:00 auto-generated timeline started\n")
 
     def test_alignment_is_explicit_and_preserves_local_times(self):
         with self.assertRaises(ValueError):
@@ -49,7 +52,7 @@ class TimelineTest(unittest.TestCase):
         result = self.build()
         self.assertEqual(result["segments"][0]["start_seconds"], 59.9)
         self.assertEqual(result["segments"][0]["youtube_start_seconds"], 69.9)
-        self.assertTrue(timeline.render_text(result, youtube=True).startswith("01:09"))
+        self.assertIn("01:09 한글 Song D20 start", timeline.render_text(result, youtube=True))
 
     def test_bad_alignment(self):
         for alignment in [None, {"youtube_url": "url"}, {"offset_seconds": 0},
@@ -141,7 +144,8 @@ class TimelineTest(unittest.TestCase):
             output = directory / "results"
             command = ["just", "timeline", str(video), str(review_path), str(output)]
             subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True)
-            self.assertEqual((output / "timeline.txt").read_text(), "00:00 한글 Song [D20]\n")
+            self.assertEqual((output / "timeline.txt").read_text(),
+                             "00:00 auto-generated timeline started\n00:00 한글 Song D20 start\n00:01 한글 Song D20 end\n")
             result = json.loads((output / "timeline.json").read_text())
             self.assertEqual(result["segments"][0]["start_seconds"], 0.25)
             self.assertEqual(result["text_timestamp_basis"], "local_playback")

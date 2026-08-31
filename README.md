@@ -104,7 +104,7 @@ Comments are noisy references, not ground truth. Keep them separate from detecto
 2. Broaden judgment/player-attribution validation, including genuine simultaneous two-player recordings; validate localization on unseen stream compositions and exhaustively annotated short plays.
 3. Extend beyond the tested Phoenix layouts, add a portable OCR backend, and pursue chart/replay extraction after timeline accuracy is established.
 
-Implementation knowledge is recorded in [scene and OCR field notes](docs/scene-and-ocr-notes.md): scene flow, player-side result differences, coordinate conventions, failure/summary handling and OCR regressions. See [game-screen and result design](docs/layout-and-result-design.md) for the remaining CV/YAML layout proposals, and [result/template usage](docs/result-templates.md) for implemented TOML/JSON presentation options.
+Implementation knowledge is recorded in [scene and OCR field notes](docs/scene-and-ocr-notes.md): scene flow, player-side result differences, coordinate conventions, failure/summary handling and OCR regressions. See [game-screen and result design](docs/layout-and-result-design.md) for the remaining CV/YAML layout proposals, and [result/template usage](docs/result-templates.md) for executable TypeScript presentation.
 
 ## Analyze first, render when ready
 
@@ -113,7 +113,7 @@ Implementation knowledge is recorded in [scene and OCR field notes](docs/scene-a
 just analyze '/path/to/video.mkv' .local/outputs/analysis --judgments
 
 # Review the structured result and its evidence, then choose presentation.
-just render .local/outputs/analysis/analysis.json .local/outputs/presentation --template templates/judgments.toml
+just format .local/outputs/analysis/analysis.json .local/outputs/timeline.txt
 ```
 
 `analyze` writes `analysis.json`, checkpoints and evidence only. Without `--judgments`, it skips optional player-statistics OCR. It does not accept templates or output player selectors: analysis retains all detected slots, and presentation selects them later. To add judgments later, run `just results .local/outputs/analysis/analysis.json .local/outputs/enriched`; render `.local/outputs/enriched/analysis.json` when needed. No immediate timeline is required.
@@ -186,10 +186,10 @@ Reference files declare `method: independent_video_review`, source identity (`pa
 
 ```sh
 # Template fields automatically enable judgment extraction. No P1/P2 choice needed for one player.
-just auto '/path/to/video.mkv' .local/outputs/with-counts --template templates/judgments.toml
+just auto '/path/to/video.mkv' .local/outputs/with-counts --judgments
 
 # Add judgments to a previous run using its saved game-result frames.
-just results .local/outputs/automatic-run/timeline.json .local/outputs/enriched --template templates/judgments.toml
+just results .local/outputs/automatic-run/timeline.json .local/outputs/enriched
 
 # Change presentation without video decoding, OCR or network access.
 just render .local/outputs/enriched/timeline.json .local/outputs/reformatted \
@@ -227,9 +227,15 @@ just timeline '/absolute/path/to/studio-download.mp4' '.local/review.json' '.loc
 
 The example values are illustrative, not labels for the seed videos. Use `null` for an unknown song, chart, or confidence. Confidence, when supplied, is a reviewer estimate in [0, 1], not a calibrated detector probability. Evidence is required; the program cannot verify that the reviewer actually inspected the video.
 
-Boundary convention: start at the first visible playable gameplay frame (not song selection or the loading screen); end at the first frame after gameplay disappears. Intervals are `[start, end)`, ordered and non-overlapping. Record any ambiguity in evidence. Frame sampling is for inspection and does not establish exact boundaries automatically.
+Boundary convention for a publishable song range:
 
-The outputs are `timeline.json` and `timeline.txt`. JSON retains fractional seconds, source path, size, modification time, original container start, video timebases and frame rates, and evidence. Text floors timestamps to whole seconds, rendering `MM:SS Song [Chart]` or `H:MM:SS Song [Chart]`. Unknown songs render as `Unknown song`; unknown charts are omitted. Empty reviewed lists produce empty text, not invented detections. This is timestamp-list text, not a guarantee that YouTube will activate chapters.
+- Choose the start as a whole second in the silent screen filled by the song cover, before gameplay begins. Starting playback there must not reveal another game sound effect.
+- Choose the end as a whole second in the black transition after the song ends and before the score screen appears. Starting playback there must not reveal another game sound effect.
+- Treat intervals as `[start, end)`, ordered and non-overlapping. Inspect both video and audio around each boundary and record any ambiguity in `evidence`.
+
+The automatic HUD detector produces gameplay-oriented fractional boundary evidence and cannot prove the silence requirement. Save reviewed corrections in the local review JSON and run `just timeline` for publication; frame sampling alone cannot establish audio silence.
+
+The outputs are `timeline.json` and `timeline.txt`. JSON retains reviewed values, source path, size, modification time, original container start, video timebases, frame rates and evidence. Text floors timestamps to whole seconds and renders `00:00 auto-generated timeline started`, then `MM:SS Song Chart start` and `MM:SS Song Chart end` (or hour-prefixed equivalents) for each song. Unknown songs render as `Unknown song`; unknown charts are omitted. An empty review still produces only the initial row. This is paste-ready timestamp text, not a guarantee that YouTube will activate chapters.
 
 All review times are seconds from **local playback start**, not frame indices or absolute packet timestamps. Container duration metadata can include an initial offset, so playback duration is derived from video stream end times, falling back to a streaming packet scan when necessary. The original container duration and origin are retained separately. Variable-frame-rate media is not converted to constant frame rate. `frames.json` distinguishes requested times from the decoded frame's actual source PTS and playback time. Frame images retain source resolution; rotated media follows FFmpeg's default display orientation.
 

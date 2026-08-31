@@ -35,7 +35,7 @@ Evidence comes from the original game-only result frames under `outputs/auto-hel
 
 `outputs/judgments-verified-v1/` exercises enrichment of selected segments; `outputs/judgments-rerender-v1/` exercises JSON-only re-rendering with the same selected-player placeholders across P2 and P1 plays. `outputs/judgments-p1-v1/` confirms that explicitly selecting an absent P1 prints unknowns/warnings rather than using P2's counts. Conditional missing-count behavior, first-match rules, separate player namespaces and two-player selection are covered by unit tests. Native OCR also reads distinct left/right counts from a synthetic simultaneous two-player result fixture. Genuine simultaneous two-player recordings have not yet been validated.
 
-The complete `just auto ... --template templates/judgments.toml` flow was additionally exercised on a 145-second derived local test copy (`outputs/judgments-auto-cli-v1/`). No `--judgments` flag was necessary: template fields activated extraction and produced the title/detail files. This copy is only a CLI fixture, not a retimed replacement for the original recording or a publishable original-video timeline. Its source recording was left intact. CV game-screen localization is not part of this extension.
+The complete `just auto ... --judgments` flow was additionally exercised on a 145-second derived local test copy (`outputs/judgments-auto-cli-v1/`). It produced the title/detail files. This copy is only a CLI fixture, not a retimed replacement for the original recording or a publishable original-video timeline. Its source recording was left intact. CV game-screen localization is not part of this extension.
 
 ## First-milestone automatic pipeline evaluation
 

@@ -96,6 +96,7 @@ def media_record(path):
 def review_template(record):
     return {
         "schema_version": 1, "method": "manual_video_review",
+        "boundary_policy": "silent_song_cover_to_silent_pre_result_black_frame_whole_seconds",
         "media": record,
         "alignment": {"youtube_url": None, "offset_seconds": None},
         "segments": [],
@@ -162,7 +163,9 @@ def build_timeline(review, record):
             item["youtube_start_seconds"] = number(start + offset, "youtube_start_seconds")
             item["youtube_end_seconds"] = number(end + offset, "youtube_end_seconds")
         normalized.append(item)
-    return {"schema_version": 1, "method": "manual_video_review", "media": record,
+    return {"schema_version": 1, "method": "manual_video_review",
+            "boundary_policy": "silent_song_cover_to_silent_pre_result_black_frame_whole_seconds",
+            "media": record,
             "alignment": {"youtube_url": url, "offset_seconds": offset},
             "segments": normalized}
 
@@ -177,13 +180,16 @@ def timestamp(seconds):
 def render_text(timeline, youtube=False):
     if youtube and timeline["alignment"]["offset_seconds"] is None:
         raise ValueError("YouTube text needs a manually verified alignment offset")
-    key = "youtube_start_seconds" if youtube else "start_seconds"
-    lines = []
+    start_key = "youtube_start_seconds" if youtube else "start_seconds"
+    end_key = "youtube_end_seconds" if youtube else "end_seconds"
+    lines = ["00:00 auto-generated timeline started"]
     for segment in timeline["segments"]:
         song = segment["song"] or "Unknown song"
-        chart = f" [{segment['chart']}]" if segment["chart"] else ""
-        lines.append(f"{timestamp(segment[key])} {song}{chart}")
-    return "\n".join(lines) + ("\n" if lines else "")
+        chart = f" {segment['chart']}" if segment["chart"] else ""
+        label = f"{song}{chart}"
+        lines.append(f"{timestamp(segment[start_key])} {label} start")
+        lines.append(f"{timestamp(segment[end_key])} {label} end")
+    return "\n".join(lines) + "\n"
 
 
 def write_json(path, value):

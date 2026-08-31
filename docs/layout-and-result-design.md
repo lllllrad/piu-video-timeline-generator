@@ -1,6 +1,6 @@
 # Game-screen localization, result statistics and output templates
 
-Status: **design record with a partially implemented subset**. Player judgments and conditional title/detail templates are now implemented using TOML/JSON; [the usage guide](result-templates.md) is authoritative for their actual CLI/schema. CV localization and YAML game-layout configuration remain proposals. YAML examples and other syntax below are illustrative, not accepted configuration. See [field notes](scene-and-ocr-notes.md) for observations and current limitations.
+Status: **design record with a partially implemented subset**. Player judgments and conditional title/detail rendering are implemented, while arbitrary presentation logic uses the executable TypeScript example; [the usage guide](result-templates.md) is authoritative for the current workflow. CV localization and YAML game-layout configuration remain proposals. YAML examples and other syntax below are illustrative, not accepted configuration. See [field notes](scene-and-ocr-notes.md) for observations and current limitations.
 
 ## Direction and implementation order
 

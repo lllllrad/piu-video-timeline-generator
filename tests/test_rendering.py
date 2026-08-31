@@ -26,15 +26,24 @@ def timeline(players=None):
     return {"segments": [segment]}
 
 
+def judgment_config():
+    return {"details": [{"text": "P {player.perfect} / G {player.great}", "missing": "show"}],
+            "rules": [{"title": "All judgments perfect",
+                       "when": {"all": [{"field": f"player.{field}", "op": "eq", "value": 0}
+                                         for field in ("great", "good", "bad", "miss")]}}]}
+
+
 class RenderingTest(unittest.TestCase):
-    def test_default_is_backward_compatible(self):
+    def test_default_matches_paste_ready_timeline_rows(self):
         data = timeline()
         rendered = r.render(data, {})
-        self.assertEqual(rendered["entries"][0]["title"] + "\n", render_text(data))
+        entry = rendered["entries"][0]
+        self.assertEqual("00:00 auto-generated timeline started\n" + entry["title"] + "\n" + entry["end_title"] + "\n",
+                         render_text(data))
         self.assertFalse(r.needs_results(r.validate_config({})))
 
     def test_single_alias_follows_either_side_and_does_not_mutate(self):
-        config = r.load_config(ROOT / "templates/judgments.toml")
+        config = judgment_config()
         for side in ("p1", "p2"):
             data = timeline({side: player(side)})
             original = copy.deepcopy(data)
@@ -45,7 +54,7 @@ class RenderingTest(unittest.TestCase):
             self.assertEqual(data, original)
 
     def test_unknown_zero_conflict_never_satisfies_condition(self):
-        config = r.load_config(ROOT / "templates/judgments.toml")
+        config = judgment_config()
         for field in ("great", "good", "bad", "miss"):
             p = player(**{field: None})
             entry = r.render(timeline({"p2": p}), config)["entries"][0]
@@ -123,8 +132,10 @@ class RenderingTest(unittest.TestCase):
             root = Path(temporary)
             source = root / "timeline.json"
             source.write_text(json.dumps(timeline({"p2": player()})))
+            config = root / "config.json"
+            config.write_text(json.dumps(judgment_config()))
             command = [sys.executable, "-m", "piu_timeline.rendering", str(source), str(root / "render"),
-                       "--template", str(ROOT / "templates/judgments.toml")]
+                       "--template", str(config)]
             subprocess.run(command, check=True, capture_output=True)
             self.assertIn("P 500", (root / "render/details.txt").read_text())
             self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
