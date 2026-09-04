@@ -11,6 +11,10 @@ from piu_timeline import auto_timeline as auto
 
 
 class AutoTest(unittest.TestCase):
+    def test_selection_sampling_covers_both_blink_phases(self):
+        self.assertEqual(auto.SELECTION_OFFSETS, (-14, -13, -10, -9, -6, -5, -3))
+        self.assertEqual({offset % 2 for offset in auto.SELECTION_OFFSETS}, {0, 1})
+
     def test_one_high_confidence_title_can_enable_summary_recovery_but_needs_review(self):
         observations = [{"song": {"text": "Visible once", "confidence": .95}},
                         {"song": None}]
@@ -51,6 +55,30 @@ class AutoTest(unittest.TestCase):
                 extract.reset_mock()
             self.assertEqual(result["segments"][0]["results"], stats)
             self.assertTrue((root / "out/analysis.json").is_file())
+
+    def test_analysis_rejects_candidate_without_song_or_chart_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            video = root / "source.mp4"
+            video.write_bytes(b"source")
+            evidence = root / "ocr.json"
+            evidence.write_text("[]")
+            record = {"path": str(video), "size_bytes": video.stat().st_size,
+                      "mtime_ns": video.stat().st_mtime_ns, "duration_seconds": 100,
+                      "video_streams": [{"width": 1920, "height": 1080}]}
+            detection = {"candidates": [{"start_seconds": 10, "end_seconds": 30, "mean_match_score": 1}]}
+            profile = {"hud": (180, 0, 70, 20), "at": 20, "detection": detection}
+            with patch.object(auto, "media_record", return_value=record), \
+                 patch.object(auto, "find_reference", return_value=(20, profile["hud"], {})), \
+                 patch.object(auto, "detect", return_value=detection), \
+                 patch.object(auto, "discover_profiles", return_value=[profile]), \
+                 patch.object(auto, "reference_patch", return_value=b"reference"), \
+                 patch.object(auto, "refine_boundary", side_effect=[(10, {"refined": True}), (30, {"refined": True})]), \
+                 patch.object(auto, "recognize_segment", return_value=({"song": None, "chart": None}, {}, str(evidence))), \
+                 patch.object(auto, "extract_stats") as extract:
+                result = auto.analyze(video, root / "out")
+            self.assertEqual(result["segments"], [])
+            extract.assert_not_called()
 
     def test_alternate_hud_discovery_reaches_beyond_first_ten_minutes(self):
         record = {"duration_seconds": 1200}

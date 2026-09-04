@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from urllib.parse import parse_qs, urlparse
 
-from .auto_timeline import analyze, resolve_source
+from .auto_timeline import ANALYSIS_VERSION, analyze, resolve_source
 from .detect import roi_value
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL_DATA = ROOT / ".local/data"
@@ -98,8 +98,10 @@ def run(source, format_name="default", game_roi=None):
     analysis_file = analysis_dir / "analysis.json"
     output = directory / "output" / f"{format_name}.txt"
     script = formatter(format_name)
-    if not analysis_file.is_file():
-        if analysis_dir.exists():
+    document = json.loads(analysis_file.read_text(encoding="utf-8")) if analysis_file.is_file() else None
+    stale = document is not None and document.get("analysis_version") != ANALYSIS_VERSION
+    if document is None or stale:
+        if analysis_dir.exists() and not stale:
             raise ValueError(f"Incomplete analysis exists: {analysis_dir}")
         raw.mkdir(parents=True, exist_ok=True)
         video, provenance = resolve_source(source, raw)
@@ -108,8 +110,14 @@ def run(source, format_name="default", game_roi=None):
             if not link.exists():
                 link.symlink_to(video.resolve())
             video = link
-        analyze(video, analysis_dir, game_roi, provenance)
-    document = json.loads(analysis_file.read_text(encoding="utf-8"))
+        target = directory / "analysis.next" if stale else analysis_dir
+        if target.exists():
+            raise ValueError(f"Incomplete replacement analysis exists: {target}")
+        analyze(video, target, game_roi, provenance)
+        if stale:
+            shutil.rmtree(analysis_dir)
+            target.rename(analysis_dir)
+        document = json.loads(analysis_file.read_text(encoding="utf-8"))
     if document.get("method") != "automatic_hud_ocr":
         raise ValueError("Saved analysis is not an automatic HUD analysis")
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -91,7 +91,9 @@ class WorkflowTest(unittest.TestCase):
 
             def fake_analyze(_video, output, _roi, _provenance):
                 output.mkdir(parents=True)
-                (output / "analysis.json").write_text(json.dumps({"method": "automatic_hud_ocr", "segments": []}))
+                (output / "analysis.json").write_text(json.dumps({
+                    "analysis_version": workflow.ANALYSIS_VERSION,
+                    "method": "automatic_hud_ocr", "segments": []}))
 
             with patch.object(workflow, "LOCAL_DATA", root / "data"), \
                  patch.object(workflow, "BUILTIN_FORMATS", root / "formats"), \
@@ -117,7 +119,8 @@ class WorkflowTest(unittest.TestCase):
             identifier = "abc123XYZ00"
             analysis = root / "data" / identifier / "analysis/analysis.json"
             analysis.parent.mkdir(parents=True)
-            analysis.write_text(json.dumps({"method": "automatic_hud_ocr", "segments": []}))
+            analysis.write_text(json.dumps({"analysis_version": workflow.ANALYSIS_VERSION,
+                                            "method": "automatic_hud_ocr", "segments": []}))
             script = root / "formats/default/index.ts"
             script.parent.mkdir(parents=True)
             script.write_text("throw new Error('broken')")
@@ -147,7 +150,9 @@ class WorkflowTest(unittest.TestCase):
                 self.assertEqual(source, video.resolve())
                 self.assertEqual(provenance["kind"], "cached_youtube")
                 output.mkdir(parents=True)
-                (output / "analysis.json").write_text(json.dumps({"method": "automatic_hud_ocr", "segments": []}))
+                (output / "analysis.json").write_text(json.dumps({
+                    "analysis_version": workflow.ANALYSIS_VERSION,
+                    "method": "automatic_hud_ocr", "segments": []}))
 
             with patch.object(workflow, "LOCAL_DATA", root / "data"), \
                  patch.object(workflow, "BUILTIN_FORMATS", root / "formats"), \
@@ -157,6 +162,38 @@ class WorkflowTest(unittest.TestCase):
                  patch("piu_timeline.auto_timeline.subprocess.run") as download:
                 workflow.run(identifier)
             download.assert_not_called()
+
+    def test_auto_replaces_stale_analysis_only_after_success(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            identifier = "abc123XYZ00"
+            raw = root / "data" / identifier / "raw"
+            raw.mkdir(parents=True)
+            video = raw / f"{identifier}.mkv"
+            video.write_bytes(b"video")
+            analysis = raw.parent / "analysis/analysis.json"
+            analysis.parent.mkdir()
+            analysis.write_text(json.dumps({"analysis_version": 1, "method": "automatic_hud_ocr",
+                                            "segments": [{"song": "stale"}]}))
+            script = root / "formats/default/index.ts"
+            script.parent.mkdir(parents=True)
+            script.write_text("format")
+
+            def fake_analyze(_source, output, _roi, _provenance):
+                output.mkdir()
+                (output / "analysis.json").write_text(json.dumps({
+                    "analysis_version": workflow.ANALYSIS_VERSION,
+                    "method": "automatic_hud_ocr", "segments": []}))
+
+            with patch.object(workflow, "LOCAL_DATA", root / "data"), \
+                 patch.object(workflow, "BUILTIN_FORMATS", root / "formats"), \
+                 patch.object(workflow, "LOCAL_FORMATS", root / "local-formats"), \
+                 patch.object(workflow, "analyze", side_effect=fake_analyze), \
+                 patch.object(workflow, "run_formatter", return_value="timeline\n"):
+                workflow.run(identifier)
+            replaced = json.loads(analysis.read_text())
+            self.assertEqual(replaced["analysis_version"], workflow.ANALYSIS_VERSION)
+            self.assertEqual(replaced["segments"], [])
 
 
 if __name__ == "__main__":

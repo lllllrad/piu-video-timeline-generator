@@ -11,6 +11,10 @@ from .timeline import media_record, write_json
 from .result_stats import extract_stats
 
 
+SELECTION_OFFSETS = (-14, -13, -10, -9, -6, -5, -3)
+ANALYSIS_VERSION = 2
+
+
 def resolve_source(source, raw_dir=None):
     local = Path(source).expanduser()
     if local.is_file():
@@ -161,7 +165,9 @@ def corroborated_result_title(observations, chart):
 def recognize_segment(record, roi, start, end, directory):
     directory.mkdir()
     frames = []
-    for phase, times in [("selection", [start - 14, start - 12, start - 10, start - 8, start - 6, start - 4, start - 3]),
+    # Adjacent one-second samples avoid repeatedly hitting the same phase of a
+    # blinking PRESS/CENTER overlay that can obscure the middle of a title.
+    for phase, times in [("selection", [start + offset for offset in SELECTION_OFFSETS]),
                          ("result", [end + offset for offset in (3, 5, 7, 8, 9, 10, 11, 12)])]:
         for index, seconds in enumerate(times):
             if not 0 <= seconds < record["duration_seconds"]:
@@ -253,6 +259,9 @@ def analyze(video, output, game_roi=None, provenance=None):
         if end <= start or (segments and start < segments[-1]["end_seconds"]):
             raise ValueError("Automatic refinement produced invalid/overlapping intervals")
         labels, support, ocr_file = recognize_segment(record, roi, start, end, evidence_dir / f"segment-{index + 1:03}")
+        if labels["song"] is None and labels["chart"] is None:
+            print(f"Rejected candidate {index + 1}: no song or chart evidence", flush=True)
+            continue
         segments.append({"start_seconds": start, "end_seconds": end, "hud_profile": profile_index, **labels,
                          "confidence": support, "boundary_evidence": {"start": start_evidence, "end": end_evidence},
                          "ocr_evidence": ocr_file,
@@ -269,7 +278,8 @@ def analyze(video, output, game_roi=None, provenance=None):
     stat = video.resolve().stat()
     if (stat.st_size, stat.st_mtime_ns) != (record["size_bytes"], record["mtime_ns"]):
         raise ValueError("Source changed during automatic processing")
-    result = {"schema_version": 1, "artifact_type": "video_analysis", "method": "automatic_hud_ocr", "media": record,
+    result = {"schema_version": 1, "analysis_version": ANALYSIS_VERSION,
+              "artifact_type": "video_analysis", "method": "automatic_hud_ocr", "media": record,
               "provenance": provenance or {"kind": "local", "network_used": False},
               "game_roi": list(roi), "alignment": {"youtube_url": None, "offset_seconds": None},
               "timestamp_basis": "local_playback", "segments": segments,

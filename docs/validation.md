@@ -23,6 +23,7 @@ Genuine simultaneous two-player recordings have not been broadly validated. The 
 - Sparse HUD discovery can miss short appearances or an unseen skin.
 - OCR agreement can repeat the same error and is not a calibrated probability.
 - Overlays can hide song titles, charts or result values.
+- Candidates with neither song nor chart evidence are rejected as detector false positives.
 - Local and YouTube timelines can differ after editing; no offset is inferred.
 
 Run `just check-ocr` and record the macOS/Vision version when comparing native OCR behavior.

@@ -24,6 +24,7 @@ Codex-only environment generation and optional mise installation are documented 
 - `timeline.py`, `evaluate.py` and `relabel_analysis.py` are internal review and diagnostic tools.
 
 Analysis is authoritative and presentation is disposable. A format reads `analysis.json`; it does not trigger recognition or mutate evidence.
+Analyzer changes that affect saved results increment `ANALYSIS_VERSION`. `just auto` rebuilds an older cache into a temporary directory and replaces it only after the new analysis succeeds.
 
 ## Commands
 
