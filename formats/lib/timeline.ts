@@ -15,6 +15,7 @@ export interface ResultPlayer {
 export interface TimelineSegment {
   start_seconds: number;
   end_seconds: number;
+  stage: 1 | 2 | 3 | 4 | 5 | 6 | null;
   song: string | null;
   chart: string | null;
   results?: { players?: Partial<Record<"p1" | "p2", ResultPlayer>>; [key: string]: unknown };
@@ -35,7 +36,8 @@ export function parseTimeline(value: unknown): TimelineDocument {
   for (const [index, segment] of document.segments.entries()) {
     if (typeof segment !== "object" || segment === null ||
         !Number.isFinite(segment.start_seconds) || !Number.isFinite(segment.end_seconds) ||
-        segment.start_seconds < 0 || segment.end_seconds <= segment.start_seconds) {
+        segment.start_seconds < 0 || segment.end_seconds <= segment.start_seconds ||
+        !(segment.stage === null || Number.isInteger(segment.stage) && segment.stage >= 1 && segment.stage <= 6)) {
       throw new Error(`invalid segment ${index + 1}`);
     }
   }

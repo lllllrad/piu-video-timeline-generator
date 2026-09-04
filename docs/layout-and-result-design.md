@@ -16,6 +16,8 @@ The useful sequence is selection, song introduction, gameplay, transition and pe
 
 The black transition and the score screen are evidence around a play, not part of its detected gameplay interval. Publication boundaries require separate audio/video review.
 
+Each accepted play samples the gameplay HUD for its displayed `STAGE 01` through `STAGE 06` number. The value is stored per segment and may reset to 1 when another credit begins. It is not inferred from segment order or from an assumed number of stages. A combined play-result screen may follow the last stage, but is not required for stage numbering. When several summary rows share a chart, the recognized stage number may select the matching ordinal row (`1ST` through `6TH`) to recover the song title; the summary remains evidence for that song rather than a separate timeline segment.
+
 ## Player results
 
 Each play may contain independent P1 and P2 result slots. A slot retains:

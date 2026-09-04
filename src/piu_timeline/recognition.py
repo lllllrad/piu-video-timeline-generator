@@ -66,6 +66,26 @@ def chart_mode(text):
     return matches[0] if len(matches) == 1 else None
 
 
+def stage_number(lines):
+    """Read STAGE 01..06 from the in-game HUD without inferring play order."""
+    values = []
+    for label in lines:
+        if re.sub(r"[^A-Z]", "", label["text"].upper()) != "STAGE":
+            continue
+        lx, ly = center(label)
+        numbers = [line for line in lines if re.fullmatch(r"0?[1-6]", line["text"].strip())
+                   and abs(center(line)[0] - lx) < .04
+                   and 0 < center(line)[1] - ly < .08]
+        if len(numbers) == 1:
+            values.append((int(numbers[0]["text"]), label, numbers[0]))
+    unique = {value for value, _, _ in values}
+    if len(unique) != 1:
+        return None
+    value, label, number = max(values, key=lambda item: min(item[1]["confidence"], item[2]["confidence"]))
+    return {"value": value, "confidence": min(label["confidence"], number["confidence"]),
+            "evidence": [label, number]}
+
+
 def frame_labels(lines, phase):
     """Read Phoenix title and selected chart regions, never scores or chat."""
     band = (.13, .23) if phase == "result" else (.48, .54)
@@ -193,8 +213,8 @@ def summary_chart(lines, song):
     return None
 
 
-def summary_song(lines, chart):
-    """Recover a title only when exactly one summary row has the known chart."""
+def summary_song(lines, chart, stage=None):
+    """Recover a title from a unique chart or its explicitly numbered stage row."""
     matches = []
     titles = [line for line in lines if .25 < center(line)[0] < .7
               and not re.fullmatch(r"[\d\W]+", line["text"])]
@@ -209,9 +229,19 @@ def summary_song(lines, chart):
                       and 1 <= int(item["text"]) <= 99 and item["confidence"] >= .5
                       and abs(center(item)[0] - cx) < .04 and 0 < center(item)[1] - cy < .075]
             if len(digits) == 1 and mode + str(int(digits[0]["text"])) == chart:
+                ordinal = next((item for item in lines
+                                if re.sub(r"[^A-Z0-9]", "", item["text"].upper())
+                                == {1: "1ST", 2: "2ND", 3: "3RD", 4: "4TH", 5: "5TH", 6: "6TH"}.get(stage)
+                                and abs(center(item)[0] - center(title)[0]) < .08
+                                and .015 < title_y - center(item)[1] < .08), None)
                 matches.append({"text": title["text"], "confidence": min(
                     title["confidence"], line["confidence"], digits[0]["confidence"]),
-                                "evidence": [title, line, digits[0]]})
+                                "stage_match": ordinal is not None,
+                                "evidence": [title, line, digits[0], *([ordinal] if ordinal else [])]})
+    if stage is not None:
+        stage_matches = [item for item in matches if item["stage_match"]]
+        if len(stage_matches) == 1:
+            return stage_matches[0]
     unique = {re.sub(r"\s+", "", item["text"]).casefold() for item in matches}
     return max(matches, key=lambda item: item["confidence"]) if len(unique) == 1 else None
 

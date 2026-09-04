@@ -6,13 +6,13 @@ import subprocess
 
 from .detect import detect, similarity
 from .media import fetch_command, resolve_url
-from .recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, ocr_images, summary_chart, summary_song
+from .recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, ocr_images, stage_number, summary_chart, summary_song
 from .timeline import media_record, write_json
 from .result_stats import extract_stats
 
 
 SELECTION_OFFSETS = (-14, -13, -10, -9, -6, -5, -3)
-ANALYSIS_VERSION = 2
+ANALYSIS_VERSION = 3
 
 
 def resolve_source(source, raw_dir=None):
@@ -162,8 +162,8 @@ def corroborated_result_title(observations, chart):
     return max(candidates, key=lambda item: item["confidence"]) if len(keys) == 1 else None
 
 
-def recognize_segment(record, roi, start, end, directory):
-    directory.mkdir()
+def recognize_segment(record, roi, start, end, directory, stage=None):
+    directory.mkdir(exist_ok=True)
     frames = []
     # Adjacent one-second samples avoid repeatedly hitting the same phase of a
     # blinking PRESS/CENTER overlay that can obscure the middle of a title.
@@ -211,7 +211,7 @@ def recognize_segment(record, roi, start, end, directory):
             is_summary = any("".join(line["text"].upper().split()) == "PLAYRESULT" for line in raw)
             focused = focused_lines(frame["file"], "summary", roi[2], roi[3]) if is_summary else []
             item = {**frame, "phase": "summary", "ocr": raw, "focused_ocr": focused,
-                    "song": summary_song(focused, labels["chart"]) if is_summary and labels["chart"] else None,
+                    "song": summary_song(focused, labels["chart"], stage) if is_summary and labels["chart"] else None,
                     "chart": summary_chart(focused, labels["song"]) if is_summary and labels["song"] else None}
             summary_observations.append(item)
         for field in ("song", "chart"):
@@ -223,6 +223,16 @@ def recognize_segment(record, roi, start, end, directory):
         observations.extend(summary_observations)
     write_json(directory / "ocr.json", observations)
     return labels, confidence, str(directory / "ocr.json")
+
+
+def recognize_stage(record, roi, start, end, directory):
+    seconds = min(start + 5, (start + end) / 2)
+    frame = capture_game(record, directory / "stage.png", seconds, roi)
+    lines = ocr_images([frame["file"]], english=True)[0]["lines"]
+    recognized = stage_number(lines)
+    evidence = {**frame, "ocr": lines, "recognized": recognized}
+    write_json(directory / "stage.json", evidence)
+    return (recognized["value"] if recognized else None), str(directory / "stage.json")
 
 
 def analyze(video, output, game_roi=None, provenance=None):
@@ -258,14 +268,19 @@ def analyze(video, output, game_roi=None, provenance=None):
         end, end_evidence = refine_boundary(record, hud, reference, candidate["end_seconds"], "end")
         if end <= start or (segments and start < segments[-1]["end_seconds"]):
             raise ValueError("Automatic refinement produced invalid/overlapping intervals")
-        labels, support, ocr_file = recognize_segment(record, roi, start, end, evidence_dir / f"segment-{index + 1:03}")
+        segment_dir = evidence_dir / f"segment-{index + 1:03}"
+        segment_dir.mkdir()
+        stage, stage_evidence = recognize_stage(record, roi, start, end, segment_dir)
+        labels, support, ocr_file = recognize_segment(record, roi, start, end, segment_dir, stage)
         if labels["song"] is None and labels["chart"] is None:
             print(f"Rejected candidate {index + 1}: no song or chart evidence", flush=True)
             continue
-        segments.append({"start_seconds": start, "end_seconds": end, "hud_profile": profile_index, **labels,
+        segments.append({"start_seconds": start, "end_seconds": end, "stage": stage,
+                         "stage_evidence": stage_evidence, "hud_profile": profile_index, **labels,
                          "confidence": support, "boundary_evidence": {"start": start_evidence, "end": end_evidence},
                          "ocr_evidence": ocr_file,
                          "needs_review": any(labels[key] is None for key in labels)
+                                         or stage is None
                                          or not start_evidence["refined"] or not end_evidence["refined"]
                                          or any(value and (value["mean_ocr_confidence"] < .7
                                                            or value.get("supporting_frames", 0) < 2)

@@ -32,6 +32,7 @@ If `.local/formats/<name>/` exists, it owns that format name. A missing `index.t
 [formats/lib/timeline.ts](../formats/lib/timeline.ts) defines the analysis types and small optional helpers:
 
 - `parseTimeline(value)` validates untyped JSON and returns `TimelineDocument`.
+- `TimelineSegment.stage` is the recognized in-game stage number (`1` through `6`) or `null`.
 - `timestamp(seconds)` floors a playback time to `MM:SS` or `H:MM:SS`.
 - `label(segment)` joins a song name and chart without stray punctuation.
 - `onlyPlayer(segment)` returns the sole recognized player, if unambiguous.

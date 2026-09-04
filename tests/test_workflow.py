@@ -13,7 +13,7 @@ class WorkflowTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary) / "analysis.json"
             source.write_text(json.dumps({"method": "automatic_hud_ocr", "segments": [
-                {"start_seconds": 83.9, "end_seconds": 225.2, "song": "Song", "chart": "D20"}
+                {"start_seconds": 83.9, "end_seconds": 225.2, "stage": 2, "song": "Song", "chart": "D20"}
             ]}))
             output = workflow.run_formatter(workflow.BUILTIN_FORMATS / "default/index.ts", source)
             self.assertEqual(output, "00:00 auto-generated timeline started\n01:23 Song D20 start\n03:45 Song D20 end\n")

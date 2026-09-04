@@ -49,11 +49,13 @@ class AutoTest(unittest.TestCase):
                  patch.object(auto, "reference_patch", return_value=b"reference"), \
                  patch.object(auto, "refine_boundary", side_effect=[(10, {"refined": True}), (30, {"refined": True})] * 4), \
                  patch.object(auto, "recognize_segment", return_value=({"song": "Song", "chart": "D21"}, {}, str(evidence))), \
+                 patch.object(auto, "recognize_stage", return_value=(4, str(evidence))), \
                  patch.object(auto, "extract_stats", return_value=stats) as extract:
                 result = auto.analyze(video, root / "out")
                 extract.assert_called_once()
                 extract.reset_mock()
             self.assertEqual(result["segments"][0]["results"], stats)
+            self.assertEqual(result["segments"][0]["stage"], 4)
             self.assertTrue((root / "out/analysis.json").is_file())
 
     def test_analysis_rejects_candidate_without_song_or_chart_evidence(self):
@@ -74,6 +76,7 @@ class AutoTest(unittest.TestCase):
                  patch.object(auto, "discover_profiles", return_value=[profile]), \
                  patch.object(auto, "reference_patch", return_value=b"reference"), \
                  patch.object(auto, "refine_boundary", side_effect=[(10, {"refined": True}), (30, {"refined": True})]), \
+                 patch.object(auto, "recognize_stage", return_value=(None, str(evidence))), \
                  patch.object(auto, "recognize_segment", return_value=({"song": None, "chart": None}, {}, str(evidence))), \
                  patch.object(auto, "extract_stats") as extract:
                 result = auto.analyze(video, root / "out")

@@ -57,6 +57,14 @@ class RecognitionTest(unittest.TestCase):
         self.assertIsNone(recognition.chart_mode("TROUBLE"))
         self.assertIsNone(recognition.chart_mode("D"))
 
+    def test_stage_number_uses_hud_label_and_supports_one_through_six(self):
+        for value in range(1, 7):
+            lines = [line("STAGE", .14, .01), line(f"{value:02}", .145, .045)]
+            self.assertEqual(recognition.stage_number(lines)["value"], value)
+        self.assertIsNone(recognition.stage_number([line("STAGE", .14, .01), line("07", .145, .045)]))
+        self.assertIsNone(recognition.stage_number([line("03", .145, .045)]))
+        self.assertIsNone(recognition.stage_number([line("STAGE", .14, .01), line("03", .4, .045)]))
+
     def test_spacing_consensus(self):
         value, support = recognition.consensus([
             {"song": {"text": "뱅 뱅", "confidence": .5}},
@@ -95,6 +103,16 @@ class RecognitionTest(unittest.TestCase):
         self.assertEqual(recognition.summary_song(lines, "D24")["text"], "Hidden title")
         duplicate = lines + [line("Another", .4, .72, .2), line("DOUBLE", .72, .67), line("24", .72, .70)]
         self.assertIsNone(recognition.summary_song(duplicate, "D24"))
+
+    def test_summary_song_uses_stage_when_chart_is_repeated(self):
+        lines = [line("1ST", .48, .18), line("First", .4, .22, .2),
+                 line("2ND", .48, .45), line("Second", .4, .49, .2),
+                 line("DOUBLE", .72, .17), line("23", .72, .20),
+                 line("DOUBLE", .72, .44), line("23", .72, .47)]
+        self.assertIsNone(recognition.summary_song(lines, "D23"))
+        recovered = recognition.summary_song(lines, "D23", stage=2)
+        self.assertEqual(recovered["text"], "Second")
+        self.assertTrue(recovered["stage_match"])
 
 
 if __name__ == "__main__":
