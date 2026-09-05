@@ -6,13 +6,13 @@ import subprocess
 
 from .detect import detect, similarity
 from .media import fetch_command, resolve_url
-from .recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, ocr_images, stage_number, summary_chart, summary_song
+from .recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, is_summary_screen, ocr_images, stage_number, summary_chart, summary_song, summary_stage_row
 from .timeline import media_record, write_json
 from .result_stats import extract_stats
 
 
 SELECTION_OFFSETS = (-14, -13, -10, -9, -6, -5, -3)
-ANALYSIS_VERSION = 3
+ANALYSIS_VERSION = 4
 
 
 def resolve_source(source, raw_dir=None):
@@ -201,14 +201,29 @@ def recognize_segment(record, roi, start, end, directory, stage=None):
                                   "alternatives": {labels["song"]: 1},
                                   "phase": "selection_or_result",
                                   "agreement": "high_confidence_single_frame"}
+    summary_observations = []
+    if stage is not None:
+        for item in observations:
+            if item["phase"] != "result" or not is_summary_screen(item["ocr"]):
+                continue
+            focused = focused_lines(item["file"], "summary", roi[2], roi[3])
+            row = summary_stage_row(focused, stage)
+            summary_observations.append({**item, "phase": "summary", "focused_ocr": focused,
+                                         "song": row["song"] if row else None,
+                                         "chart": row["chart"] if row else None})
+        summary_song_value, summary_song_support = consensus(summary_observations, "song")
+        summary_chart_value, summary_chart_support = consensus(summary_observations, "chart")
+        if summary_song_value is not None and summary_chart_value is not None:
+            labels["song"], labels["chart"] = summary_song_value, summary_chart_value
+            confidence["song"] = {**summary_song_support, "phase": "summary_stage"}
+            confidence["chart"] = {**summary_chart_support, "phase": "summary_stage"}
     if labels["song"] is None or labels["chart"] is None:
-        summary_observations = []
         for index, seconds in enumerate((end + 12, end + 14, end + 16)):
             if seconds >= record["duration_seconds"]:
                 continue
             frame = capture_game(record, directory / f"summary-{index}.png", seconds, roi)
             raw = ocr_images([frame["file"]])[0]["lines"]
-            is_summary = any("".join(line["text"].upper().split()) == "PLAYRESULT" for line in raw)
+            is_summary = is_summary_screen(raw)
             focused = focused_lines(frame["file"], "summary", roi[2], roi[3]) if is_summary else []
             item = {**frame, "phase": "summary", "ocr": raw, "focused_ocr": focused,
                     "song": summary_song(focused, labels["chart"], stage) if is_summary and labels["chart"] else None,
@@ -220,7 +235,7 @@ def recognize_segment(record, roi, start, end, directory, stage=None):
             value, support = consensus(summary_observations, field)
             if value:
                 labels[field], confidence[field] = value, {**support, "phase": "summary"}
-        observations.extend(summary_observations)
+    observations.extend(summary_observations)
     write_json(directory / "ocr.json", observations)
     return labels, confidence, str(directory / "ocr.json")
 

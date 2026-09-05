@@ -114,6 +114,20 @@ class RecognitionTest(unittest.TestCase):
         self.assertEqual(recovered["text"], "Second")
         self.assertTrue(recovered["stage_match"])
 
+    def test_summary_stage_row_reads_chart_independently_of_selection(self):
+        lines = [line("1ST", .48, .18), line("First", .4, .22, .2),
+                 line("2ND", .48, .45), line("Die Another Day", .4, .49, .2),
+                 line("DOUBLE", .72, .17), line("20", .72, .20),
+                 line("DOUBLE", .72, .44), line("19", .72, .47)]
+        row = recognition.summary_stage_row(lines, 2)
+        self.assertEqual(row["song"]["text"], "Die Another Day")
+        self.assertEqual(row["chart"]["text"], "D19")
+        self.assertIsNone(recognition.summary_stage_row(lines, 3))
+
+    def test_summary_screen_tolerates_spacing(self):
+        self.assertTrue(recognition.is_summary_screen([line("PLAY RESULT", .4, .1)]))
+        self.assertFalse(recognition.is_summary_screen([line("SCORE", .4, .1)]))
+
 
 if __name__ == "__main__":
     unittest.main()

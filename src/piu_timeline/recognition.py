@@ -137,6 +137,10 @@ def is_result_screen(lines):
     return "SCORE" in words and bool(words & {"PERFECT", "MAXCOMBO", "KCAL"})
 
 
+def is_summary_screen(lines):
+    return any(re.sub(r"[^A-Z]", "", line["text"].upper()) == "PLAYRESULT" for line in lines)
+
+
 def focused_lines(frame, phase, game_width, game_height):
     """Upscale title and chart regions before OCR; map boxes back to game coordinates."""
     boxes = ([(.2, .15, .6, .07), (.59, .25, .15, .14), (.26, .25, .15, .14)] if phase == "result"
@@ -244,6 +248,37 @@ def summary_song(lines, chart, stage=None):
             return stage_matches[0]
     unique = {re.sub(r"\s+", "", item["text"]).casefold() for item in matches}
     return max(matches, key=lambda item: item["confidence"]) if len(unique) == 1 else None
+
+
+def summary_stage_row(lines, stage):
+    """Read the song and chart from one explicitly numbered combined-result row."""
+    ordinal_text = {1: "1ST", 2: "2ND", 3: "3RD", 4: "4TH", 5: "5TH", 6: "6TH"}.get(stage)
+    ordinals = [line for line in lines
+                if re.sub(r"[^A-Z0-9]", "", line["text"].upper()) == ordinal_text]
+    matches = []
+    for ordinal in ordinals:
+        ox, oy = center(ordinal)
+        titles = [line for line in lines if .25 < center(line)[0] < .7
+                  and abs(center(line)[0] - ox) < .15 and .015 < center(line)[1] - oy < .08
+                  and not re.fullmatch(r"[\d\W]+", line["text"])]
+        for title in titles:
+            title_y = center(title)[1]
+            for mode_line in lines:
+                mode = chart_mode(mode_line["text"])
+                cx, cy = center(mode_line)
+                if not mode or not (.69 < cx < .8 and -.09 < cy - title_y < -.025):
+                    continue
+                digits = [item for item in lines if re.fullmatch(r"\d{1,2}", item["text"])
+                          and 1 <= int(item["text"]) <= 99 and item["confidence"] >= .5
+                          and abs(center(item)[0] - cx) < .04 and 0 < center(item)[1] - cy < .075]
+                if len(digits) == 1:
+                    evidence = [ordinal, title, mode_line, digits[0]]
+                    matches.append({"song": {"text": title["text"], "confidence": min(
+                                        item["confidence"] for item in evidence), "evidence": evidence},
+                                    "chart": {"text": mode + str(int(digits[0]["text"])), "confidence": min(
+                                        item["confidence"] for item in evidence), "evidence": evidence}})
+    keys = {(item["song"]["text"], item["chart"]["text"]) for item in matches}
+    return matches[0] if len(keys) == 1 else None
 
 
 def consensus(observations, field):
