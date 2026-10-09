@@ -9,5 +9,8 @@ description = "Evidence-backed Pump It Up video timeline analysis"
 requires-python = ">=3.12,<3.13"
 dependencies = ["yt-dlp==2026.8.19"]
 
+[project.optional-dependencies]
+ocr = ["easyocr==1.7.2"]
+
 [tool.setuptools.packages.find]
 where = ["src"]

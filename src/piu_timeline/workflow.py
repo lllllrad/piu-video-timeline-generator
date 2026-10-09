@@ -1,6 +1,8 @@
 """One-command media preparation, analysis, and TypeScript presentation."""
 import argparse
 import hashlib
+import fcntl
+import uuid
 import json
 from pathlib import Path
 import re
@@ -10,6 +12,8 @@ from urllib.parse import parse_qs, urlparse
 
 from .auto_timeline import ANALYSIS_VERSION, analyze, resolve_source
 from .detect import roi_value
+from .ocr import configuration
+from .storage import relocate_evidence
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL_DATA = ROOT / ".local/data"
 LOCAL_FORMATS = ROOT / ".local/formats"
@@ -90,7 +94,19 @@ def import_studio(source, video_path):
     return destination
 
 
+
 def run(source, format_name="default", game_roi=None):
+    directory = LOCAL_DATA / source_id(source)
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / ".auto.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError(f"Another auto run is processing {directory.name}") from error
+        return _run(source, format_name, game_roi)
+
+
+def _run(source, format_name="default", game_roi=None):
     identifier = source_id(source)
     directory = LOCAL_DATA / identifier
     raw = directory / "raw"
@@ -100,6 +116,16 @@ def run(source, format_name="default", game_roi=None):
     script = formatter(format_name)
     document = json.loads(analysis_file.read_text(encoding="utf-8")) if analysis_file.is_file() else None
     stale = document is not None and document.get("analysis_version") != ANALYSIS_VERSION
+    if document is not None:
+        stale |= game_roi is not None and list(game_roi) != document.get("game_roi")
+        stale |= document.get("ocr_configuration", configuration()) != configuration()
+        media = document.get("media")
+        if media:
+            cached_source = Path(media["path"])
+            stale |= not cached_source.is_file()
+            if cached_source.is_file():
+                stat = cached_source.stat()
+                stale |= (stat.st_size, stat.st_mtime_ns) != (media["size_bytes"], media["mtime_ns"])
     if document is None or stale:
         if analysis_dir.exists() and not stale:
             raise ValueError(f"Incomplete analysis exists: {analysis_dir}")
@@ -110,13 +136,33 @@ def run(source, format_name="default", game_roi=None):
             if not link.exists():
                 link.symlink_to(video.resolve())
             video = link
-        target = directory / "analysis.next" if stale else analysis_dir
-        if target.exists():
-            raise ValueError(f"Incomplete replacement analysis exists: {target}")
-        analyze(video, target, game_roi, provenance)
-        if stale:
-            shutil.rmtree(analysis_dir)
+        target = directory / f"analysis.build-{uuid.uuid4().hex[:12]}"
+        effective_roi = game_roi or (tuple(document["game_roi"]) if document and document.get("game_roi") else None)
+        # Versions 5–10 contain the same bounded raw frames and per-song
+        # statistics. Refresh only the summary layout and resolution decisions.
+        reusable = (document and document.get("analysis_version") in {5, 6, 7, 8, 9, 10}
+                    and document.get("ocr_configuration") == configuration()
+                    and document.get("game_roi") == list(effective_roi or [])
+                    and document.get("media", {}).get("size_bytes") == video.stat().st_size
+                    and document.get("media", {}).get("mtime_ns") == video.stat().st_mtime_ns
+                    and (analysis_dir / "profiles.json").is_file()
+                    and (analysis_dir / "candidates.json").is_file())
+        if reusable:
+            analyze(video, target, effective_roi, provenance, retained=analysis_dir)
+        else:
+            analyze(video, target, effective_roi, provenance)
+        relocate_evidence(target, analysis_dir)
+        backup = directory / f"analysis.previous-{uuid.uuid4().hex[:12]}"
+        if analysis_dir.exists():
+            analysis_dir.rename(backup)
+        try:
             target.rename(analysis_dir)
+        except OSError:
+            if backup.exists():
+                backup.rename(analysis_dir)
+            raise
+        if backup.exists():
+            relocate_evidence(backup, backup, source=analysis_dir)
         document = json.loads(analysis_file.read_text(encoding="utf-8"))
     if document.get("method") != "automatic_hud_ocr":
         raise ValueError("Saved analysis is not an automatic HUD analysis")

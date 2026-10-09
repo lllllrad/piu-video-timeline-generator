@@ -73,7 +73,7 @@ def focused_stats(frame, directory, index, width, height):
     return mapped
 
 
-def field_consensus(observations):
+def field_consensus(observations, min_confidence=.7):
     values = [item for item in observations if item is not None]
     counts = Counter(item["value"] for item in values)
     if not counts:
@@ -82,8 +82,8 @@ def field_consensus(observations):
     accepted = votes >= 2 and votes > len(values) / 2
     selected = [item for item in values if item["value"] == winner]
     confidence = sum(item["confidence"] for item in selected) / votes
-    return {"value": winner if accepted and confidence >= .7 else None,
-            "status": "recognized" if accepted and confidence >= .7 else "conflict" if len(counts) > 1 else "unknown",
+    return {"value": winner if accepted and confidence >= min_confidence else None,
+            "status": "recognized" if accepted and confidence >= min_confidence else "conflict" if len(counts) > 1 else "unknown",
             "supporting_frames": votes, "recognized_frames": len(values),
             "mean_ocr_confidence": confidence, "alternatives": {str(k): v for k, v in counts.items()}}
 

@@ -18,6 +18,36 @@ class WorkflowTest(unittest.TestCase):
             output = workflow.run_formatter(workflow.BUILTIN_FORMATS / "default/index.ts", source)
             self.assertEqual(output, "00:00 auto-generated timeline started\n01:23 Song D20 start\n03:45 Song D20 end\n")
 
+    def test_default_format_names_different_players_across_a_recording(self):
+        def segment(name, start, chart):
+            return {"start_seconds": start, "end_seconds": start + 10, "stage": 1,
+                    "song": "Song", "chart": chart, "players": {"p2": {
+                        "player_id": "p2", "presence": "recognized", "side": "right",
+                        "fields": {"name": {"status": "recognized", "value": name}}}}}
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "analysis.json"
+            source.write_text(json.dumps({"segments": [segment("Alice #1234", 10, "D20"),
+                                                       segment("Bob #5678", 30, "S18")]}))
+            output = workflow.run_formatter(workflow.BUILTIN_FORMATS / "default/index.ts", source)
+            self.assertIn("00:10 Song D20 [Alice #1234] start", output)
+            self.assertIn("00:30 Song S18 [Bob #5678] start", output)
+            source.write_text(json.dumps({"segments": [segment("Alice #1234", 10, "D20")]}))
+            output = workflow.run_formatter(workflow.BUILTIN_FORMATS / "default/index.ts", source)
+            self.assertNotIn("Alice", output)
+
+    def test_simultaneous_players_display_their_own_charts(self):
+        players = {player: {"player_id": player, "presence": "recognized", "fields": {
+            "name": {"status": "recognized", "value": name},
+            "chart": {"status": "recognized", "value": chart}}}
+            for player, name, chart in (("p1", "Alice #1234", "S18"), ("p2", "Bob #5678", "D20"))}
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "analysis.json"
+            source.write_text(json.dumps({"segments": [{"start_seconds": 10, "end_seconds": 20,
+                "stage": 1, "song": "Song", "chart": "D20", "players": players}]}))
+            output = workflow.run_formatter(workflow.BUILTIN_FORMATS / "default/index.ts", source)
+            self.assertIn("Song [P1: Alice #1234 S18 / P2: Bob #5678 D20] start", output)
+            self.assertNotIn("Song D20", output)
+
     def test_source_ids(self):
         self.assertEqual(workflow.source_id("https://youtu.be/abc123XYZ00"), "abc123XYZ00")
         self.assertEqual(workflow.source_id("https://www.youtube.com/watch?v=abc123XYZ00&t=4"), "abc123XYZ00")

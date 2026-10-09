@@ -1,36 +1,12 @@
 """Local game-screen OCR with positional evidence and multi-frame agreement."""
 from collections import Counter
 from difflib import SequenceMatcher
-import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
-import sys
 import unicodedata
 
-ROOT = Path(__file__).resolve().parents[2]
-
-
-def ocr_binary():
-    if sys.platform != "darwin" or not shutil.which("swiftc"):
-        raise ValueError("Automatic OCR currently requires macOS Vision and swiftc (Xcode Command Line Tools)")
-    source = ROOT / "native/ocr.swift"
-    binary = ROOT / ".local/bin/piu-ocr"
-    cache = ROOT / ".local/cache/swift"
-    cache.mkdir(parents=True, exist_ok=True)
-    binary.parent.mkdir(parents=True, exist_ok=True)
-    if not binary.exists() or binary.stat().st_mtime_ns < source.stat().st_mtime_ns:
-        subprocess.run(["swiftc", "-module-cache-path", str(cache), str(source), "-o", str(binary)], check=True)
-    return binary
-
-
-def ocr_images(paths, english=False):
-    result = subprocess.run([str(ocr_binary()), *(["--english"] if english else []), *map(str, paths)], capture_output=True, text=True)
-    if result.returncode:
-        raise ValueError("Local Vision OCR failed. On restricted hosts, allow local OCR execution; "
-                         "no images are uploaded. " + result.stderr.strip())
-    return json.loads(result.stdout)
+from .ocr import ocr_binary, ocr_images
 
 
 def capture_game(record, output, seconds, roi):
@@ -134,11 +110,39 @@ def frame_labels(lines, phase):
 
 def is_result_screen(lines):
     words = {re.sub(r"[^A-Z]", "", line["text"].upper()) for line in lines}
-    return "SCORE" in words and bool(words & {"PERFECT", "MAXCOMBO", "KCAL"})
+    return not is_summary_screen(lines) and "SCORE" in words and bool(words & {"PERFECT", "MAXCOMBO", "KCAL"})
 
 
 def is_summary_screen(lines):
-    return any(re.sub(r"[^A-Z]", "", line["text"].upper()) == "PLAYRESULT" for line in lines)
+    words = {re.sub(r"[^A-Z]", "", line["text"].upper()) for line in lines}
+    ordinals = {ordinal_number(line["text"]) for line in lines if .35 < center(line)[0] < .65}
+    return "PLAYRESULT" in words or {"PLAY", "RESULT"} <= words or len(ordinals - {None}) >= 2
+
+
+def ordinal_number(text):
+    token = re.sub(r"[^A-Z0-9]", "", text.upper())
+    return {"1ST": 1, "15T": 1, "2ND": 2, "3RD": 3, "4TH": 4, "5TH": 5, "6TH": 6}.get(token)
+
+
+def is_demo_screen(lines):
+    return any(re.sub(r"[^A-Z]", "", line["text"].upper()) == "DEMOPLAY"
+               and center(line)[1] > .85 for line in lines)
+
+
+def scene_kind(lines):
+    """Summary takes precedence: never parse its first row as a per-song title."""
+    if is_demo_screen(lines):
+        return "demo"
+    if is_summary_screen(lines):
+        return "summary"
+    if is_result_screen(lines):
+        return "result"
+    if stage_number(lines):
+        return "gameplay"
+    words = {re.sub(r"[^A-Z]", "", line["text"].upper()) for line in lines}
+    if "MYBEST" in words or frame_labels(lines, "selection")["chart"]:
+        return "selection"
+    return "unknown"
 
 
 def focused_lines(frame, phase, game_width, game_height):
@@ -146,12 +150,12 @@ def focused_lines(frame, phase, game_width, game_height):
     boxes = ([(.2, .15, .6, .07), (.59, .25, .15, .14), (.26, .25, .15, .14)] if phase == "result"
              else [(.2, .485, .6, .052), (.15, .63, .7, .3), (.07, .82, .15, .17)])
     if phase == "summary":
-        boxes = [(.25, .14, .45, .8), (.70, .14, .09, .8)]
+        boxes = [(.20, .14, .60, .8), (.70, .14, .09, .8), (.21, .14, .09, .8), (.46, .15, .08, .80)]
     paths, regions = [], []
     for index, (x, y, w, h) in enumerate(boxes):
         pixels = (int(x * game_width), int(y * game_height), int(w * game_width), int(h * game_height))
         px, py, pw, ph = pixels
-        path = Path(frame).with_name(Path(frame).stem + f"-focus-{index}.png")
+        path = Path(frame).with_name(Path(frame).stem + f"-{phase}-v5-focus-{index}.png")
         processing = f"crop={pw}:{ph}:{px}:{py},scale=iw*3:ih*3"
         subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(frame),
                         "-vf", processing, str(path)], check=True, capture_output=True)
@@ -159,9 +163,13 @@ def focused_lines(frame, phase, game_width, game_height):
         regions.append((px / game_width, py / game_height, pw / game_width, ph / game_height))
     recognized = ocr_images(paths[:1]) + ocr_images(paths[1:], english=True)
     mapped = []
-    for result, (x, y, w, h) in zip(recognized, regions):
+    for region_index, (result, (x, y, w, h)) in enumerate(zip(recognized, regions)):
         for line in result["lines"]:
+            if phase == "summary" and region_index == 3 and ordinal_number(line["text"]) is None:
+                continue
             bx, by, bw, bh = line["box"]
+            if phase == "summary" and region_index == 0 and not .30 < x + (bx + bw / 2) * w < .70:
+                continue
             mapped.append({**line, "box": [x + bx * w, y + by * h, bw * w, bh * h], "image": result["path"]})
     if phase == "result":
         title = frame_labels(mapped, "result")["song"]
@@ -197,64 +205,10 @@ def focused_lines(frame, phase, game_width, game_height):
     return mapped
 
 
-def summary_chart(lines, song):
-    key = lambda text: re.sub(r"\s+", "", unicodedata.normalize("NFKC", text)).casefold()
-    titles = [line for line in lines if key(line["text"]) == key(song)]
-    if len(titles) != 1:
-        return None
-    title_y = center(titles[0])[1]
-    for line in lines:
-        mode = chart_mode(line["text"])
-        cx, cy = center(line)
-        if mode and .69 < cx < .8 and -.09 < cy - title_y < -.025:
-            digits = [item for item in lines if re.fullmatch(r"\d{1,2}", item["text"])
-                      and 1 <= int(item["text"]) <= 99 and item["confidence"] >= .5
-                      and abs(center(item)[0] - cx) < .04 and 0 < center(item)[1] - cy < .075]
-            if len(digits) == 1:
-                return {"text": mode + str(int(digits[0]["text"])),
-                        "confidence": min(line["confidence"], digits[0]["confidence"]),
-                        "evidence": [titles[0], line, digits[0]]}
-    return None
-
-
-def summary_song(lines, chart, stage=None):
-    """Recover a title from a unique chart or its explicitly numbered stage row."""
-    matches = []
-    titles = [line for line in lines if .25 < center(line)[0] < .7
-              and not re.fullmatch(r"[\d\W]+", line["text"])]
-    for title in titles:
-        title_y = center(title)[1]
-        for line in lines:
-            mode = chart_mode(line["text"])
-            cx, cy = center(line)
-            if not mode or not (.69 < cx < .8 and -.09 < cy - title_y < -.025):
-                continue
-            digits = [item for item in lines if re.fullmatch(r"\d{1,2}", item["text"])
-                      and 1 <= int(item["text"]) <= 99 and item["confidence"] >= .5
-                      and abs(center(item)[0] - cx) < .04 and 0 < center(item)[1] - cy < .075]
-            if len(digits) == 1 and mode + str(int(digits[0]["text"])) == chart:
-                ordinal = next((item for item in lines
-                                if re.sub(r"[^A-Z0-9]", "", item["text"].upper())
-                                == {1: "1ST", 2: "2ND", 3: "3RD", 4: "4TH", 5: "5TH", 6: "6TH"}.get(stage)
-                                and abs(center(item)[0] - center(title)[0]) < .08
-                                and .015 < title_y - center(item)[1] < .08), None)
-                matches.append({"text": title["text"], "confidence": min(
-                    title["confidence"], line["confidence"], digits[0]["confidence"]),
-                                "stage_match": ordinal is not None,
-                                "evidence": [title, line, digits[0], *([ordinal] if ordinal else [])]})
-    if stage is not None:
-        stage_matches = [item for item in matches if item["stage_match"]]
-        if len(stage_matches) == 1:
-            return stage_matches[0]
-    unique = {re.sub(r"\s+", "", item["text"]).casefold() for item in matches}
-    return max(matches, key=lambda item: item["confidence"]) if len(unique) == 1 else None
-
-
 def summary_stage_row(lines, stage):
     """Read the song and chart from one explicitly numbered combined-result row."""
-    ordinal_text = {1: "1ST", 2: "2ND", 3: "3RD", 4: "4TH", 5: "5TH", 6: "6TH"}.get(stage)
     ordinals = [line for line in lines
-                if re.sub(r"[^A-Z0-9]", "", line["text"].upper()) == ordinal_text]
+                if stage is not None and ordinal_number(line["text"]) == stage]
     matches = []
     for ordinal in ordinals:
         ox, oy = center(ordinal)
@@ -266,19 +220,28 @@ def summary_stage_row(lines, stage):
             for mode_line in lines:
                 mode = chart_mode(mode_line["text"])
                 cx, cy = center(mode_line)
-                if not mode or not (.69 < cx < .8 and -.09 < cy - title_y < -.025):
+                if not mode or not ((.20 < cx < .31 or .69 < cx < .8) and -.09 < cy - title_y < -.025):
                     continue
                 digits = [item for item in lines if re.fullmatch(r"\d{1,2}", item["text"])
                           and 1 <= int(item["text"]) <= 99 and item["confidence"] >= .5
                           and abs(center(item)[0] - cx) < .04 and 0 < center(item)[1] - cy < .075]
                 if len(digits) == 1:
                     evidence = [ordinal, title, mode_line, digits[0]]
-                    matches.append({"song": {"text": title["text"], "confidence": min(
+                    matches.append({"player_id": "p1" if cx < .5 else "p2", "song": {"text": title["text"], "confidence": min(
                                         item["confidence"] for item in evidence), "evidence": evidence},
                                     "chart": {"text": mode + str(int(digits[0]["text"])), "confidence": min(
                                         item["confidence"] for item in evidence), "evidence": evidence}})
-    keys = {(item["song"]["text"], item["chart"]["text"]) for item in matches}
-    return matches[0] if len(keys) == 1 else None
+    if len({item["song"]["text"] for item in matches}) != 1:
+        return None
+    charts = {}
+    for player in ("p1", "p2"):
+        entries = [item["chart"] for item in matches if item["player_id"] == player]
+        if len({entry["text"] for entry in entries}) == 1:
+            charts[player] = max(entries, key=lambda item: item["confidence"])
+    shared = list(charts.values())
+    chart = shared[0] if len({entry["text"] for entry in shared}) == 1 else None
+    return {"song": max((item["song"] for item in matches), key=lambda item: item["confidence"]),
+            "chart": chart, "charts": charts}
 
 
 def consensus(observations, field):

@@ -89,30 +89,13 @@ class RecognitionTest(unittest.TestCase):
         result = recognition.frame_labels([line("D", .14, .86, .02), line("25", .14, .9, .025)], "selection")
         self.assertEqual(result["chart"]["text"], "D25")
 
-    def test_summary_chart_matches_song_not_another_row(self):
-        lines = [line("Song A", .4, .22, .2), line("Song B", .4, .49, .2),
-                 line("DOUBLE", .72, .17), line("21", .72, .20),
-                 line("DOUBLE", .72, .44), line("25", .72, .47)]
-        self.assertEqual(recognition.summary_chart(lines, "Song B")["text"], "D25")
-        self.assertIsNone(recognition.summary_chart(lines, "Unknown"))
-
-    def test_summary_song_uses_unique_known_chart(self):
-        lines = [line("First", .4, .22, .2), line("Hidden title", .4, .49, .2),
-                 line("DOUBLE", .72, .17), line("21", .72, .20),
-                 line("DOUBLE", .72, .44), line("24", .72, .47)]
-        self.assertEqual(recognition.summary_song(lines, "D24")["text"], "Hidden title")
-        duplicate = lines + [line("Another", .4, .72, .2), line("DOUBLE", .72, .67), line("24", .72, .70)]
-        self.assertIsNone(recognition.summary_song(duplicate, "D24"))
-
-    def test_summary_song_uses_stage_when_chart_is_repeated(self):
+    def test_summary_stage_row_disambiguates_repeated_charts(self):
         lines = [line("1ST", .48, .18), line("First", .4, .22, .2),
                  line("2ND", .48, .45), line("Second", .4, .49, .2),
                  line("DOUBLE", .72, .17), line("23", .72, .20),
                  line("DOUBLE", .72, .44), line("23", .72, .47)]
-        self.assertIsNone(recognition.summary_song(lines, "D23"))
-        recovered = recognition.summary_song(lines, "D23", stage=2)
-        self.assertEqual(recovered["text"], "Second")
-        self.assertTrue(recovered["stage_match"])
+        self.assertEqual(recognition.summary_stage_row(lines, 2)["song"]["text"], "Second")
+        self.assertIsNone(recognition.summary_stage_row(lines, None))
 
     def test_summary_stage_row_reads_chart_independently_of_selection(self):
         lines = [line("1ST", .48, .18), line("First", .4, .22, .2),
@@ -123,6 +106,23 @@ class RecognitionTest(unittest.TestCase):
         self.assertEqual(row["song"]["text"], "Die Another Day")
         self.assertEqual(row["chart"]["text"], "D19")
         self.assertIsNone(recognition.summary_stage_row(lines, 3))
+
+    def test_summary_left_and_two_player_charts_remain_separate(self):
+        title = [line("1ST", .48, .18), line("Same Song", .4, .22, .2)]
+        left = [line("SINGLE", .23, .17), line("18", .23, .20)]
+        right = [line("DOUBLE", .72, .17), line("20", .72, .20)]
+        row = recognition.summary_stage_row(title + left, 1)
+        self.assertEqual(row["song"]["text"], "Same Song")
+        self.assertEqual(row["chart"]["text"], "S18")
+        row = recognition.summary_stage_row(title + left + right, 1)
+        self.assertEqual(row["charts"]["p1"]["text"], "S18")
+        self.assertEqual(row["charts"]["p2"]["text"], "D20")
+        self.assertIsNone(row["chart"])
+
+    def test_demo_marker_is_not_evidence_of_a_real_play(self):
+        self.assertTrue(recognition.is_demo_screen([line("DEMO PLAY", .2, .94)]))
+        self.assertEqual(recognition.scene_kind([line("DEMO PLAY", .2, .94)]), "demo")
+        self.assertFalse(recognition.is_demo_screen([line("DEMO PLAY", .2, .5)]))
 
     def test_summary_screen_tolerates_spacing(self):
         self.assertTrue(recognition.is_summary_screen([line("PLAY RESULT", .4, .1)]))

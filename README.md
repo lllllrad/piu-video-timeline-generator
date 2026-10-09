@@ -41,11 +41,26 @@ just auto VIDEO_ID
 
 The import refuses to overwrite an existing cached video. It moves the export to `.local/data/<video-id>/raw/`; the following `auto` command therefore makes no network request.
 
-Automatic OCR currently requires macOS Vision and a clearly visible Phoenix game screen. For a direct game capture or a different stream layout, specify the game rectangle:
+Automatic OCR uses macOS Vision on macOS or the optional EasyOCR backend on Linux. It requires a clearly visible Phoenix game screen. For a direct game capture or a different stream layout, specify the game rectangle:
 
 ```sh
 just auto VIDEO --game-roi 0,0,1920,1080
 ```
+
+On Linux, install the OCR extra after creating the virtual environment:
+
+```sh
+.venv/bin/pip install -e '.[ocr]'
+just auto VIDEO
+```
+
+Linux defaults to CPU inference. To use an available GPU with a compatible PyTorch installation:
+
+```sh
+PIU_OCR_BACKEND=easyocr PIU_OCR_DEVICE=auto just auto VIDEO
+```
+
+Models are downloaded on first use into `.local/cache/easyocr/`; inference is local. See [development](docs/development.md) for explicit device selection and validation limits.
 
 ## Output formats
 
@@ -64,6 +79,8 @@ The default format produces:
 01:23 Song Name D20 start
 03:45 Song Name D20 end
 ```
+
+When a recording contains different recognized player accounts (including players taking turns), the default format adds `[Name #1234]` to each play. Simultaneous players retain separate names and charts. Unreadable identities remain `Unknown player`; one recognized account keeps the original compact output.
 
 Copy [formats/default/index.ts](formats/default/index.ts) to start a new format. Shared types and helpers are in [formats/lib/timeline.ts](formats/lib/timeline.ts). See [custom formats](docs/formats.md) for examples.
 
@@ -87,4 +104,4 @@ Unknown or conflicting OCR values remain unknown. The project never infers a You
 - `just`
 - Xcode Command Line Tools on macOS for Vision OCR
 
-Developer setup and internal commands are documented in [docs/development.md](docs/development.md). Measured behavior and known limits are in [docs/validation.md](docs/validation.md).
+Developer setup and internal commands are documented in [docs/development.md](docs/development.md). Recognition assumptions and limitations are described in [docs/scene-and-ocr-notes.md](docs/scene-and-ocr-notes.md).

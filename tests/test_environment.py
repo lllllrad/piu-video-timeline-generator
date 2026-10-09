@@ -19,6 +19,8 @@ class EnvironmentTest(unittest.TestCase):
         self.assertFalse(config["allow_login_shell"])
         overrides = config["shell_environment_policy"]["set"]
         env = overrides
+        if not (ROOT / ".local/mise_home/data/shims/just").exists():
+            self.skipTest("Optional checkout-local mise installation is absent")
         result = subprocess.run(
             ["/bin/sh", "-c", "command -v just && just --version"],
             cwd=ROOT, env=env, check=True, capture_output=True, text=True,

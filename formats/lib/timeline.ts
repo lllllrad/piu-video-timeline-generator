@@ -18,6 +18,7 @@ export interface TimelineSegment {
   stage: 1 | 2 | 3 | 4 | 5 | 6 | null;
   song: string | null;
   chart: string | null;
+  players?: Partial<Record<"p1" | "p2", ResultPlayer>>;
   results?: { players?: Partial<Record<"p1" | "p2", ResultPlayer>>; [key: string]: unknown };
   [key: string]: unknown;
 }
@@ -69,4 +70,26 @@ export function onlyPlayer(segment: TimelineSegment): ResultPlayer | undefined {
 export function field<T extends string | number>(player: ResultPlayer | undefined, name: string): T | undefined {
   const evidence = player?.fields[name];
   return evidence?.status === "recognized" ? evidence.value as T : undefined;
+}
+
+
+export function hasDifferentPlayers(document: TimelineDocument): boolean {
+  const names = new Set(document.segments.flatMap(segment =>
+    Object.values(segment.players ?? {}).map(player => field<string>(player, "name")).filter(Boolean)));
+  return names.size > 1 || document.segments.some(segment =>
+    Object.values(segment.results?.players ?? {}).filter(p => p?.presence === "recognized").length > 1 ||
+    Object.values(segment.players ?? {}).filter(p => p?.presence === "recognized").length > 1);
+}
+
+export function playerLabel(segment: TimelineSegment, includeNames: boolean): string {
+  if (!includeNames) return label(segment);
+  const ids = (["p1", "p2"] as const).filter(id =>
+    segment.players?.[id]?.presence === "recognized" || segment.results?.players?.[id]?.presence === "recognized");
+  const names = ids.map(id => {
+    const name = field<string>(segment.players?.[id], "name") ?? "Unknown player";
+    const chart = field<string>(segment.players?.[id], "chart") ?? field<string>(segment.results?.players?.[id], "chart");
+    return ids.length > 1 ? [id.toUpperCase() + ":", name, chart].filter(Boolean).join(" ") : name;
+  });
+  const title = ids.length > 1 ? segment.song ?? "Unknown song" : label(segment);
+  return `${title} [${names.length ? names.join(" / ") : "Unknown player"}]`;
 }

@@ -3,16 +3,20 @@ import json
 import math
 from pathlib import Path
 import subprocess
+import shutil
 
 from .detect import detect, similarity
 from .media import fetch_command, resolve_url
-from .recognition import capture_game, consensus, focused_lines, frame_labels, is_result_screen, is_summary_screen, ocr_images, stage_number, summary_chart, summary_song, summary_stage_row
+from .recognition import (capture_game, focused_lines, frame_labels, ocr_images,
+                          stage_number, summary_stage_row, scene_kind, is_demo_screen)
 from .timeline import media_record, write_json
-from .result_stats import extract_stats
+from .result_stats import extract_stats, aggregate_frames
+from .evidence import resolve_labels, resolve_players, reconcile_sessions
+from .ocr import configuration
 
 
 SELECTION_OFFSETS = (-14, -13, -10, -9, -6, -5, -3)
-ANALYSIS_VERSION = 4
+ANALYSIS_VERSION = 11
 
 
 def resolve_source(source, raw_dir=None):
@@ -149,95 +153,51 @@ def refine_boundary(record, roi, reference, approximate, kind, threshold=.9, rad
                      "note": "Decoded frame sampling; allow one sampling step of quantization error"}
 
 
-def singleton_title(observations):
-    candidates = [item["song"] for item in observations if item.get("song")]
-    return candidates[0] if len(candidates) == 1 and candidates[0]["confidence"] >= .9 else None
-
-
-def corroborated_result_title(observations, chart):
-    candidates = [item["song"] for item in observations if item.get("phase") == "result"
-                  and item.get("song") and item.get("chart", {}).get("text") == chart
-                  and item["song"]["confidence"] >= .5]
-    keys = {"".join(item["text"].split()).casefold() for item in candidates}
-    return max(candidates, key=lambda item: item["confidence"]) if len(keys) == 1 else None
-
-
-def recognize_segment(record, roi, start, end, directory, stage=None):
+def recognize_segment(record, roi, start, end, directory, stage=None, previous_end=0, next_start=None, reuse_summary=False):
     directory.mkdir(exist_ok=True)
-    frames = []
-    # Adjacent one-second samples avoid repeatedly hitting the same phase of a
-    # blinking PRESS/CENTER overlay that can obscure the middle of a title.
-    for phase, times in [("selection", [start + offset for offset in SELECTION_OFFSETS]),
-                         ("result", [end + offset for offset in (3, 5, 7, 8, 9, 10, 11, 12)])]:
+    retained = directory / "ocr.json"
+    existing = json.loads(retained.read_text()) if retained.is_file() else []
+    saved = {item["requested_seconds"]: item for item in existing}
+    next_start = record["duration_seconds"] if next_start is None else next_start
+    frames, pending = [], []
+    for window, times in [("selection", [start + offset for offset in SELECTION_OFFSETS]),
+                          ("result", [end + offset for offset in
+                                      (3, 5, 7, 8, 9, 10, 11, 12, 14, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60)])]:
         for index, seconds in enumerate(times):
-            if not 0 <= seconds < record["duration_seconds"]:
+            if not previous_end < seconds < next_start or not 0 <= seconds < record["duration_seconds"]:
                 continue
-            frame = capture_game(record, directory / f"{phase}-{index}.png", seconds, roi)
-            frames.append({**frame, "phase": phase})
-    recognized = ocr_images([frame["file"] for frame in frames])
+            if seconds in saved:
+                frame = saved[seconds]
+            else:
+                frame = capture_game(record, directory / f"{window}-{index}.png", seconds, roi)
+                pending.append(frame)
+            frames.append({**frame, "window": window})
+    recognized = ocr_images([frame["file"] for frame in pending])
+    fresh = {frame["file"]: result["lines"] for frame, result in zip(pending, recognized)}
     observations = []
-    for frame, result in zip(frames, recognized):
-        eligible = frame["phase"] != "result" or is_result_screen(result["lines"])
-        focused = focused_lines(frame["file"], frame["phase"], roi[2], roi[3]) if eligible else []
-        labels = frame_labels(focused, frame["phase"]) if eligible else {"song": None, "chart": None}
-        observations.append({**frame, "ocr": result["lines"], "focused_ocr": focused,
-                             "eligible_screen": eligible, **labels})
-    # Results describe the chart actually played, so prefer them over selection UI.
-    labels, confidence = {}, {}
-    for field in ("song", "chart"):
-        for phase in ("result", "selection"):
-            value, support = consensus([item for item in observations if item["phase"] == phase], field)
-            if value is not None:
-                labels[field], confidence[field] = value, {**support, "phase": phase}
-                break
+    for frame in frames:
+        raw = frame.get("ocr", fresh.get(frame["file"], []))
+        scene = scene_kind(raw)
+        eligible = ((frame["window"] == "selection" and scene == "selection")
+                    or (frame["window"] == "result" and scene in {"result", "summary"}))
+        if eligible and (scene != "summary" or reuse_summary) and "focused_ocr" in frame:
+            focused = frame["focused_ocr"]
         else:
-            labels[field], confidence[field] = None, None
-    if labels["song"] is None:
-        candidate = corroborated_result_title(observations, labels.get("chart")) or singleton_title(observations)
-        if candidate:
-            labels["song"] = candidate["text"].strip()
-            confidence["song"] = {"supporting_frames": 1, "recognized_frames": 1,
-                                  "mean_ocr_confidence": candidate["confidence"],
-                                  "alternatives": {labels["song"]: 1},
-                                  "phase": "selection_or_result",
-                                  "agreement": "high_confidence_single_frame"}
-    summary_observations = []
-    if stage is not None:
-        for item in observations:
-            if item["phase"] != "result" or not is_summary_screen(item["ocr"]):
-                continue
-            focused = focused_lines(item["file"], "summary", roi[2], roi[3])
-            row = summary_stage_row(focused, stage)
-            summary_observations.append({**item, "phase": "summary", "focused_ocr": focused,
-                                         "song": row["song"] if row else None,
-                                         "chart": row["chart"] if row else None})
-        summary_song_value, summary_song_support = consensus(summary_observations, "song")
-        summary_chart_value, summary_chart_support = consensus(summary_observations, "chart")
-        if summary_song_value is not None and summary_chart_value is not None:
-            labels["song"], labels["chart"] = summary_song_value, summary_chart_value
-            confidence["song"] = {**summary_song_support, "phase": "summary_stage"}
-            confidence["chart"] = {**summary_chart_support, "phase": "summary_stage"}
-    if labels["song"] is None or labels["chart"] is None:
-        for index, seconds in enumerate((end + 12, end + 14, end + 16)):
-            if seconds >= record["duration_seconds"]:
-                continue
-            frame = capture_game(record, directory / f"summary-{index}.png", seconds, roi)
-            raw = ocr_images([frame["file"]])[0]["lines"]
-            is_summary = is_summary_screen(raw)
-            focused = focused_lines(frame["file"], "summary", roi[2], roi[3]) if is_summary else []
-            item = {**frame, "phase": "summary", "ocr": raw, "focused_ocr": focused,
-                    "song": summary_song(focused, labels["chart"], stage) if is_summary and labels["chart"] else None,
-                    "chart": summary_chart(focused, labels["song"]) if is_summary and labels["song"] else None}
-            summary_observations.append(item)
-        for field in ("song", "chart"):
-            if labels[field] is not None:
-                continue
-            value, support = consensus(summary_observations, field)
-            if value:
-                labels[field], confidence[field] = value, {**support, "phase": "summary"}
-    observations.extend(summary_observations)
-    write_json(directory / "ocr.json", observations)
-    return labels, confidence, str(directory / "ocr.json")
+            focused = focused_lines(frame["file"], scene, roi[2], roi[3]) if eligible else []
+        rows = {}
+        labels = {"song": None, "chart": None}
+        if eligible and scene == "summary":
+            rows = {str(number): row for number in range(1, 7)
+                    if (row := summary_stage_row(focused, number))}
+            labels = rows.get(str(stage), labels)
+        elif eligible:
+            labels = frame_labels(focused, scene)
+        observations.append({**frame, "phase": scene, "scene": scene, "ocr": raw,
+                             "focused_ocr": focused, "eligible_screen": eligible, "rows": rows, **labels})
+    labels, confidence = resolve_labels(observations)
+    retained.unlink(missing_ok=True)
+    write_json(retained, observations)
+    return labels, confidence, str(retained)
 
 
 def recognize_stage(record, roi, start, end, directory):
@@ -250,7 +210,7 @@ def recognize_stage(record, roi, start, end, directory):
     return (recognized["value"] if recognized else None), str(directory / "stage.json")
 
 
-def analyze(video, output, game_roi=None, provenance=None):
+def analyze(video, output, game_roi=None, provenance=None, retained=None):
     """Persist recognition data independently of player selection or presentation."""
     record = media_record(video)
     stream = record["video_streams"][0]
@@ -259,37 +219,75 @@ def analyze(video, output, game_roi=None, provenance=None):
     x, y, width, height = roi
     if x + width > stream["width"] or y + height > stream["height"]:
         raise ValueError("Game ROI exceeds video dimensions")
-    output.mkdir(parents=True, exist_ok=False)
-    evidence_dir = output / "evidence"
-    evidence_dir.mkdir()
-    print("Locating gameplay HUD with local OCR...", flush=True)
-    at, hud, reference_evidence = find_reference(record, roi, evidence_dir)
-    write_json(output / "reference.json", reference_evidence)
-    print(f"Scanning gameplay using HUD {hud} at {at}s...", flush=True)
-    detected = detect(record, hud, at, min_duration=10)
-    print("Checking uncovered video for alternate HUD positions...", flush=True)
-    profiles = discover_profiles(record, roi, evidence_dir,
-                                 {"hud": hud, "at": at, "evidence": reference_evidence, "detection": detected})
-    write_json(output / "profiles.json", profiles)
-    candidates = merge_profile_candidates(profiles)
-    write_json(output / "candidates.json", {"method": "multi_profile_hud", "candidates": candidates})
+    cached_segments = {}
+    reuse_summary = False
+    if retained:
+        retained_document = json.loads((retained / "analysis.json").read_text())
+        reuse_summary = retained_document.get("analysis_version", 0) >= 9
+        from .storage import relocate_evidence
+        shutil.copytree(retained, output)
+        relocate_evidence(output, output, source=retained)
+        (output / "analysis.json").unlink(missing_ok=True)
+        evidence_dir = output / "evidence"
+        profiles = json.loads((output / "profiles.json").read_text())
+        candidates = json.loads((output / "candidates.json").read_text())["candidates"]
+        for path in output.glob("segment-*.json"):
+            cached_segments[path.stem] = json.loads(path.read_text())
+            path.unlink()
+        for path in output.glob("play-*.json"):
+            path.unlink()
+        print("Reusing verified acquisition; refreshing summary layout and evidence decisions...", flush=True)
+    else:
+        output.mkdir(parents=True, exist_ok=False)
+        evidence_dir = output / "evidence"
+        evidence_dir.mkdir()
+        print("Locating gameplay HUD with local OCR...", flush=True)
+        at, hud, reference_evidence = find_reference(record, roi, evidence_dir)
+        write_json(output / "reference.json", reference_evidence)
+        print(f"Scanning gameplay using HUD {hud} at {at}s...", flush=True)
+        detected = detect(record, hud, at, min_duration=10)
+        print("Checking uncovered video for alternate HUD positions...", flush=True)
+        profiles = discover_profiles(record, roi, evidence_dir,
+                                     {"hud": hud, "at": at, "evidence": reference_evidence, "detection": detected})
+        write_json(output / "profiles.json", profiles)
+        candidates = merge_profile_candidates(profiles)
+        write_json(output / "candidates.json", {"method": "multi_profile_hud", "candidates": candidates})
     references = [reference_patch(record, p["hud"], p["at"]) for p in profiles]
     segments = []
+    all_observations = []
+    segment_files = []
     for index, candidate in enumerate(candidates):
         profile_index = candidate["profile_index"]
         hud, reference = profiles[profile_index]["hud"], references[profile_index]
         print(f"Refining and recognizing segment {index + 1}/{len(candidates)}...", flush=True)
-        start, start_evidence = refine_boundary(record, hud, reference, candidate["start_seconds"], "start")
-        end, end_evidence = refine_boundary(record, hud, reference, candidate["end_seconds"], "end")
+        cached = cached_segments.get(f"segment-{index + 1:03}")
+        if cached:
+            start, end = cached["start_seconds"], cached["end_seconds"]
+            start_evidence, end_evidence = cached["boundary_evidence"]["start"], cached["boundary_evidence"]["end"]
+        else:
+            start, start_evidence = refine_boundary(record, hud, reference, candidate["start_seconds"], "start")
+            end, end_evidence = refine_boundary(record, hud, reference, candidate["end_seconds"], "end")
         if end <= start or (segments and start < segments[-1]["end_seconds"]):
             raise ValueError("Automatic refinement produced invalid/overlapping intervals")
         segment_dir = evidence_dir / f"segment-{index + 1:03}"
-        segment_dir.mkdir()
-        stage, stage_evidence = recognize_stage(record, roi, start, end, segment_dir)
-        labels, support, ocr_file = recognize_segment(record, roi, start, end, segment_dir, stage)
-        if labels["song"] is None and labels["chart"] is None:
-            print(f"Rejected candidate {index + 1}: no song or chart evidence", flush=True)
+        segment_dir.mkdir(exist_ok=True)
+        stage_path = segment_dir / "stage.json"
+        if stage_path.is_file():
+            recognized = json.loads(stage_path.read_text())["recognized"]
+            stage, stage_evidence = recognized["value"] if recognized else None, str(stage_path)
+        else:
+            stage, stage_evidence = recognize_stage(record, roi, start, end, segment_dir)
+        stage_data = json.loads(Path(stage_evidence).read_text())
+        if isinstance(stage_data, dict) and is_demo_screen(stage_data.get("ocr", [])):
+            print(f"Rejected candidate {index + 1}: explicit DEMO PLAY screen", flush=True)
             continue
+        labels, support, ocr_file = recognize_segment(record, roi, start, end, segment_dir, stage,
+                                                      previous_end=candidates[index - 1]["end_seconds"] if index else 0,
+                                                      next_start=candidates[index + 1]["start_seconds"] - 8
+                                                      if index + 1 < len(candidates) else None,
+                                                      reuse_summary=reuse_summary)
+        # Keep unresolved candidates until later credit summaries have had a
+        # chance to identify their stage. Early rejection loses real failed plays.
         segments.append({"start_seconds": start, "end_seconds": end, "stage": stage,
                          "stage_evidence": stage_evidence, "hud_profile": profile_index, **labels,
                          "confidence": support, "boundary_evidence": {"start": start_evidence, "end": end_evidence},
@@ -301,15 +299,40 @@ def analyze(video, output, game_roi=None, provenance=None):
                                                            or value.get("supporting_frames", 0) < 2)
                                                 for value in support.values())})
         observations = json.loads(Path(ocr_file).read_text())
-        stats = extract_stats(observations, evidence_dir / f"stats-{index + 1:03}", width, height)
+        all_observations.append(observations)
+        segments[-1]["players"] = resolve_players(observations, stage_data if isinstance(stage_data, dict) else None)
+        stats_dir = evidence_dir / f"stats-{index + 1:03}"
+        stats_frames = stats_dir / "frames.json"
+        if cached:
+            stats = cached["results"]
+        elif stats_frames.is_file():
+            stats = aggregate_frames(json.loads(stats_frames.read_text()))
+            stats["evidence"] = str(stats_frames.resolve())
+        else:
+            stats = extract_stats(observations, stats_dir, width, height)
         segments[-1]["results"] = stats
         segments[-1]["needs_review"] |= stats["needs_review"]
-        write_json(output / f"segment-{index + 1:03}.json", segments[-1])
+        segments[-1]["needs_review"] |= any(
+            p["fields"]["name"].get("mean_ocr_confidence", 0) < .7
+            or p["fields"]["name"]["status"] != "recognized"
+            for p in segments[-1]["players"].values())
+        segment_files.append(output / f"segment-{index + 1:03}.json")
+        write_json(segment_files[-1], segments[-1])
+    reconcile_sessions(segments, all_observations)
+    accepted = []
+    for path, segment in zip(segment_files, segments):
+        path.unlink()
+        if segment["song"] is None and segment["chart"] is None:
+            print(f"Rejected {path.stem}: no labels after credit reconciliation", flush=True)
+            continue
+        accepted.append(segment)
+        write_json(path, segment)
+    segments = accepted
     stat = video.resolve().stat()
     if (stat.st_size, stat.st_mtime_ns) != (record["size_bytes"], record["mtime_ns"]):
         raise ValueError("Source changed during automatic processing")
     result = {"schema_version": 1, "analysis_version": ANALYSIS_VERSION,
-              "artifact_type": "video_analysis", "method": "automatic_hud_ocr", "media": record,
+              "ocr_configuration": configuration(), "artifact_type": "video_analysis", "method": "automatic_hud_ocr", "media": record,
               "provenance": provenance or {"kind": "local", "network_used": False},
               "game_roi": list(roi), "alignment": {"youtube_url": None, "offset_seconds": None},
               "timestamp_basis": "local_playback", "segments": segments,

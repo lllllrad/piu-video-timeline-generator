@@ -35,6 +35,9 @@ If `.local/formats/<name>/` exists, it owns that format name. A missing `index.t
 - `TimelineSegment.stage` is the recognized in-game stage number (`1` through `6`) or `null`.
 - `timestamp(seconds)` floors a playback time to `MM:SS` or `H:MM:SS`.
 - `label(segment)` joins a song name and chart without stray punctuation.
+- `hasDifferentPlayers(document)` detects distinct corroborated accounts or simultaneous result slots.
+- `playerLabel(segment, includeNames)` adds player names and, for simultaneous players, each slot's chart.
+- `TimelineSegment.players` stores identity evidence separately from `results.players` score evidence.
 - `onlyPlayer(segment)` returns the sole recognized player, if unambiguous.
 - `field(player, name)` returns a recognized player field without converting missing data to zero.
 
