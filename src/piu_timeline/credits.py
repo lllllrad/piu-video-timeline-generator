@@ -74,7 +74,7 @@ def reconcile_players(segments, observations):
             segment["credit"] = {"id": credit_id, "boundary": group["boundary"],
                                  "plays": len(indices), "association": "observed_scene_sequence"}
             for slot, identity in identities.items():
-                if not identity.get("name"):
+                if slot in segment.get("excluded_slots", {}) or not identity.get("name"):
                     continue
                 own = segment.setdefault("players", {}).get(slot)
                 # A local conflict is evidence of a possible account change,

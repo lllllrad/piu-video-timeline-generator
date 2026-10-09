@@ -62,8 +62,20 @@ def stage_number(lines):
             "evidence": [label, number]}
 
 
+def rival_slots(lines):
+    """RIVAL is a comparison account in the header, not a second participant."""
+    return {slot for slot, (low, high) in {"p1": (.14, .44), "p2": (.56, .86)}.items()
+            if any(low < center(line)[0] < high and 0 < center(line)[1] < .05
+                   and line["confidence"] >= .5
+                   and re.sub(r"[^A-Z]", "", line["text"].upper()) == "RIVAL" for line in lines)}
+
+
 def frame_labels(lines, phase):
     """Read Phoenix title and selected chart regions, never scores or chat."""
+    if phase == "result":
+        blocked = rival_slots(lines)
+        lines = [line for line in lines if not (("p1" in blocked and center(line)[0] < .45)
+                                                 or ("p2" in blocked and center(line)[0] > .55))]
     band = (.13, .23) if phase == "result" else (.48, .54)
     titles = [line for line in lines if .25 < center(line)[0] < .75
               and band[0] < center(line)[1] < band[1]

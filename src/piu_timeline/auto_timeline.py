@@ -8,16 +8,16 @@ import shutil
 from .detect import detect, similarity
 from .media import fetch_command, resolve_url
 from .recognition import (capture_game, focused_lines, frame_labels, ocr_images,
-                          stage_number, summary_stage_row, scene_kind, is_demo_screen, focused_names, chart_mode, center)
+                          stage_number, summary_stage_row, scene_kind, is_demo_screen, focused_names, chart_mode, center, rival_slots)
 from .timeline import media_record, write_json
 from .result_stats import extract_stats
-from .evidence import resolve_labels, resolve_players, reconcile_sessions
+from .evidence import resolve_labels, resolve_players, reconcile_sessions, exclude_rivals
 from .ocr import configuration
 from .credits import transition_samples, reconcile_players, recover_summary_stages
 
 
 SELECTION_OFFSETS = (-14, -13, -10, -9, -6, -5, -3)
-ANALYSIS_VERSION = 25
+ANALYSIS_VERSION = 26
 
 
 def resolve_source(source, raw_dir=None):
@@ -196,11 +196,15 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
                 # focused, supplement only chart glyphs from the raw screen.
                 badge_lines = [line for line in raw if (.15 < center(line)[0] < .31 or .69 < center(line)[0] < .87)
                                and (chart_mode(line["text"]) or line["text"].strip().isdigit())]
+                blocked = rival_slots(raw)
+                row_lines = [*focused, *badge_lines]
+                row_lines = [line for line in row_lines if not (("p1" in blocked and center(line)[0] < .35)
+                                                              or ("p2" in blocked and center(line)[0] > .65))]
                 rows = {str(number): row for number in range(1, 7)
-                        if (row := summary_stage_row([*focused, *badge_lines], number))}
+                        if (row := summary_stage_row(row_lines, number))}
                 labels = rows.get(str(stage), labels)
             elif eligible:
-                labels = frame_labels(focused, scene)
+                labels = frame_labels([*focused, *[l for l in raw if rival_slots([l])]], scene)
             frames.append({**frame, "phase": scene, "scene": scene, "ocr": raw,
                            "focused_ocr": focused, "eligible_screen": eligible, "rows": rows,
                            "identity_eligible": (frame["window"] == "selection" and scene in {"selection", "mode", "unknown"}
@@ -437,6 +441,7 @@ def analyze(video, output, game_roi=None, provenance=None, retained=None):
         write_json(segment_files[-1], segments[-1])
     recover_summary_stages(segments, all_observations)
     reconcile_sessions(segments, all_observations)
+    exclude_rivals(segments, all_observations)
     reconcile_players(segments, all_observations)
     # Caption-preserving result badges can correct rotated focused glyphs.
     for segment in segments:

@@ -55,3 +55,5 @@ The first argument is the absolute or project-resolved path to `analysis.json`. 
 Formatting does not receive the video and must not modify analysis or evidence files.
 
 A play's `results.status` may be `not_displayed` with `reason: stage_break_screen` when repeated life-loss screens replace the score table. Such a result has no numeric players and is not an OCR failure. Missing visible fields retain their `unknown` or `conflict` evidence states.
+
+The default format displays nicknames without the trailing `#dddd` discriminator. Full identities remain in analysis for account distinction. `playerLabel(segment, includeNames, true)` selects nickname-only display; its default third argument retains full identities for other formats. Rival comparison slots are excluded from `players` and `results.players`, with header evidence retained under `excluded_slots`.

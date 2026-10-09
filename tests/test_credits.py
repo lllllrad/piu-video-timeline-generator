@@ -13,6 +13,15 @@ def frame(pts, scene, window, name=None):
 
 
 class CreditTests(unittest.TestCase):
+    def test_credit_propagation_does_not_restore_an_excluded_rival_slot(self):
+        segments = [{"stage": 1, "players": {}, "excluded_slots": {"p2": {"role": "rival"}}},
+                    {"stage": 2, "players": {}}]
+        observations = [[frame(1, "selection", "selection")],
+                        [frame(2, "result", "result", "Bob #5678"), frame(3, "result", "result", "Bob #5678")]]
+        reconcile_players(segments, observations)
+        self.assertNotIn("p2", segments[0]["players"])
+        self.assertEqual(segments[1]["players"]["p2"]["name"], "Bob #5678")
+
     def test_missing_stages_keep_identity_within_observed_credit(self):
         segments = [{"stage": None, "players": {}} for _ in range(3)]
         observations = [[frame(1, "selection", "selection", "SURA #6747"), frame(2, "result", "result")],

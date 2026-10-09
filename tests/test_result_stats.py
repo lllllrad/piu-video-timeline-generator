@@ -173,6 +173,17 @@ class ResultStatsTest(unittest.TestCase):
             self.assertEqual(result["players"]["p2"]["score"], 987654)
             self.assertEqual(result["players"]["p2"]["fields"]["score"]["method"], "caption_contrast_ocr")
 
+    def test_rival_score_panel_is_not_a_participant(self):
+        lines = result_lines("left", 100) + result_lines("right", 200)
+        parsed = stats.parse_result(lines + [line("RIVAL", .665, .03)])
+        self.assertTrue(parsed["p1"]["present"])
+        self.assertFalse(parsed["p2"]["present"])
+        self.assertEqual(parsed["p2"]["role"], "rival")
+        result = stats.aggregate_frames([{"players": parsed}] * 2)
+        self.assertEqual(set(result["players"]), {"p1"})
+        # Without the header, both independent numeric panels remain players.
+        self.assertTrue(stats.parse_result(lines)["p2"]["present"])
+
     def test_no_result_remains_unknown(self):
         result = stats.aggregate_frames([])
         self.assertEqual(result["players"], {})

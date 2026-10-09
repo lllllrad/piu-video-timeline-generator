@@ -8,7 +8,7 @@ const timeline = parseTimeline(JSON.parse(readFileSync(input, "utf8")));
 const includeNames = hasDifferentPlayers(timeline);
 const lines = ["00:00 auto-generated timeline started"];
 for (const segment of timeline.segments) {
-  lines.push(`${timestamp(segment.start_seconds)} ${playerLabel(segment, includeNames)} start`);
-  lines.push(`${timestamp(segment.end_seconds)} ${playerLabel(segment, includeNames)} end`);
+  lines.push(`${timestamp(segment.start_seconds)} ${playerLabel(segment, includeNames, true)} start`);
+  lines.push(`${timestamp(segment.end_seconds)} ${playerLabel(segment, includeNames, true)} end`);
 }
 console.log(lines.join("\n"));

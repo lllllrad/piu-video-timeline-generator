@@ -81,12 +81,13 @@ export function hasDifferentPlayers(document: TimelineDocument): boolean {
     Object.values(segment.players ?? {}).filter(p => p?.presence === "recognized").length > 1);
 }
 
-export function playerLabel(segment: TimelineSegment, includeNames: boolean): string {
+export function playerLabel(segment: TimelineSegment, includeNames: boolean, nicknameOnly = false): string {
   if (!includeNames) return label(segment);
   const ids = (["p1", "p2"] as const).filter(id =>
     segment.players?.[id]?.presence === "recognized" || segment.results?.players?.[id]?.presence === "recognized");
   const names = ids.map(id => {
-    const name = field<string>(segment.players?.[id], "name") ?? "Unknown player";
+    const account = field<string>(segment.players?.[id], "name") ?? "Unknown player";
+    const name = nicknameOnly ? account.replace(/\s*#\d{4}$/, "") : account;
     const chart = field<string>(segment.players?.[id], "chart") ?? field<string>(segment.results?.players?.[id], "chart");
     return ids.length > 1 ? [id.toUpperCase() + ":", name, chart].filter(Boolean).join(" ") : name;
   });

@@ -4,9 +4,9 @@ import copy
 import json
 from pathlib import Path
 
-from .evidence import reconcile_sessions, resolve_labels, resolve_players
+from .evidence import exclude_rivals, reconcile_sessions, resolve_labels, resolve_players
 from .credits import reconcile_players, recover_summary_stages
-from .recognition import frame_labels, scene_kind, summary_stage_row
+from .recognition import center, frame_labels, rival_slots, scene_kind, summary_stage_row
 from .timeline import write_json
 
 
@@ -21,12 +21,16 @@ def replay_observations(observations, stage):
         # cannot be interpreted as a summary crop, even if its raw screen is one.
         focused = item.get("focused_ocr", []) if item.get("phase") == scene else []
         item["song"], item["chart"] = None, None
+        markers = [line for line in item.get("ocr", []) if rival_slots([line])]
         if scene == "summary":
+            blocked = rival_slots(markers)
+            focused = [line for line in focused if not (("p1" in blocked and center(line)[0] < .35)
+                                                        or ("p2" in blocked and center(line)[0] > .65))]
             item["rows"] = {str(number): row for number in range(1, 7)
                             if (row := summary_stage_row(focused, number))}
             item.update(item["rows"].get(str(stage), {}))
         elif focused and scene in {"result", "selection"}:
-            item.update(frame_labels(focused, scene))
+            item.update(frame_labels([*focused, *markers], scene))
         replayed.append(item)
     return replayed
 
@@ -48,6 +52,7 @@ def relabel(source, output):
         all_observations.append(observations)
     recover_summary_stages(result["segments"], all_observations)
     reconcile_sessions(result["segments"], all_observations)
+    exclude_rivals(result["segments"], all_observations)
     reconcile_players(result["segments"], all_observations)
     changes = [{"segment": index, "field": field, "before": before.get(field), "after": after.get(field)}
                for index, (before, after) in enumerate(zip(document["segments"], result["segments"]), 1)

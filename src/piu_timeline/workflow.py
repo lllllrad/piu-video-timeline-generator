@@ -140,7 +140,7 @@ def _run(source, format_name="default", game_roi=None):
         effective_roi = game_roi or (tuple(document["game_roi"]) if document and document.get("game_roi") else None)
         # Reuse source-verified acquisition; acquire missing scene/identity
         # samples while preserving decoded boundaries and result evidence.
-        reusable = (document and document.get("analysis_version") in {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}
+        reusable = (document and document.get("analysis_version") in {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25}
                     and document.get("ocr_configuration") == configuration()
                     and document.get("game_roi") == list(effective_roi or [])
                     and document.get("media", {}).get("size_bytes") == video.stat().st_size

@@ -5,7 +5,7 @@ import json
 import re
 import subprocess
 
-from .recognition import chart_mode, center, frame_labels, is_result_screen, is_stage_break, ocr_images
+from .recognition import chart_mode, center, frame_labels, is_result_screen, is_stage_break, ocr_images, rival_slots
 from .timeline import write_json
 
 COUNT_FIELDS = ("perfect", "great", "good", "bad", "miss", "max_combo")
@@ -29,6 +29,7 @@ def number_at(lines, cx, cy, dx, dy, maximum):
 def parse_result(lines):
     """Coordinates belong to the normalized, unmirrored game image, not the stream."""
     players = {}
+    rivals = rival_slots(lines)
     for player, side in SIDES.items():
         left = side == "left"
         region = [line for line in lines if (center(line)[0] < .45 if left else center(line)[0] > .55)]
@@ -44,7 +45,8 @@ def parse_result(lines):
         # establishes a slot; a stray digit in a background video does not.
         present = bool(chart or (score_label and values["score"]
                                 and sum(values[field] is not None for field in COUNT_FIELDS) >= 3))
-        players[player] = {"side": side, "present": present, "fields": values}
+        players[player] = {"side": side, "present": present and player not in rivals, "fields": values,
+                           "role": "rival" if player in rivals else "player"}
     # Phoenix displays one shared badge for two players on the same chart.
     # Both numeric panels must be established, and any unreadable separate
     # badge glyphs prevent treating that slot as intentionally absent.
@@ -170,7 +172,8 @@ def extract_stats(observations, directory, width, height):
     # numeric OCR is necessary to recognize an additional displayed badge.
     for frame in frames:
         if "ocr" in frame:
-            frame["players"] = parse_result(frame["ocr"])
+            markers = [line for line in frame.get("source_ocr", []) if rival_slots([line])]
+            frame["players"] = parse_result([*frame["ocr"], *markers])
     seen = {frame["source_pts_seconds"] for frame in frames}
     for index, observation in enumerate(observations):
         if observation.get("phase") != "result" or not observation.get("eligible_screen"):
@@ -186,7 +189,7 @@ def extract_stats(observations, directory, width, height):
         lines = focused_stats(frame, directory, f"pts-{pts:.3f}", width, height)
         # Keep only SCORE markers from raw OCR; numeric extraction uses dedicated
         # crops so mixed-language/BGA OCR cannot outvote focused numeric evidence.
-        lines += [line for line in raw if re.sub(r"[^A-Z]", "", line["text"].upper()) == "SCORE"]
+        lines += [line for line in raw if re.sub(r"[^A-Z]", "", line["text"].upper()) in {"SCORE", "RIVAL"}]
         frames.append({"file": str(frame), "source_pts_seconds": pts,
                        "playback_seconds": observation.get("playback_seconds"),
                        "ocr": lines, "source_ocr": raw, "players": parse_result(lines)})
@@ -194,6 +197,8 @@ def extract_stats(observations, directory, width, height):
     raw_by_pts = {o.get("source_pts_seconds"): o.get("ocr", []) for o in observations}
     for frame in frames:
         frame.setdefault("source_ocr", raw_by_pts.get(frame["source_pts_seconds"], []))
+        for slot in rival_slots(frame["source_ocr"]):
+            frame["players"][slot].update(present=False, role="rival")
     result = aggregate_frames(frames)
     need_chart_context = False
     need_number_context = False

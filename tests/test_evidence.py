@@ -139,3 +139,20 @@ class EvidenceTest(unittest.TestCase):
         self.assertEqual(segments[2]["song"], "Correct")
         self.assertEqual(segments[3]["song"], "Old")
         self.assertTrue(segments[2]["needs_review"])
+
+
+class RivalEvidenceTest(unittest.TestCase):
+    def test_rival_header_excludes_name_and_later_reconciled_slots(self):
+        from piu_timeline.evidence import player_names, exclude_rivals
+        lines = [line("Alice #1234", .25, .065), line("Bob #5678", .65, .065),
+                 line("RIVAL", .65, .025)]
+        self.assertEqual(set(player_names(lines)), {"p1"})
+        segments = [{"players": {"p1": {}, "p2": {}}, "results": {"players": {
+            "p1": {"needs_review": False}, "p2": {"needs_review": True}}, "needs_review": True}}]
+        frames = [[{"identity_eligible": True, "source_pts_seconds": pts,
+                    "file": f"frame-{pts}.png", "ocr": lines} for pts in (1, 2)]]
+        exclude_rivals(segments, frames)
+        self.assertEqual(set(segments[0]["players"]), {"p1"})
+        self.assertEqual(set(segments[0]["results"]["players"]), {"p1"})
+        self.assertEqual(segments[0]["excluded_slots"]["p2"]["role"], "rival")
+        self.assertFalse(segments[0]["results"]["needs_review"])

@@ -2,7 +2,7 @@
 import re
 import unicodedata
 
-from .recognition import center, consensus
+from .recognition import center, consensus, rival_slots
 from .result_stats import field_consensus
 
 
@@ -50,6 +50,8 @@ def player_names(lines):
     players = {}
     excluded = {"P1", "P2", "PLAYER", "GUEST", "NOACCOUNT", "CREDIT", "CREDITS", "STAGE", "BASIC", "PREMIUM"}
     for player, (low, high) in {"p1": (.14, .44), "p2": (.56, .86)}.items():
+        if player in rival_slots(lines):
+            continue
         candidates = []
         for line in lines:
             if not (low < center(line)[0] < high and .05 < center(line)[1] < .085
@@ -176,3 +178,22 @@ def reconcile_sessions(segments, observations):
                     slot["presence"] = "recognized"
                     slot["fields"]["chart"] = {"status": "recognized", "value": value,
                                                 **evidence, "phase": "summary"}
+
+
+def exclude_rivals(segments, observations):
+    """Keep corroborated comparison slots out of identities and score players."""
+    for segment, frames in zip(segments, observations):
+        eligible = list(unique_frames([f for f in frames if f.get("identity_eligible")]))
+        excluded = {}
+        for slot in ("p1", "p2"):
+            hits = [f for f in eligible if slot in rival_slots(f.get("ocr", []))]
+            if len(hits) < 2:
+                continue
+            excluded[slot] = {"role": "rival", "method": "observed_rival_header",
+                              "source_frames": [f["file"] for f in hits]}
+            segment.get("players", {}).pop(slot, None)
+            segment.get("results", {}).get("players", {}).pop(slot, None)
+        segment["excluded_slots"] = excluded
+        results = segment.get("results")
+        if excluded and results and results.get("players"):
+            results["needs_review"] = any(p["needs_review"] for p in results["players"].values())

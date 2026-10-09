@@ -32,6 +32,14 @@ class RecognitionTest(unittest.TestCase):
         self.assertEqual(recognition.scene_kind(first), "failure")
         self.assertFalse(recognition.is_stage_break([line("GAME OVER", .3, .4)]))
 
+    def test_rival_badge_does_not_conflict_with_actual_chart(self):
+        lines = [line("SINGLE", .31, .28), line("25", .31, .31),
+                 line("SINGLE", .63, .28), line("23", .63, .31), line("RIVAL", .63, .015)]
+        self.assertEqual(recognition.frame_labels(lines, "result")["chart"]["text"], "S25")
+        self.assertEqual(recognition.rival_slots(lines), {"p2"})
+        self.assertEqual(recognition.rival_slots([line("R I V A L", .63, .015)]), {"p2"})
+        self.assertEqual(recognition.rival_slots([line("RIVAL", .63, .5)]), set())
+
     def test_left_player_and_conflicting_players(self):
         left = [line("DOUBLE", .31, .28), line("18", .31, .31)]
         self.assertEqual(recognition.frame_labels(left, "result")["chart"]["text"], "D18")

@@ -29,8 +29,8 @@ class WorkflowTest(unittest.TestCase):
             source.write_text(json.dumps({"segments": [segment("Alice #1234", 10, "D20"),
                                                        segment("Bob #5678", 30, "S18")]}))
             output = workflow.run_formatter(workflow.BUILTIN_FORMATS / "default/index.ts", source)
-            self.assertIn("00:10 Song D20 [Alice #1234] start", output)
-            self.assertIn("00:30 Song S18 [Bob #5678] start", output)
+            self.assertIn("00:10 Song D20 [Alice] start", output)
+            self.assertIn("00:30 Song S18 [Bob] start", output)
             source.write_text(json.dumps({"segments": [segment("Alice #1234", 10, "D20")]}))
             output = workflow.run_formatter(workflow.BUILTIN_FORMATS / "default/index.ts", source)
             self.assertNotIn("Alice", output)
@@ -45,7 +45,7 @@ class WorkflowTest(unittest.TestCase):
             source.write_text(json.dumps({"segments": [{"start_seconds": 10, "end_seconds": 20,
                 "stage": 1, "song": "Song", "chart": "D20", "players": players}]}))
             output = workflow.run_formatter(workflow.BUILTIN_FORMATS / "default/index.ts", source)
-            self.assertIn("Song [P1: Alice #1234 S18 / P2: Bob #5678 D20] start", output)
+            self.assertIn("Song [P1: Alice S18 / P2: Bob D20] start", output)
             self.assertNotIn("Song D20", output)
 
     def test_source_ids(self):
