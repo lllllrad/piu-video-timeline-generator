@@ -46,34 +46,82 @@ def resolve_labels(observations):
 
 
 def player_names(lines):
-    """Read account labels only inside Phoenix's top player-name bands."""
+    """Parse account strips, tolerating a damaged discriminator in focused OCR."""
     players = {}
+    excluded = {"P1", "P2", "PLAYER", "GUEST", "NOACCOUNT", "CREDIT", "CREDITS", "STAGE", "BASIC", "PREMIUM"}
     for player, (low, high) in {"p1": (.14, .44), "p2": (.56, .86)}.items():
-        candidates = [line for line in lines if low < center(line)[0] < high
-                      and .05 < center(line)[1] < .085 and line["confidence"] >= .5
-                      and re.search(r"[^\W\d_]", line["text"], re.UNICODE)]
-        # Require the account discriminator, rather than mistaking a rank or BGA
-        # caption for a name. Unknown/guest accounts stay unknown.
-        candidates = [line for line in candidates if re.fullmatch(r".+?\s*#\s*\d{4}", line["text"].strip())]
-        if len(candidates) == 1:
-            line = candidates[0]
-            name = re.sub(r"\s*#\s*(\d{4})$", r" #\1", line["text"].strip())
-            players[player] = {"value": name, "confidence": line["confidence"], "raw": line}
+        candidates = []
+        for line in lines:
+            if not (low < center(line)[0] < high and .05 < center(line)[1] < .085
+                    and line["confidence"] >= .5):
+                continue
+            text = unicodedata.normalize("NFKC", line["text"]).strip()
+            match = re.fullmatch(r"(.+?)\s*[#*+]\s*(\d{4})", text)
+            # Raw full-screen guesses still need #. Focused strips may read
+            # its tiny strokes as +/*; keep the displayed digits as evidence.
+            if match and ("#" in text or line.get("name_crop")):
+                nickname, suffix = match.groups()
+            elif line.get("name_crop") and re.fullmatch(r"[\w .-]{2,24}", text):
+                # On an empty player side, BGA credits can occupy the same
+                # coordinates. Bare nicknames need the account/rank header
+                # immediately above them on that side.
+                header = any(low < center(item)[0] < high and .005 < center(item)[1] < .05
+                             and re.search(r"\b(BEGINNER|INTERMEDIATE|ADVANCED|EXPERT|MASTER)\b",
+                                           item["text"].upper()) for item in lines)
+                if not header:
+                    continue
+                nickname, suffix = text, None
+            else:
+                continue
+            if (not re.search(r"[^\W\d_]", nickname, re.UNICODE)
+                    or re.sub(r"\W", "", nickname).upper() in excluded):
+                continue
+            candidates.append({"value": nickname.strip() + (f" #{suffix}" if suffix else ""),
+                               "nickname": nickname.strip(), "discriminator": suffix,
+                               "confidence": line["confidence"], "raw": line})
+        focused = [item for item in candidates if item["raw"].get("name_crop")]
+        if focused:
+            # Preserve Hangul when a Korean reading exists; otherwise prefer
+            # the Latin reader at equal confidence over mixed-language guesses.
+            korean = [item for item in focused if re.search(r"[가-힣]", item["nickname"])]
+            pool = korean or focused
+            players[player] = max(pool, key=lambda item: (item["confidence"],
+                item["discriminator"] is not None, item["raw"].get("language") == "en"))
+        elif len(candidates) == 1:
+            players[player] = candidates[0]
     return players
 
 
 def resolve_players(observations, stage_evidence=None):
-    frames = [o for o in unique_frames(observations) if o.get("eligible_screen") and o.get("scene") in {"selection", "result", "summary"}]
+    frames = [o for o in unique_frames(observations)
+              if o.get("identity_eligible", o.get("eligible_screen"))
+              and o.get("scene") in {"selection", "result", "summary", "failure", "mode", "gameplay", "unknown"}]
     if stage_evidence:
-        frames.append(stage_evidence)
-    names = [player_names(o.get("ocr", [])) for o in frames]
+        frames = list(unique_frames([*frames, stage_evidence]))
+    names = [player_names([*o.get("ocr", []), *o.get("name_ocr", [])]) for o in frames]
     players = {}
     for player, side in {"p1": "left", "p2": "right"}.items():
-        # Name candidates already require a valid account discriminator and
-        # the dedicated name band. Mixed-language Vision assigns many clearly
-        # readable Latin account labels 0.5; do not reuse the numeric-field gate.
-        evidence = field_consensus([n.get(player) for n in names], min_confidence=.5)
+        candidates = [n.get(player) for n in names]
+        focused = [item for item in candidates if item and item["raw"].get("name_crop")]
+        focused_name = field_consensus(focused, min_confidence=.5)
+        focused_nickname = field_consensus([dict(item, value=item["nickname"]) for item in focused], min_confidence=.5)
+        # Repeated dedicated-strip OCR takes precedence over full-screen guesses
+        # of tiny account digits, just as a numbered row precedes title guesses.
+        use_focused = focused_name["status"] == "recognized" or focused_nickname["status"] == "recognized"
+        selected = focused if use_focused else candidates
+        evidence = field_consensus(selected, min_confidence=.5)
+        nickname = field_consensus([dict(item, value=item["nickname"]) if item else None
+                                    for item in selected], min_confidence=.5)
         if evidence.get("recognized_frames", 0):
+            # A legible repeated nickname is useful even when tiny account
+            # digits disagree. Retain full alternatives; do not invent a suffix.
+            if evidence["status"] != "recognized" and nickname["status"] == "recognized":
+                evidence = {**nickname, "account_alternatives": evidence["alternatives"],
+                            "discriminator_status": "unknown"}
+            if use_focused:
+                evidence["full_screen_alternatives"] = field_consensus(candidates, min_confidence=.5)["alternatives"]
+            evidence["source_frames"] = [o.get("file") for o, n in zip(frames, names) if n.get(player)
+                                         and (not use_focused or n[player]["raw"].get("name_crop"))]
             players[player] = {"player_id": player, "side": side, "name": evidence["value"],
                                "presence": "recognized" if evidence["status"] == "recognized" else "uncertain",
                                "fields": {"name": evidence}}
@@ -105,6 +153,13 @@ def reconcile_sessions(segments, observations):
             labels, support = resolve_labels(rows)
             if labels["song"] is None:
                 continue
+            # A numbered title is independent of a readable chart. Resolve
+            # fallback charts from this play's own matching-title evidence,
+            # rather than erase a corroborated chart when its summary badge
+            # is unreadable. Different simultaneous charts remain unshared.
+            split_charts = any(len({chart["text"] for chart in row.get("charts", {}).values()}) > 1 for row in rows)
+            if labels["chart"] is None and not split_charts:
+                labels, support = resolve_labels([*rows, *observations[target]])
             segment = segments[target]
             old = {name: segment[name] for name in ("song", "chart")}
             if any(old[name] and labels[name] and key(old[name]) != key(labels[name]) for name in old):

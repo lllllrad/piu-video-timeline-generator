@@ -80,7 +80,7 @@ The default format produces:
 03:45 Song Name D20 end
 ```
 
-When a recording contains different recognized player accounts (including players taking turns), the default format adds `[Name #1234]` to each play. Simultaneous players retain separate names and charts. Unreadable identities remain `Unknown player`; one recognized account keeps the original compact output.
+When a recording contains different recognized player accounts (including players taking turns), the default format adds `[Name #1234]` to each play. If the account digits are unreadable but the nickname agrees across frames, it adds `[Name]`. Simultaneous players retain separate names and charts. Unreadable identities remain `Unknown player`; one recognized account keeps the original compact output.
 
 Copy [formats/default/index.ts](formats/default/index.ts) to start a new format. Shared types and helpers are in [formats/lib/timeline.ts](formats/lib/timeline.ts). See [custom formats](docs/formats.md) for examples.
 

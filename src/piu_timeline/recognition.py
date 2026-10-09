@@ -33,7 +33,7 @@ def center(line):
 def chart_mode(text):
     word = re.sub(r"[^A-Z]", "", text.upper())
     # Basic-mode badges do not explicitly say SINGLE; preserve the displayed label.
-    modes = {"DOUBLE": "D", "SINGLE": "S", "COOP": "COOP", "VERYHARD": "VERY HARD "}
+    modes = {"DOUBLE": "D", "HDOUBLE": "HD", "SINGLE": "S", "COOP": "COOP", "VERYHARD": "VERY HARD "}
     if word in modes:
         return modes[word]
     # Restrict correction to one substituted glyph in a full mode word.
@@ -46,14 +46,14 @@ def stage_number(lines):
     """Read STAGE 01..06 from the in-game HUD without inferring play order."""
     values = []
     for label in lines:
-        if re.sub(r"[^A-Z]", "", label["text"].upper()) != "STAGE":
+        if re.sub(r"[^A-Z]", "", label["text"].upper()) not in {"STAGE", "ISTAGE"}:
             continue
         lx, ly = center(label)
-        numbers = [line for line in lines if re.fullmatch(r"0?[1-6]", line["text"].strip())
+        numbers = [line for line in lines if re.fullmatch(r"0?[1-6]", line["text"].strip().translate(str.maketrans({"O": "0", "О": "0", "Ч": "4"})))
                    and abs(center(line)[0] - lx) < .04
                    and 0 < center(line)[1] - ly < .08]
         if len(numbers) == 1:
-            values.append((int(numbers[0]["text"]), label, numbers[0]))
+            values.append((int(numbers[0]["text"].translate(str.maketrans({"O": "0", "О": "0", "Ч": "4"}))), label, numbers[0]))
     unique = {value for value, _, _ in values}
     if len(unique) != 1:
         return None
@@ -110,7 +110,18 @@ def frame_labels(lines, phase):
 
 def is_result_screen(lines):
     words = {re.sub(r"[^A-Z]", "", line["text"].upper()) for line in lines}
-    return not is_summary_screen(lines) and "SCORE" in words and bool(words & {"PERFECT", "MAXCOMBO", "KCAL"})
+    # Judgment captions are stylized and often read as PERFEST / MAX COMBD.
+    # Require their panel geometry or several aligned numeric rows as well as
+    # the SCORE caption; selection MY BEST scores must not qualify.
+    captions = sum(any(abs(center(line)[1] - y) < .025 and .43 < center(line)[0] < .57
+                       and re.sub(r"[^A-Z]", "", line["text"].upper()).startswith(prefix)
+                       for line in lines)
+                   for y, prefix in ((.434, "PERFE"), (.540, "GOOD"), (.593, "BAD"), (.699, "MAXCOMB")))
+    numeric_rows = max(sum(any(abs(center(line)[0] - x) < .04 and abs(center(line)[1] - y) < .02
+                              and re.fullmatch(r"\d{3,6}", line["text"].strip()) for line in lines)
+                           for y in (.434, .487, .540, .593, .646, .699)) for x in (.335, .665))
+    return not is_summary_screen(lines) and "SCORE" in words and (
+        bool(words & {"PERFECT", "MAXCOMBO", "KCAL"}) or captions >= 2 or numeric_rows >= 3)
 
 
 def is_summary_screen(lines):
@@ -129,6 +140,20 @@ def is_demo_screen(lines):
                and center(line)[1] > .85 for line in lines)
 
 
+def is_stage_break(lines):
+    """Phoenix's taunt screen replaces per-song statistics after a life loss."""
+    from difflib import SequenceMatcher
+    words = [re.sub(r"[^A-Z]", "", line["text"].upper())
+             for line in lines if .08 < center(line)[1] < .85]
+    if not any(word == "HEY" for word in words):
+        return False
+    for phrases in (("WHYDONTYOU", "JUSTGETUPAND", "DANCEMAN"), ("ISTHIS", "REALLY", "YOURBEST")):
+        if sum(any(SequenceMatcher(None, word, phrase).ratio() >= .65 for word in words)
+               for phrase in phrases) >= 2:
+            return True
+    return False
+
+
 def scene_kind(lines):
     """Summary takes precedence: never parse its first row as a per-song title."""
     if is_demo_screen(lines):
@@ -137,12 +162,46 @@ def scene_kind(lines):
         return "summary"
     if is_result_screen(lines):
         return "result"
+    words = {re.sub(r"[^A-Z]", "", line["text"].upper()) for line in lines}
+    if words & {"BASIC", "BASICMODE"} and words & {"PREMIUM", "PREMIUMMODE"}:
+        return "mode"
+    if is_stage_break(lines):
+        return "failure"
+    if words & {"GAMEOVER", "STAGEBREAK", "STAGEFAILED"} or "STAGE" in words and words & {"BREAK", "FAILED"}:
+        return "failure"
+    if any("INSERTCOIN" in word or "PRESSCENTERSTEP" in word or "PRESSTHECENTERSTEP" in word for word in words):
+        return "entry"
     if stage_number(lines):
         return "gameplay"
     words = {re.sub(r"[^A-Z]", "", line["text"].upper()) for line in lines}
     if "MYBEST" in words or frame_labels(lines, "selection")["chart"]:
         return "selection"
     return "unknown"
+
+
+def focused_names(frame, game_width, game_height):
+    """Read the dedicated account strips independently of title/score OCR."""
+    paths, regions = [], []
+    for slot, x in (("p1", .14), ("p2", .56)):
+        px, py, pw, ph = int(x * game_width), int(.045 * game_height), int(.30 * game_width), int(.05 * game_height)
+        path = Path(frame).with_name(Path(frame).stem + f"-name-v1-{slot}.png")
+        if not path.is_file():
+            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(frame),
+                            "-vf", f"crop={pw}:{ph}:{px}:{py},scale=iw*4:ih*4", str(path)],
+                           check=True, capture_output=True)
+        paths.append(path)
+        regions.append((px / game_width, py / game_height, pw / game_width, ph / game_height))
+    mapped = []
+    # Read both languages in a small dedicated strip. Latin OCR is much more
+    # reliable here; Korean OCR preserves Hangul account names.
+    for english in (True, False):
+        for result, (x, y, w, h) in zip(ocr_images(paths, english=english), regions):
+            for line in result["lines"]:
+                bx, by, bw, bh = line["box"]
+                mapped.append({**line, "box": [x + bx * w, y + by * h, bw * w, bh * h],
+                               "image": result["path"], "name_crop": True,
+                               "language": "en" if english else "ko-en"})
+    return mapped
 
 
 def focused_lines(frame, phase, game_width, game_height):
@@ -206,32 +265,36 @@ def focused_lines(frame, phase, game_width, game_height):
 
 
 def summary_stage_row(lines, stage):
-    """Read the song and chart from one explicitly numbered combined-result row."""
-    ordinals = [line for line in lines
-                if stage is not None and ordinal_number(line["text"]) == stage]
-    matches = []
+    """Read a numbered title independently of either player's chart badge."""
+    ordinals = [line for line in lines if stage is not None and ordinal_number(line["text"]) == stage]
+    titles, matches = [], []
     for ordinal in ordinals:
         ox, oy = center(ordinal)
-        titles = [line for line in lines if .25 < center(line)[0] < .7
-                  and abs(center(line)[0] - ox) < .15 and .015 < center(line)[1] - oy < .08
-                  and not re.fullmatch(r"[\d\W]+", line["text"])]
-        for title in titles:
+        candidates = [line for line in lines if .25 < center(line)[0] < .7
+                      and abs(center(line)[0] - ox) < .15 and .015 < center(line)[1] - oy < .08
+                      and not re.fullmatch(r"[\d\W]+", line["text"])]
+        for title in candidates:
+            titles.append({"text": title["text"], "confidence": min(title["confidence"], ordinal["confidence"]),
+                           "evidence": [ordinal, title]})
             title_y = center(title)[1]
             for mode_line in lines:
                 mode = chart_mode(mode_line["text"])
                 cx, cy = center(mode_line)
-                if not mode or not ((.20 < cx < .31 or .69 < cx < .8) and -.09 < cy - title_y < -.025):
+                if not mode or not ((.15 < cx < .31 or .69 < cx < .87) and -.09 < cy - title_y < -.025):
                     continue
                 digits = [item for item in lines if re.fullmatch(r"\d{1,2}", item["text"])
                           and 1 <= int(item["text"]) <= 99 and item["confidence"] >= .5
                           and abs(center(item)[0] - cx) < .04 and 0 < center(item)[1] - cy < .075]
-                if len(digits) == 1:
-                    evidence = [ordinal, title, mode_line, digits[0]]
-                    matches.append({"player_id": "p1" if cx < .5 else "p2", "song": {"text": title["text"], "confidence": min(
-                                        item["confidence"] for item in evidence), "evidence": evidence},
-                                    "chart": {"text": mode + str(int(digits[0]["text"])), "confidence": min(
-                                        item["confidence"] for item in evidence), "evidence": evidence}})
-    if len({item["song"]["text"] for item in matches}) != 1:
+                # Raw/focused readings from one source frame may duplicate a
+                # glyph. Agreement is one observation; competing digits abstain.
+                if len({int(item["text"]) for item in digits}) == 1:
+                    number = max(digits, key=lambda item: item["confidence"])
+                    evidence = [ordinal, title, mode_line, number]
+                    matches.append({"player_id": "p1" if cx < .5 else "p2",
+                                    "chart": {"text": mode + str(int(number["text"])),
+                                              "confidence": min(item["confidence"] for item in evidence),
+                                              "evidence": evidence}})
+    if len({re.sub(r"\s+", "", item["text"]).casefold() for item in titles}) != 1:
         return None
     charts = {}
     for player in ("p1", "p2"):
@@ -240,8 +303,7 @@ def summary_stage_row(lines, stage):
             charts[player] = max(entries, key=lambda item: item["confidence"])
     shared = list(charts.values())
     chart = shared[0] if len({entry["text"] for entry in shared}) == 1 else None
-    return {"song": max((item["song"] for item in matches), key=lambda item: item["confidence"]),
-            "chart": chart, "charts": charts}
+    return {"song": max(titles, key=lambda item: item["confidence"]), "chart": chart, "charts": charts}
 
 
 def consensus(observations, field):

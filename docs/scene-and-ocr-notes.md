@@ -19,11 +19,12 @@ The useful working sequence is song/chart selection, loading or song introductio
 The analyzer samples the following windows and then classifies each acquired screen:
 
 - Before gameplay: start minus 14, 13, 10, 9, 6, 5 and 3 seconds.
-- After gameplay: end plus 3, 5, 7, 8, 9, 10, 11, 12, 14, 16, 20 and 24 seconds, then every four seconds through 60 seconds. A verified recording shows its credit summary only around 40 seconds after gameplay ends.
+- After gameplay: early samples at end plus 0.5, 1.25 and 2 seconds, then 3, 5, 7, 8, 9, 10, 11, 12, 14, 16, 20 and 24 seconds, then every four seconds through 60 seconds. A singleton result/summary receives nearby corroborating frames.
+- Missing identities/labels or an absent result trigger sparse selection samples up to 60 seconds before gameplay and bounded screen-transition scans. Only representatives after downscaled scene changes receive OCR. Previously discovered adaptive samples remain part of replay evidence.
 
-These are sampling windows, not assumed scene identities. Samples are constrained by neighboring candidate intervals, with an eight-second guard before the next coarse gameplay start. Screen transitions outside these windows remain a coverage limitation.
+These are sampling windows, not assumed scene identities. Samples are constrained by neighboring candidate intervals, with an eight-second guard before the next coarse gameplay start. Transitions outside these bounded windows or below the scene-change threshold remain a coverage limitation.
 
-`scene_kind()` excludes explicit bottom-of-screen `DEMO PLAY` markers, then checks multi-song summaries first, then per-song results, gameplay and supported selection anchors. `PLAY RESULT` or multiple stage ordinals establish a summary. `SCORE` plus `PERFECT`, `MAX COMBO` or `KCAL` can establish a per-song result only when the summary gate is absent. Selection requires a chart badge or `MY BEST`; unclassified frames remain evidence without supplying labels.
+`scene_kind()` excludes explicit bottom-of-screen `DEMO PLAY` markers, then checks multi-song summaries first, then per-song results, Basic/Premium mode choices, failure/start screens, gameplay and supported selection anchors. `PLAY RESULT` or multiple stage ordinals establish a summary. `SCORE` plus `PERFECT`, `MAX COMBO` or `KCAL` can establish a per-song result only when the summary gate is absent. Selection requires a chart badge or `MY BEST`; unclassified frames remain evidence without supplying labels.
 
 All summary rows are read independently of the initially guessed title/chart. Their explicit stage numbers allow later summaries to repair earlier plays in the same credit. Titles and charts are resolved with matching title evidence rather than independent phase winners. Exact timestamp duplicates and single-frame guesses cannot establish agreement.
 
@@ -68,7 +69,7 @@ The STAGE patch moved from approximately x=180 to x=613 in the tested 1300-wide 
 - `PUMBILITY LEVEL UP!!` can cover title/result information. Results and their readable labels are not necessarily available at the same offset after every play. Resampling later is preferable to accepting overlay text.
 - Store mode and level evidence together. A nearby score, option value or available-level row is not a chart level. The current full-word mode correction allows only one substituted glyph; do not expand it into unrestricted fuzzy guessing.
 - Basic-mode badges visibly say `VERY HARD 12`. Preserve that displayed label; do not silently reinterpret it as `S12`. `COOP` is recognized by the parser but was not validated as a real-video mode in this milestone.
-- Summary recovery uses explicit stage rows, so repeated titles or charts do not identify a row by themselves. Missing stage identity prevents automatic row assignment.
+- Summary recovery uses explicit stage rows, so repeated titles or charts do not identify a row by themselves. A missing HUD stage can be recovered by a unique title match to a repeated numbered row in the same observed credit, including bounded OCR spelling variants. Competing matches stay unresolved.
 - Failed plays can lack a usable per-song result. Missing statistics must remain missing, not zero; summary chart recovery is not recovery of the full judgment table.
 
 ## Judgment counts
@@ -80,3 +81,9 @@ Leading zeros, partially obscured digits, unstable animations, missing rows and 
 ## Evidence
 
 Use the original media plus `frames.json` and OCR metadata to reproduce a check; a contact-sheet cell is not an exact timestamp. Keyframe proposals can be seconds away from a decoded boundary. Preserve source PTS, distinguish local playback from YouTube time, and never derive an offset from duration metadata alone. Keep prior output directories when comparing regressions, and record the host OS/Vision version when comparing OCR measurements.
+
+Phoenix's “HEY” taunts (“WHY DON'T YOU / JUST GET UP AND / DANCE MAN” or “IS THIS / REALLY / YOUR BEST”) establish a stage break when corroborated across source frames. They replace the per-song numeric table. These results use `status: not_displayed`, `reason: stage_break_screen`, and retain the source-frame references; `GAME OVER` alone does not establish a failed song. No hidden score or judgment counts are synthesized.
+
+Numeric recovery keeps upright captions beside counts and score digits. This prevents OCR from interpreting the Phoenix font upside down (for example, `09` as `60`). Independent full-screen and caption-preserving badge evidence can correct an earlier focused chart read. Enlarged stage crops are anchored to the observed STAGE caption because single and double gameplay place the HUD differently.
+
+In two-player results Phoenix can show one shared chart badge. A slot uses that badge only when both score/judgment panels are established and the other badge region contains no separate mode or level glyphs. A partly recognized second badge remains unresolved. The per-frame chart evidence records `shared_from`; scores and judgments remain separate.

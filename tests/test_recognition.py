@@ -9,6 +9,29 @@ def line(text, x, y, width=.05, height=.025, confidence=1):
 
 
 class RecognitionTest(unittest.TestCase):
+    def test_result_caption_typos_and_aligned_rows_still_identify_result(self):
+        lines = [line("SCORE", .15, .345), line("PERFEST", .46, .42),
+                 line("MAX COMBD", .45, .683)]
+        self.assertTrue(recognition.is_result_screen(lines))
+        self.assertFalse(recognition.is_result_screen([line("SCORE", .15, .345)]))
+        rows = [line("123", .315, y - .01) for y in (.434, .487, .540)]
+        self.assertTrue(recognition.is_result_screen([line("SCORE", .15, .345), *rows]))
+
+    def test_stage_hud_confusable_glyph_is_anchored_to_label(self):
+        lines = [line("ISTAGE", .14, .005), line("0Ч", .14, .03)]
+        self.assertEqual(recognition.stage_number(lines)["value"], 4)
+        self.assertIsNone(recognition.stage_number(lines[1:]))
+
+    def test_stage_break_taunts_and_game_over_are_distinct(self):
+        first = [line(t, .25, y) for t, y in (("HEY!", .15), ("JHYDONTYDU", .3),
+                                             ("JUST CETUPAND", .5), ("DANGEMANR", .7))]
+        second = [line(t, .25, y) for t, y in (("HEY", .15), ("IS THS", .3),
+                                              ("REALLY", .5), ("YDUR BESTH", .7))]
+        self.assertTrue(recognition.is_stage_break(first))
+        self.assertTrue(recognition.is_stage_break(second))
+        self.assertEqual(recognition.scene_kind(first), "failure")
+        self.assertFalse(recognition.is_stage_break([line("GAME OVER", .3, .4)]))
+
     def test_left_player_and_conflicting_players(self):
         left = [line("DOUBLE", .31, .28), line("18", .31, .31)]
         self.assertEqual(recognition.frame_labels(left, "result")["chart"]["text"], "D18")
@@ -89,6 +112,11 @@ class RecognitionTest(unittest.TestCase):
         result = recognition.frame_labels([line("D", .14, .86, .02), line("25", .14, .9, .025)], "selection")
         self.assertEqual(result["chart"]["text"], "D25")
 
+    def test_half_double_result_badge_is_distinct_from_double(self):
+        lines = [line("H.DOUBLE", .65, .28), line("17", .65, .32)]
+        self.assertEqual(recognition.frame_labels(lines, "result")["chart"]["text"], "HD17")
+        self.assertEqual(recognition.chart_mode("HDOUBLE"), "HD")
+
     def test_summary_stage_row_disambiguates_repeated_charts(self):
         lines = [line("1ST", .48, .18), line("First", .4, .22, .2),
                  line("2ND", .48, .45), line("Second", .4, .49, .2),
@@ -106,6 +134,15 @@ class RecognitionTest(unittest.TestCase):
         self.assertEqual(row["song"]["text"], "Die Another Day")
         self.assertEqual(row["chart"]["text"], "D19")
         self.assertIsNone(recognition.summary_stage_row(lines, 3))
+
+    def test_summary_title_survives_missing_chart_and_shifted_badge(self):
+        title = [line("1ST", .48, .18), line("Song", .4, .22, .2)]
+        row = recognition.summary_stage_row(title, 1)
+        self.assertEqual(row["song"]["text"], "Song")
+        self.assertIsNone(row["chart"])
+        shifted = [line("DOUBLE", .80, .17), line("20", .80, .20)]
+        row = recognition.summary_stage_row(title + shifted + shifted, 1)
+        self.assertEqual(row["charts"]["p2"]["text"], "D20")
 
     def test_summary_left_and_two_player_charts_remain_separate(self):
         title = [line("1ST", .48, .18), line("Same Song", .4, .22, .2)]

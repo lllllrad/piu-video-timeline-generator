@@ -72,6 +72,63 @@ class EvidenceTest(unittest.TestCase):
         self.assertEqual(resolve_players(frames)["p1"]["name"], "ALICE #1234")
         self.assertIsNone(resolve_players(frames[:1])["p1"]["name"])
 
+    def test_focused_name_recovers_damaged_hash_and_keeps_nickname_when_digits_conflict(self):
+        frames = []
+        for i, text in enumerate(("SURA #6747", "SURA +6747")):
+            crop = {**line(text, .72, .065), "name_crop": True, "language": "en"}
+            frames.append({"source_pts_seconds": i, "scene": "unknown", "identity_eligible": True,
+                           "name_ocr": [crop]})
+        self.assertEqual(resolve_players(frames)["p2"]["name"], "SURA #6747")
+        frames[1]["name_ocr"][0]["text"] = "SURA +5747"
+        player = resolve_players(frames)["p2"]
+        self.assertEqual(player["name"], "SURA")
+        self.assertEqual(player["fields"]["name"]["discriminator_status"], "unknown")
+        self.assertIsNone(resolve_players(frames[:1])["p2"]["name"])
+
+    def test_repeated_bare_nickname_requires_dedicated_crop(self):
+        raw = line("SURA", .72, .065)
+        frames = [{"source_pts_seconds": i, "scene": "selection", "eligible_screen": True,
+                   "ocr": [raw]} for i in range(2)]
+        self.assertEqual(resolve_players(frames), {})
+        for f in frames:
+            f["name_ocr"] = [{**raw, "name_crop": True}]
+        self.assertEqual(resolve_players(frames), {})
+        for f in frames:
+            f["ocr"].append(line("BEGINNER", .72, .025))
+        self.assertEqual(resolve_players(frames)["p2"]["name"], "SURA")
+        self.assertIsNone(resolve_players([frames[0], frames[0]])["p2"]["name"])
+
+    def test_repeated_focused_account_digits_precede_full_screen_guesses(self):
+        frames = [{"source_pts_seconds": pts, "file": f"{pts}.png", "scene": "result", "eligible_screen": True,
+                   "ocr": [line("SURA #5747", .72, .065)]} for pts in range(10)]
+        for f in frames[:2]:
+            f["name_ocr"] = [{**line("SURA #6747", .72, .065), "name_crop": True}]
+        name = resolve_players(frames)["p2"]
+        self.assertEqual(name["name"], "SURA #6747")
+        self.assertEqual(name["fields"]["name"]["source_frames"], ["0.png", "1.png"])
+        self.assertIn("SURA #5747", name["fields"]["name"]["full_screen_alternatives"])
+
+    def test_background_credit_on_empty_side_is_not_a_nickname(self):
+        frames = [{"source_pts_seconds": pts, "scene": "result", "eligible_screen": True,
+                   "ocr": [line("BEGINNER", .72, .025), line("ALICE #1234", .72, .065)],
+                   "name_ocr": [{**line("Visualized by KURORAK", .28, .065), "name_crop": True}]}
+                  for pts in (1, 2)]
+        players = resolve_players(frames)
+        self.assertNotIn("p1", players)
+        self.assertEqual(players["p2"]["name"], "ALICE #1234")
+
+    def test_summary_title_only_retains_matching_chart_evidence(self):
+        segments = [{"stage": 1, "song": "Song", "chart": "D20", "needs_review": False}]
+        row = {"song": {"text": "Song", "confidence": 1}, "chart": None, "charts": {}}
+        obs = [observation(1, "result", "Song", "D20"), observation(2, "result", "Song", "D20")]
+        obs += [{**observation(pts, "summary", None, None), "rows": {"1": row}} for pts in (3, 4)]
+        reconcile_sessions(segments, [obs])
+        self.assertEqual(segments[0]["chart"], "D20")
+        self.assertEqual(segments[0]["confidence"]["chart"]["phase"], "result")
+        row["song"]["text"] = "Another song"
+        reconcile_sessions(segments, [obs])
+        self.assertIsNone(segments[0]["chart"])
+
     def test_summary_repairs_previous_stages_but_not_previous_credit(self):
         segments = [{"stage": stage, "song": "Old", "chart": "D10", "needs_review": False}
                     for stage in (1, 2, 1, 2)]

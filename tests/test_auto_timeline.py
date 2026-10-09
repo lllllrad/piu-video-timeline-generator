@@ -11,6 +11,12 @@ from piu_timeline import auto_timeline as auto
 
 
 class AutoTest(unittest.TestCase):
+    def setUp(self):
+        for name in ("transition_samples", "focused_names"):
+            mocked = patch.object(auto, name, return_value=[])
+            mocked.start()
+            self.addCleanup(mocked.stop)
+
     def test_selection_sampling_covers_both_blink_phases(self):
         self.assertEqual(auto.SELECTION_OFFSETS, (-14, -13, -10, -9, -6, -5, -3))
         self.assertEqual({offset % 2 for offset in auto.SELECTION_OFFSETS}, {0, 1})
@@ -18,14 +24,33 @@ class AutoTest(unittest.TestCase):
     def test_sampling_does_not_cross_neighbor_intervals(self):
         with tempfile.TemporaryDirectory() as temporary:
             def capture(record, path, seconds, roi):
-                return {"file": str(path), "source_pts_seconds": seconds}
+                return {"file": str(path), "source_pts_seconds": seconds, "requested_seconds": seconds}
             with patch.object(auto, "capture_game", side_effect=capture) as capture_mock, \
                  patch.object(auto, "ocr_images", side_effect=lambda paths: [{"lines": []} for _ in paths]), \
                  patch.object(auto, "focused_lines") as focus:
                 auto.recognize_segment({"duration_seconds": 100}, (0, 0, 1300, 730),
                                        10, 20, Path(temporary), previous_end=7, next_start=25)
-            self.assertEqual([call.args[2] for call in capture_mock.call_args_list], [23])
+            self.assertTrue(all(7 < call.args[2] < 25 for call in capture_mock.call_args_list))
+            self.assertIn(21.25, [call.args[2] for call in capture_mock.call_args_list])
             focus.assert_not_called()
+
+    def test_short_result_between_old_offsets_is_recovered(self):
+        from test_recognition import line
+        with tempfile.TemporaryDirectory() as temporary:
+            def capture(record, path, seconds, roi):
+                return {"file": str(path), "source_pts_seconds": seconds, "requested_seconds": seconds}
+            def ocr(paths):
+                return [{"lines": [line("SCORE", .8, .35), line("PERFECT", .5, .4)]
+                         if Path(path).stem in {"adaptive-result-21.250", "adaptive-result-22.000"}
+                         else []} for path in paths]
+            with patch.object(auto, "capture_game", side_effect=capture), \
+                 patch.object(auto, "ocr_images", side_effect=ocr), \
+                 patch.object(auto, "focused_lines", return_value=[line("Short result", .4, .16, .2)]):
+                labels, _, evidence = auto.recognize_segment(
+                    {"duration_seconds": 100}, (0, 0, 1300, 730), 10, 20, Path(temporary),
+                    previous_end=7, next_start=25)
+            self.assertEqual(labels["song"], "Short result")
+            self.assertEqual(sum(o["scene"] == "result" for o in json.loads(Path(evidence).read_text())), 2)
 
     def test_retained_acquisition_adds_late_summary_samples(self):
         from test_recognition import line
@@ -57,6 +82,61 @@ class AutoTest(unittest.TestCase):
             self.assertIn(60, times)
             self.assertTrue(Path(evidence).is_file())
 
+    def test_single_short_summary_is_corroborated_by_nearby_frames(self):
+        from test_recognition import line
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = {}
+            def capture(record, path, seconds, roi):
+                paths[str(path)] = seconds
+                return {"file": str(path), "source_pts_seconds": seconds, "requested_seconds": seconds}
+            def ocr(files):
+                return [{"lines": [line("PLAY RESULT", .4, .1)] if 26.5 < paths[p] < 27.5 else []} for p in files]
+            title = [line("1ST", .48, .18), line("Short summary", .4, .22, .2)]
+            with patch.object(auto, "capture_game", side_effect=capture), \
+                 patch.object(auto, "ocr_images", side_effect=ocr), \
+                 patch.object(auto, "focused_lines", return_value=title):
+                labels, confidence, evidence = auto.recognize_segment(
+                    {"duration_seconds": 100}, (0, 0, 1300, 730), 10, 20, Path(temporary),
+                    stage=1, previous_end=7, next_start=40)
+            self.assertEqual(labels["song"], "Short summary")
+            self.assertGreaterEqual(confidence["song"]["supporting_frames"], 2)
+            self.assertGreaterEqual(sum(o["scene"] == "summary" for o in json.loads(Path(evidence).read_text())), 2)
+
+    def test_retained_adaptive_summary_remains_on_replay(self):
+        from test_recognition import line
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            focused = [line("1ST", .48, .18), line("Recovered", .4, .22, .2),
+                       line("DOUBLE", .72, .17), line("20", .72, .20)]
+            (directory / "ocr.json").write_text(json.dumps([{
+                "file": str(directory / f"adaptive-result-{t}.png"), "requested_seconds": t,
+                "source_pts_seconds": t, "ocr": [line("PLAY RESULT", .4, .1)],
+                "focused_ocr": focused, "phase": "summary", "window": "result"} for t in (37.25, 37.85)]))
+            def capture(record, path, seconds, roi):
+                return {"file": str(path), "source_pts_seconds": seconds, "requested_seconds": seconds}
+            with patch.object(auto, "capture_game", side_effect=capture) as captured, \
+                 patch.object(auto, "ocr_images", side_effect=lambda paths: [{"lines": []} for _ in paths]):
+                labels, _, evidence = auto.recognize_segment(
+                    {"duration_seconds": 100}, (0, 0, 1300, 730), 10, 20, directory,
+                    stage=1, previous_end=7, next_start=90, reuse_summary=True)
+            self.assertEqual(labels, {"song": "Recovered", "chart": "D20"})
+            self.assertNotIn(37.25, [call.args[2] for call in captured.call_args_list])
+            self.assertEqual(sum(o["scene"] == "summary" for o in json.loads(Path(evidence).read_text())), 2)
+
+    def test_retained_float_timestamp_does_not_recapture_existing_image(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / "ocr.json").write_text(json.dumps([{
+                "file": str(directory / "result-0.png"), "requested_seconds": 115.29999999999998,
+                "source_pts_seconds": 115.3, "ocr": [], "window": "result"}]))
+            def capture(record, path, seconds, roi):
+                return {"file": str(path), "source_pts_seconds": seconds, "requested_seconds": seconds}
+            with patch.object(auto, "capture_game", side_effect=capture) as captured, \
+                 patch.object(auto, "ocr_images", side_effect=lambda paths: [{"lines": []} for _ in paths]):
+                auto.recognize_segment({"duration_seconds": 150}, (0, 0, 1300, 730),
+                                       100, 112.3, directory, previous_end=99, next_start=120)
+            self.assertNotIn(115.3, [call.args[2] for call in captured.call_args_list])
+
     def test_analysis_includes_player_results(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -71,15 +151,15 @@ class AutoTest(unittest.TestCase):
             profile = {"hud": (180, 0, 70, 20), "at": 20, "detection": detection}
             player = {"player_id": "p2", "side": "right", "presence": "recognized", "fields": {
                 "perfect": {"status": "recognized", "value": 500},
-                "chart": {"status": "recognized", "value": "D21"}}}
-            stats = {"players": {"p2": player}, "needs_review": True}
+                "chart": {"status": "recognized", "value": "D21", "method": "full_screen_badge_ocr"}}}
+            stats = {"players": {"p2": player}, "needs_review": True, "evidence": str(evidence)}
             with patch.object(auto, "media_record", return_value=record), \
                  patch.object(auto, "find_reference", return_value=(20, profile["hud"], {})), \
                  patch.object(auto, "detect", return_value=detection), \
                  patch.object(auto, "discover_profiles", return_value=[profile]), \
                  patch.object(auto, "reference_patch", return_value=b"reference"), \
                  patch.object(auto, "refine_boundary", side_effect=[(10, {"refined": True}), (30, {"refined": True})] * 4), \
-                 patch.object(auto, "recognize_segment", return_value=({"song": "Song", "chart": "D21"}, {}, str(evidence))), \
+                 patch.object(auto, "recognize_segment", return_value=({"song": "Song", "chart": "D12"}, {}, str(evidence))), \
                  patch.object(auto, "recognize_stage", return_value=(4, str(evidence))), \
                  patch.object(auto, "extract_stats", return_value=stats) as extract:
                 result = auto.analyze(video, root / "out")
@@ -87,6 +167,8 @@ class AutoTest(unittest.TestCase):
                 extract.reset_mock()
             self.assertEqual(result["segments"][0]["results"], stats)
             self.assertEqual(result["segments"][0]["stage"], 4)
+            self.assertEqual(result["segments"][0]["chart"], "D21")
+            self.assertEqual(result["segments"][0]["chart_correction"]["previous"], "D12")
             self.assertTrue((root / "out/analysis.json").is_file())
 
     def test_analysis_rejects_candidate_without_song_or_chart_evidence(self):

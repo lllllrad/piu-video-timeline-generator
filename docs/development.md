@@ -22,6 +22,7 @@ Codex-only environment generation and optional mise installation are documented 
 - `ocr.py` adapts Vision or EasyOCR to the same normalized, top-left image coordinates. EasyOCR readers are reused within a process; models stay under `.local/cache/`.
 - `recognition.py` classifies observed screens and parses layout-specific fields.
 - `evidence.py` resolves labels, player identity and stage-row associations across a credit.
+- `credits.py` samples screen transitions inside gameplay gaps and groups plays using observed credit boundaries.
 - `result_stats.py` extracts per-player result fields only from per-song results.
 - `formats/` contains Node.js TypeScript presentation programs.
 - `timeline.py`, `evaluate.py` and `relabel_analysis.py` are internal review and diagnostic tools.
@@ -29,7 +30,7 @@ Codex-only environment generation and optional mise installation are documented 
 Analysis is authoritative and presentation is disposable. A format reads `analysis.json`; it does not trigger recognition or mutate evidence.
 Analyzer changes that affect saved results increment `ANALYSIS_VERSION`. `just auto` rebuilds an older cache into a unique temporary directory and replaces it only after the new analysis succeeds. Source size/mtime, explicit game ROI and OCR backend/device changes invalidate the cache too. A per-source advisory lock prevents concurrent writers on macOS/Linux. Existing results are retained in `analysis.previous-*`; interrupted builds remain in `analysis.build-*` for diagnosis. Promotion rewrites nested evidence paths to their final location. Original media is never rewritten.
 
-The version 11 migration can reuse verified version 5–10 acquisition: it copies evidence into the new build, refreshes summary crops and decisions, and decodes the newly added late samples from the original video. It preserves existing per-song statistics and decoded boundaries; version 9+ summary crops need no additional OCR. Other versions or changed input/settings receive a complete rebuild. Only the new complete analysis is promoted.
+Version 25 reuses source-verified acquisition from versions 5–24. It preserves decoded gameplay boundaries and saved result frames, adds early/transition samples, and reads dedicated account strips. Result statistics are recomputed from the union of retained and newly acquired evidence. Unresolved numeric fields, conflicts between full-screen and numeric-only OCR, and uncorroborated badges receive caption-preserving crops on at most six new source frames per play to prevent rotated digit recognition; missing HUD stages receive enlarged anchored crops. Scores still unreadable after contextual recovery receive a separate contrast channel on at most six source frames. Other versions or changed input/settings receive a complete rebuild. Only the new complete analysis is promoted.
 
 ## Commands
 

@@ -8,15 +8,16 @@ import shutil
 from .detect import detect, similarity
 from .media import fetch_command, resolve_url
 from .recognition import (capture_game, focused_lines, frame_labels, ocr_images,
-                          stage_number, summary_stage_row, scene_kind, is_demo_screen)
+                          stage_number, summary_stage_row, scene_kind, is_demo_screen, focused_names, chart_mode, center)
 from .timeline import media_record, write_json
-from .result_stats import extract_stats, aggregate_frames
+from .result_stats import extract_stats
 from .evidence import resolve_labels, resolve_players, reconcile_sessions
 from .ocr import configuration
+from .credits import transition_samples, reconcile_players, recover_summary_stages
 
 
 SELECTION_OFFSETS = (-14, -13, -10, -9, -6, -5, -3)
-ANALYSIS_VERSION = 11
+ANALYSIS_VERSION = 25
 
 
 def resolve_source(source, raw_dir=None):
@@ -157,47 +158,167 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
     directory.mkdir(exist_ok=True)
     retained = directory / "ocr.json"
     existing = json.loads(retained.read_text()) if retained.is_file() else []
-    saved = {item["requested_seconds"]: item for item in existing}
+    saved = {round(item["requested_seconds"], 3): item for item in existing}
     next_start = record["duration_seconds"] if next_start is None else next_start
-    frames, pending = [], []
-    for window, times in [("selection", [start + offset for offset in SELECTION_OFFSETS]),
-                          ("result", [end + offset for offset in
-                                      (3, 5, 7, 8, 9, 10, 11, 12, 14, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60)])]:
+    frames = []
+    seen = set()
+
+    def acquire(window, times, adaptive=False):
+        pending, batch = [], []
         for index, seconds in enumerate(times):
-            if not previous_end < seconds < next_start or not 0 <= seconds < record["duration_seconds"]:
+            seconds = round(seconds, 3)
+            if (seconds in seen or not previous_end < seconds < next_start
+                    or not 0 <= seconds < record["duration_seconds"]):
                 continue
+            seen.add(seconds)
             if seconds in saved:
                 frame = saved[seconds]
             else:
-                frame = capture_game(record, directory / f"{window}-{index}.png", seconds, roi)
+                filename = f"adaptive-{window}-{seconds:.3f}.png" if adaptive else f"{window}-{index}.png"
+                frame = capture_game(record, directory / filename, seconds, roi)
                 pending.append(frame)
-            frames.append({**frame, "window": window})
-    recognized = ocr_images([frame["file"] for frame in pending])
-    fresh = {frame["file"]: result["lines"] for frame, result in zip(pending, recognized)}
-    observations = []
-    for frame in frames:
-        raw = frame.get("ocr", fresh.get(frame["file"], []))
-        scene = scene_kind(raw)
-        eligible = ((frame["window"] == "selection" and scene == "selection")
-                    or (frame["window"] == "result" and scene in {"result", "summary"}))
-        if eligible and (scene != "summary" or reuse_summary) and "focused_ocr" in frame:
-            focused = frame["focused_ocr"]
-        else:
-            focused = focused_lines(frame["file"], scene, roi[2], roi[3]) if eligible else []
-        rows = {}
-        labels = {"song": None, "chart": None}
-        if eligible and scene == "summary":
-            rows = {str(number): row for number in range(1, 7)
-                    if (row := summary_stage_row(focused, number))}
-            labels = rows.get(str(stage), labels)
-        elif eligible:
-            labels = frame_labels(focused, scene)
-        observations.append({**frame, "phase": scene, "scene": scene, "ocr": raw,
-                             "focused_ocr": focused, "eligible_screen": eligible, "rows": rows, **labels})
-    labels, confidence = resolve_labels(observations)
+            batch.append({**frame, "window": window})
+        recognized = ocr_images([frame["file"] for frame in pending])
+        fresh = {frame["file"]: result["lines"] for frame, result in zip(pending, recognized)}
+        for frame in batch:
+            raw = frame.get("ocr", fresh.get(frame["file"], []))
+            scene = scene_kind(raw)
+            eligible = ((frame["window"] == "selection" and scene == "selection")
+                        or (frame["window"] == "result" and scene in {"result", "summary"}))
+            if eligible and (scene != "summary" or reuse_summary) and "focused_ocr" in frame:
+                focused = frame["focused_ocr"]
+            else:
+                focused = focused_lines(frame["file"], scene, roi[2], roi[3]) if eligible else []
+            rows = {}
+            labels = {"song": None, "chart": None}
+            if eligible and scene == "summary":
+                # Badge columns move in some Phoenix layouts. Keep title OCR
+                # focused, supplement only chart glyphs from the raw screen.
+                badge_lines = [line for line in raw if (.15 < center(line)[0] < .31 or .69 < center(line)[0] < .87)
+                               and (chart_mode(line["text"]) or line["text"].strip().isdigit())]
+                rows = {str(number): row for number in range(1, 7)
+                        if (row := summary_stage_row([*focused, *badge_lines], number))}
+                labels = rows.get(str(stage), labels)
+            elif eligible:
+                labels = frame_labels(focused, scene)
+            frames.append({**frame, "phase": scene, "scene": scene, "ocr": raw,
+                           "focused_ocr": focused, "eligible_screen": eligible, "rows": rows,
+                           "identity_eligible": (frame["window"] == "selection" and scene in {"selection", "mode", "unknown"}
+                                                 or frame["window"] == "result" and scene in {"result", "summary", "failure"}),
+                           **labels})
+        # Do not let a later credit establish confidence before deciding
+        # whether this play needs additional acquisition.
+        stops = [f["requested_seconds"] for f in frames if f["window"] == "result"
+                 and f["scene"] in {"selection", "mode", "entry", "demo"}]
+        if stops:
+            stop = min(stops)
+            for frame in frames:
+                if frame["window"] == "result" and frame["requested_seconds"] >= stop:
+                    frame["eligible_screen"] = frame["identity_eligible"] = False
+
+    acquire("selection", [start + offset for offset in SELECTION_OFFSETS])
+    acquire("result", [end + offset for offset in
+                       (3, 5, 7, 8, 9, 10, 11, 12, 14, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60)])
+    # The first seconds may contain the only failed/short result screen.
+    acquire("result", [end + offset for offset in (.5, 1.25, 2)], adaptive=True)
+    # A previously discovered brief screen remains evidence on every replay,
+    # even if it resolved the uncertainty that originally triggered its scan.
+    for window in ("selection", "result"):
+        acquire(window, [item["requested_seconds"] for item in existing
+                         if item.get("window") == window], adaptive=True)
+
+    # A singleton short screen receives close neighbors instead of losing its
+    # fields solely because the regular sampling grid caught it only once.
+    for scene in ("result", "summary", "failure"):
+        singletons = [f for f in frames if f["window"] == "result" and f["scene"] == scene
+                      and (f["eligible_screen"] or f["identity_eligible"])]
+        if len(singletons) == 1:
+            at = singletons[0]["requested_seconds"]
+            acquire("result", [at - .3, at + .3], adaptive=True)
+
+    def focus_identities():
+        candidates = sorted([f for f in frames if f["identity_eligible"]],
+                            key=lambda f: (f["scene"] == "unknown", abs(f["requested_seconds"] -
+                                           (start if f["window"] == "selection" else end))))
+        identities = resolve_players(frames)
+        already_focused = sum("name_ocr" in f for f in candidates)
+        if already_focused >= 2 and identities and all(p.get("name") and
+                p["fields"]["name"].get("discriminator_status") != "unknown" for p in identities.values()):
+            return identities
+        checked = 0
+        for frame in candidates:
+            if "name_ocr" in frame:
+                continue
+            frame["name_ocr"] = focused_names(frame["file"], roi[2], roi[3])
+            checked += 1
+            identities = resolve_players(frames)
+            if already_focused + checked >= 2 and identities and all(p.get("name") and
+                    p["fields"]["name"].get("discriminator_status") != "unknown" for p in identities.values()):
+                return identities
+            if checked >= 8:
+                break
+        return resolve_players(frames)
+
+    identities = focus_identities()
+    labels, confidence = resolve_labels(frames)
+    no_result = not any(f["scene"] in {"result", "summary", "failure"} for f in frames if f["window"] == "result")
+    if (not identities or any(not p.get("name") for p in identities.values())
+            or any(v is None for v in labels.values()) or no_result):
+        # A sparse look farther back captures the account/mode/selection header
+        # while avoiding OCR over a long idle gap. Only unresolved plays need it.
+        acquire("selection", [start - offset for offset in (20, 30, 45, 60)], adaptive=True)
+        for window, begin, stop in (("result", end, min(end + 65, next_start)),
+                                    ("selection", max(previous_end + .5, start - 60), start - 2)):
+            plan = directory / f"transitions-v1-{window}.json"
+            if plan.is_file():
+                times = json.loads(plan.read_text())
+            else:
+                times = transition_samples(record, roi, begin, stop)
+                write_json(plan, times)
+            acquire(window, times, adaptive=True)
+        focus_identities()
+    frames.sort(key=lambda f: f["requested_seconds"])
+    labels, confidence = resolve_labels(frames)
     retained.unlink(missing_ok=True)
-    write_json(retained, observations)
+    write_json(retained, frames)
     return labels, confidence, str(retained)
+
+
+def recover_stage(path, width, height):
+    evidence = json.loads(path.read_text())
+    if not isinstance(evidence, dict):
+        return None
+    recognized = evidence.get("recognized") or stage_number(evidence.get("focused_ocr", [])) or stage_number(evidence.get("ocr", []))
+    if recognized:
+        if not evidence.get("recognized"):
+            evidence["recognized"] = recognized
+            path.unlink()
+            write_json(path, evidence)
+        return recognized
+    if evidence.get("stage_crop_version") == 2:
+        return None
+    # Anchor to the observed HUD: single and double modes have different x.
+    labels = [line for line in evidence.get("ocr", [])
+              if line["text"].strip().upper() in {"STAGE", "ISTAGE"} and center(line)[1] < .1]
+    if len(labels) != 1:
+        return None
+    x, y, w, h = max(0, center(labels[0])[0] - .04), 0., .08, .085
+    px, py, pw, ph = int(x * width), int(y * height), int(w * width), int(h * height)
+    crop = path.with_name("stage-focus-v2.png")
+    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", evidence["file"],
+                    "-vf", f"crop={pw}:{ph}:{px}:{py},scale=iw*6:ih*6", str(crop)],
+                   check=True, capture_output=True)
+    lines = []
+    for line in ocr_images([crop], english=True)[0]["lines"]:
+        bx, by, bw, bh = line["box"]
+        lines.append({**line, "box": [(px + bx * pw) / width, (py + by * ph) / height,
+                                     bw * pw / width, bh * ph / height], "image": str(crop)})
+    evidence["stage_crop_version"] = 2
+    evidence["focused_ocr"] = lines
+    evidence["recognized"] = stage_number(lines)
+    path.unlink()
+    write_json(path, evidence)
+    return evidence["recognized"]
 
 
 def recognize_stage(record, roi, start, end, directory):
@@ -273,10 +394,13 @@ def analyze(video, output, game_roi=None, provenance=None, retained=None):
         segment_dir.mkdir(exist_ok=True)
         stage_path = segment_dir / "stage.json"
         if stage_path.is_file():
-            recognized = json.loads(stage_path.read_text())["recognized"]
+            recognized = recover_stage(stage_path, width, height)
             stage, stage_evidence = recognized["value"] if recognized else None, str(stage_path)
         else:
             stage, stage_evidence = recognize_stage(record, roi, start, end, segment_dir)
+        if stage is None:
+            recognized = recover_stage(Path(stage_evidence), width, height)
+            stage = recognized["value"] if recognized else None
         stage_data = json.loads(Path(stage_evidence).read_text())
         if isinstance(stage_data, dict) and is_demo_screen(stage_data.get("ocr", [])):
             print(f"Rejected candidate {index + 1}: explicit DEMO PLAY screen", flush=True)
@@ -302,14 +426,7 @@ def analyze(video, output, game_roi=None, provenance=None, retained=None):
         all_observations.append(observations)
         segments[-1]["players"] = resolve_players(observations, stage_data if isinstance(stage_data, dict) else None)
         stats_dir = evidence_dir / f"stats-{index + 1:03}"
-        stats_frames = stats_dir / "frames.json"
-        if cached:
-            stats = cached["results"]
-        elif stats_frames.is_file():
-            stats = aggregate_frames(json.loads(stats_frames.read_text()))
-            stats["evidence"] = str(stats_frames.resolve())
-        else:
-            stats = extract_stats(observations, stats_dir, width, height)
+        stats = extract_stats(observations, stats_dir, width, height)
         segments[-1]["results"] = stats
         segments[-1]["needs_review"] |= stats["needs_review"]
         segments[-1]["needs_review"] |= any(
@@ -318,13 +435,42 @@ def analyze(video, output, game_roi=None, provenance=None, retained=None):
             for p in segments[-1]["players"].values())
         segment_files.append(output / f"segment-{index + 1:03}.json")
         write_json(segment_files[-1], segments[-1])
+    recover_summary_stages(segments, all_observations)
     reconcile_sessions(segments, all_observations)
+    reconcile_players(segments, all_observations)
+    # Caption-preserving result badges can correct rotated focused glyphs.
+    for segment in segments:
+        players = list(segment["results"]["players"].values())
+        charts = {p["fields"]["chart"].get("value") for p in players
+                  if p["fields"]["chart"]["status"] == "recognized" and p["fields"]["chart"].get("value")}
+        if players and len(charts) == 1 and all(p["fields"]["chart"]["status"] == "recognized"
+                and p["fields"]["chart"].get("method") in {"caption_context_ocr", "full_screen_badge_ocr", "full_screen_ocr"}
+                for p in players):
+            corrected = next(iter(charts))
+            old = segment.get("chart")
+            # SINGLE and VERY HARD are alternate labels for the same basic badge.
+            same_basic = old and corrected.startswith("VERY HARD ") and old == "S" + corrected.split()[-1]
+            if old != corrected and not same_basic:
+                segment["chart"] = corrected
+                segment["confidence"]["chart"] = {**players[0]["fields"]["chart"], "phase": "result"}
+                segment["chart_correction"] = {"previous": old, "method": "upright_result_badge",
+                                                "evidence": segment["results"]["evidence"]}
     accepted = []
     for path, segment in zip(segment_files, segments):
         path.unlink()
         if segment["song"] is None and segment["chart"] is None:
             print(f"Rejected {path.stem}: no labels after credit reconciliation", flush=True)
             continue
+        segment["needs_review"] = (any(segment.get(key) is None for key in ("song", "chart", "stage"))
+            or segment["results"]["needs_review"]
+            or any(not segment["boundary_evidence"][key]["refined"] for key in ("start", "end"))
+            or any(value and (value.get("mean_ocr_confidence", 0) < .7
+                             or value.get("supporting_frames", 0) < 2)
+                   for value in segment["confidence"].values())
+            or any(not player.get("name") or player["fields"]["name"]["status"] != "recognized"
+                   or player["fields"]["name"].get("mean_ocr_confidence", 0) < .7
+                   for player in segment["players"].values())
+            or bool(segment.get("label_revisions")))
         accepted.append(segment)
         write_json(path, segment)
     segments = accepted

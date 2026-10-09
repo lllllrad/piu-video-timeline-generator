@@ -1,10 +1,11 @@
 """Player-separated result OCR; never infer missing judgment counts as zero."""
 from collections import Counter
 from pathlib import Path
+import json
 import re
 import subprocess
 
-from .recognition import center, frame_labels, is_result_screen, ocr_images
+from .recognition import chart_mode, center, frame_labels, is_result_screen, is_stage_break, ocr_images
 from .timeline import write_json
 
 COUNT_FIELDS = ("perfect", "great", "good", "bad", "miss", "max_combo")
@@ -44,6 +45,20 @@ def parse_result(lines):
         present = bool(chart or (score_label and values["score"]
                                 and sum(values[field] is not None for field in COUNT_FIELDS) >= 3))
         players[player] = {"side": side, "present": present, "fields": values}
+    # Phoenix displays one shared badge for two players on the same chart.
+    # Both numeric panels must be established, and any unreadable separate
+    # badge glyphs prevent treating that slot as intentionally absent.
+    charts = [slot for slot in players if players[slot]["fields"]["chart"]]
+    if len(charts) == 1 and all(p["present"] for p in players.values()):
+        source = charts[0]
+        target = "p2" if source == "p1" else "p1"
+        cx = .665 if target == "p2" else .335
+        occupied = any(abs(center(line)[0] - cx) < .05 and .25 < center(line)[1] < .36
+                       and (chart_mode(line["text"]) or re.fullmatch(r"\d{1,2}", line["text"].strip()))
+                       for line in lines)
+        if not occupied:
+            players[target]["fields"]["chart"] = {**players[source]["fields"]["chart"],
+                                                   "shared_from": source}
     return players
 
 
@@ -55,7 +70,7 @@ def focused_stats(frame, directory, index, width, height):
     paths, regions = [], []
     for name, x, y, w, h in boxes:
         px, py, pw, ph = int(x * width), int(y * height), int(w * width), int(h * height)
-        path = directory / f"frame-{index:03}-{name}.png"
+        path = directory / f"frame-{index}-{name}.png"
         processing = f"crop={pw}:{ph}:{px}:{py},scale=iw*4:ih*4"
         if name.endswith("counts"):
             processing += r",format=gray,lut=y=if(gt(val\,180)\,255\,0)"
@@ -70,6 +85,47 @@ def focused_stats(frame, directory, index, width, height):
             bx, by, bw, bh = line["box"]
             mapped.append({**line, "box": [x + bx * w, y + by * h, bw * w, bh * h],
                            "image": result["path"]})
+    return mapped
+
+
+def contextual_stats(frame, directory, index, width, height):
+    """Keep upright captions beside numbers to prevent automatic rotated OCR."""
+    boxes = [("counts", .27, .40, .46, .325),
+             ("charts", .27, .25, .46, .20),
+             ("p1-score", .075, .315, .34, .13), ("p2-score", .585, .315, .34, .13)]
+    paths, regions = [], []
+    for name, x, y, w, h in boxes:
+        px, py, pw, ph = int(x * width), int(y * height), int(w * width), int(h * height)
+        path = directory / f"context-v2-{index}-{name}.png"
+        if not path.is_file():
+            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(frame),
+                            "-vf", f"crop={pw}:{ph}:{px}:{py},scale=iw*4:ih*4", str(path)],
+                           check=True, capture_output=True)
+        paths.append(path)
+        regions.append((px / width, py / height, pw / width, ph / height))
+    mapped = []
+    for result, (x, y, w, h) in zip(ocr_images(paths, english=True), regions):
+        for line in result["lines"]:
+            bx, by, bw, bh = line["box"]
+            mapped.append({**line, "box": [x + bx * w, y + by * h, bw * w, bh * h],
+                           "image": result["path"]})
+    return mapped
+
+
+def contrast_score(frame, directory, index, width, height, player):
+    """A second, bounded score channel for glyphs still misread as letters."""
+    x, y, w, h = (.075 if player == "p1" else .585), .315, .34, .13
+    px, py, pw, ph = int(x * width), int(y * height), int(w * width), int(h * height)
+    path = directory / f"score-contrast-v1-{index}-{player}.png"
+    if not path.is_file():
+        processing = f"crop={pw}:{ph}:{px}:{py},scale=iw*2:ih*2" + r",format=gray,lut=y=if(gt(val\,180)\,255\,0)"
+        subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(frame),
+                        "-vf", processing, str(path)], check=True, capture_output=True)
+    mapped = []
+    for line in ocr_images([path], english=True)[0]["lines"]:
+        bx, by, bw, bh = line["box"]
+        mapped.append({**line, "box": [(px + bx * pw) / width, (py + by * ph) / height,
+                                      bw * pw / width, bh * ph / height], "image": str(path)})
     return mapped
 
 
@@ -107,9 +163,15 @@ def aggregate_frames(frames):
 
 
 def extract_stats(observations, directory, width, height):
-    directory.mkdir(parents=True, exist_ok=False)
-    frames = []
-    seen = set()
+    directory.mkdir(parents=True, exist_ok=True)
+    saved = directory / "frames.json"
+    frames = json.loads(saved.read_text()) if saved.is_file() else []
+    # Reparse retained glyphs when layout/mode support changes; no decoding or
+    # numeric OCR is necessary to recognize an additional displayed badge.
+    for frame in frames:
+        if "ocr" in frame:
+            frame["players"] = parse_result(frame["ocr"])
+    seen = {frame["source_pts_seconds"] for frame in frames}
     for index, observation in enumerate(observations):
         if observation.get("phase") != "result" or not observation.get("eligible_screen"):
             continue
@@ -121,14 +183,85 @@ def extract_stats(observations, directory, width, height):
         if not is_result_screen(raw):
             continue
         frame = Path(observation["file"]).resolve()
-        lines = focused_stats(frame, directory, index, width, height)
+        lines = focused_stats(frame, directory, f"pts-{pts:.3f}", width, height)
         # Keep only SCORE markers from raw OCR; numeric extraction uses dedicated
         # crops so mixed-language/BGA OCR cannot outvote focused numeric evidence.
         lines += [line for line in raw if re.sub(r"[^A-Z]", "", line["text"].upper()) == "SCORE"]
         frames.append({"file": str(frame), "source_pts_seconds": pts,
                        "playback_seconds": observation.get("playback_seconds"),
-                       "ocr": lines, "players": parse_result(lines)})
+                       "ocr": lines, "source_ocr": raw, "players": parse_result(lines)})
+    # Retained full-screen chart glyphs provide an independent upright channel.
+    raw_by_pts = {o.get("source_pts_seconds"): o.get("ocr", []) for o in observations}
+    for frame in frames:
+        frame.setdefault("source_ocr", raw_by_pts.get(frame["source_pts_seconds"], []))
     result = aggregate_frames(frames)
-    write_json(directory / "frames.json", frames)
+    need_chart_context = False
+    need_number_context = False
+    for player in result["players"]:
+        chart = field_consensus([parse_result(f["source_ocr"])[player]["fields"]["chart"] for f in frames])
+        need_chart_context |= chart["status"] != "recognized" and any(f["source_ocr"] for f in frames)
+        if chart["status"] == "recognized":
+            chart["method"] = "full_screen_badge_ocr"
+            result["players"][player]["chart"] = chart["value"]
+            result["players"][player]["fields"]["chart"] = chart
+    for player, resolved in result["players"].items():
+        for key in (*COUNT_FIELDS, "score"):
+            upright = field_consensus([parse_result(f["source_ocr"])[player]["fields"][key] for f in frames])
+            if upright["status"] == "recognized" and resolved["fields"][key]["status"] == "recognized":
+                need_number_context |= upright["value"] != resolved[key]
+    failures = {o.get("source_pts_seconds"): o for o in observations
+                if o.get("window") == "result" and o.get("identity_eligible")
+                and is_stage_break(o.get("ocr", []))}
+    if not result["players"] and len(failures) >= 2:
+        result.update(status="not_displayed", reason="stage_break_screen", needs_review=False,
+                      source_frames=[{"file": o["file"], "source_pts_seconds": pts}
+                                     for pts, o in sorted(failures.items())])
+    if result["needs_review"] or need_chart_context or need_number_context:
+        ordered = sorted(frames, key=lambda f: f["source_pts_seconds"])
+        # Sample the result's duration, rather than repeating costly OCR on
+        # every retained frame. Previously acquired context remains evidence.
+        positions = {round(i * (len(ordered) - 1) / 5) for i in range(6)} if ordered else set()
+        selected = [f for i, f in enumerate(ordered) if i in positions or f.get("context_version") == 2]
+        for frame in selected:
+            if frame.get("context_version") != 2:
+                frame["context_version"] = 2
+                frame["context_ocr"] = contextual_stats(Path(frame["file"]), directory,
+                                                        f"{frame['source_pts_seconds']:.3f}", width, height)
+        for player in result["players"]:
+            for key in FIELDS:
+                contextual = field_consensus([parse_result(f["context_ocr"])[player]["fields"][key]
+                                              for f in selected])
+                if contextual["status"] != "recognized" and result["players"][player]["fields"][key]["status"] != "recognized":
+                    contextual = field_consensus([parse_result(f["source_ocr"])[player]["fields"][key]
+                                                  for f in frames])
+                    contextual["method"] = "full_screen_ocr"
+                if contextual["status"] == "recognized":
+                    contextual.setdefault("method", "caption_context_ocr")
+                    result["players"][player][key] = contextual["value"]
+                    result["players"][player]["fields"][key] = contextual
+    for player, resolved in result["players"].items():
+        if resolved["fields"]["score"]["status"] == "recognized":
+            continue
+        ordered = sorted(frames, key=lambda f: f["source_pts_seconds"])
+        positions = {round(i * (len(ordered) - 1) / 5) for i in range(6)} if ordered else set()
+        selected = [f for i, f in enumerate(ordered) if i in positions]
+        for frame in selected:
+            channel = frame.setdefault("contrast_score_ocr", {})
+            if player not in channel:
+                channel[player] = contrast_score(Path(frame["file"]), directory,
+                                                  f"{frame['source_pts_seconds']:.3f}", width, height, player)
+        score = field_consensus([parse_result(f["contrast_score_ocr"][player])[player]["fields"]["score"]
+                                 for f in selected])
+        if score["status"] == "recognized":
+            score["method"] = "caption_contrast_ocr"
+            resolved["score"] = score["value"]
+            resolved["fields"]["score"] = score
+    for player in result["players"].values():
+        player["needs_review"] = player["presence"] != "recognized" or any(
+            field["status"] != "recognized" for field in player["fields"].values())
+    if result["players"]:
+        result["needs_review"] = any(p["needs_review"] for p in result["players"].values())
+    saved.unlink(missing_ok=True)
+    write_json(saved, frames)
     result["evidence"] = str((directory / "frames.json").resolve())
     return result

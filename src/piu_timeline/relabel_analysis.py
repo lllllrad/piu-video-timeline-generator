@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .evidence import reconcile_sessions, resolve_labels, resolve_players
+from .credits import reconcile_players, recover_summary_stages
 from .recognition import frame_labels, scene_kind, summary_stage_row
 from .timeline import write_json
 
@@ -45,7 +46,9 @@ def relabel(source, output):
         segment["players"] = resolve_players(observations)
         segment["needs_review"] = True
         all_observations.append(observations)
+    recover_summary_stages(result["segments"], all_observations)
     reconcile_sessions(result["segments"], all_observations)
+    reconcile_players(result["segments"], all_observations)
     changes = [{"segment": index, "field": field, "before": before.get(field), "after": after.get(field)}
                for index, (before, after) in enumerate(zip(document["segments"], result["segments"]), 1)
                for field in ("song", "chart") if before.get(field) != after.get(field)]
