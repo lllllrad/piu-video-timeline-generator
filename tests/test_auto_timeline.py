@@ -277,7 +277,7 @@ class AutoTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             video = Path(temporary) / "local.mp4"
             video.write_bytes(b"local")
-            with patch.object(auto.subprocess, "run") as invoke:
+            with patch.object(auto, "run_download") as invoke:
                 path, provenance = auto.resolve_source(str(video))
             invoke.assert_not_called()
             self.assertEqual(path, video.resolve())
@@ -285,7 +285,7 @@ class AutoTest(unittest.TestCase):
 
     def test_url_download_path_is_checked(self):
         with tempfile.TemporaryDirectory() as temporary, \
-             patch.object(auto.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "PIU_FILE:/outside.mp4\n", "")):
+             patch.object(auto, "run_download", return_value="PIU_FILE:/outside.mp4\n"):
             with self.assertRaises(ValueError):
                 auto.resolve_source("https://www.youtube.com/watch?v=_OE47GBOvB0", Path(temporary))
 
@@ -294,7 +294,7 @@ class AutoTest(unittest.TestCase):
             raw = Path(temporary)
             video = raw / "abc123XYZ00.mkv"
             video.write_bytes(b"video")
-            with patch.object(auto.subprocess, "run") as invoke:
+            with patch.object(auto, "run_download") as invoke:
                 path, provenance = auto.resolve_source("abc123XYZ00", raw)
             invoke.assert_not_called()
             self.assertEqual(path, video.resolve())

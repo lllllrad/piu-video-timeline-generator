@@ -32,6 +32,8 @@ Download without starting analysis when needed:
 just fetch 'https://www.youtube.com/watch?v=VIDEO_ID'
 ```
 
+Downloads show live progress, speed and estimated time remaining.
+
 `fetch` and `auto` share the same cache. A later `auto` call reuses the completed video under `.local/data/<video-id>/raw/` without downloading it again.
 
 To use a video downloaded from YouTube Studio as that cached source, move it into place with its URL or ID:

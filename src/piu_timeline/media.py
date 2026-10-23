@@ -1,8 +1,10 @@
 """YouTube download and local media inspection helpers."""
 import argparse
+from collections import deque
 from pathlib import Path
 import re
 import subprocess
+import sys
 from urllib.parse import urlparse
 
 def resolve_url(source):
@@ -27,8 +29,27 @@ def fetch_command(source, output_root, concurrent_fragments=4):
         "--js-runtimes", "node", "--paths", str(destination), "--output", "%(id)s.%(ext)s",
         "--format", "bv*+ba/b", "--merge-output-format", "mkv",
         "--concurrent-fragments", str(concurrent_fragments), "--progress-delta", "5",
+        "--progress", "--newline", "--no-quiet",
     ]
     return command + ["--", resolve_url(source)]
+
+
+def run_download(command):
+    """Stream downloader logs while retaining only completed-file markers."""
+    markers = []
+    recent = deque(maxlen=20)
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, bufsize=1) as process:
+        for line in process.stdout:
+            if line.startswith("PIU_FILE:"):
+                markers.append(line)
+            else:
+                print(line, end="", file=sys.stderr, flush=True)
+                recent.append(line)
+        returncode = process.wait()
+    if returncode:
+        raise subprocess.CalledProcessError(returncode, command, stderr="".join(recent))
+    return "".join(markers)
 
 
 def main():

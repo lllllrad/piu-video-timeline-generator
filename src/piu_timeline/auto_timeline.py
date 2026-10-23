@@ -6,7 +6,7 @@ import subprocess
 import shutil
 
 from .detect import detect, similarity
-from .media import fetch_command, resolve_url
+from .media import fetch_command, resolve_url, run_download
 from .recognition import (capture_game, focused_lines, frame_labels, ocr_images,
                           stage_number, summary_stage_row, scene_kind, is_demo_screen, focused_names, chart_mode, center, rival_slots)
 from .timeline import media_record, write_json
@@ -37,8 +37,8 @@ def resolve_source(source, raw_dir=None):
         raise ValueError(f"Multiple videos found in {destination}")
     command = fetch_command(source, destination)
     command[-2:-2] = ["--print", "after_move:PIU_FILE:%(filepath)s"]
-    result = subprocess.run(command, check=True, capture_output=True, text=True)
-    paths = [Path(line.removeprefix("PIU_FILE:")).resolve() for line in result.stdout.splitlines()
+    output = run_download(command)
+    paths = [Path(line.removeprefix("PIU_FILE:")).resolve() for line in output.splitlines()
              if line.startswith("PIU_FILE:")]
     if len(paths) != 1 or not paths[0].is_file() or not paths[0].is_relative_to(destination):
         raise ValueError("Download did not return exactly one completed video")
