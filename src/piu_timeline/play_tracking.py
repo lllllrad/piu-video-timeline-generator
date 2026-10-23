@@ -18,6 +18,7 @@ class NoteTracker:
         self.layout, self.width, self.height = layout, width, height
         self.spacing = float(np.median(np.diff([lane['x'] * width for lane in layout['lanes']])))
         self.active, self.finished = [], []
+        self.hold_candidate, self.unsupported_intervals = False, []
 
     def detect(self, rgb):
         hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
@@ -26,6 +27,7 @@ class NoteTracker:
                  'red': ((h <= 15) | (h >= 150)),
                  'yellow': ((h >= 15) & (h <= 45))}
         detections = []
+        self.hold_candidate = False
         top = int(self.layout['receptor_y'] * self.height + .45 * self.spacing)
         bottom = int(self.layout.get('note_y_max', .95) * self.height)
         for index, lane in enumerate(self.layout['lanes']):
@@ -34,6 +36,8 @@ class NoteTracker:
             mask = (masks[lane['color']] & (s > 105) & (v > 170))[top:bottom, left:right].astype('uint8')
             count, _, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
             for x, y, w, height, area in stats[1:count]:
+                if height > 1.25 * self.spacing and w > .2 * self.spacing and y < .25 * self.spacing and area > self.spacing ** 2 * .10:
+                    self.hold_candidate = True
                 if not (.20 * self.spacing <= w <= self.spacing and .20 * self.spacing <= height <= 1.25 * self.spacing):
                     continue
                 if area < self.spacing ** 2 * .035:
@@ -49,6 +53,12 @@ class NoteTracker:
         return detections
 
     def update(self, seconds, detections):
+        if self.hold_candidate:
+            if self.unsupported_intervals and seconds - self.unsupported_intervals[-1]['end_seconds'] < .1:
+                self.unsupported_intervals[-1]['end_seconds'] = seconds
+            else:
+                self.unsupported_intervals.append({'start_seconds': seconds, 'end_seconds': seconds,
+                                                   'reason': 'possible_hold_or_dense_stack'})
         pairs = []
         for i, track in enumerate(self.active):
             last_t, last_y = track.points[-1]
@@ -109,7 +119,7 @@ def fit_track(track, receptor_y, spacing):
     if not 0 <= extrapolation <= .16:
         return {**result, 'reason': 'receptor_not_observed_closely'}
     return {**result, 'status': 'estimated', 'target_seconds': target,
-            'prediction_uncertainty_seconds': max(residual / abs(velocity), .001)}
+            'prediction_uncertainty_seconds': max(residual / abs(velocity), float(np.median(np.diff(points[:,0]))) / 2)}
 
 
 def glyphs(rgb):
@@ -138,14 +148,19 @@ def glyphs(rgb):
 class DigitReader:
     def __init__(self):
         self.examples = {str(i): [] for i in range(10)}
+        self.sources = {str(i): set() for i in range(10)}
+        self.training_call = 0
 
-    def train(self, rgb, value):
+    def train(self, rgb, value, source=None):
+        self.training_call += 1
+        source = source if source is not None else self.training_call
         digits = glyphs(rgb)
         text = str(value)
         if len(digits) != len(text) or not text.isdigit():
             return False
         for digit, image in zip(text, digits):
-            self.examples[digit] = (self.examples[digit] + [image])[-12:]
+            self.examples[digit] = (self.examples[digit] + [image])[-24:]
+            self.sources[digit].add(source)
         return True
 
     def read(self, rgb):
@@ -156,7 +171,7 @@ class DigitReader:
         for image in digits:
             scores = []
             for digit, examples in self.examples.items():
-                if len(examples) < 2:
+                if len(self.sources[digit]) < 2:
                     continue
                 score = max(2 * np.count_nonzero(image & other) / max(1, image.sum() + other.sum())
                             for other in examples)
@@ -210,7 +225,7 @@ def associate(notes, combo_events, window=.045, display_delay=0.0):
     for i, event in enumerate(combo_events):
         if event['status'] == 'candidate':
             candidates[i] = [j for j, row in enumerate(rows)
-                             if abs((event['lower_seconds'] + event['upper_seconds']) / 2 - display_delay - row['seconds']) <= window]
+                             if event['lower_seconds'] - window <= row['seconds'] + display_delay <= event['upper_seconds'] + window]
     use_count = {j: sum(j in options for options in candidates.values()) for j in range(len(rows))}
     matches = []
     for i, options in candidates.items():

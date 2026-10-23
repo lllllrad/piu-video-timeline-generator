@@ -3,7 +3,7 @@ import unittest
 import cv2
 import numpy as np
 
-from piu_timeline.play_tracking import Track, fit_track, DigitReader, ComboTracker, associate
+from piu_timeline.play_tracking import Track, fit_track, DigitReader, ComboTracker, NoteTracker, associate
 
 
 class TrackingTest(unittest.TestCase):
@@ -36,6 +36,34 @@ class TrackingTest(unittest.TestCase):
         events = [{'status': 'candidate', 'lower_seconds': .99, 'upper_seconds': 1.02}]
         self.assertEqual(associate(notes, events), [])
         self.assertEqual(events[0]['reason'], 'chord_or_duplicate_track')
+
+    def test_repeated_digit_in_one_source_is_not_corroboration(self):
+        image=np.zeros((60,180,3),dtype='uint8')
+        cv2.putText(image,'111',(5,45),cv2.FONT_HERSHEY_SIMPLEX,1.5,(255,255,255),3)
+        reader=DigitReader();reader.train(image,111,source=1);reader.train(image,111,source=1)
+        self.assertIsNone(reader.read(image)[0])
+        reader.train(image,111,source=2)
+        self.assertEqual(reader.read(image)[0],111)
+
+    def test_long_component_at_receptor_blocks_hold_timing(self):
+        layout={'lanes':[{'x':.1+.2*i,'color':('blue','red','yellow','red','blue')[i]} for i in range(5)],
+                'receptor_y':.2,'note_y_max':.95}
+        tracker=NoteTracker(layout,320,180)
+        image=np.zeros((180,320,3),dtype='uint8')
+        cv2.rectangle(image,(22,60),(42,170),(0,200,255),-1)
+        notes=tracker.detect(image);tracker.update(.1,notes)
+        self.assertTrue(tracker.hold_candidate)
+        self.assertEqual(len(tracker.unsupported_intervals),1)
+        tracker.detect(np.zeros_like(image))
+        self.assertFalse(tracker.hold_candidate)
+
+    def test_external_display_delay_changes_association_not_raw_evidence(self):
+        notes=[{'status':'estimated','target_seconds':1,'lane':0}]
+        event={'status':'candidate','lower_seconds':1.10,'upper_seconds':1.12}
+        self.assertEqual(associate(notes,[dict(event)]),[])
+        matched=associate(notes,[dict(event)],display_delay=.1)
+        self.assertEqual(len(matched),1)
+        self.assertAlmostEqual(matched[0]['raw_offset_lower_ms'],100)
 
     def test_digit_templates_abstain_until_corroborated(self):
         def draw(text):

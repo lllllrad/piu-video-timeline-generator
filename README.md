@@ -63,6 +63,16 @@ Progress includes per-segment elapsed time, OCR image counts (including focused 
 
 Models are downloaded on first use into `.local/cache/easyocr/`; inference is local. See [development](docs/development.md) for explicit device selection and validation limits.
 
+## Visual play analysis
+
+After `just auto`, analyze one play's visible notes and combo update timing:
+
+```sh
+just play VIDEO --segment 1
+```
+
+Open `.local/data/SOURCE_ID/play/segment-001/report.html`. The local HTML report shows reconstructed note trajectories, timing intervals, source-video seek links and exclusions. Combo refresh is a proxy for input timing; physical switch timing and display latency are not measured. Nonlinear motion, ambiguous events and unsupported holds/chords remain excluded. See [play analysis](docs/play-analysis.md) for calibration, latency correction and limited windows.
+
 ## Output formats
 
 Choose a bundled or local format with the optional second argument:

@@ -27,6 +27,7 @@ Codex-only environment generation and optional mise installation are documented 
 - `evidence.py` resolves labels, player identity and stage-row associations across a credit.
 - `credits.py` samples screen transitions inside gameplay gaps and groups plays using observed credit boundaries.
 - `result_stats.py` extracts per-player result fields only from per-song results.
+- `play_analysis.py` orchestrates opt-in visual analysis and caches evidence; `play_report.py` renders a self-contained local HTML view.
 - `play_frames.py` streams native decoded frames with original PTS and no FPS conversion.
 - `play_tracking.py` tracks visible colored note heads, rejects nonlinear motion, learns combo digit templates and brackets confirmed combo updates. It does not equate display refresh with physical switch input.
 - `formats/` contains Node.js TypeScript presentation programs.
@@ -43,7 +44,7 @@ Progress reports include segment elapsed time, inferred/cached OCR image counts 
 
 Source-verified acquisition from versions 5–29 can be reused, including decoded gameplay boundaries, saved result frames, and transition plans. Other versions or changed input/settings receive a complete rebuild. Only the new complete analysis is promoted.
 
-Frame decoding, visual change detection and OCR have separate responsibilities. Gameplay interval detection uses visual HUD matching. Future note-position tracking should consume decoded gameplay frames and their original timestamps directly; it must not call metadata OCR for every frame. OCR belongs to selected metadata observations around gameplay, with separate language and region-specific recovery. Note tracking is not implemented yet, and the metadata sampling rate must never become its frame-rate limit.
+Frame decoding, visual change detection and OCR have separate responsibilities. Gameplay interval detection uses visual HUD matching. Future note-position tracking should consume decoded gameplay frames and their original timestamps directly; it must not call metadata OCR for every frame. OCR belongs to selected metadata observations around gameplay, with separate language and region-specific recovery. The opt-in `just play` path consumes native frames independently of metadata sampling; see [play analysis](play-analysis.md).
 
 ## Commands
 
@@ -51,6 +52,7 @@ The public interface intentionally stays small:
 
 ```sh
 just auto SOURCE [FORMAT]
+just play SOURCE --segment N
 just fetch URL_OR_ID
 just import-studio URL_OR_ID VIDEO_PATH
 just check

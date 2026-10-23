@@ -4,6 +4,10 @@ set positional-arguments
 auto +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.workflow auto "$@"
 
+# Analyze visible notes and combo timing; save a local HTML report.
+play +args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.play_analysis "$@"
+
 # Download a YouTube video into the cache used by `auto`.
 fetch +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.workflow fetch "$@"

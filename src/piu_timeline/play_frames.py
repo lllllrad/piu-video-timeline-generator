@@ -46,7 +46,10 @@ def decode_frames(record, start, end, roi, width=650):
                 break
             if len(data) != size:
                 raise ValueError('Truncated decoded frame')
-            pts = timestamps.get(timeout=30)
+            try:
+                pts = timestamps.get(timeout=30)
+            except queue.Empty as error:
+                raise ValueError('Timed out waiting for source frame PTS') from error
             if pts is None:
                 raise ValueError('Decoded frame has no original PTS')
             playback = pts - record['container_start_seconds']
@@ -64,8 +67,8 @@ def decode_frames(record, start, end, roi, width=650):
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait()
-        process.stdout.close(); process.stderr.close()
         thread.join(timeout=5)
+        process.stdout.close(); process.stderr.close()
 
 
 def crop_region(rgb, region):
