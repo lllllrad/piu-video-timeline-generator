@@ -17,7 +17,7 @@ from .credits import transition_samples, reconcile_players, recover_summary_stag
 
 
 SELECTION_OFFSETS = (-14, -13, -10, -9, -6, -5, -3)
-ANALYSIS_VERSION = 26
+ANALYSIS_VERSION = 27
 
 
 def resolve_source(source, raw_dir=None):
@@ -55,7 +55,8 @@ def find_reference(record, game_roi, evidence_dir):
         if seconds >= duration:
             continue
         frame = capture_game(record, evidence_dir / f"reference-{index:03}.png", seconds, game_roi)
-        result = ocr_images([frame["file"]])[0]
+        # The fixed HUD label is English; multilingual OCR can read STAGE as STAG드.
+        result = ocr_images([frame["file"]], english=True)[0]
         for line in result["lines"]:
             if line["text"].strip().upper() != "STAGE" or line["box"][1] > .12:
                 continue

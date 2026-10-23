@@ -5,10 +5,12 @@
 The project requires Python 3.12, FFmpeg, Node.js 24 or newer and `just`.
 
 ```sh
-python3.12 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-just check
+mise install
+mise exec -- just check
+mise exec -- just auto SOURCE
 ```
+
+Recipes automatically create `.venv` and install the project dependencies. `requirements.txt` includes EasyOCR on Linux using a platform marker. Installation is serialized across concurrent recipes and cached under `.venv`; changes to dependency declarations trigger an update. Failed installations are retried on the next run. If the required tools are already on PATH, `just` can be used directly.
 
 No shell activation is required; recipes use `scripts/run.sh` to apply project-local cache paths and invoke `.venv` explicitly.
 
@@ -30,7 +32,7 @@ Codex-only environment generation and optional mise installation are documented 
 Analysis is authoritative and presentation is disposable. A format reads `analysis.json`; it does not trigger recognition or mutate evidence.
 Analyzer changes that affect saved results increment `ANALYSIS_VERSION`. `just auto` rebuilds an older cache into a unique temporary directory and replaces it only after the new analysis succeeds. Source size/mtime, explicit game ROI and OCR backend/device changes invalidate the cache too. A per-source advisory lock prevents concurrent writers on macOS/Linux. Existing results are retained in `analysis.previous-*`; interrupted builds remain in `analysis.build-*` for diagnosis. Promotion rewrites nested evidence paths to their final location. Original media is never rewritten.
 
-Version 26 reuses source-verified acquisition from versions 5–25. It preserves decoded gameplay boundaries and saved result frames, adds early/transition samples, and reads dedicated account strips. Result statistics are recomputed from the union of retained and newly acquired evidence. Unresolved numeric fields, conflicts between full-screen and numeric-only OCR, and uncorroborated badges receive caption-preserving crops on at most six new source frames per play to prevent rotated digit recognition; missing HUD stages receive enlarged anchored crops. Scores still unreadable after contextual recovery receive a separate contrast channel on at most six source frames. Other versions or changed input/settings receive a complete rebuild. Only the new complete analysis is promoted.
+Version 27 uses English OCR to locate the fixed `STAGE` HUD label and reuses source-verified acquisition from versions 5–26. It preserves decoded gameplay boundaries and saved result frames, adds early/transition samples, and reads dedicated account strips. Result statistics are recomputed from the union of retained and newly acquired evidence. Unresolved numeric fields, conflicts between full-screen and numeric-only OCR, and uncorroborated badges receive caption-preserving crops on at most six new source frames per play to prevent rotated digit recognition; missing HUD stages receive enlarged anchored crops. Scores still unreadable after contextual recovery receive a separate contrast channel on at most six source frames. Other versions or changed input/settings receive a complete rebuild. Only the new complete analysis is promoted.
 
 ## Commands
 
@@ -53,7 +55,7 @@ just check
 node formats/default/index.ts PATH/TO/analysis.json
 ```
 
-`just check` is offline and includes unit tests plus synthetic FFmpeg integration. `just check-ocr` separately exercises the host Vision implementation.
+`just check` is offline after the initial dependency setup and includes unit tests plus synthetic FFmpeg integration. `just check-ocr` separately exercises the host Vision implementation.
 
 ## Data and recognition rules
 
@@ -68,7 +70,7 @@ Design observations are in [scene-and-ocr-notes.md](scene-and-ocr-notes.md) and 
 
 ## Linux and accelerator setup
 
-Install the normal requirements, then `.venv/bin/pip install -e '.[ocr]'`. The optional backend is EasyOCR 1.7.2, using Korean and English readers. The base install on macOS remains lightweight.
+Recipes install EasyOCR automatically on Linux from `requirements.txt`. The Linux backend is EasyOCR 1.7.2, using Korean and English readers. The base install on macOS remains lightweight.
 
 - `PIU_OCR_BACKEND=auto` selects Vision on macOS and EasyOCR elsewhere.
 - `PIU_OCR_BACKEND=vision|easyocr` explicitly chooses a backend.

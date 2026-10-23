@@ -42,7 +42,7 @@ def reader(english, device):
     try:
         import easyocr
     except ImportError as error:
-        raise ValueError('Install Linux OCR with .venv/bin/pip install -e ".[ocr]"') from error
+        raise ValueError('Install OCR dependencies with .venv/bin/python -m pip install -r requirements.txt') from error
     return easyocr.Reader(["en"] if english else ["ko", "en"],
                           gpu=False if device == "cpu" else True if device == "auto" else device,
                           model_storage_directory=str(ROOT / ".local/cache/easyocr/models"),

@@ -17,6 +17,20 @@ class AutoTest(unittest.TestCase):
             mocked.start()
             self.addCleanup(mocked.stop)
 
+    def test_reference_uses_english_hud_and_preserves_decoded_time(self):
+        frame = {"file": "reference.png", "playback_seconds": 30.04}
+        # The multilingual model reads this label as STAG드 on Linux.
+        def recognize(paths, english=False):
+            return [{"lines": [{"text": "STAGE" if english else "STAG드",
+                                "box": [.14, .01, .05, .02]}]}]
+        with patch.object(auto, "capture_game", return_value=frame), \
+                patch.object(auto, "ocr_images", side_effect=recognize):
+            seconds, hud, evidence = auto.find_reference(
+                {"duration_seconds": 100}, (10, 20, 1300, 730), Path("unused"))
+        self.assertEqual(seconds, 30.04)
+        self.assertEqual(hud, (190, 25, 69, 19))
+        self.assertEqual(evidence["ocr"]["lines"][0]["text"], "STAGE")
+
     def test_selection_sampling_covers_both_blink_phases(self):
         self.assertEqual(auto.SELECTION_OFFSETS, (-14, -13, -10, -9, -6, -5, -3))
         self.assertEqual({offset % 2 for offset in auto.SELECTION_OFFSETS}, {0, 1})

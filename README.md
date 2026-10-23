@@ -3,8 +3,10 @@
 Generate a paste-ready song timeline from a Pump It Up Phoenix gameplay video.
 
 ```sh
-just auto 'https://www.youtube.com/watch?v=VIDEO_ID'
+mise exec -- just auto 'https://www.youtube.com/watch?v=VIDEO_ID'
 ```
+
+With mise installed, run `mise install` once to provision the tools in `mise.toml`. Recipes automatically create `.venv` and install Python dependencies on first use. On Linux, the requirements include EasyOCR. Later runs reuse the environment; dependency changes trigger an update. Initial setup needs network access.
 
 The command downloads or opens the source, detects plays, recognizes songs, charts and result data, runs the default TypeScript format, prints the timeline, and saves everything under:
 
@@ -41,18 +43,13 @@ just auto VIDEO_ID
 
 The import refuses to overwrite an existing cached video. It moves the export to `.local/data/<video-id>/raw/`; the following `auto` command therefore makes no network request.
 
-Automatic OCR uses macOS Vision on macOS or the optional EasyOCR backend on Linux. It requires a clearly visible Phoenix game screen. For a direct game capture or a different stream layout, specify the game rectangle:
+Automatic OCR uses macOS Vision on macOS or EasyOCR on Linux. It requires a clearly visible Phoenix game screen. For a direct game capture or a different stream layout, specify the game rectangle:
 
 ```sh
 just auto VIDEO --game-roi 0,0,1920,1080
 ```
 
-On Linux, install the OCR extra after creating the virtual environment:
-
-```sh
-.venv/bin/pip install -e '.[ocr]'
-just auto VIDEO
-```
+On Linux, recipes install EasyOCR automatically from `requirements.txt`.
 
 Linux defaults to CPU inference. To use an available GPU with a compatible PyTorch installation:
 

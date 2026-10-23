@@ -31,9 +31,6 @@ node -e 'const major=Number(process.versions.node.split(".")[0]); process.exit(m
   exit 1
 }
 
-if [ ! -x .venv/bin/python ]; then
-  "$PYTHON" -m venv .venv
-fi
-.venv/bin/python -m pip install --disable-pip-version-check -r requirements-dev.txt
+"$PYTHON" scripts/bootstrap.py
 .venv/bin/python scripts/configure_codex.py
 just check

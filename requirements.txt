@@ -1,2 +1,3 @@
-# Runtime dependencies. Bootstrap installs this file into the project venv.
--e .
+# Runtime Python modules. Linux OCR runs locally with EasyOCR.
+yt-dlp==2026.8.19
+easyocr==1.7.2; sys_platform != "darwin"
