@@ -1,5 +1,8 @@
 import os
 import sys
+import tempfile
+import warnings
+from pathlib import Path
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -7,9 +10,9 @@ from piu_timeline import ocr
 
 
 class OCRBackendTest(unittest.TestCase):
-    def test_defaults_follow_host_and_linux_defaults_to_cpu(self):
+    def test_defaults_follow_host_and_linux_selects_device_automatically(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(sys, "platform", "linux"):
-            self.assertEqual(ocr.configuration(), {"backend": "easyocr", "device": "cpu"})
+            self.assertEqual(ocr.configuration(), {"backend": "easyocr", "device": "auto"})
         with patch.dict(os.environ, {}, clear=True), patch.object(sys, "platform", "darwin"):
             self.assertEqual(ocr.configuration(), {"backend": "vision", "device": "native"})
 
@@ -43,7 +46,64 @@ class EasyOCRAdapterTest(unittest.TestCase):
             self.assertEqual(args, (["ko", "en"],))
             self.assertFalse(kwargs["gpu"])
             self.assertIn(".local/cache/easyocr", kwargs["model_storage_directory"])
+            ocr.reader(False, "auto")
+            self.assertIs(fake.Reader.call_args.kwargs["gpu"], True)
             ocr.reader(True, "cuda:0")
             self.assertEqual(fake.Reader.call_args.args, (["en"],))
             self.assertEqual(fake.Reader.call_args.kwargs["gpu"], "cuda:0")
         ocr.reader.cache_clear()
+
+    def test_cpu_pinning_notice_is_scoped_and_other_warnings_remain_visible(self):
+        from PIL import Image
+
+        notice = ("'pin_memory' argument is set as true but no accelerator is found, "
+                  "then device pinned memory won't be used.")
+
+        def emit_notice():
+            warnings.warn_explicit(notice, UserWarning, "dataloader.py", 1,
+                                   module="torch.utils.data.dataloader")
+
+        def readtext(*args, **kwargs):
+            emit_notice()
+            warnings.warn("Other OCR warning", UserWarning)
+            return [([[0, 0], [10, 0], [10, 10], [0, 10]], "Song", .9)]
+
+        engine = MagicMock()
+        engine.readtext.side_effect = readtext
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "frame.png"
+            Image.new("RGB", (20, 20)).save(path)
+            with patch.object(ocr, "configuration", return_value={"backend": "easyocr", "device": "auto"}), \
+                    patch.object(ocr, "reader", return_value=engine), \
+                    warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                result = ocr.ocr_images([path])
+                self.assertEqual([str(item.message) for item in caught], ["Other OCR warning"])
+                self.assertEqual(result[0]["lines"][0]["text"], "Song")
+                emit_notice()
+                self.assertEqual(str(caught[-1].message), notice)
+
+class OCRContentCacheTest(unittest.TestCase):
+    def setUp(self):
+        ocr._IMAGE_CACHE.clear()
+        self.addCleanup(ocr._IMAGE_CACHE.clear)
+
+    def test_content_language_and_changed_pixels_are_independent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            first, second = Path(temporary) / "first.png", Path(temporary) / "second.png"
+            first.write_bytes(b"same encoded pixels")
+            second.write_bytes(first.read_bytes())
+            def infer(paths, english=False):
+                return [{"path": str(p), "lines": [{"text": "English" if english else "Korean",
+                                                   "box": [0, 0, 1, 1]}]} for p in paths]
+            with patch.object(ocr, "_ocr_images_uncached", side_effect=infer) as engine:
+                result = ocr.ocr_images([first, second])
+                self.assertEqual(engine.call_count, 1)
+                self.assertEqual(len(engine.call_args.args[0]), 1)
+                self.assertEqual([r["path"] for r in result], [str(first), str(second)])
+                result[0]["lines"][0]["text"] = "mutated"
+                self.assertEqual(ocr.ocr_images([first])[0]["lines"][0]["text"], "Korean")
+                self.assertEqual(ocr.ocr_images([second], english=True)[0]["lines"][0]["text"], "English")
+                second.write_bytes(b"changed pixels")
+                ocr.ocr_images([second])
+                self.assertEqual(engine.call_count, 3)

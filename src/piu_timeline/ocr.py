@@ -1,11 +1,16 @@
 """Host-independent OCR contract: normalized top-left boxes and local inference."""
+from collections import OrderedDict
+from copy import deepcopy
 from functools import lru_cache
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import warnings
+from time import perf_counter
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -14,7 +19,7 @@ def configuration():
     backend = os.environ.get("PIU_OCR_BACKEND", "auto").lower()
     if backend == "auto":
         backend = "vision" if sys.platform == "darwin" else "easyocr"
-    device = os.environ.get("PIU_OCR_DEVICE", "cpu").lower()
+    device = os.environ.get("PIU_OCR_DEVICE", "auto").lower()
     if backend not in {"vision", "easyocr"}:
         raise ValueError("PIU_OCR_BACKEND must be auto, vision or easyocr")
     if device not in {"cpu", "auto", "cuda", "mps"} and not (device.startswith("cuda:") and device[5:].isdigit()):
@@ -58,7 +63,7 @@ def normalized_line(points, text, confidence, width, height):
             "box": [x0 / width, y0 / height, (x1 - x0) / width, (y1 - y0) / height]}
 
 
-def ocr_images(paths, english=False):
+def _ocr_images_uncached(paths, english=False):
     paths = list(paths)
     if not paths:
         return []
@@ -75,7 +80,59 @@ def ocr_images(paths, english=False):
     for path in paths:
         with Image.open(path) as image:
             width, height = image.size
-        lines = [normalized_line(points, text, confidence, width, height)
-                 for points, text, confidence in engine.readtext(str(path), detail=1, paragraph=False)]
+        # EasyOCR 1.7.2 hardcodes pin_memory=True, including CPU inference.
+        # PyTorch already disables pinning without an accelerator; hide only that notice.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"^'pin_memory' argument is set as true but no accelerator is found, "
+                        r"then device pinned memory won't be used\.$",
+                category=UserWarning,
+                module=r"^torch\.utils\.data\.dataloader$",
+            )
+            lines = [normalized_line(points, text, confidence, width, height)
+                     for points, text, confidence in engine.readtext(str(path), detail=1, paragraph=False)]
         results.append({"path": str(path), "lines": lines})
+    return results
+
+
+_IMAGE_CACHE = OrderedDict()
+_METRICS = {"requested_images": 0, "inferred_images": 0, "cached_images": 0, "seconds": 0.0}
+
+
+def ocr_metrics():
+    """Process-local counts of OCR input images (including focused crops)."""
+    return dict(_METRICS)
+
+
+def ocr_images(paths, english=False):
+    paths = list(paths)
+    if not paths:
+        return []
+    started = perf_counter()
+    config = configuration()
+    keys, missing = [], {}
+    for path in paths:
+        key = (config["backend"], config["device"], english, sha256(Path(path).read_bytes()).digest())
+        keys.append(key)
+        if key not in _IMAGE_CACHE:
+            missing.setdefault(key, path)
+    fresh = {}
+    if missing:
+        fresh = {key: result["lines"] for key, result in
+                 zip(missing, _ocr_images_uncached(list(missing.values()), english=english))}
+    results = []
+    for path, key in zip(paths, keys):
+        lines = fresh[key] if key in fresh else _IMAGE_CACHE[key]
+        results.append({"path": str(path), "lines": deepcopy(lines)})
+    for key in keys:
+        if key in fresh:
+            _IMAGE_CACHE[key] = fresh[key]
+        _IMAGE_CACHE.move_to_end(key)
+    while len(_IMAGE_CACHE) > 512:
+        _IMAGE_CACHE.popitem(last=False)
+    _METRICS["requested_images"] += len(paths)
+    _METRICS["inferred_images"] += len(missing)
+    _METRICS["cached_images"] += len(paths) - len(missing)
+    _METRICS["seconds"] += perf_counter() - started
     return results

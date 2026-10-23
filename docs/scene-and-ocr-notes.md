@@ -16,15 +16,19 @@ The useful working sequence is song/chart selection, loading or song introductio
 | Failure screen | Failure message, e.g. `HEY!` | Do not accept message text as a song title. No usable score result is guaranteed. |
 | Multi-song summary | `PLAY RESULT`, multiple song rows and chart badges | It contains previous plays too. Do not attach the first readable row to the latest play. |
 
-The analyzer samples the following windows and then classifies each acquired screen:
+The analyzer first scans bounded pre/post-game gaps at two downscaled grayscale frames per second without OCR. Detected changes nominate two source-time representatives per transition, up to 24 per gap, retaining pairs spread across the entire gap when changes exceed that budget. Selection guards at start minus 5 and 3 seconds and result guards at end plus 3, 7, 16, 32 and 60 seconds supplement those representatives. Early result samples at end plus 0.5, 1.25 and 2 seconds remain mandatory. A singleton result/summary receives nearby corroborating frames. This is visual sampling for metadata, independent of future per-frame gameplay/note analysis.
+
+When no transitions are found, labels remain unresolved, or no result is observed, the analyzer falls back to the following windows and classifies each acquired screen:
 
 - Before gameplay: start minus 14, 13, 10, 9, 6, 5 and 3 seconds.
 - After gameplay: early samples at end plus 0.5, 1.25 and 2 seconds, then 3, 5, 7, 8, 9, 10, 11, 12, 14, 16, 20 and 24 seconds, then every four seconds through 60 seconds. A singleton result/summary receives nearby corroborating frames.
-- Missing identities/labels or an absent result trigger sparse selection samples up to 60 seconds before gameplay and bounded screen-transition scans. Only representatives after downscaled scene changes receive OCR. Previously discovered adaptive samples remain part of replay evidence.
+- Missing identities/labels or an absent result trigger sparse selection samples up to 60 seconds before gameplay and reuse the bounded screen-transition plan. Previously discovered adaptive samples remain part of replay evidence; source timestamps are not sampled twice.
 
 These are sampling windows, not assumed scene identities. Samples are constrained by neighboring candidate intervals, with an eight-second guard before the next coarse gameplay start. Transitions outside these bounded windows or below the scene-change threshold remain a coverage limitation.
 
-`scene_kind()` excludes explicit bottom-of-screen `DEMO PLAY` markers, then checks multi-song summaries first, then per-song results, Basic/Premium mode choices, failure/start screens, gameplay and supported selection anchors. `PLAY RESULT` or multiple stage ordinals establish a summary. `SCORE` plus `PERFECT`, `MAX COMBO` or `KCAL` can establish a per-song result only when the summary gate is absent. Selection requires a chart badge or `MY BEST`; unclassified frames remain evidence without supplying labels.
+Scene routing first reads English UI regions: the central panel, bottom chart/menu band and account header. Song titles and account strips retain their separate language-specific OCR. Directly recognized result/browse layouts can route visually matching frames using fixed UI masks. This reuses only the scene kind; metadata and values are read directly from selected source frames. Stable later representatives are processed first, and a per-song title/chart stops receiving new focused reads after distinct frames agree. Whole-screen OCR is a bounded fallback for at most two unresolved samples per window. Exact encoded-image matches reuse OCR within a run, separately for each backend/device/language. Source frames and timestamps remain distinct. Focused title/chart OCR is limited to six new frames per eligible scene/window.
+
+`scene_kind()` excludes explicit bottom-of-screen `DEMO PLAY` markers, then checks multi-song summaries first, then per-song results, Basic/Premium mode choices, failure/start screens, gameplay and supported selection anchors. `PLAY RESULT` or multiple stage ordinals establish a summary. `SCORE` plus `PERFECT`, `MAX COMBO` or `KCAL` can establish a per-song result only when the summary gate is absent. Selection requires a chart badge or `MY BEST`; a horizontally distributed row of at least five two-digit levels in the bottom chart band establishes `browse` instead. Browsing can delimit a new selection and supply account evidence, but available levels never supply a selected chart. A result may also be established by a caption in the judgment band plus three aligned numeric rows, even when the SCORE heading is still animating. Unclassified frames remain evidence without supplying labels or triggering unlimited whole-screen retries.
 
 All summary rows are read independently of the initially guessed title/chart. Their explicit stage numbers allow later summaries to repair earlier plays in the same credit. Titles and charts are resolved with matching title evidence rather than independent phase winners. Exact timestamp duplicates and single-frame guesses cannot establish agreement.
 
@@ -74,7 +78,7 @@ The STAGE patch moved from approximately x=180 to x=613 in the tested 1300-wide 
 
 ## Judgment counts
 
-Optional result extraction reads `PERFECT`, `GREAT`, `GOOD`, `BAD`, `MISS`, `MAX COMBO` and `SCORE` into separate player slots. Each value needs corroborating stable frames; unreadable, conflicting or weak evidence remains unknown. Calories and grades are not implemented output fields.
+Result extraction limits new dedicated numeric OCR to at most six distinct source timestamps spread across the observed result duration, even if a caller supplies every decoded frame. Retained numeric evidence remains available. Optional result extraction reads `PERFECT`, `GREAT`, `GOOD`, `BAD`, `MISS`, `MAX COMBO` and `SCORE` into separate player slots. Each value needs corroborating stable frames; unreadable, conflicting or weak evidence remains unknown. Calories and grades are not implemented output fields.
 
 Leading zeros, partially obscured digits, unstable animations, missing rows and genuine simultaneous-player results need continued validation. `MAX COMBO` is not a total-judgment count, and a judgment total is not automatically a chart note count.
 

@@ -130,10 +130,11 @@ def is_result_screen(lines):
                        for line in lines)
                    for y, prefix in ((.434, "PERFE"), (.540, "GOOD"), (.593, "BAD"), (.699, "MAXCOMB")))
     numeric_rows = max(sum(any(abs(center(line)[0] - x) < .04 and abs(center(line)[1] - y) < .02
-                              and re.fullmatch(r"\d{3,6}", line["text"].strip()) for line in lines)
+                              and re.fullmatch(r"\d{3,6}", line["text"].strip()) and line["confidence"] >= .5 for line in lines)
                            for y in (.434, .487, .540, .593, .646, .699)) for x in (.335, .665))
-    return not is_summary_screen(lines) and "SCORE" in words and (
-        bool(words & {"PERFECT", "MAXCOMBO", "KCAL"}) or captions >= 2 or numeric_rows >= 3)
+    return not is_summary_screen(lines) and (
+        "SCORE" in words and (bool(words & {"PERFECT", "MAXCOMBO", "KCAL"}) or captions >= 2 or numeric_rows >= 3)
+        or captions >= 1 and numeric_rows >= 3)
 
 
 def is_summary_screen(lines):
@@ -188,6 +189,13 @@ def scene_kind(lines):
     words = {re.sub(r"[^A-Z]", "", line["text"].upper()) for line in lines}
     if "MYBEST" in words or frame_labels(lines, "selection")["chart"]:
         return "selection"
+    # The browsing carousel displays many available levels, not one selected
+    # chart. Route identities/boundaries without treating its row as a choice.
+    levels = [line for line in lines if .05 < center(line)[0] < .95
+              and .84 < center(line)[1] < .94 and re.fullmatch(r"[0-9]{2}", line["text"].strip())
+              and 1 <= int(line["text"]) <= 30 and line["confidence"] >= .5]
+    if len(levels) >= 5 and max(center(l)[0] for l in levels) - min(center(l)[0] for l in levels) > .4:
+        return "browse"
     return "unknown"
 
 

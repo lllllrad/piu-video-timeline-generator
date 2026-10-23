@@ -17,6 +17,21 @@ class RecognitionTest(unittest.TestCase):
         rows = [line("123", .315, y - .01) for y in (.434, .487, .540)]
         self.assertTrue(recognition.is_result_screen([line("SCORE", .15, .345), *rows]))
 
+    def test_result_anchors_do_not_need_the_animated_score_heading(self):
+        rows = [line("123", .64, y - .01) for y in (.434, .487, .540)]
+        caption = line("GOOD", .47, .527)
+        self.assertEqual(recognition.scene_kind([caption, *rows]), "result")
+        self.assertEqual(recognition.scene_kind(rows), "unknown")
+        self.assertEqual(recognition.scene_kind([caption]), "unknown")
+
+    def test_carousel_levels_are_browsing_not_a_selected_chart(self):
+        levels = [line(str(10 + i), .1 + i * .13, .87) for i in range(6)]
+        self.assertEqual(recognition.scene_kind(levels), "browse")
+        self.assertIsNone(recognition.frame_labels(levels, "selection")["chart"])
+        self.assertEqual(recognition.scene_kind(levels[:2]), "unknown")
+        self.assertEqual(recognition.scene_kind([{**l, "box": [l["box"][0], .4, .05, .025]}
+                                                for l in levels]), "unknown")
+
     def test_stage_hud_confusable_glyph_is_anchored_to_label(self):
         lines = [line("ISTAGE", .14, .005), line("0Ч", .14, .03)]
         self.assertEqual(recognition.stage_number(lines)["value"], 4)

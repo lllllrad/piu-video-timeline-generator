@@ -97,7 +97,7 @@ def player_names(lines):
 def resolve_players(observations, stage_evidence=None):
     frames = [o for o in unique_frames(observations)
               if o.get("identity_eligible", o.get("eligible_screen"))
-              and o.get("scene") in {"selection", "result", "summary", "failure", "mode", "gameplay", "unknown"}]
+              and o.get("scene") in {"selection", "browse", "result", "summary", "failure", "mode", "gameplay", "unknown"}]
     if stage_evidence:
         frames = list(unique_frames([*frames, stage_evidence]))
     names = [player_names([*o.get("ocr", []), *o.get("name_ocr", [])]) for o in frames]

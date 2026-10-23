@@ -12,6 +12,13 @@ from piu_timeline import auto_timeline as auto
 
 class AutoTest(unittest.TestCase):
     def setUp(self):
+        visual = patch.object(auto.SceneRouter, "signatures", return_value=None)
+        visual.start()
+        self.addCleanup(visual.stop)
+        probe = patch.object(auto, "screen_lines", side_effect=lambda path, width, height:
+                             auto.ocr_images([path])[0]["lines"])
+        probe.start()
+        self.addCleanup(probe.stop)
         for name in ("transition_samples", "focused_names"):
             mocked = patch.object(auto, name, return_value=[])
             mocked.start()
@@ -30,6 +37,111 @@ class AutoTest(unittest.TestCase):
         self.assertEqual(seconds, 30.04)
         self.assertEqual(hud, (190, 25, 69, 19))
         self.assertEqual(evidence["ocr"]["lines"][0]["text"], "STAGE")
+
+    def test_transition_first_ocr_keeps_late_summary_without_dense_result_scan(self):
+        from test_recognition import line
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = {}
+            def capture(record, path, seconds, roi):
+                paths[str(path)] = seconds
+                return {"file": str(path), "source_pts_seconds": seconds,
+                        "requested_seconds": seconds, "playback_seconds": seconds}
+            def recognize(files):
+                return [{"lines": ([line("PLAY RESULT", .4, .1)] if paths[p] >= 230
+                                  else [line("SCORE", .8, .35), line("PERFECT", .5, .4)]
+                                  if paths[p] > 200 else [])} for p in files]
+            def focus(path, scene, width, height):
+                if scene == "summary":
+                    return [line("1ST", .48, .18), line("Played song", .4, .22, .2),
+                            line("DOUBLE", .72, .17), line("20", .72, .20)]
+                return [line("Played song", .4, .16, .2), line("DOUBLE", .65, .28),
+                        line("20", .65, .32)]
+            with patch.object(auto, "transition_samples", side_effect=[[90.25, 90.85],
+                                                                      [205.25, 205.85, 230.25, 230.85]]) as transitions, \
+                    patch.object(auto, "capture_game", side_effect=capture), \
+                    patch.object(auto, "ocr_images", side_effect=recognize), \
+                    patch.object(auto, "focused_lines", side_effect=focus):
+                labels, _, evidence = auto.recognize_segment(
+                    {"duration_seconds": 300}, (0, 0, 1300, 730), 100, 200,
+                    Path(temporary), stage=1, previous_end=80, next_start=270)
+            observations = json.loads(Path(evidence).read_text())
+            self.assertEqual(labels, {"song": "Played song", "chart": "D20"})
+            results = [o for o in observations if o["window"] == "result"]
+            self.assertLessEqual(len(results), 12)
+            self.assertNotIn(208, [o["requested_seconds"] for o in results])
+            self.assertGreaterEqual(sum(o["scene"] == "summary" for o in results), 2)
+            self.assertEqual(transitions.call_count, 2)
+            self.assertTrue(all(o["source_pts_seconds"] == o["requested_seconds"] for o in observations))
+
+    def test_unresolved_transition_samples_fall_back_to_dense_metadata_scan(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            def capture(record, path, seconds, roi):
+                return {"file": str(path), "source_pts_seconds": seconds, "requested_seconds": seconds}
+            with patch.object(auto, "transition_samples", side_effect=[[90.25, 90.85], [205.25, 205.85]]), \
+                    patch.object(auto, "capture_game", side_effect=capture) as capture_mock, \
+                    patch.object(auto, "ocr_images", side_effect=lambda paths: [{"lines": []} for _ in paths]):
+                labels, _, _ = auto.recognize_segment(
+                    {"duration_seconds": 300}, (0, 0, 1300, 730), 100, 200,
+                    Path(temporary), previous_end=80, next_start=270)
+            self.assertEqual(labels, {"song": None, "chart": None})
+            self.assertIn(208, [call.args[2] for call in capture_mock.call_args_list])
+
+    def test_dense_fallback_corroborates_a_previously_missed_short_result(self):
+        from test_recognition import line
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = {}
+            def capture(record, path, seconds, roi):
+                paths[str(path)] = seconds
+                return {"file": str(path), "source_pts_seconds": seconds, "requested_seconds": seconds}
+            def recognize(files):
+                return [{"lines": [line("SCORE", .8, .35), line("PERFECT", .5, .4)]
+                         if 207.5 < paths[p] < 208.5 else []} for p in files]
+            focused = [line("Short song", .4, .16, .2), line("DOUBLE", .65, .28), line("20", .65, .32)]
+            with patch.object(auto, "transition_samples", side_effect=[[], [205.25, 205.85]]), \
+                    patch.object(auto, "capture_game", side_effect=capture), \
+                    patch.object(auto, "ocr_images", side_effect=recognize), \
+                    patch.object(auto, "focused_lines", return_value=focused):
+                labels, _, evidence = auto.recognize_segment(
+                    {"duration_seconds": 300}, (0, 0, 1300, 730), 100, 200,
+                    Path(temporary), previous_end=80, next_start=270)
+            self.assertEqual(labels, {"song": "Short song", "chart": "D20"})
+            observations = json.loads(Path(evidence).read_text())
+            self.assertGreaterEqual(sum(o["scene"] == "result" for o in observations), 2)
+
+    def test_unknown_screens_have_a_bounded_full_frame_ocr_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            def capture(record, path, seconds, roi):
+                return {"file": str(path), "source_pts_seconds": seconds, "requested_seconds": seconds}
+            with patch.object(auto, "capture_game", side_effect=capture), \
+                    patch.object(auto, "screen_lines", return_value=[]), \
+                    patch.object(auto, "ocr_images", side_effect=lambda paths: [{"lines": []} for _ in paths]) as full:
+                labels, _, evidence = auto.recognize_segment(
+                    {"duration_seconds": 300}, (0, 0, 1300, 730), 100, 200,
+                    Path(temporary), previous_end=80, next_start=270)
+            self.assertEqual(labels, {"song": None, "chart": None})
+            self.assertGreater(len(json.loads(Path(evidence).read_text())), 20)
+            self.assertEqual(full.call_count, 4)
+
+    def test_repeated_result_frames_have_a_bounded_title_chart_read_budget(self):
+        from test_recognition import line
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = {}
+            def capture(record, path, seconds, roi):
+                paths[str(path)] = seconds
+                return {"file": str(path), "source_pts_seconds": seconds, "requested_seconds": seconds}
+            def probe(path, width, height):
+                return [line("SCORE", .8, .35), line("PERFECT", .5, .4)] if paths[path] > 200 else []
+            focused = [line("Repeated song", .4, .16, .2), line("DOUBLE", .65, .28), line("20", .65, .32)]
+            with patch.object(auto, "capture_game", side_effect=capture), \
+                    patch.object(auto, "screen_lines", side_effect=probe), \
+                    patch.object(auto, "ocr_images", side_effect=lambda paths: [{"lines": []} for _ in paths]), \
+                    patch.object(auto, "focused_lines", return_value=focused) as focus:
+                labels, _, evidence = auto.recognize_segment(
+                    {"duration_seconds": 300}, (0, 0, 1300, 730), 100, 200,
+                    Path(temporary), previous_end=80, next_start=270)
+            self.assertEqual(labels, {"song": "Repeated song", "chart": "D20"})
+            self.assertEqual(focus.call_count, 2)
+            self.assertGreater(sum(o["scene"] == "result" for o in json.loads(Path(evidence).read_text())), 20)
 
     def test_selection_sampling_covers_both_blink_phases(self):
         self.assertEqual(auto.SELECTION_OFFSETS, (-14, -13, -10, -9, -6, -5, -3))

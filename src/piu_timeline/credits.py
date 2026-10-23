@@ -20,15 +20,25 @@ def transition_samples(record, roi, begin, end, limit=24):
         "-an", "-f", "null", "-",
     ], check=True, capture_output=True, text=True)
     changes = [begin + float(value) for value in re.findall(r"\bpts_time:([\d.eE+-]+)", result.stderr)]
-    samples = []
+    samples, groups = [], []
     for change in changes:
+        group = []
         for offset in (.25, .85):
             seconds = round(change + offset, 3)
             if seconds < end and all(abs(seconds - previous) >= .3 for previous in samples):
                 samples.append(seconds)
-        if len(samples) >= limit:
-            break
-    return samples[:limit]
+                group.append(seconds)
+        if group:
+            groups.append(group)
+    if len(samples) <= limit:
+        return samples
+    # Preserve paired corroboration and cover the entire gap. Taking only the
+    # earliest changes can lose a late summary behind an animated score screen.
+    count = max(1, limit // 2)
+    indices = ({round(i * (len(groups) - 1) / (count - 1)) for i in range(count)}
+               if count > 1 else {0})
+    return [seconds for i in sorted(indices) for seconds in groups[i]][:limit]
+
 
 
 def credit_groups(segments, observations):

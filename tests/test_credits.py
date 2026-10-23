@@ -99,3 +99,14 @@ class CreditTests(unittest.TestCase):
         self.assertEqual(samples, [102.75, 103.35, 103.85])
         self.assertIn("fps=2", " ".join(run.call_args.args[0]))
         self.assertTrue(all(100 <= t < 120 for t in samples))
+
+    def test_busy_gap_keeps_paired_samples_near_its_end(self):
+        record = {"path": "video.mkv", "video_streams": [{"index": 0}]}
+        result = subprocess.CompletedProcess([], 0, stderr=" ".join(
+            f"pts_time:{seconds}" for seconds in range(0, 60, 2)))
+        with patch("piu_timeline.credits.subprocess.run", return_value=result):
+            samples = transition_samples(record, (0, 0, 1300, 730), 100, 160, limit=6)
+        self.assertEqual(len(samples), 6)
+        self.assertEqual(samples[:2], [100.25, 100.85])
+        self.assertEqual(samples[-2:], [158.25, 158.85])
+        self.assertEqual(samples, sorted(set(samples)))

@@ -7,6 +7,7 @@ import subprocess
 
 from .recognition import chart_mode, center, frame_labels, is_result_screen, is_stage_break, ocr_images, rival_slots
 from .timeline import write_json
+from .screen_ocr import screen_lines
 
 COUNT_FIELDS = ("perfect", "great", "good", "bad", "miss", "max_combo")
 FIELDS = (*COUNT_FIELDS, "score", "chart")
@@ -175,16 +176,30 @@ def extract_stats(observations, directory, width, height):
             markers = [line for line in frame.get("source_ocr", []) if rival_slots([line])]
             frame["players"] = parse_result([*frame["ocr"], *markers])
     seen = {frame["source_pts_seconds"] for frame in frames}
-    for index, observation in enumerate(observations):
-        if observation.get("phase") != "result" or not observation.get("eligible_screen"):
-            continue
-        pts = observation.get("source_pts_seconds")
-        if pts is None or pts in seen:
+    # Metadata OCR is sampled independently of decoded frame density. Keep
+    # every retained observation but bound new expensive numeric crop reads.
+    candidates = {o["source_pts_seconds"]: o for o in observations
+                  if o.get("phase") == "result" and o.get("eligible_screen")
+                  and o.get("source_pts_seconds") is not None and (is_result_screen(o.get("ocr", []))
+                       or o.get("scene_routing", {}).get("method") == "visual_template")}
+    # UI appears before the numeric table settles. Prefer directly observed
+    # numeric rows so entrance animations do not consume the recovery budget.
+    ready = {pts: observation for pts, observation in candidates.items()
+             if any(sum(slot["fields"][field] is not None for field in COUNT_FIELDS) >= 3
+                    for slot in parse_result(observation.get("ocr", [])).values())}
+    if len(ready) >= 2:
+        candidates = ready
+    ordered = sorted(candidates)
+    positions = {round(i * (len(ordered) - 1) / 5) for i in range(6)} if ordered else set()
+    selected_pts = {ordered[i] for i in positions}
+    for pts in sorted(selected_pts):
+        if pts in seen:
             continue
         seen.add(pts)
+        observation = candidates[pts]
         raw = observation.get("ocr", [])
-        if not is_result_screen(raw):
-            continue
+        if observation.get("scene_routing", {}).get("method") == "visual_template" and not observation.get("screen_ocr"):
+            raw = screen_lines(observation["file"], width, height)
         frame = Path(observation["file"]).resolve()
         lines = focused_stats(frame, directory, f"pts-{pts:.3f}", width, height)
         # Keep only SCORE markers from raw OCR; numeric extraction uses dedicated

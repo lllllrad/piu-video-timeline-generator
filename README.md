@@ -53,11 +53,13 @@ just auto VIDEO --game-roi 0,0,1920,1080
 
 On Linux, recipes install EasyOCR automatically from `requirements.txt`.
 
-Linux defaults to CPU inference. To use an available GPU with a compatible PyTorch installation:
+Linux automatically uses an available GPU supported by the installed PyTorch build, with CPU fallback. No device setting is needed for `just auto`. To force CPU inference:
 
 ```sh
-PIU_OCR_BACKEND=easyocr PIU_OCR_DEVICE=auto just auto VIDEO
+PIU_OCR_DEVICE=cpu just auto VIDEO
 ```
+
+Progress includes per-segment elapsed time, OCR image counts (including focused crops), cache reuse and OCR time.
 
 Models are downloaded on first use into `.local/cache/easyocr/`; inference is local. See [development](docs/development.md) for explicit device selection and validation limits.
 

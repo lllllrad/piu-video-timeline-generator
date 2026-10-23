@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 import subprocess
 import shutil
+from time import perf_counter
 
 from .detect import detect, similarity
 from .media import fetch_command, resolve_url, run_download
@@ -12,12 +13,14 @@ from .recognition import (capture_game, focused_lines, frame_labels, ocr_images,
 from .timeline import media_record, write_json
 from .result_stats import extract_stats
 from .evidence import resolve_labels, resolve_players, reconcile_sessions, exclude_rivals
-from .ocr import configuration
+from .ocr import configuration, ocr_metrics
+from .screen_ocr import screen_lines, SceneRouter, VERSION as SCREEN_OCR_VERSION
 from .credits import transition_samples, reconcile_players, recover_summary_stages
 
 
+MAX_FOCUSED_FRAMES = 6
 SELECTION_OFFSETS = (-14, -13, -10, -9, -6, -5, -3)
-ANALYSIS_VERSION = 27
+ANALYSIS_VERSION = 30
 
 
 def resolve_source(source, raw_dir=None):
@@ -163,6 +166,9 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
     next_start = record["duration_seconds"] if next_start is None else next_start
     frames = []
     seen = set()
+    full_screen_reads = {"selection": 0, "result": 0}
+    focused_reads = {}
+    router = SceneRouter()
 
     def acquire(window, times, adaptive=False):
         pending, batch = [], []
@@ -179,17 +185,73 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
                 frame = capture_game(record, directory / filename, seconds, roi)
                 pending.append(frame)
             batch.append({**frame, "window": window})
-        recognized = ocr_images([frame["file"] for frame in pending])
-        fresh = {frame["file"]: result["lines"] for frame, result in zip(pending, recognized)}
-        for frame in batch:
-            raw = frame.get("ocr", fresh.get(frame["file"], []))
-            scene = scene_kind(raw)
+        if pending:
+            print(f"  Reading {window} metadata: {len(pending)} frames...", flush=True)
+        routed = []
+        # Inspect later representatives first: result/selection animations
+        # often settle there. A confirmed UI can route earlier frames too.
+        for frame in sorted(batch, key=lambda f: f["requested_seconds"], reverse=True):
+            signature = router.signatures(frame["file"])
+            match = router.match(signature)
+            anchors = frame.get("screen_ocr")
+            retained_scene = scene_kind(frame["ocr"]) if frame.get("ocr") else "unknown"
+            if match or retained_scene != "unknown":
+                anchors = anchors or []
+            elif frame.get("screen_ocr_version") != SCREEN_OCR_VERSION or not anchors:
+                if router.needs_ui(signature):
+                    anchors = screen_lines(frame["file"], roi[2], roi[3])
+                else:
+                    # No account/result UI: look only for large start/mode/
+                    # failure controls, not names, chart rows or BGA captions.
+                    anchors = screen_lines(frame["file"], roi[2], roi[3], controls_only=True)
+            raw = frame.get("ocr", anchors)
+            scene = match["scene"] if match else retained_scene if retained_scene != "unknown" else scene_kind([*raw, *anchors])
+            frame = {**frame, "scene_routing": match or {"method": "ocr", "scene": scene}}
+            if scene == "unknown" and "ocr" not in frame and full_screen_reads[window] < 2:
+                # Unknown animation/BGA must not trigger whole-screen OCR on
+                # every sampled frame. Preserve a bounded general-layout fallback.
+                full_screen_reads[window] += 1
+                raw = ocr_images([frame["file"]])[0]["lines"]
+                scene = scene_kind([*raw, *anchors])
+            raw = [*raw, *[line for line in anchors if line not in raw]]
+            if not match:
+                router.remember(frame["file"], scene, signature)
+            routed.append((frame, raw, anchors, scene))
+        routed.sort(key=lambda item: item[0]["requested_seconds"])
+        stops = [frame["requested_seconds"] for frame, _, _, scene in routed
+                 if window == "result" and scene in {"selection", "browse", "mode", "entry", "demo"}]
+        stops += [f["requested_seconds"] for f in frames if f["window"] == "result"
+                  and f["scene"] in {"selection", "browse", "mode", "entry", "demo"}]
+        stop = min(stops, default=float("inf"))
+        selected = set()
+        for scene in ("selection", "result", "summary"):
+            candidates = [frame for frame, _, _, kind in routed if kind == scene
+                          and (window == "selection" if scene == "selection" else window == "result")
+                          and (window != "result" or frame["requested_seconds"] < stop)
+                          and not (frame.get("focused_ocr") and frame.get("phase", frame.get("scene")) == scene
+                                   and (scene != "summary" or reuse_summary))]
+            remaining = max(0, MAX_FOCUSED_FRAMES - focused_reads.get((window, scene), 0))
+            count = min(remaining, len(candidates))
+            positions = ({round(i * (len(candidates) - 1) / (count - 1)) for i in range(count)}
+                         if count > 1 else {0} if count else set())
+            selected.update(candidates[i]["file"] for i in positions)
+            focused_reads[window, scene] = focused_reads.get((window, scene), 0) + len(positions)
+        for frame, raw, anchors, scene in routed:
+            if frame["file"] in selected and frame.get("scene_routing", {}).get("method") == "visual_template" and not anchors:
+                anchors = screen_lines(frame["file"], roi[2], roi[3])
+                raw = [*raw, *anchors]
             eligible = ((frame["window"] == "selection" and scene == "selection")
                         or (frame["window"] == "result" and scene in {"result", "summary"}))
-            if eligible and (scene != "summary" or reuse_summary) and "focused_ocr" in frame:
+            eligible = eligible and (window != "result" or frame["requested_seconds"] < stop)
+            if (eligible and (scene != "summary" or reuse_summary) and frame.get("focused_ocr")
+                    and frame.get("phase", frame.get("scene")) == scene):
                 focused = frame["focused_ocr"]
             else:
-                focused = focused_lines(frame["file"], scene, roi[2], roi[3]) if eligible else []
+                resolved, _ = resolve_labels([f for f in frames
+                                              if f["window"] == window and f["scene"] == scene])
+                complete = scene == "result" and all(value is not None for value in resolved.values())
+                focused = (focused_lines(frame["file"], scene, roi[2], roi[3])
+                           if eligible and frame["file"] in selected and not complete else [])
             rows = {}
             labels = {"song": None, "chart": None}
             if eligible and scene == "summary":
@@ -207,23 +269,49 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
             elif eligible:
                 labels = frame_labels([*focused, *[l for l in raw if rival_slots([l])]], scene)
             frames.append({**frame, "phase": scene, "scene": scene, "ocr": raw,
+                           "screen_ocr": anchors, "screen_ocr_version": SCREEN_OCR_VERSION,
                            "focused_ocr": focused, "eligible_screen": eligible, "rows": rows,
-                           "identity_eligible": (frame["window"] == "selection" and scene in {"selection", "mode", "unknown"}
+                           "identity_eligible": (frame["window"] == "selection" and scene in {"selection", "browse", "mode"}
                                                  or frame["window"] == "result" and scene in {"result", "summary", "failure"}),
                            **labels})
         # Do not let a later credit establish confidence before deciding
         # whether this play needs additional acquisition.
         stops = [f["requested_seconds"] for f in frames if f["window"] == "result"
-                 and f["scene"] in {"selection", "mode", "entry", "demo"}]
+                 and f["scene"] in {"selection", "browse", "mode", "entry", "demo"}]
         if stops:
             stop = min(stops)
             for frame in frames:
                 if frame["window"] == "result" and frame["requested_seconds"] >= stop:
                     frame["eligible_screen"] = frame["identity_eligible"] = False
 
-    acquire("selection", [start + offset for offset in SELECTION_OFFSETS])
-    acquire("result", [end + offset for offset in
-                       (3, 5, 7, 8, 9, 10, 11, 12, 14, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60)])
+    def transition_plan(window):
+        begin, stop = ((end, min(end + 65, next_start)) if window == "result"
+                       else (max(previous_end + .5, start - 60), start - 2))
+        plan = directory / f"transitions-v1-{window}.json"
+        if plan.is_file():
+            return json.loads(plan.read_text())
+        times = transition_samples(record, roi, begin, stop)
+        write_json(plan, times)
+        return times
+
+    # Decoding/visual change detection is independent of text recognition.
+    # Future per-frame note tracking must not call OCR as a frame callback.
+    selection_times = [start + offset for offset in SELECTION_OFFSETS]
+    result_times = [end + offset for offset in
+                    (3, 5, 7, 8, 9, 10, 11, 12, 14, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60)]
+    selection_changes = transition_plan("selection")
+    result_changes = transition_plan("result")
+    if selection_changes:
+        acquire("selection", sorted(set(selection_changes + [start - 5, start - 3])), adaptive=True)
+    else:
+        acquire("selection", selection_times)
+    if result_changes:
+        # Sparse guards cover low-contrast transitions missed by the detector,
+        # including a later PLAY RESULT after a usable per-song score screen.
+        guards = [end + offset for offset in (3, 7, 16, 32, 60)]
+        acquire("result", sorted(set(result_changes + guards)), adaptive=True)
+    else:
+        acquire("result", result_times)
     # The first seconds may contain the only failed/short result screen.
     acquire("result", [end + offset for offset in (.5, 1.25, 2)], adaptive=True)
     # A previously discovered brief screen remains evidence on every replay,
@@ -232,14 +320,17 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
         acquire(window, [item["requested_seconds"] for item in existing
                          if item.get("window") == window], adaptive=True)
 
-    # A singleton short screen receives close neighbors instead of losing its
-    # fields solely because the regular sampling grid caught it only once.
-    for scene in ("result", "summary", "failure"):
-        singletons = [f for f in frames if f["window"] == "result" and f["scene"] == scene
-                      and (f["eligible_screen"] or f["identity_eligible"])]
-        if len(singletons) == 1:
-            at = singletons[0]["requested_seconds"]
-            acquire("result", [at - .3, at + .3], adaptive=True)
+    def corroborate_screens():
+        # A singleton short screen receives close neighbors instead of losing
+        # its fields solely because a sampling grid caught it only once.
+        for scene in ("result", "summary", "failure"):
+            singletons = [f for f in frames if f["window"] == "result" and f["scene"] == scene
+                          and (f["eligible_screen"] or f["identity_eligible"])]
+            if len(singletons) == 1:
+                at = singletons[0]["requested_seconds"]
+                acquire("result", [at - .3, at + .3], adaptive=True)
+
+    corroborate_screens()
 
     def focus_identities():
         candidates = sorted([f for f in frames if f["identity_eligible"]],
@@ -254,6 +345,9 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
         for frame in candidates:
             if "name_ocr" in frame:
                 continue
+            if frame.get("scene_routing", {}).get("method") == "visual_template" and not frame.get("screen_ocr"):
+                frame["screen_ocr"] = screen_lines(frame["file"], roi[2], roi[3])
+                frame["ocr"] = [*frame["ocr"], *frame["screen_ocr"]]
             frame["name_ocr"] = focused_names(frame["file"], roi[2], roi[3])
             checked += 1
             identities = resolve_players(frames)
@@ -264,6 +358,17 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
                 break
         return resolve_players(frames)
 
+    labels, confidence = resolve_labels(frames)
+    has_result = any(f["window"] == "result" and f["scene"] in {"result", "summary", "failure"}
+                     for f in frames)
+    if any(value is None for value in labels.values()) or not has_result:
+        # Do not assume that every visual transition was detected or readable.
+        # Dense fallback covers unresolved labels and absent result screens.
+        if selection_changes:
+            acquire("selection", selection_times)
+        if result_changes:
+            acquire("result", result_times)
+        corroborate_screens()
     identities = focus_identities()
     labels, confidence = resolve_labels(frames)
     no_result = not any(f["scene"] in {"result", "summary", "failure"} for f in frames if f["window"] == "result")
@@ -272,15 +377,8 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
         # A sparse look farther back captures the account/mode/selection header
         # while avoiding OCR over a long idle gap. Only unresolved plays need it.
         acquire("selection", [start - offset for offset in (20, 30, 45, 60)], adaptive=True)
-        for window, begin, stop in (("result", end, min(end + 65, next_start)),
-                                    ("selection", max(previous_end + .5, start - 60), start - 2)):
-            plan = directory / f"transitions-v1-{window}.json"
-            if plan.is_file():
-                times = json.loads(plan.read_text())
-            else:
-                times = transition_samples(record, roi, begin, stop)
-                write_json(plan, times)
-            acquire(window, times, adaptive=True)
+        for window in ("result", "selection"):
+            acquire(window, transition_plan(window), adaptive=True)
         focus_identities()
     frames.sort(key=lambda f: f["requested_seconds"])
     labels, confidence = resolve_labels(frames)
@@ -386,6 +484,8 @@ def analyze(video, output, game_roi=None, provenance=None, retained=None):
         profile_index = candidate["profile_index"]
         hud, reference = profiles[profile_index]["hud"], references[profile_index]
         print(f"Refining and recognizing segment {index + 1}/{len(candidates)}...", flush=True)
+        segment_started = perf_counter()
+        metrics_before = ocr_metrics()
         cached = cached_segments.get(f"segment-{index + 1:03}")
         if cached:
             start, end = cached["start_seconds"], cached["end_seconds"]
@@ -431,6 +531,7 @@ def analyze(video, output, game_roi=None, provenance=None, retained=None):
         all_observations.append(observations)
         segments[-1]["players"] = resolve_players(observations, stage_data if isinstance(stage_data, dict) else None)
         stats_dir = evidence_dir / f"stats-{index + 1:03}"
+        print("  Reading result statistics (up to 6 new source frames)...", flush=True)
         stats = extract_stats(observations, stats_dir, width, height)
         segments[-1]["results"] = stats
         segments[-1]["needs_review"] |= stats["needs_review"]
@@ -438,6 +539,12 @@ def analyze(video, output, game_roi=None, provenance=None, retained=None):
             p["fields"]["name"].get("mean_ocr_confidence", 0) < .7
             or p["fields"]["name"]["status"] != "recognized"
             for p in segments[-1]["players"].values())
+        metrics_after = ocr_metrics()
+        metrics = {key: metrics_after[key] - metrics_before[key] for key in metrics_after}
+        segments[-1]["ocr_metrics"] = metrics
+        print(f"  Finished in {perf_counter() - segment_started:.1f}s; "
+              f"OCR {metrics['inferred_images']} images, {metrics['cached_images']} reused, "
+              f"{metrics['seconds']:.1f}s in OCR.", flush=True)
         segment_files.append(output / f"segment-{index + 1:03}.json")
         write_json(segment_files[-1], segments[-1])
     recover_summary_stages(segments, all_observations)
