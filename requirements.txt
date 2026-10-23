@@ -1,3 +1,7 @@
 # Runtime Python modules. Linux OCR runs locally with EasyOCR.
 yt-dlp==2026.8.19
 easyocr==1.7.2; sys_platform != "darwin"
+
+# Native-frame visual play analysis on Linux and macOS.
+numpy>=1.26,<3
+opencv-python-headless>=4.8,<6

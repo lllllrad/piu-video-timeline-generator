@@ -27,6 +27,8 @@ Codex-only environment generation and optional mise installation are documented 
 - `evidence.py` resolves labels, player identity and stage-row associations across a credit.
 - `credits.py` samples screen transitions inside gameplay gaps and groups plays using observed credit boundaries.
 - `result_stats.py` extracts per-player result fields only from per-song results.
+- `play_frames.py` streams native decoded frames with original PTS and no FPS conversion.
+- `play_tracking.py` tracks visible colored note heads, rejects nonlinear motion, learns combo digit templates and brackets confirmed combo updates. It does not equate display refresh with physical switch input.
 - `formats/` contains Node.js TypeScript presentation programs.
 - `timeline.py`, `evaluate.py` and `relabel_analysis.py` are internal review and diagnostic tools.
 
@@ -79,7 +81,7 @@ Design observations are in [scene-and-ocr-notes.md](scene-and-ocr-notes.md) and 
 
 ## Linux and accelerator setup
 
-Recipes install EasyOCR automatically on Linux from `requirements.txt`. The Linux backend is EasyOCR 1.7.2, using Korean and English readers. The base install on macOS remains lightweight.
+Recipes install EasyOCR automatically on Linux from `requirements.txt`. The Linux backend is EasyOCR 1.7.2, using Korean and English readers. macOS metadata OCR uses native Vision; visual play analysis also uses NumPy and OpenCV.
 
 - `PIU_OCR_BACKEND=auto` selects Vision on macOS and EasyOCR elsewhere.
 - `PIU_OCR_BACKEND=vision|easyocr` explicitly chooses a backend.
