@@ -119,8 +119,14 @@ class NoteTracker:
                 self.active.append(Track(note['lane'], [(seconds, note['y'] * self.height)]))
 
     def finish(self):
-        notes = [fit_track(track, self.layout['receptor_y'] * self.height, self.spacing)
-                 for track in self.finished + self.active]
+        from .play_fragments import stitch_tracks
+        notes = []
+        for track, fragments in stitch_tracks(self.finished + self.active, self.layout['receptor_y'] * self.height, self.spacing):
+            note = fit_track(track, self.layout['receptor_y'] * self.height, self.spacing)
+            if len(fragments) > 1:
+                note['fit_method'] = 'corroborated_fragments'
+                note['source_track_fragments'] = fragments
+            notes.append(note)
         # One arrow can yield multiple disconnected colored components. Keep the
         # best trajectory when same-lane crossings coincide within two frames.
         kept = []

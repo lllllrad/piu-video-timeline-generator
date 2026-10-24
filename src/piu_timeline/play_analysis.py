@@ -19,7 +19,7 @@ from .recognition import capture_game
 from .workflow import LOCAL_DATA, source_id
 from .play_judgments import augment_judgments, cache_current as judgment_cache_current
 
-VERSION = 11
+VERSION = 12
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 COLORS = ('blue', 'red', 'yellow', 'red', 'blue')
