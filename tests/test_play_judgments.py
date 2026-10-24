@@ -87,11 +87,11 @@ class JudgmentTest(unittest.TestCase):
         self.assertNotIn('judgment_label',result['matches'][0])
         self.assertEqual(result['matches'][1]['judgment_label'],'GREAT')
 
-    def test_previous_word_observations_upgrade_without_decoding_or_ocr(self):
+    def test_current_word_observations_reuse_without_decoding_or_ocr(self):
         with tempfile.TemporaryDirectory() as temporary:
             output=Path(temporary)
             data=self.combo_data([1.],[(.94,1.01)])
-            data.update(media={},analysis_width=650,judgment_analysis_version=6,
+            data.update(media={},analysis_width=650,judgment_analysis_version=VERSION,
                         judgment_template_labels=[],judgment_events=[])
             frames=[{'source_pts_seconds':t+5,'playback_seconds':t,**observation('PERFECT')}
                     for t in (1.01,1.027,1.044)]
@@ -102,6 +102,82 @@ class JudgmentTest(unittest.TestCase):
             self.assertEqual(result['judgment_analysis_version'],VERSION)
             self.assertEqual(result['matches'][0]['judgment_label'],'PERFECT')
             self.assertEqual(result['matches'][0]['observation_lower_seconds'],.94)
+
+    def test_two_close_reads_survive_later_occlusion_without_majority_vote(self):
+        data=self.combo_data([1.],[(.99,1.01)])
+        frames=[{'source_pts_seconds':t+5,'playback_seconds':t,**observation(label)}
+                for t,label in [(1.01,'GREAT'),(1.027,'GREAT'),(1.044,None),(1.06,None)]]
+        result=merge_judgments(data,[],frames)
+        self.assertEqual(result['matches'][0]['judgment_label'],'GREAT')
+        self.assertEqual(len(result['matches'][0]['judgment_observations']),2)
+
+    def test_disconnected_reads_do_not_bridge_a_long_occlusion(self):
+        data=self.combo_data([1.],[(.99,1.01)])
+        frames=[{'source_pts_seconds':t+5,'playback_seconds':t,**observation(label)}
+                for t,label in [(1.01,'PERFECT'),(1.027,None),(1.044,None),(1.06,'PERFECT')]]
+        result=merge_judgments(data,[],frames)
+        self.assertNotIn('judgment_label',result['matches'][0])
+
+    def test_reader_upgrade_uses_cached_pixels_and_fonts_without_ocr_or_decode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output=Path(temporary);directory=output/'evidence/judgments';directory.mkdir(parents=True)
+            image=np.zeros((60,260,3),dtype='uint8')
+            cv2.putText(image,'PERFECT',(70,40),cv2.FONT_HERSHEY_SIMPLEX,.8,(0,230,255),2)
+            feature=feature_map(image);ys,xs=np.nonzero(feature<18)
+            hue=int(np.median(feature[ys,xs]));mask=(feature[ys.min():ys.max()+1,xs.min():xs.max()+1]<18).astype('uint8')
+            models=[{'label':'PERFECT','hue':hue,'mask':mask.tolist()}]
+            times=np.array([1.01,1.027,1.044]);pts=times+5
+            np.savez_compressed(directory/'features-v3.npz',features=np.array([feature]*3),pts=pts,times=times)
+            (directory/'samples.json').write_text('[]')
+            data=self.combo_data([1.],[(.99,1.01)])
+            data.update(media={},analysis_width=260,judgment_analysis_version=7,
+                        judgment_template_labels=['PERFECT'],judgment_events=[],layout={'combo_roi':[.4,.5,.2,.1]})
+            with patch('piu_timeline.play_judgments.load_bank',return_value=models), \
+                    patch('piu_timeline.play_judgments.decode_frames',side_effect=AssertionError('must not decode')), \
+                    patch('piu_timeline.play_judgments.learn_models',side_effect=AssertionError('must not OCR')):
+                result=augment_judgments(data,output)
+            self.assertEqual(result['judgment_analysis_version'],VERSION)
+            self.assertEqual(result['judgment_bootstrap_ocr_images'],0)
+            self.assertEqual(result['matches'][0]['judgment_label'],'PERFECT')
+            readings=[json.loads(line) for line in (output/'judgments.jsonl').read_text().splitlines()]
+            self.assertEqual([reading['source_pts_seconds'] for reading in readings],pts.tolist())
+
+    def test_touching_objects_and_partial_occlusion_preserve_word_shapes(self):
+        models=[];clean={};bounds={}
+        for label in LABELS:
+            image=np.zeros((60,260,3),dtype='uint8')
+            width=cv2.getTextSize(label,cv2.FONT_HERSHEY_SIMPLEX,.8,2)[0][0]
+            x=(260-width)//2
+            cv2.putText(image,label,(x,40),cv2.FONT_HERSHEY_SIMPLEX,.8,(0,230,255),2)
+            feature=feature_map(image);ys,xs=np.nonzero(feature<18)
+            hue=int(np.median(feature[ys,xs]));mask=(feature[ys.min():ys.max()+1,xs.min():xs.max()+1]<18).astype('uint8')
+            models.append({'label':label,'hue':hue,'mask':mask.tolist()})
+            clean[label]=image;bounds[label]=(int(xs.min()),int(ys.min()),mask.shape[1],mask.shape[0])
+        reader=JudgmentReader(models)
+        for label,image in clean.items():
+            with self.subTest(label=label):
+                x,y,w,h=bounds[label]
+                damaged=image.copy()
+                cv2.rectangle(damaged,(x+w//8,0),(x+w//8+max(3,w//15),59),(0,230,255),-1)
+                result=reader.read(feature_map(damaged))
+                self.assertEqual(result['label'],label)
+                self.assertEqual(result['read_mode'],'partial_template')
+        fragment=np.zeros_like(image)
+        x,y,w,h=bounds['PERFECT']
+        fragment[:,x:x+w//4]=clean['PERFECT'][:,x:x+w//4]
+        self.assertIsNone(reader.read(feature_map(fragment))['label'])
+        solid=np.zeros_like(image);cv2.rectangle(solid,(30,20),(230,45),(0,230,255),-1)
+        self.assertIsNone(reader.read(feature_map(solid))['label'])
+
+        tracker=JudgmentTracker()
+        tracker.update(0,{'source_pts_seconds':5,**reader.read(feature_map(clean['PERFECT']))})
+        tracker.update(.017,reader.read(feature_map(clean['PERFECT'])))
+        x,y,w,h=bounds['PERFECT']
+        for i in range(12):
+            moving=clean['PERFECT'].copy()
+            cv2.rectangle(moving,(x+i*w//12,0),(x+i*w//12+5,59),(0,230,255),-1)
+            tracker.update(.034+i/60,reader.read(feature_map(moving)))
+        self.assertEqual(len(tracker.events),1)
 
     def test_all_five_words_are_classified_by_shape_without_counter(self):
         models=[];images={}

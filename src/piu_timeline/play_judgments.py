@@ -12,7 +12,8 @@ from .ocr import ocr_images
 from .play_frames import crop_region, decode_frames
 from .play_tracking import associate
 
-VERSION = 7
+VERSION = 8
+OBSERVATION_VERSION = 2
 LABELS = ('PERFECT', 'GREAT', 'GOOD', 'BAD', 'MISS')
 
 
@@ -76,6 +77,7 @@ def cache_current(data, root):
 class JudgmentReader:
     def __init__(self, models):
         self.templates=[]
+        self.partial_templates=[]
         aspects={label:[len(m['mask'][0])/len(m['mask']) for m in models if m['label']==label] for label in LABELS}
         for model in models:
             mask=np.asarray(model['mask'],dtype='float32')
@@ -85,6 +87,38 @@ class JudgmentReader:
                 continue
             normalized=cv2.resize(mask,(max(8,round(w/h*24)),24),interpolation=cv2.INTER_LINEAR)
             self.templates.append((model['label'],model['hue'],w/h,h,normalized))
+            for scale in (1.,1.2,1.4):
+                scaled=cv2.resize(mask,(round(w*scale),round(h*scale)),interpolation=cv2.INTER_LINEAR)
+                self.partial_templates.append((model['label'],model['hue'],scaled))
+
+    def read_partial(self, feature, masks):
+        """Locate the word itself when a touching note corrupts its component."""
+        scores={}
+        height,width=feature.shape
+        for label,hue,template in self.partial_templates:
+            h,w=template.shape
+            left=max(0,round((width-w)/2-width*.10));right=min(width,round((width+w)/2+width*.10))
+            top=round(height*.20);bottom=round(height*.82)
+            if bottom-top<h or right-left<w:continue
+            if hue not in masks:masks[hue]=color_mask(feature,hue)
+            search=masks[hue][top:bottom,left:right].astype('float32')
+            correlation=cv2.matchTemplate(search,template,cv2.TM_CCORR_NORMED)
+            _,score,_,(x,y)=cv2.minMaxLoc(correlation)
+            if score<.83:continue
+            crop=search[y:y+h,x:x+w]
+            # Most of the word must independently retain its letter shapes.
+            # A small matching patch or a solid same-color object is insufficient.
+            pieces=[]
+            for a,b in zip(np.linspace(0,w,5,dtype=int)[:-1],np.linspace(0,w,5,dtype=int)[1:]):
+                observed,expected=crop[:,a:b],template[:,a:b]
+                pieces.append(float(2*np.sum(observed*expected)/max(1e-6,np.sum(observed**2)+np.sum(expected**2))))
+            if sum(value>=.80 for value in pieces)<3:continue
+            if score>scores.get(label,(-1,None))[0]:scores[label]=score,[x+left,y+top,w,h]
+        ranked=sorted(scores.items(),key=lambda pair:pair[1][0],reverse=True)
+        if not ranked or len(ranked)>1 and ranked[0][1][0]-ranked[1][1][0]<.08:
+            return None
+        label,(score,box)=ranked[0]
+        return {'label':label,'confidence':score,'box':box,'blank':False,'read_mode':'partial_template'}
 
     def read(self, feature):
         masks,boxes,scores={}, {}, {}
@@ -107,10 +141,12 @@ class JudgmentReader:
                 if score>scores.get(label,(-1,None))[0]:scores[label]=score,[x,y,w,h]
         ranked=sorted(scores.items(),key=lambda pair:pair[1][0],reverse=True)
         if not ranked or ranked[0][1][0]<.72 or len(ranked)>1 and ranked[0][1][0]-ranked[1][1][0]<.08:
+            partial=self.read_partial(feature,masks)
+            if partial is not None:return partial
             return {'label':None,'confidence':0.,'box':None,
                     'blank':bool(masks) and all(np.count_nonzero(mask)<12 for mask in masks.values())}
         label,(confidence,box)=ranked[0]
-        return {'label':label,'confidence':confidence,'box':box,'blank':False}
+        return {'label':label,'confidence':confidence,'box':box,'blank':False,'read_mode':'component_template'}
 
 
 def collect_features(data, output):
@@ -325,8 +361,9 @@ def label_counter_frames(data, observations):
         frames=observations[bisect_left(times,start-1e-6):bisect_right(times,stop)]
         labels={frame['label'] for frame in frames if frame['label'] is not None}
         known=[frame for frame in frames if frame['label'] is not None and frame['confidence']>=.8]
-        if (len(labels)!=1 or 'MISS' in labels or len(known)<2 or len(known)<len(frames)*.6
+        if (len(labels)!=1 or 'MISS' in labels or len(known)<2
                 or known[0]['playback_seconds']>start+.035
+                or not any(b['playback_seconds']-a['playback_seconds']<=.035 for a,b in zip(known,known[1:]))
                 or len({frame['source_pts_seconds'] for frame in known})<2):
             continue
         for match in group:
@@ -441,9 +478,8 @@ def augment_judgments(data, output):
     models = load_bank(output.parent,data['media'],data['analysis_width'])
     available = {model['label'] for model in models}
     trace=output/'judgments.jsonl'
-    if (data.get('judgment_analysis_version') in (6,VERSION)
-            and available.issubset(set(data.get('judgment_template_labels',[])))
-            and (data.get('judgment_analysis_version')==VERSION or trace.is_file())):
+    if (data.get('judgment_analysis_version')==VERSION
+            and available.issubset(set(data.get('judgment_template_labels',[])))):
         observations=[]
         if trace.is_file():
             with trace.open() as saved:
@@ -453,16 +489,20 @@ def augment_judgments(data, output):
         return merge_judgments(data,data.get('judgment_events',[]),observations)
     print('Reading native judgment words independently of combo visibility...',flush=True)
     features,pts,times,samples = collect_features(data,output)
-    models = learn_models(data,output,models,samples)
-    bootstrap=output/'evidence/judgments/bootstrap.json'
-    data['judgment_bootstrap_ocr_images']=json.loads(bootstrap.read_text())['ocr_images'] if bootstrap.is_file() else 0
+    if models and data.get('judgment_analysis_version') in (6,7,VERSION) and available.issubset(set(data.get('judgment_template_labels',[]))):
+        print('Reusing saved color features and word templates; no decoding or OCR.',flush=True)
+        data['judgment_bootstrap_ocr_images']=0
+    else:
+        models = learn_models(data,output,models,samples)
+        bootstrap=output/'evidence/judgments/bootstrap.json'
+        data['judgment_bootstrap_ocr_images']=json.loads(bootstrap.read_text())['ocr_images'] if bootstrap.is_file() else 0
     reader,tracker = JudgmentReader(models),JudgmentTracker()
     with trace.open('w') as stream:
         for feature,source_pts,seconds in zip(features,pts,times):
             observation=reader.read(feature)
             tracker.update(float(seconds),observation)
             stream.write(json.dumps({'source_pts_seconds':float(source_pts),'playback_seconds':float(seconds),**observation})+'\n')
-    data.update(judgment_analysis_version=VERSION,judgment_roi=judgment_region(data['layout']),
+    data.update(judgment_analysis_version=VERSION,judgment_observation_version=OBSERVATION_VERSION,judgment_roi=judgment_region(data['layout']),
                 judgment_template_labels=sorted({model['label'] for model in models}),
                 judgment_missing_labels=sorted(set(LABELS)-{model['label'] for model in models}))
     with trace.open() as saved:
