@@ -58,8 +58,8 @@ TEMPLATE = r'''<!doctype html>
 <title>__TITLE__ · Play timing</title>
 <style>
 :root{color-scheme:dark;--bg:#101719;--panel:#182326;--edge:#314448;--ink:#e5efeb;--muted:#9cb1b1;--green:#9cddbe;--blue:#75bdea;--amber:#f1c478}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,sans-serif}main{max-width:1440px;margin:auto;padding:32px}h1{font-size:clamp(24px,4vw,40px);font-weight:600;letter-spacing:-.04em;margin:8px 0}h2{font-size:18px;font-weight:600;margin:0 0 14px}.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--green);text-transform:uppercase}.muted,small{color:var(--muted)}a{color:var(--green)}.panel{background:var(--panel);border:1px solid var(--edge);padding:22px;border-radius:12px;margin:18px 0}.grid{display:grid;grid-template-columns:1.15fr 1fr;gap:20px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat{padding:16px;background:var(--panel);border:1px solid var(--edge);border-radius:10px}.stat strong{display:block;font-size:27px;color:var(--green)}label{display:block;margin:12px 0}input,button,select,textarea{background:#102023;color:var(--ink);border:1px solid #486267;border-radius:5px;padding:8px;font:inherit}button{cursor:pointer}input[type=range]{width:min(360px,80%);vertical-align:middle}video{width:100%;max-height:430px;background:#080d0e}canvas{display:block;width:100%;height:290px;touch-action:none}.chart{position:relative}.chart small{display:block;margin-top:8px}.warning{border-left:3px solid var(--amber);padding:10px 15px;background:#2a2920}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:9px;text-align:left;border-bottom:1px solid var(--edge)}tbody tr{cursor:pointer}tbody tr:hover{background:#21373b}.scroll{max-height:360px;overflow:auto}.preview{position:relative}.preview img{width:100%;display:block}.preview canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}textarea{width:100%;min-height:180px;font:12px/1.5 monospace}.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.pill{display:inline-block;border:1px solid var(--edge);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--muted)}@media(max-width:850px){main{padding:18px}.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.panel{padding:15px}}
-.playback-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}.playback-grid>.panel{min-width:0}.video-panel{position:sticky;top:18px}.playback-grid video{max-height:70vh}.chart-controls input[type=range]{width:150px}.chart-controls input[type=number]{width:90px}@media(max-width:1000px){.playback-grid{grid-template-columns:1fr}.video-panel{position:static}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,sans-serif}main{margin:auto;padding:12px}h1{font-size:clamp(24px,4vw,40px);font-weight:600;letter-spacing:-.04em;margin:8px 0}h2{font-size:18px;font-weight:600;margin:0 0 14px}.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--green);text-transform:uppercase}.muted,small{color:var(--muted)}a{color:var(--green)}.panel{background:var(--panel);border:1px solid var(--edge);padding:22px;border-radius:12px;margin:18px 0}.grid{display:grid;grid-template-columns:1.15fr 1fr;gap:20px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat{padding:16px;background:var(--panel);border:1px solid var(--edge);border-radius:10px}.stat strong{display:block;font-size:27px;color:var(--green)}label{display:block;margin:12px 0}input,button,select,textarea{background:#102023;color:var(--ink);border:1px solid #486267;border-radius:5px;padding:8px;font:inherit}button{cursor:pointer}input[type=range]{width:min(360px,80%);vertical-align:middle}video{width:100%;max-height:430px;background:#080d0e}canvas{display:block;width:100%;height:290px;touch-action:none}.chart{position:relative}.chart small{display:block;margin-top:8px}.warning{border-left:3px solid var(--amber);padding:10px 15px;background:#2a2920}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:9px;text-align:left;border-bottom:1px solid var(--edge)}tbody tr{cursor:pointer}tbody tr:hover{background:#21373b}.scroll{max-height:360px;overflow:auto}.preview{position:relative}.preview img{width:100%;display:block}.preview canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}textarea{width:100%;min-height:180px;font:12px/1.5 monospace}.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.pill{display:inline-block;border:1px solid var(--edge);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--muted)}@media(max-width:850px){main{padding:8px}.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.panel{padding:15px}}
+.playback-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}.playback-grid>.panel{min-width:0;padding:12px}.playback-grid>.chart{padding:8px}.chart-controls{gap:8px}.chart-controls label{display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:100%;min-width:0;margin:4px 0}.chart-viewport{width:100%;min-width:0}.video-panel input[type=file]{max-width:100%}.video-panel{position:sticky;top:18px}.playback-grid video{max-height:70vh}.chart-controls input[type=range]{width:150px}.chart-controls input[type=number]{width:90px}@media(max-width:1000px){.playback-grid{grid-template-columns:1fr}.video-panel{position:static}}
 </style>
 <main>
 <div class="eyebrow">Video evidence / experimental play analysis</div><h1>__TITLE__</h1>
@@ -69,13 +69,13 @@ TEMPLATE = r'''<!doctype html>
 <div class="playback-grid"><section class="panel video-panel"><h2>Original recording</h2><video id="video" controls preload="metadata" src="__MEDIA__"></video>
 <label>Choose the original file if this browser cannot open its relative path <input id="file" type="file" accept="video/*,.mkv"></label><small>The file stays in this browser. Unsupported codecs may require another browser. Nothing is uploaded or re-encoded.</small>
 <div class="row"><button id="begin">Go to play start</button><button id="previous">Previous match</button><button id="next">Next match</button><span id="clock" class="pill"></span></div></section>
-<section class="panel chart"><div class="row chart-controls"><h2>Vertical note chart</h2><label>Spacing <input id="spacingScale" type="range" min="0.05" max="16" step="0.01" value="1"> <input id="spacingInput" type="number" min="0.05" max="16" step="0.01" value="1" aria-label="Exact note spacing multiplier"> <output id="spacingValue">1.00×</output></label><label>Note size <input id="noteSize" type="range" min="16" max="64" step="1" value="32"> <output id="noteSizeValue">32 px</output></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div>
+<section class="panel chart"><div class="row chart-controls"><h2>Vertical note chart</h2><label>Spacing <input id="spacingScale" type="range" min="0.05" max="16" step="0.01" value="1"> <input id="spacingInput" type="number" min="0.05" max="16" step="0.01" value="1" aria-label="Exact note spacing multiplier"> <output id="spacingValue">1.00×</output></label><label>Note size <input id="noteSize" type="range" min="8" max="64" step="1" value="24"> <output id="noteSizeValue">24 px</output></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div>
 <p class="muted">Earlier ↑ · later ↓. Fixed colored squares: notes. Lime left: chart target range. Magenta right: input range. Solid: matched; dashed: possible. Long bodies: holds; magenta strips: sustained recognition. Conditional neighbor bounds appear only in the table. The green line follows video playback.</p>
 <div class="row"><button id="previousNote">Previous note</button><button id="nextNote">Next note</button><span id="chartPosition" class="pill"></span></div>
 <label>Recording position <input id="position" type="range" step="0.001" style="width:100%"></label>
-<div style="overflow-x:auto"><canvas id="lanes" width="1000" height="680" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right"></canvas></div><small><span style="color:#b6ff59">● Left: chart target range</span> · <span style="color:#ff70dd">● Right: input range (dashed = candidate)</span><br>Click a note or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Long bodies are holds; magenta spans show recognized held states, not repeated presses. Rolls and unreliable motion remain unresolved.</small></section>
+<div class="chart-viewport"><canvas id="lanes" width="1000" height="680" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right"></canvas></div><small><span style="color:#b6ff59">● Left: chart target range</span> · <span style="color:#ff70dd">● Right: input range (dashed = candidate)</span><br>Click a note or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Long bodies are holds; magenta spans show recognized held states, not repeated presses. Rolls and unreliable motion remain unresolved.</small></section>
 </div>
-<details class="panel"><summary>How to read the vertical chart</summary><p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Note size and spacing are independent. Play the video on the left to follow the same recording position in this chart. Colored squares retain a fixed size as spacing changes. Lime points and capped lines on the left show chart target ranges. Magenta points and capped lines on the right show input ranges. Dashed magenta lines show alternative refresh ranges, not confirmed inputs. Both ranges remain visible when their times overlap. Points at interval centers are visual guides, not subframe measurements. A magenta mark above its note is early; below is late. The green line follows the recording.</p></details>
+<details class="panel"><summary>How to read the vertical chart</summary><p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Note size and spacing are independent. Notes fit the available width automatically so all lanes and both timing ranges remain visible; the size label indicates when fitting reduces your chosen size. Play the video on the left to follow the same recording position in this chart. Colored squares retain a fixed size as spacing changes. Lime points and capped lines on the left show chart target ranges. Magenta points and capped lines on the right show input ranges. Dashed magenta lines show alternative refresh ranges, not confirmed inputs. Both ranges remain visible when their times overlap. Points at interval centers are visual guides, not subframe measurements. A magenta mark above its note is early; below is late. The green line follows the recording.</p></details>
 <section class="panel"><h2>Timing evidence</h2><label>Display latency correction: <output id="delayValue"></output> ms<br><input id="delay" type="range" min="-500" max="500" step="1"></label>
 <button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
 <div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="timing-ranges.json">Per-note timing ranges</a> · <a href="holds.json">Long-note geometry and held-state evidence</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section>
@@ -169,13 +169,14 @@ for(const [i,m] of matches.entries()){const [lo,hi]=offset(m);if(!Number.isFinit
 c.strokeStyle='#9cddbe';c.lineWidth=1;c.beginPath();c.moveTo(x(playhead),0);c.lineTo(x(playhead),h);c.stroke();c.fillStyle='#9cb1b1';c.fillText(fmt(data.start_seconds),p,h-2);c.fillText(fmt(data.end_seconds),w-85,h-2);
 canvas.onclick=e=>{const t=data.start_seconds+((e.clientX-canvas.getBoundingClientRect().left)/canvas.clientWidth*w-p)/(w-2*p)*(data.end_seconds-data.start_seconds);if(matches.length){let i=0;for(let j=1;j<matches.length;j++)if(Math.abs(matches[j].target_seconds-t)<Math.abs(matches[i].target_seconds-t))i=j;seek(matches[i].target_seconds,i)}}}
 function laneGeometry(){
-const canvas=$('lanes'),left=95,right=canvas.width-20,top=58,bottom=canvas.height-32;
+const canvas=$('lanes'),left=48,right=canvas.width-4,top=58,bottom=canvas.height-32;
 const pixelsPerSecond=700*(Number($('spacingScale').value)||1),span=(bottom-top)/pixelsPerSecond/2;
 const from=playhead-span,to=playhead+span,laneWidth=(right-left)/data.layout.lanes.length;
 return {left,right,top,bottom,from,to,laneWidth,x:lane=>left+(lane+.5)*laneWidth,y:t=>top+(t-from)/(to-from)*(bottom-top)};
 }
 function lanes(){
-const canvas=$('lanes'),minimumWidth=(115+data.layout.lanes.length*Math.max(56,noteSize()+36))+'px';if(canvas.style.minWidth!==minimumWidth)canvas.style.minWidth=minimumWidth;if(canvas.width!==canvas.clientWidth)canvas.width=canvas.clientWidth;
+const canvas=$('lanes');if(canvas.width!==canvas.clientWidth)canvas.width=canvas.clientWidth;
+const requested=Number($('noteSize').value)||24,size=noteSize();$('noteSizeValue').textContent=size+' px'+(size<requested?' (fit to width)':'');
 const c=background(canvas),g=laneGeometry(),w=canvas.width,h=canvas.height;
 const symbols=['↙','↖','●','↗','↘'];
 for(const [i,lane] of data.layout.lanes.entries()){
@@ -187,7 +188,7 @@ c.fillStyle=lane.color==='blue'?'#75bdea':lane.color==='yellow'?'#f1c478':'#e89c
 }
 c.textAlign='left';c.font='12px system-ui';
 const tick=(g.to-g.from)<=.5?.025:(g.to-g.from)<=1?.1:(g.to-g.from)<=3?.25:(g.to-g.from)<=6?.5:1;
-for(let t=Math.ceil(g.from/tick)*tick;t<=g.to;t+=tick){const y=g.y(t);c.strokeStyle='#314448';c.lineWidth=1;c.beginPath();c.moveTo(g.left,y);c.lineTo(g.right,y);c.stroke();c.fillStyle='#9cb1b1';c.fillText(fmt(t),0,y+4)}
+for(let t=Math.ceil(g.from/tick)*tick;t<=g.to;t+=tick){const y=g.y(t);c.strokeStyle='#314448';c.lineWidth=1;c.beginPath();c.moveTo(g.left,y);c.lineTo(g.right,y);c.stroke();c.fillStyle='#9cb1b1';c.font='10px system-ui';c.fillText(fmt(t),0,y+4)}
 c.strokeStyle='#9cddbe';c.lineWidth=2;c.beginPath();c.moveTo(g.left,g.y(playhead));c.lineTo(g.right,g.y(playhead));c.stroke();
 const visible=t=>t>=g.from&&t<=g.to;
 for(const hold of holds){
@@ -201,10 +202,10 @@ c.strokeStyle=palette[1];c.lineWidth=2;c.strokeRect(x-bodyWidth/2,y1,bodyWidth,M
 if(visible(end)){c.fillStyle=palette[1];c.fillRect(x-noteSize()*.4,g.y(end)-2,noteSize()*.8,4);if(hold.end_censored){c.font='12px system-ui';c.fillText('?',x+noteSize()*.45,g.y(end)+4)}}
 const envelope=hold.input.recognition_envelope;
 if(envelope){const lower=envelope[0]-Number(delay.value)/1000,upper=envelope[1]-Number(delay.value)/1000;
-if(upper>=g.from&&lower<=g.to){c.strokeStyle=inputColor;c.lineWidth=3;c.setLineDash([4,4]);c.beginPath();c.moveTo(x+noteSize()/2+9,Math.max(g.top,g.y(lower)));c.lineTo(x+noteSize()/2+9,Math.min(g.bottom,g.y(upper)));c.stroke();c.setLineDash([])}}
+if(upper>=g.from&&lower<=g.to){c.strokeStyle=inputColor;c.lineWidth=3;c.setLineDash([4,4]);c.beginPath();c.moveTo(x+noteSize()/2+5,Math.max(g.top,g.y(lower)));c.lineTo(x+noteSize()/2+5,Math.min(g.bottom,g.y(upper)));c.stroke();c.setLineDash([])}}
 for(const state of hold.input.segments){const lower=state.lower_seconds-Number(delay.value)/1000,upper=state.upper_seconds-Number(delay.value)/1000;
 if(upper<g.from||lower>g.to)continue;
-c.fillStyle=inputColor;c.fillRect(x+noteSize()/2+7,Math.max(g.top,g.y(lower)),5,Math.max(2,Math.min(g.bottom,g.y(upper))-Math.max(g.top,g.y(lower))));
+c.fillStyle=inputColor;c.fillRect(x+noteSize()/2+3,Math.max(g.top,g.y(lower)),5,Math.max(2,Math.min(g.bottom,g.y(upper))-Math.max(g.top,g.y(lower))));
 }
 }
 
@@ -214,7 +215,7 @@ if(!range||range[1]<g.from||range[0]>g.to)return;
 const y1=Math.max(g.top,g.y(range[0])),y2=Math.min(g.bottom,g.y(range[1]));
 c.strokeStyle=color;c.fillStyle=color;c.lineWidth=3;c.setLineDash(possible?[4,3]:[]);
 c.beginPath();c.moveTo(x,y1);c.lineTo(x,Math.max(y1+2,y2));c.stroke();c.setLineDash([]);
-for(const t of range)if(visible(t)){c.beginPath();c.moveTo(x-4,g.y(t));c.lineTo(x+4,g.y(t));c.stroke()}
+for(const t of range)if(visible(t)){c.beginPath();c.moveTo(x-3,g.y(t));c.lineTo(x+3,g.y(t));c.stroke()}
 const middle=(range[0]+range[1])/2;if(visible(middle)){c.beginPath();c.arc(x,g.y(middle),3,0,Math.PI*2);if(possible)c.stroke();else c.fill()}
 };
 for(const [index,note] of data.notes.entries()){
@@ -225,7 +226,7 @@ if($('excluded').checked&&Number.isFinite(t)&&visible(t)){c.fillStyle='#647371';
 const target=targetRange(note),hold=holdFor(note),bounded=rangeByNote[index]?.status==='bounded',input=hold||bounded?null:inputRange(matchByNote.get(index)?.match,index);
 const targetVisible=target&&target[1]>=g.from&&target[0]<=g.to,tailVisible=hold?.end_range&&hold.end_range[1]>=g.from&&hold.end_range[0]<=g.to;
 if(!visible(t)&&!targetVisible&&!tailVisible&&(!input||input[1]<g.from||input[0]>g.to))continue;
-const rail=size/2+9;
+const rail=size/2+5;
 // Glyph geometry depends on noteSize only, never time spacing or uncertainty.
 if(g.y(t)+size/2>=g.top&&g.y(t)-size/2<=g.bottom){
 const palette=notePalette[data.layout.lanes[note.lane].color]||notePalette.yellow;
@@ -256,7 +257,11 @@ const closest=candidates[0];
 if(closest)seek(closest.note.target_seconds,matchByNote.get(closest.index)?.index??-1,closest.index);else seek(t);
 };
 }
-function noteSize(){return Number($('noteSize').value)||32}
+function noteSize(){
+// Fit all lanes and both timing rails in the available width, independently of spacing.
+return Math.max(4,Math.min(Number($('noteSize').value)||24,Math.floor(laneGeometry().laneWidth-18)));
+}
+if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>lanes()).observe($('lanes'));
 function setSpacing(value){
 if(!Number.isFinite(value))return;
 const scale=Math.max(.05,Math.min(16,value)).toFixed(2);
@@ -264,7 +269,7 @@ $('spacingScale').value=scale;$('spacingInput').value=scale;$('spacingValue').te
 }
 $('spacingScale').oninput=()=>setSpacing(Number($('spacingScale').value));
 $('spacingInput').oninput=()=>{if($('spacingInput').value.trim())setSpacing(Number($('spacingInput').value))};
-$('noteSize').oninput=()=>{$('noteSizeValue').textContent=noteSize()+' px';draw()};
+$('noteSize').oninput=()=>draw();
 $('position').min=data.start_seconds;$('position').max=data.end_seconds;
 $('position').oninput=()=>seek(Number($('position').value));
 function stepNote(direction){

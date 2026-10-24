@@ -33,8 +33,9 @@ for (const match of html.matchAll(/<canvas id="([^"]+)" width="(\d+)" height="(\
 elements.get('data').textContent = payload;
 elements.get('spacingScale').value = '1';
 elements.get('spacingInput').value = '1';
-elements.get('noteSize').value = '32';
-let callbackId=0;
+const initialNoteSize=Number(html.match(/id="noteSize"[^>]*value="(\d+)"/)[1]);
+elements.get('noteSize').value=String(initialNoteSize);
+let callbackId=0,resizeCallback=null;
 const videoCallbacks=new Map(),animationCallbacks=new Map();
 const video=elements.get('video');
 video.requestVideoFrameCallback=callback=>{const id=++callbackId;videoCallbacks.set(id,callback);return id};
@@ -44,6 +45,7 @@ const context = vm.createContext({document: {
   getElementById(id) { assert.ok(elements.has(id), 'missing element '+id); return elements.get(id); },
   createElement: element,
 }, URL, Blob, setTimeout,
+ResizeObserver:class {constructor(callback){resizeCallback=callback}observe(canvas){assert.equal(canvas,elements.get('lanes'))}},
 requestAnimationFrame:callback=>{const id=++callbackId;animationCallbacks.set(id,callback);return id},
 cancelAnimationFrame:id=>animationCallbacks.delete(id)});
 vm.runInContext(runtime, context, {timeout: 10000});
@@ -81,16 +83,34 @@ for (const scale of [.25, 1, 16]) {
   assert.equal(elements.get('lanes').height, 680);
   assert.deepEqual(evaluate('({selectedNote,playhead})'), before);
   assert.deepEqual(evaluate('reviewNotes.map(({note})=>targetRange(note))'), targetRanges);
-  if(initialRows.length){assert.ok(squares().length,'visible note has a colored square');assert.ok(squares().every(op=>op.args[2]===32),'spacing must preserve square dimensions')}
+  if(initialRows.length){assert.ok(squares().length,'visible note has a colored square');assert.ok(squares().every(op=>op.args[2]===initialNoteSize),'spacing must preserve square dimensions')}
   scaleGeometry.push(evaluate('(()=>{const g=laneGeometry();return g.y(playhead+.1)-g.y(playhead)})()'));
 }
 assert.ok(scaleGeometry[0]<scaleGeometry[1] && scaleGeometry[1]<scaleGeometry[2]);
-if(initialRows.length)assert.ok([...noteFonts].every(font=>['bold 20px system-ui','bold 32px system-ui'].includes(font)));
+if(initialRows.length)assert.ok([...noteFonts].every(font=>['bold 20px system-ui','bold '+initialNoteSize+'px system-ui'].includes(font)));
 elements.get('spacingInput').value = '1.01';elements.get('spacingInput').oninput();
 assert.equal(elements.get('spacingScale').value,'1.01');
 assert.ok(Math.abs(evaluate('(()=>{const g=laneGeometry();return g.y(playhead+.1)-g.y(playhead)})()')/scaleGeometry[1]-1.01)<1e-8);
 const beforeSize=evaluate('({playhead,span:laneGeometry().to-laneGeometry().from})');
 for(const size of [16,64,32]){elements.get('noteSize').value=String(size);elements.get('noteSize').oninput();assert.equal(evaluate('noteSize()'),size);assert.ok(squares().every(op=>op.args[2]===size));assert.deepEqual(evaluate('({playhead,span:laneGeometry().to-laneGeometry().from})'),beforeSize)}
+// Narrow charts must retain every lane, square and both timing rails without
+// a forced canvas width or horizontal scrolling, even at a large requested size.
+const originalWidth=elements.get('lanes').clientWidth;
+for(const width of [280,360,540]){
+  elements.get('lanes').clientWidth=width;elements.get('noteSize').value='64';
+  assert.ok(resizeCallback);resizeCallback();
+  assert.equal(elements.get('lanes').width,width);
+  assert.ok(!elements.get('lanes').style.minWidth);
+  const fit=evaluate('(()=>{const g=laneGeometry(),size=noteSize();return {size,left:g.left,right:g.right,laneWidth:g.laneWidth,lanes:data.layout.lanes.map((_,i)=>g.x(i))}})()');
+  assert.ok(fit.size<=64);
+  for(const x of fit.lanes){assert.ok(x-fit.size/2-8>=fit.left);assert.ok(x+fit.size/2+8<=fit.right)}
+  assert.ok(squares().every(op=>op.args[2]===fit.size));
+  assert.equal(elements.get('noteSizeValue').textContent,fit.size+' px'+(fit.size<64?' (fit to width)':''));
+  const fitBeforeSpacing=fit.size;
+  elements.get('spacingInput').value='0.37';elements.get('spacingInput').oninput();
+  assert.equal(evaluate('noteSize()'),fitBeforeSpacing);
+}
+elements.get('lanes').clientWidth=originalWidth;elements.get('noteSize').value='32';resizeCallback();
 elements.get('spacingScale').value = '1';elements.get('spacingScale').oninput();
 if (initialRows.length) {
   elements.get('events').children[0].onclick();
