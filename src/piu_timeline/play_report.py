@@ -61,7 +61,7 @@ TEMPLATE = r'''<!doctype html>
 <button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
 <div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section></div>
 <section class="panel chart"><h2>Observed timing offsets</h2><canvas id="timing" width="1200" height="290"></canvas><small>Each bar compares the input estimate with the note target range, including both frame-bracket and fitted-target uncertainty. Blue: earlier; amber: later; green: overlapping ranges. Click to select a note and seek the recording. This is display-based evidence, not a judgment-window score.</small></section>
-<section class="panel chart"><div class="row"><h2>Vertical note chart</h2><label>Window <select id="zoom"><option value="0.5">±0.5 seconds</option><option value="1.5" selected>±1.5 seconds</option><option value="3">±3 seconds</option><option value="8">±8 seconds</option></select></label><label>Chart height <input id="chartHeight" type="range" min="360" max="2400" step="20" value="680"> <output id="chartHeightValue">680 px</output></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div>
+<section class="panel chart"><div class="row"><h2>Vertical note chart</h2><label>Window <select id="zoom"><option value="0.1">±0.1 seconds</option><option value="0.25">±0.25 seconds</option><option value="0.5">±0.5 seconds</option><option value="1.5" selected>±1.5 seconds</option><option value="3">±3 seconds</option><option value="8">±8 seconds</option></select></label><label>Chart height <input id="chartHeight" type="range" min="360" max="20000" step="20" value="680"> <output id="chartHeightValue">680 px</output></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div>
 <p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Colored arrows mark fitted targets; blue bands show their uncertainty. Amber outlines show input ranges. An amber mark above its arrow is early; below is late. The green line follows the recording.</p>
 <div class="row"><button id="previousNote">Previous note</button><button id="nextNote">Next note</button><span id="chartPosition" class="pill"></span></div>
 <label>Recording position <input id="position" type="range" step="0.001" style="width:100%"></label>
@@ -142,7 +142,7 @@ c.fillStyle='#e5efeb';c.textAlign='center';c.font='13px system-ui';c.fillText(la
 c.fillStyle=lane.color==='blue'?'#75bdea':lane.color==='yellow'?'#f1c478':'#e89cba';c.font='bold 20px system-ui';c.fillText(symbols[i%5],g.x(i),47);
 }
 c.textAlign='left';c.font='12px system-ui';
-const tick=(g.to-g.from)<=1?.1:(g.to-g.from)<=3?.25:(g.to-g.from)<=6?.5:1;
+const tick=(g.to-g.from)<=.5?.025:(g.to-g.from)<=1?.1:(g.to-g.from)<=3?.25:(g.to-g.from)<=6?.5:1;
 for(let t=Math.ceil(g.from/tick)*tick;t<=g.to;t+=tick){const y=g.y(t);c.strokeStyle='#314448';c.lineWidth=1;c.beginPath();c.moveTo(g.left,y);c.lineTo(g.right,y);c.stroke();c.fillStyle='#9cb1b1';c.fillText(fmt(t),0,y+4)}
 const visible=t=>t>=g.from&&t<=g.to;
 const band=(range,x,width,filled,color)=>{if(!range||range[1]<g.from||range[0]>g.to)return;
@@ -150,7 +150,7 @@ const y1=Math.max(g.top,g.y(range[0])),y2=Math.min(g.bottom,g.y(range[1])),heigh
 c.fillStyle=color;c.strokeStyle=color;c.lineWidth=2;if(filled)c.fillRect(x-width/2,y1,width,height);else c.strokeRect(x-width/2,y1,width,height);
 };
 for(const [index,note] of data.notes.entries()){
-const t=note.target_seconds??note.points.at(-1)?.[0],x=g.x(note.lane),width=Math.min(65,g.laneWidth*.72);
+const t=note.target_seconds??note.points.at(-1)?.[0],x=g.x(note.lane),width=g.laneWidth*.72,size=g.laneWidth*.6;
 if(note.status!=='estimated'){
 if($('excluded').checked&&Number.isFinite(t)&&visible(t)){c.fillStyle='#647371';c.font='18px system-ui';c.textAlign='center';c.fillText('×',x,g.y(t)+6)}continue;
 }
@@ -162,8 +162,8 @@ c.strokeStyle='#f1c478';c.lineWidth=1;c.beginPath();c.moveTo(x,Math.max(g.top,Ma
 band(input,x,width+6,false,'#f1c478');
 }
 if(visible(t)){
-const lane=data.layout.lanes[note.lane];c.fillStyle=lane.color==='blue'?'#75bdea':lane.color==='yellow'?'#f1c478':'#e89cba';c.textAlign='center';c.font='bold 22px system-ui';c.fillText(symbols[note.lane%5],x,g.y(t)+7);
-if(index===selectedNote){c.strokeStyle='#ffffff';c.lineWidth=2;c.strokeRect(x-width/2-6,g.y(t)-14,width+12,28)}
+const lane=data.layout.lanes[note.lane];c.fillStyle=lane.color==='blue'?'#75bdea':lane.color==='yellow'?'#f1c478':'#e89cba';c.textAlign='center';c.font='bold '+size+'px system-ui';c.fillText(symbols[note.lane%5],x,g.y(t)+size*.32);
+if(index===selectedNote){c.strokeStyle='#ffffff';c.lineWidth=2;c.strokeRect(x-width/2-6,g.y(t)-size*.55,width+12,size*1.1)}
 }
 }
 c.textAlign='left';c.font='12px system-ui';c.strokeStyle='#9cddbe';c.lineWidth=2;c.beginPath();c.moveTo(g.left,g.y(playhead));c.lineTo(g.right,g.y(playhead));c.stroke();c.fillStyle='#9cddbe';c.fillText('Now '+fmt(playhead),g.left+6,g.y(playhead)-8);

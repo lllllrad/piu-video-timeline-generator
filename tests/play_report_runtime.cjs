@@ -54,7 +54,7 @@ for (const index of [...new Set([0, initialRows.length - 1])]) {
   elements.get('events').children[index].onclick();
   details.push(elements.get('comparisonDetails').children.map(node => node.textContent));
 }
-for (const height of [360, 1200, 2400]) {
+for (const height of [360, 1200, 20000]) {
   const before = evaluate('({selectedNote,playhead,span:laneGeometry().to-laneGeometry().from})');
   elements.get('chartHeight').value = String(height);
   elements.get('chartHeight').oninput();
@@ -63,6 +63,8 @@ for (const height of [360, 1200, 2400]) {
   assert.deepEqual(evaluate('({selectedNote,playhead,span:laneGeometry().to-laneGeometry().from})'), before);
   assert.deepEqual(evaluate('reviewNotes.map(({note})=>targetRange(note))'), targetRanges);
 }
+elements.get('chartHeight').value = '1200';
+elements.get('chartHeight').oninput();
 if (initialRows.length) {
   elements.get('events').children[0].onclick();
   // Test hit coordinates after CSS scaling, including a click on the input band.
@@ -90,6 +92,8 @@ elements.get('next').onclick();
 elements.get('previous').onclick();
 elements.get('excluded').checked = true;
 elements.get('excluded').onchange();
+elements.get('zoom').value = '0.1';
+elements.get('zoom').onchange();
 elements.get('zoom').value = '8';
 elements.get('zoom').onchange();
 assert.deepEqual(evaluate('data'), data, 'embedded evidence changed');
