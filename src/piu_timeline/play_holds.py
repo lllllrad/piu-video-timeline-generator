@@ -320,7 +320,7 @@ def augment_holds(data, output):
 def presentation(data):
     """Project hold-aware chart/recognition without rewriting native tap evidence."""
     holds = data.get('hold_analysis', {}).get('holds', [])
-    if not holds:
+    if not data.get('hold_analysis'):
         return data
     notes = [dict(note) for note in data['notes']]
     suppressed = {index for hold in holds for index in hold['covered_notes']}
@@ -344,11 +344,39 @@ def presentation(data):
         return any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2) + .04
                    and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds'])
                    for hold in holds)
+    # A dense interval is a warning about hold ticks, not proof that every
+    # other lane is a hold. Retain strict row alignments until lane evidence
+    # can distinguish an independent tap from sustained recognition.
+    input_matches = list(data['matches'])
+    assigned = {match['note'] for match in input_matches}
+    deferred = []
+    for match in data.get('deferred_matches', []):
+        index = match['note']
+        if index in assigned or notes[index]['status'] != 'estimated' or notes[index].get('note_type') == 'hold':
+            continue
+        event = data['combo_events'][match['combo_event']]
+        if event.get('delta') != 1:
+            continue
+        lo, hi = match['combo_lower_seconds'], match['combo_upper_seconds']
+        conflict = False
+        for other in input_matches:
+            other_lo = other.get('observation_lower_seconds', other.get('combo_lower_seconds'))
+            other_hi = other.get('observation_upper_seconds', other.get('combo_upper_seconds'))
+            if (other_lo is not None and other_hi is not None and abs(other_hi-hi) <= .025
+                    and other_lo <= hi and other_hi >= lo
+                    and abs(other['target_seconds']-match['target_seconds']) >= .025):
+                conflict = True
+                break
+        if not conflict:
+            deferred.append({**match, 'evidence_source': 'combo+lane_onset',
+                             'observation_lower_seconds': lo, 'observation_upper_seconds': hi,
+                             'recovery_method': 'strict_row_alignment_with_independent_lane_onset'})
+    input_matches.extend(deferred)
     from .play_receptors import onset_overlaps
     guard = 2*(data.get('median_frame_interval_seconds') or .017)
     runs = data['hold_analysis'].get('receptor_runs', [])
     owners, note_runs = {}, {}
-    for match in data['matches']:
+    for match in input_matches:
         index = match['note']
         if index in suppressed:
             continue
@@ -360,23 +388,29 @@ def presentation(data):
             if run['lane'] == notes[index]['lane'] and onset_overlaps(run, lo, hi, guard):
                 owners.setdefault(ri, set()).add(index)
                 note_runs.setdefault(index, []).append(ri)
-    def independent_onset(note_index, lo, hi):
+    def independent_onset(note_index):
         return any(owners[ri] == {note_index} for ri in note_runs.get(note_index, []))
     matches, ambiguous = [], []
-    for match in data['matches']:
+    recovered = []
+    for match in input_matches:
         if match['note'] in suppressed:
             continue
         lo = match.get('observation_lower_seconds', match.get('combo_lower_seconds'))
         hi = match.get('observation_upper_seconds', match.get('combo_upper_seconds'))
-        if lo is not None and hi is not None and during_hold(lo, hi) and not independent_onset(match['note'], lo, hi):
+        needs_onset = match.get('recovery_method') == 'strict_row_alignment_with_independent_lane_onset'
+        if (needs_onset or lo is not None and hi is not None and during_hold(lo, hi)) and not independent_onset(match['note']):
             ambiguous.append(match['note'])
         else:
             matches.append(match)
+            if needs_onset:
+                recovered.append(match['note'])
     def events(key):
         result = []
         owned = {match.get('combo_event' if key == 'combo_events' else 'judgment_event') for match in matches}
         for event_index, event in enumerate(data.get(key, [])):
             event = dict(event)
+            if key == 'combo_events' and event_index in owned and event.get('reason') == 'possible_hold_or_dense_stack':
+                event.update(status='matched', reason='tap_with_independent_lane_onset_during_dense_interval')
             if event.get('label') != 'MISS' and event.get('delta', 1) > 0 and during_hold(event['lower_seconds'], event['upper_seconds']):
                 if event_index in owned:
                     event.update(status='matched', reason='tap_with_independent_lane_onset_during_hold')
@@ -400,5 +434,5 @@ def presentation(data):
             'excluded_notes': dict(Counter(note.get('reason') for note in notes if note['status'] == 'excluded')),
             'miss_candidates': [candidate for candidate in data.get('miss_candidates', []) if candidate['note'] not in suppressed],
             'combo_events': events('combo_events'), 'judgment_events': events('judgment_events'),
-            'hold_tick_ambiguous_notes': ambiguous,
+            'hold_tick_ambiguous_notes': ambiguous, 'recovered_dense_notes': recovered,
             'hold_analysis': {**data['hold_analysis'], 'holds': projected}, 'coverage': coverage}

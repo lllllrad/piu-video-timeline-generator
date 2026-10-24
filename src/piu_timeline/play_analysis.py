@@ -19,7 +19,7 @@ from .recognition import capture_game
 from .workflow import LOCAL_DATA, source_id
 from .play_judgments import augment_judgments, cache_current as judgment_cache_current
 
-VERSION = 13
+VERSION = 14
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 COLORS = ('blue', 'red', 'yellow', 'red', 'blue')
@@ -316,15 +316,16 @@ def bootstrap_digits(record, roi, start, end, layout, directory, width=650, samp
 def resolve_timing(tracker, combo, display_delay_ms):
     notes = tracker.finish()
     candidates = associate(notes, combo.events, display_delay=display_delay_ms/1000)
-    matches = []
+    matches, deferred = [], []
     for match in candidates:
         if any(match['combo_upper_seconds'] >= interval['start_seconds'] - .1
                and match['combo_lower_seconds'] <= interval['end_seconds'] + .1
                for interval in tracker.unsupported_intervals):
             combo.events[match['combo_event']].update(status='excluded', reason='possible_hold_or_dense_stack')
+            deferred.append({**match, 'deferred_reason': 'possible_hold_or_dense_stack'})
         else:
             matches.append(match)
-    return {'notes': notes, 'combo_events': combo.events, 'matches': matches,
+    return {'notes': notes, 'combo_events': combo.events, 'matches': matches, 'deferred_matches': deferred,
             'unsupported_intervals': tracker.unsupported_intervals,
             'coverage': {'visible_note_heads': sum(n['status'] == 'estimated' for n in notes),
                          'timed_note_heads': len(matches),
