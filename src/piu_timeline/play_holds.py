@@ -1,4 +1,5 @@
 """Lane-specific long-note geometry and sustained recognition, separate from taps."""
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from hashlib import sha256
 from itertools import zip_longest
@@ -13,7 +14,7 @@ from .play_frames import decode_frames
 from .play_tracking import Track, fit_track
 
 FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 8}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 9}
 
 
 def fingerprint(value):
@@ -175,6 +176,7 @@ def reconstruct(data, frames):
     spacing = float(np.median(np.diff([lane['x'] * width for lane in data['layout']['lanes']])))
     receptor = data['layout']['receptor_y'] * height
     holds = []
+    frame_times = [frame['playback_seconds'] for frame in frames]
     for track in body_tracks(frames, spacing):
         longs = [point for point in track if point['long'] and point.get('stripe_support', 1) >= .8]
         if len(longs) < 5 or longs[-1]['time'] - longs[0]['time'] < .08:
@@ -213,15 +215,21 @@ def reconstruct(data, frames):
         # A held state is lane-local visual support. Repeated accepted ticks do
         # not create separate presses, and disappearance does not measure release.
         segments = []
-        for point in contact:
-            if not point['lit'] or point['time'] < start[0] or point['time'] > last_time:
+        support_start = start[1] if censored else start[0]
+        # A flash can temporarily hide the body's colored pixels. Use the
+        # independently recorded receptor state in neighboring native frames,
+        # bounded by the reconstructed hold, not only frames with a body box.
+        support = frames[bisect_left(frame_times, support_start):bisect_right(frame_times, last_time)]
+        for frame in support:
+            if not frame['receptor_lit'][lane]:
                 continue
-            if segments and point['time'] - segments[-1]['upper_seconds'] <= .075:
-                segments[-1].update(upper_seconds=point['time'], last_source_pts_seconds=point['pts'],
+            time, pts = frame['playback_seconds'], frame['source_pts_seconds']
+            if segments and time - segments[-1]['upper_seconds'] <= .075:
+                segments[-1].update(upper_seconds=time, last_source_pts_seconds=pts,
                                     frames=segments[-1]['frames']+1)
             else:
-                segments.append({'lower_seconds': point['time'], 'upper_seconds': point['time'],
-                                 'first_source_pts_seconds': point['pts'], 'last_source_pts_seconds': point['pts'], 'frames': 1})
+                segments.append({'lower_seconds': time, 'upper_seconds': time,
+                                 'first_source_pts_seconds': pts, 'last_source_pts_seconds': pts, 'frames': 1})
         segments = [segment for segment in segments if segment['frames'] >= 2]
         covered = [i for i, note in enumerate(data['notes']) if note['status'] == 'estimated'
                    and note['lane'] == lane and (start[1] if censored else start[0])-.025 <= note['target_seconds'] <= last_time+.025]
@@ -313,22 +321,33 @@ def presentation(data):
         return any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2) + .04
                    and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds'])
                    for hold in holds)
+    def independent_onset(note_index, lo, hi):
+        lane = notes[note_index]['lane']
+        guard = 2*(data.get('median_frame_interval_seconds') or .017)
+        return any(run['lane'] == lane and run['lit'] and run['frames'] >= 2
+                   and run['previous_seconds'] is not None and run['previous_seconds'] <= hi+guard
+                   and lo-guard <= run['start_seconds'] <= hi+guard
+                   for run in data['hold_analysis'].get('receptor_runs', []))
     matches, ambiguous = [], []
     for match in data['matches']:
         if match['note'] in suppressed:
             continue
         lo = match.get('observation_lower_seconds', match.get('combo_lower_seconds'))
         hi = match.get('observation_upper_seconds', match.get('combo_upper_seconds'))
-        if lo is not None and hi is not None and during_hold(lo, hi):
+        if lo is not None and hi is not None and during_hold(lo, hi) and not independent_onset(match['note'], lo, hi):
             ambiguous.append(match['note'])
         else:
             matches.append(match)
     def events(key):
         result = []
-        for event in data.get(key, []):
+        owned = {match.get('combo_event' if key == 'combo_events' else 'judgment_event') for match in matches}
+        for event_index, event in enumerate(data.get(key, [])):
             event = dict(event)
             if event.get('label') != 'MISS' and event.get('delta', 1) > 0 and during_hold(event['lower_seconds'], event['upper_seconds']):
-                event.update(status='hold_state_or_tap', reason='ongoing_hold_tick_not_new_press')
+                if event_index in owned:
+                    event.update(status='matched', reason='tap_with_independent_lane_onset_during_hold')
+                else:
+                    event.update(status='hold_state_or_tap', reason='ongoing_hold_tick_not_new_press')
             result.append(event)
         return result
     coverage = dict(data.get('coverage', {}))

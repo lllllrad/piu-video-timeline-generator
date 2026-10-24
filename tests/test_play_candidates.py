@@ -75,3 +75,10 @@ class CandidateTest(unittest.TestCase):
         self.assertNotIn(1, result)
         self.assertIn('violates_processed_row_order', rejected[1])
         self.assertIn(2, result)
+
+    def test_narrow_word_refresh_does_not_fan_out_over_aggregate_counter_rows(self):
+        data = {'notes': [note(9.9), note(10)]}
+        aggregate = {**event(9.89, 10.02), 'delta': 2}
+        result, _ = candidates(data, [aggregate, event(10, 10.02, 'judgment')])
+        self.assertEqual([entry['source'] for entry in result[0]], ['combo'])
+        self.assertEqual({entry['source'] for entry in result[1]}, {'combo', 'judgment'})

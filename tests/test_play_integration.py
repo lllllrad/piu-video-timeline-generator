@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import shutil
 import subprocess
 import tempfile
@@ -9,7 +10,8 @@ import cv2
 import numpy as np
 
 from piu_timeline.play_analysis import analyze_play
-from piu_timeline.play_frames import crop_region
+from piu_timeline.play_frames import crop_region, decode_frames
+from piu_timeline.play_holds import augment_holds, presentation
 from piu_timeline.play_tracking import DigitReader
 from piu_timeline.play_judgments import augment_judgments, feature_map
 from piu_timeline.timeline import media_record
@@ -17,6 +19,45 @@ from piu_timeline.timeline import media_record
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg unavailable')
 class PlayIntegrationTest(unittest.TestCase):
+    def test_native_long_note_is_one_sustained_state_and_replays_without_decoding(self):
+        layout = {'receptor_y': .15, 'note_y_max': .95,
+                  'lanes': [{'x': .38+.06*i, 'color': 'blue'} for i in range(5)]}
+        def frame(time):
+            image = np.zeros((183, 325, 3), dtype='uint8')
+            spacing, receptor, x = 19.5, .15*183, round(.5*325)
+            top = max(receptor+.3*spacing, receptor+200*(.6-time)-.45*spacing)
+            bottom = min(.95*183-1, receptor+200*(1.6-time)+.45*spacing)
+            if bottom > top:
+                cv2.rectangle(image, (x-5, round(top)), (x+5, round(bottom)), (0,130,255), -1)
+            if .6 <= time <= 1.6:
+                cv2.rectangle(image, (x-5, round(receptor)-5), (x+5, round(receptor)+5), (255,255,255), -1)
+            return image
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary);video = root/'long.mkv'
+            subprocess.run(['ffmpeg','-v','error','-nostdin','-n','-f','rawvideo','-pixel_format','rgb24',
+                            '-video_size','325x183','-framerate','60','-i','pipe:0','-c:v','ffv1',str(video)],
+                           input=b''.join(frame(i/60).tobytes() for i in range(132)), check=True, capture_output=True)
+            record = media_record(video);before = video.read_bytes(), video.stat().st_mtime_ns
+            frames = [{'source_pts_seconds': pts, 'playback_seconds': time}
+                      for pts,time,_ in decode_frames(record,0,2.2,[0,0,325,183],325)]
+            (root/'frames.jsonl').write_text(''.join(json.dumps(item)+'\n' for item in frames))
+            data = {'media':record,'layout':layout,'game_roi':[0,0,325,183], 'start_seconds':0,'end_seconds':2.2,
+                    'analysis_width':325, 'notes':[{'lane':2,'status':'estimated','target_seconds':target,
+                    'prediction_uncertainty_seconds':.01} for target in (.6,1.6)], 'matches':[{'note':0},{'note':1}]}
+            result = augment_holds(data,root)
+            holds = result['hold_analysis']['holds']
+            self.assertEqual(len(holds),1,holds)
+            self.assertAlmostEqual(sum(holds[0]['end_range'])/2,1.6,delta=.1)
+            self.assertIsNone(holds[0]['input']['press_range'])
+            self.assertIsNone(holds[0]['input']['release_range'])
+            self.assertTrue(holds[0]['input']['segments'])
+            self.assertEqual(presentation(result)['matches'],[])
+            observed = [json.loads(line) for line in (root/'hold-frames.jsonl').read_text().splitlines()]
+            self.assertEqual([item['source_pts_seconds'] for item in observed], [item['source_pts_seconds'] for item in frames])
+            with patch('piu_timeline.play_holds.decode_frames',side_effect=AssertionError('must use cached hold pixels')):
+                self.assertEqual(augment_holds(data,root)['hold_analysis'],result['hold_analysis'])
+            self.assertEqual((video.read_bytes(),video.stat().st_mtime_ns),before)
+
     def test_first_three_inputs_match_judgments_with_no_combo_anywhere(self):
         layout={'lanes':[{'x':.1+.2*i,'color':('blue','red','yellow','red','blue')[i]} for i in range(5)],
                 'receptor_y':.2,'note_y_max':.95,'combo_roi':[.4,.6,.24,.2],

@@ -54,6 +54,14 @@ class HoldTest(unittest.TestCase):
         self.assertTrue(partial)
         self.assertTrue(partial[0]['end_censored'])
         self.assertIsNone(partial[0]['end_range'])
+        obscured = deepcopy(frames)
+        for item in obscured:
+            if .65 < item['playback_seconds'] < .75:
+                item['bodies'] = []
+        recovered = reconstruct(data, obscured)
+        self.assertEqual(len(recovered), 1)
+        self.assertTrue(any(segment['lower_seconds'] <= .66 and segment['upper_seconds'] >= .74
+                            for segment in recovered[0]['input']['segments']))
 
     def test_projection_suppresses_ticks_and_tail_without_mutating_native_taps(self):
         hold = {'id': 0, 'lane': 0, 'start_range': [1, 1.02], 'end_range': [2, 2.02],
@@ -123,3 +131,22 @@ class HoldTest(unittest.TestCase):
         # A small morphological gap repair must not turn stacked taps into
         # long-note evidence: the original unfilled stripe remains auditable.
         self.assertFalse(any(body['long'] and body['stripe_support'] >= .8 for body in bodies))
+
+    def test_other_lane_tap_during_hold_requires_its_own_receptor_onset(self):
+        hold = {'id':0,'lane':0,'start_range':[1,1.02],'end_range':[2,2.02],
+                'start_censored':False,'end_censored':False,'head_note':0,
+                'covered_notes':[0], 'input':{'segments':[]}}
+        data = {'notes':[{'status':'estimated','lane':0,'target_seconds':1.01},
+                         {'status':'estimated','lane':1,'target_seconds':1.5}],
+                'matches':[{'note':1,'target_seconds':1.5,'combo_event':0,
+                            'combo_lower_seconds':1.49,'combo_upper_seconds':1.51}],
+                'combo_events':[{'lower_seconds':1.49,'upper_seconds':1.51,'delta':1}],
+                'hold_analysis':{'holds':[hold]}}
+        ambiguous = presentation(data)
+        self.assertEqual(ambiguous['matches'],[])
+        self.assertEqual(ambiguous['hold_tick_ambiguous_notes'],[1])
+        data['hold_analysis']['receptor_runs']=[{'lane':1,'lit':True,'frames':3,
+            'previous_seconds':1.48,'start_seconds':1.49,'end_seconds':1.55}]
+        supported = presentation(data)
+        self.assertEqual(supported['matches'],data['matches'])
+        self.assertEqual(supported['combo_events'][0]['reason'],'tap_with_independent_lane_onset_during_hold')

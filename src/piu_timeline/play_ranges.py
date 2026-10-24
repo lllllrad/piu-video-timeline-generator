@@ -40,6 +40,7 @@ def timing_ranges(data):
             if math.isfinite(lo) and math.isfinite(hi) and lo <= hi:
                 events.append({'source': source, 'event': index, 'delta': event.get('delta', 1), 'lower_seconds': lo,
                                'upper_seconds': hi, 'reason': event.get('reason'),
+                               **({key: event[key] for key in ('before', 'after')} if 'before' in event and 'after' in event else {}),
                                **({'source_pts_seconds': event['source_pts_seconds']} if 'source_pts_seconds' in event else {})})
     holds = {hold['id']: hold for hold in data.get('hold_analysis', {}).get('holds', [])}
     from .play_candidates import candidates

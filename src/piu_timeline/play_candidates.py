@@ -84,8 +84,9 @@ def candidates(data, events, window=.25):
             if rows and abs(target-rows[-1]['target']) < .025:
                 rows[-1]['notes'].append(index)
                 rows[-1]['cost'] = min(rows[-1]['cost'], distance)
+                rows[-1]['uncertainty'] = max(rows[-1]['uncertainty'], uncertainty)
             else:
-                rows.append({'target': target, 'notes': [index], 'cost': distance})
+                rows.append({'target': target, 'notes': [index], 'cost': distance, 'uncertainty': uncertainty})
         if not rows:
             continue
         best = min(row['cost'] for row in rows)
@@ -99,11 +100,19 @@ def candidates(data, events, window=.25):
         for row in rows:
             if row not in selected:
                 for index in row['notes']:rejected[index].add('another_note_row_is_better_supported')
+        def source_cost(row, event):
+            center = (event['lower_seconds']+event['upper_seconds'])/2
+            span = event['upper_seconds']-event['lower_seconds']
+            return max(0, abs(row['target']+offset-center)-span/2-row['uncertainty'])
         for row in selected:
             for index in row['notes']:
                 for event in family['events']:
+                    # An aggregate counter may cover several rows, but a narrow
+                    # word refresh at its end cannot vote for every earlier row.
+                    if event.get('delta', 1) == 1 and source_cost(row, event) > min(source_cost(other, event) for other in selected)+max(.008, frame/2):
+                        continue
                     result[index].append({**event, 'constraints': ['event_ownership', 'processed_row_order', 'closest_row'],
                                           'lane_receptor_support': bool(supports[index]), 'lane_support_runs': supports[index],
                                           'ranking_offset_seconds': offset,
-                                          'alternative_rows': len(selected)})
+                                          'alternative_rows': len(selected) if capacity == 1 else 1, 'aggregate_row_capacity': capacity})
     return result, {index: sorted(reasons) for index, reasons in rejected.items()}

@@ -62,13 +62,13 @@ class ReportTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_layout({'lanes': [{'x': float('nan'), 'color': 'blue'}] * 5})
 
-    def report_runtime(self, notes, matches, miss_candidates=(), lane_count=1, judgment_events=()):
+    def report_runtime(self, notes, matches, miss_candidates=(), lane_count=1, judgment_events=(), hold_analysis=None):
         data = {'song': 'Song', 'chart': 'S20', 'media': {'path': '/tmp/source.mkv'},
                 'start_seconds': 8, 'end_seconds': 20, 'notes': notes, 'matches': matches,
                 'display_delay_correction_ms': 0, 'bootstrap': {'ocr_images': 0, 'missing_digits': []},
                 'frame_count': 100, 'combo_readable_fraction': 1, 'combo_events': [],
                 'judgment_events': judgment_events, 'excluded_notes': {}, 'limitations': [],
-                'miss_candidates': miss_candidates,
+                'miss_candidates': miss_candidates, 'hold_analysis': hold_analysis or {'holds': []},
                 'layout': {'lanes': [{'name': str(i + 1), 'color': 'yellow'} for i in range(lane_count)]}}
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'report.html'
@@ -173,3 +173,21 @@ class ReportTest(unittest.TestCase):
         self.assertIn('display:grid', layout)
         self.assertIn('grid-template-columns:minmax(0,1fr) minmax(0,1fr)', layout)
         self.assertRegex(stylesheet, r'\.video-panel\s*\{[^}]*position:sticky')
+
+    def test_long_note_chart_and_input_are_sustained_spans_not_tap_offsets(self):
+        notes = [{'status': 'estimated', 'lane': 0, 'target_seconds': target,
+                  'prediction_uncertainty_seconds': .01, 'points': []} for target in (10.01, 11.01)]
+        hold = {'id': 0, 'lane': 0, 'start_range': [10, 10.02], 'end_range': [11, 11.02],
+                'start_censored': False, 'end_censored': False, 'head_note': 0,
+                'last_body_seconds': 10.99, 'covered_notes': [0, 1],
+                'input': {'segments': [{'lower_seconds': 10.03, 'upper_seconds': 10.3}],
+                          'recognition_envelope': [10.03, 10.3], 'press_range': None, 'release_range': None}}
+        result = self.report_runtime(notes, [], hold_analysis={'holds': [hold]})
+        self.assertEqual(len(result['initialRows']), 1)
+        self.assertIn('HOLD', result['initialRows'][0][0])
+        self.assertEqual(result['initialRows'][0][3], 'Sustained state; no repeated presses')
+        self.assertIn('physical release unknown', result['initialRows'][0][4])
+        self.assertIn('Holding is sufficient', result['details'][0][2])
+        hold.update(start_range=[8, 10.02], start_censored=True, head_note=None)
+        result = self.report_runtime(notes, [], hold_analysis={'holds': [hold]})
+        self.assertIn('already visible / uncertain', result['initialRows'][0][1])
