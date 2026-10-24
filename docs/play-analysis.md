@@ -13,7 +13,8 @@ just play VIDEO --all
 Open `.local/data/SOURCE_ID/play/segment-001/report.html` locally. The report embeds its data and uses no external scripts, fonts or services. It includes:
 
 - the original recording, with seek links from the charts and event table;
-- reconstructed visible note-head crossing times by lane;
+- reconstructed visible note-head target ranges and display-based input ranges by lane;
+- a note-by-note comparison table, including unmatched targets, and two aligned range bars for the selected note;
 - combo and judgment-word refresh brackets, their evidence source and timing offsets;
 - coverage, unreadable digits, excluded trajectories and ambiguous events;
 - a receptor/combo overlay and an editable, downloadable layout;
@@ -42,6 +43,14 @@ Mutually unique overlapping counter/word refresh brackets are paired first. Conf
 An already matched single-row counter update can also receive a label from at least two consistent, high-confidence word observations within 50 ms after its first new frame. Two agreeing reads must be no more than 35 ms apart. Unreadable later frames do not invalidate already confirmed letters or vote against a label. The window stops before the next observed counter transition; conflicting words, MISS, sparse observations and aggregate increments remain unlabeled. This supplies a label only: it does not create a word refresh or narrow the original timing interval. These matches retain the contributing source PTS in `judgment_observations`, use `judgment_label_source: post_combo_frames`, and have no `judgment_event`. The HTML marks them as `word frames` and explicitly shows `Judgment unknown` for unresolved labels. Compatible saved word observations are reused without decoding or OCR.
 
 `judgments.jsonl` retains word observations, confidence, bounding boxes and original source PTS. `evidence/judgments/` contains sampled crops, OCR provenance, font templates and compressed native color features. Word detection/refresh changes can reuse those features and existing fonts without decoding or OCR; cached word classifications are invalidated when the reader changes. This path analyzes the current recording without creating or requiring a persistent chart catalog. The HTML shows the judgment and evidence source for matched heads, plus all observed word refreshes, including unassigned and MISS evidence.
+
+## Comparing target and input ranges
+
+Select a note in the **Note timing comparison** table or lane chart to see its two ranges on the same axis. The target range is the fitted receptor crossing plus/minus its saved prediction uncertainty. The input estimate is the matched combo/judgment observation bracket with the selected display-delay correction subtracted. The table uses absolute recording positions; the selected-note plot uses milliseconds relative to the fitted crossing. Changing the correction updates input ranges, difference intervals and plots together, without moving the target or changing associations.
+
+The difference includes uncertainty on both sides: for target `[T_low, T_high]` and corrected input `[I_low, I_high]`, it is `[I_low − T_high, I_high − T_low]`. A wholly negative interval establishes an earlier estimate, a wholly positive interval a later estimate, and overlap with zero leaves that distinction unresolved. These are measurement uncertainty ranges, not game judgment windows. This also applies to the overview's offset bars.
+
+Every supported target appears even without a matched refresh; its input remains **Unconfirmed**. Possible MISS candidates never receive press times. Shared chord and aggregate row brackets retain their original evidence without inventing individual switch times. Excluded trajectories remain available through the chart's exclusion control and evidence JSON, without fabricated target ranges. No tracked chart catalog is required: original chart-file timestamps are still unavailable, and input estimates remain display-based rather than measured physical switch times.
 
 The raw offset contains input/render/display latency. It is not a measured physical switch time, hardware latency or game judgment-window score. A positive externally calibrated delay is subtracted with:
 

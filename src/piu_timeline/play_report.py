@@ -60,10 +60,11 @@ TEMPLATE = r'''<!doctype html>
 <section class="panel"><h2>Timing evidence</h2><label>Display latency correction: <output id="delayValue"></output> ms<br><input id="delay" type="range" min="-500" max="500" step="1"></label>
 <button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
 <div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section></div>
-<section class="panel chart"><h2>Observed timing offsets</h2><canvas id="timing" width="1200" height="290"></canvas><small>Each bar spans the preceding display frame to the first confirmed counter or judgment refresh. Blue: earlier than the fitted crossing; amber: later. Click to seek the recording. The table also reports fitted-target uncertainty. This is display-based evidence, not a judgment-window score.</small></section>
-<section class="panel chart"><div class="row"><h2>Reconstructed visible chart</h2><label>Window <select id="zoom"><option value="3">±3 seconds</option><option value="8">±8 seconds</option><option value="15">±15 seconds</option></select></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div><canvas id="lanes" width="1200" height="350"></canvas><small>Columns show fitted receptor-crossing times; rows show lanes. Only supported visible note heads are reconstructed. Holds, rolls and unreliable motion are not scored.</small></section>
-<div class="grid"><section class="panel"><h2>Matched note heads</h2><div class="scroll"><table><thead><tr><th>Target</th><th>Lane</th><th>Fit uncertainty</th><th>Offset interval</th><th>Evidence / judgment</th></tr></thead><tbody id="events"></tbody></table></div></section>
-<section class="panel"><h2>Coverage and exclusions</h2><div id="exclusions"></div><ul id="limitations"></ul></section></div>
+<section class="panel chart"><h2>Observed timing offsets</h2><canvas id="timing" width="1200" height="290"></canvas><small>Each bar compares the input estimate with the note target range, including both frame-bracket and fitted-target uncertainty. Blue: earlier; amber: later; green: overlapping ranges. Click to select a note and seek the recording. This is display-based evidence, not a judgment-window score.</small></section>
+<section class="panel chart"><div class="row"><h2>Reconstructed visible chart</h2><label>Window <select id="zoom"><option value="3">±3 seconds</option><option value="8">±8 seconds</option><option value="15">±15 seconds</option></select></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div><canvas id="lanes" width="1200" height="350"></canvas><small>Columns show fitted receptor-crossing times; rows show lanes. Blue bars show target ranges and amber bars show input estimates after latency correction. Dots mark fitted targets. Click a note to compare its ranges. Only supported visible note heads are reconstructed. Holds, rolls and unreliable motion are not scored.</small></section>
+<section class="panel chart"><h2>Selected note: target vs input</h2><p class="muted">Select a note in the table or chart. Blue is the video-estimated target range; amber is the input estimate from a display refresh, after the latency correction above. Both use the same time axis, centered on the fitted target. These are uncertainty ranges, not game judgment windows or authoritative chart timestamps.</p><canvas id="comparison" width="1200" height="180" style="height:180px"></canvas><div id="comparisonDetails" aria-live="polite"></div></section>
+<section class="panel"><h2>Note timing comparison</h2><p class="muted">Times are absolute recording positions. Input − target includes uncertainty in both ranges: negative is early, positive is late. Overlapping ranges do not establish an early/late result. Unmatched notes have no input estimate; a possible MISS never supplies one. Chord heads share a refresh bracket; aggregate brackets can span several rows.</p><div class="scroll"><table><thead><tr><th>Note / lane</th><th>Target range (video estimate)</th><th>Input range (display estimate)</th><th>Input − target</th><th>Evidence / judgment</th></tr></thead><tbody id="events"></tbody></table></div></section>
+<section class="panel"><h2>Coverage and exclusions</h2><div id="exclusions"></div><ul id="limitations"></ul></section>
 <section class="panel"><h2>Observed combo updates, including unassigned evidence</h2><p class="muted">One increment represents a judged row. Chords share that row; counter jumps can contain several rows or hold ticks. An unassigned update is still observed evidence. Resets do not identify missed presses.</p><div class="scroll"><table><thead><tr><th>Observed bracket</th><th>Counter</th><th>Rows advanced</th><th>Association</th></tr></thead><tbody id="comboEvents"></tbody></table></div></section>
 <section class="panel"><h2>Observed judgments, including counter-free evidence</h2><p class="muted">Word changes, reappearance after a confirmed blank, and animation restarts can establish display refreshes before combo 4 or after a break. A persistent word is not counted repeatedly. MISS is failure evidence, never a press timestamp.</p><div class="scroll"><table><thead><tr><th>Observed bracket</th><th>Judgment</th><th>Refresh evidence</th><th>Association</th></tr></thead><tbody id="judgmentEvents"></tbody></table></div></section>
 <details class="panel"><summary>Inspect or correct calibration</summary><p>Check receptor centers and combo crop against the original game panel. Download an edited layout and rerun with <code>--layout layout.json</code>. Geometry changes require reanalysis.</p><div class="preview"><img id="preview" src="preview.png" alt="Original gameplay calibration frame"><canvas id="overlay" width="1300" height="730"></canvas></div><textarea id="layout" spellcheck="false"></textarea><button id="download">Download layout.json</button><span id="layoutError"></span></details>
@@ -73,8 +74,24 @@ TEMPLATE = r'''<!doctype html>
 const data=JSON.parse(document.getElementById('data').textContent),$=id=>document.getElementById(id),video=$('video');
 let playhead=data.start_seconds,selected=-1,objectUrl=null;
 const matches=data.matches,delay=$('delay');delay.value=data.display_delay_correction_ms||0;
-const fmt=t=>{const m=Math.floor(t/60);return m+':'+(t-m*60).toFixed(3).padStart(6,'0')};
-const offset=m=>[(m.raw_offset_lower_ms-Number(delay.value)),(m.raw_offset_upper_ms-Number(delay.value))];
+const fmt=t=>{const ms=Math.round(Math.abs(t)*1000),m=Math.floor(ms/60000);return (t<0?'-':'')+m+':'+((ms%60000)/1000).toFixed(3).padStart(6,'0')};
+const matchByNote=new Map(matches.map((m,i)=>[m.note,{match:m,index:i}]));
+const possibleMissNotes=new Set((data.miss_candidates||[]).map(candidate=>candidate.note));
+const reviewNotes=data.notes.map((note,index)=>({note,index})).filter(({note})=>note.status==='estimated').sort((a,b)=>a.note.target_seconds-b.note.target_seconds);
+let selectedNote=matches[0]?.note??reviewNotes[0]?.index??null;
+const targetRange=note=>Number.isFinite(note.target_seconds)&&Number.isFinite(note.prediction_uncertainty_seconds)
+  ?[note.target_seconds-note.prediction_uncertainty_seconds,note.target_seconds+note.prediction_uncertainty_seconds]:null;
+const observedRange=m=>{
+  if(!m||m.judgment_label==='MISS')return null;
+  const lo=m.observation_lower_seconds??m.combo_lower_seconds,hi=m.observation_upper_seconds??m.combo_upper_seconds;
+  return Number.isFinite(lo)&&Number.isFinite(hi)&&lo<=hi?[lo,hi]:null;
+};
+const inputRange=m=>{const range=observedRange(m);return range?range.map(t=>t-Number(delay.value)/1000):null};
+const difference=(target,input)=>target&&input?[1000*(input[0]-target[1]),1000*(input[1]-target[0])]:null;
+const offset=m=>difference(targetRange(data.notes[m.note]),inputRange(m))??[NaN,NaN];
+const formatRange=range=>range?range.map(fmt).join(' … '):'Unconfirmed';
+const formatDifference=range=>range?range.map(v=>(v>0?'+':'')+v.toFixed(1)).join(' … ')+' ms':'Unconfirmed';
+const alignment=range=>!range?'Unconfirmed':range[1]<0?'Earlier than target range':range[0]>0?'Later than target range':'Overlaps target range';
 const mid=m=>(m.raw_offset_lower_ms+m.raw_offset_upper_ms)/2;
 const median=a=>{const b=[...a].sort((x,y)=>x-y);return b.length?(b[Math.floor((b.length-1)/2)]+b[Math.ceil((b.length-1)/2)])/2:0};
 function text(tag,value,parent){const node=document.createElement(tag);node.textContent=value;parent.appendChild(node);return node}
@@ -92,25 +109,60 @@ for(const e of data.judgment_events||[]){const row=text('tr','',$('judgmentEvent
 text('p','Labeled timing heads: '+(data.coverage?.judgment_labeled_note_heads??matches.filter(m=>m.judgment_label).length)+'. Judgment unknown: '+(data.coverage?.unlabeled_timed_note_heads??matches.filter(m=>!m.judgment_label).length)+'. Labels from post-combo word frames: '+(data.coverage?.combo_frame_labeled_note_heads||0)+'.',$('quality'));
 text('p','Judgment-only timed heads: '+(data.coverage?.judgment_only_note_heads||0)+'. Learned words: '+(data.judgment_template_labels||[]).join(', ')+'. Unlearned: '+((data.judgment_missing_labels||[]).join(', ')||'none')+'. New judgment OCR crops: '+(data.judgment_bootstrap_ocr_images||0)+'.',$('quality'));
 for(const limitation of data.limitations)text('li',limitation,$('limitations'));
-function seek(t,index=-1){playhead=t;selected=index;try{video.currentTime=t}catch(_){}draw()}
+function seek(t,index=-1,noteIndex=null){playhead=t;selected=index;if(noteIndex!==null)selectedNote=noteIndex;else if(index>=0)selectedNote=matches[index].note;try{video.currentTime=t}catch(_){}draw()}
 $('file').onchange=()=>{if(objectUrl)URL.revokeObjectURL(objectUrl);if($('file').files[0]){objectUrl=URL.createObjectURL($('file').files[0]);video.src=objectUrl;video.load()}};
 $('begin').onclick=()=>seek(data.start_seconds);$('previous').onclick=()=>{if(matches.length){selected=Math.max(0,selected-1);seek(matches[selected].target_seconds,selected)}};
 $('next').onclick=()=>{if(matches.length){selected=Math.min(matches.length-1,selected+1);seek(matches[selected].target_seconds,selected)}};
 video.addEventListener('loadedmetadata',()=>{video.currentTime=playhead});video.addEventListener('timeupdate',()=>{playhead=video.currentTime;draw()});
 function background(canvas){const c=canvas.getContext('2d');c.clearRect(0,0,canvas.width,canvas.height);c.font='12px system-ui';c.fillStyle='#9cb1b1';c.strokeStyle='#314448';return c}
 function timing(){const canvas=$('timing'),c=background(canvas),w=canvas.width,h=canvas.height,p=60;
-const values=matches.flatMap(offset),range=Math.max(100,...values.map(Math.abs));const x=t=>p+(w-2*p)*(t-data.start_seconds)/(data.end_seconds-data.start_seconds),y=v=>h/2-(h/2-25)*v/range;
+const values=matches.flatMap(offset).filter(Number.isFinite),range=Math.max(100,...values.map(Math.abs));const x=t=>p+(w-2*p)*(t-data.start_seconds)/(data.end_seconds-data.start_seconds),y=v=>h/2-(h/2-25)*v/range;
 for(const v of [-range,0,range]){c.strokeStyle='#314448';c.beginPath();c.moveTo(p,y(v));c.lineTo(w-10,y(v));c.stroke();c.fillStyle='#9cb1b1';c.fillText(v.toFixed(0)+' ms',0,y(v)+4)}
-for(const [i,m] of matches.entries()){const [lo,hi]=offset(m);c.strokeStyle=(lo+hi)/2<0?'#75bdea':'#f1c478';c.lineWidth=i===selected?4:2;c.beginPath();c.moveTo(x(m.target_seconds),y(lo));c.lineTo(x(m.target_seconds),y(hi));c.stroke();c.fillStyle=c.strokeStyle;c.fillRect(x(m.target_seconds)-2,y((lo+hi)/2)-2,4,4)}
+for(const [i,m] of matches.entries()){const [lo,hi]=offset(m);if(!Number.isFinite(lo)||!Number.isFinite(hi))continue;c.strokeStyle=hi<0?'#75bdea':lo>0?'#f1c478':'#9cddbe';c.lineWidth=i===selected?4:2;c.beginPath();c.moveTo(x(m.target_seconds),y(lo));c.lineTo(x(m.target_seconds),y(hi));c.stroke();c.fillStyle=c.strokeStyle;c.fillRect(x(m.target_seconds)-2,y((lo+hi)/2)-2,4,4)}
 c.strokeStyle='#9cddbe';c.lineWidth=1;c.beginPath();c.moveTo(x(playhead),0);c.lineTo(x(playhead),h);c.stroke();c.fillStyle='#9cb1b1';c.fillText(fmt(data.start_seconds),p,h-2);c.fillText(fmt(data.end_seconds),w-85,h-2);
 canvas.onclick=e=>{const t=data.start_seconds+((e.clientX-canvas.getBoundingClientRect().left)/canvas.clientWidth*w-p)/(w-2*p)*(data.end_seconds-data.start_seconds);if(matches.length){let i=0;for(let j=1;j<matches.length;j++)if(Math.abs(matches[j].target_seconds-t)<Math.abs(matches[i].target_seconds-t))i=j;seek(matches[i].target_seconds,i)}}}
 function lanes(){const canvas=$('lanes'),c=background(canvas),w=canvas.width,h=canvas.height,p=70,span=Number($('zoom').value),x=t=>p+(t-(playhead-span))/(2*span)*(w-p),step=(h-25)/data.layout.lanes.length;
 for(let i=0;i<data.layout.lanes.length;i++){const y=15+step*i;c.fillStyle='#9cb1b1';c.fillText(data.layout.lanes[i].name||String(i+1),2,y+4);c.strokeStyle='#314448';c.beginPath();c.moveTo(p,y);c.lineTo(w,y);c.stroke()}
-for(const note of data.notes){const t=note.target_seconds??note.points.at(-1)?.[0];if(t<playhead-span||t>playhead+span||note.status!=='estimated'&&!$('excluded').checked)continue;const y=15+note.lane*step;c.fillStyle=note.status!=='estimated'?'#647371':data.layout.lanes[note.lane].color==='blue'?'#75bdea':data.layout.lanes[note.lane].color==='yellow'?'#f1c478':'#e89cba';c.beginPath();c.arc(x(t),y,5,0,Math.PI*2);c.fill()}
+for(const [noteIndex,note] of data.notes.entries()){const t=note.target_seconds??note.points.at(-1)?.[0];if(t<playhead-span||t>playhead+span||note.status!=='estimated'&&!$('excluded').checked)continue;const y=15+note.lane*step;
+const target=targetRange(note),input=inputRange(matchByNote.get(noteIndex)?.match);
+for(const [range,color,dy] of [[target,'#75bdea',-4],[input,'#f1c478',4]])if(range){c.strokeStyle=color;c.lineWidth=3;c.beginPath();c.moveTo(x(range[0]),y+dy);c.lineTo(x(range[1]),y+dy);c.stroke()}
+c.fillStyle=note.status!=='estimated'?'#647371':data.layout.lanes[note.lane].color==='blue'?'#75bdea':data.layout.lanes[note.lane].color==='yellow'?'#f1c478':'#e89cba';c.beginPath();c.arc(x(t),y,5,0,Math.PI*2);c.fill()}
 c.strokeStyle='#9cddbe';c.beginPath();c.moveTo(x(playhead),0);c.lineTo(x(playhead),h);c.stroke();c.fillStyle='#9cb1b1';c.fillText(fmt(playhead-span),p,h-2);c.fillText(fmt(playhead+span),w-85,h-2);
-canvas.onclick=e=>seek(playhead-span+((e.clientX-canvas.getBoundingClientRect().left)/canvas.clientWidth*w-p)/(w-p)*2*span)}
-function table(){$('events').replaceChildren();for(const [i,m] of matches.entries()){const row=text('tr','',$('events')),[lo,hi]=offset(m);text('td',fmt(m.target_seconds),row);text('td',data.layout.lanes[data.notes[m.note].lane].name||String(data.notes[m.note].lane+1),row);text('td','±'+(1000*data.notes[m.note].prediction_uncertainty_seconds).toFixed(1)+' ms',row);text('td',lo.toFixed(1)+' … '+hi.toFixed(1)+' ms',row);const e=m.combo_event!=null?data.combo_events[m.combo_event]:null;text('td',(e?e.before+' → '+e.after:'Judgment only')+(m.judgment_label?' / '+m.judgment_label+(m.judgment_label_source==='post_combo_frames'?' (word frames)':''):' / Judgment unknown')+(m.aggregate_row_count>1?' (aggregate row bracket)':m.row_note_count>1?' (shared chord bracket)':''),row);row.onclick=()=>seek(m.target_seconds,i)}}
-function draw(){$('clock').textContent=fmt(playhead);$('delayValue').textContent=delay.value;timing();lanes()}
+canvas.onclick=e=>{const t=playhead-span+((e.clientX-canvas.getBoundingClientRect().left)/canvas.clientWidth*w-p)/(w-p)*2*span;
+const lane=Math.round(((e.clientY-canvas.getBoundingClientRect().top)/canvas.clientHeight*h-15)/step);
+const candidates=reviewNotes.filter(({note})=>note.lane===lane&&Math.abs(note.target_seconds-t)<span*.08);
+const closest=candidates.sort((a,b)=>Math.abs(a.note.target_seconds-t)-Math.abs(b.note.target_seconds-t))[0];
+if(closest)seek(closest.note.target_seconds,matchByNote.get(closest.index)?.index??-1,closest.index);else seek(t)}}
+function comparison(){
+const canvas=$('comparison'),c=background(canvas),w=canvas.width,p=180,right=w-35,center=(p+right)/2;
+$('comparisonDetails').replaceChildren();
+const note=data.notes[selectedNote];
+if(!note){c.fillText('No supported target ranges to compare.',p,70);return}
+const match=matchByNote.get(selectedNote)?.match,target=targetRange(note),input=inputRange(match),delta=difference(target,input);
+const extent=Math.max(100,...[...(target||[]),...(input||[])].map(t=>Math.abs(1000*(t-note.target_seconds))))*1.15;
+const x=t=>center+1000*(t-note.target_seconds)/extent*(right-p)/2;
+for(const ms of [-extent,0,extent]){const px=center+ms/extent*(right-p)/2;c.strokeStyle='#314448';c.lineWidth=1;c.beginPath();c.moveTo(px,15);c.lineTo(px,135);c.stroke();c.fillStyle='#9cb1b1';c.fillText(ms.toFixed(1)+' ms',px-25,160)}
+for(const [label,range,color,y] of [['Target (video)',target,'#75bdea',45],['Input (display)',input,'#f1c478',105]]){
+c.fillStyle=color;c.fillText(label,5,y+4);
+if(range){c.strokeStyle=color;c.lineWidth=8;c.beginPath();c.moveTo(x(range[0]),y);c.lineTo(x(range[1]),y);c.stroke();for(const t of range)c.fillRect(x(t)-1,y-9,2,18)}
+else c.fillText('Unconfirmed — no press timestamp',p,y+4);
+}
+text('p','Note '+(selectedNote+1)+' / '+(data.layout.lanes[note.lane].name||String(note.lane+1))+' · Target: '+formatRange(target)+' · Input: '+formatRange(input),$('comparisonDetails'));
+text('p','Input − target: '+formatDifference(delta)+' · '+alignment(delta),$('comparisonDetails'));
+if(match?.aggregate_row_count>1)text('p','Aggregate refresh bracket shared by several rows; individual press times are unresolved.',$('comparisonDetails'));
+}
+function table(){
+$('events').replaceChildren();
+for(const {note,index} of reviewNotes){
+const linked=matchByNote.get(index),m=linked?.match,target=targetRange(note),input=inputRange(m),delta=difference(target,input),row=text('tr','',$('events'));
+text('td','#'+(index+1)+' / '+(data.layout.lanes[note.lane].name||String(note.lane+1)),row);
+text('td',formatRange(target),row);text('td',formatRange(input),row);text('td',formatDifference(delta)+' / '+alignment(delta),row);
+const e=m?.combo_event!=null?data.combo_events[m.combo_event]:null;
+const possibleMiss=possibleMissNotes.has(index);
+text('td',m?(e?e.before+' → '+e.after:'Judgment only')+(m.judgment_label?' / '+m.judgment_label+(m.judgment_label_source==='post_combo_frames'?' (word frames)':''):' / Judgment unknown')+(m.aggregate_row_count>1?' (aggregate row bracket)':m.row_note_count>1?' (shared chord bracket)':''):possibleMiss?'Possible MISS / no press timestamp':'No matched input evidence',row);
+row.onclick=()=>seek(note.target_seconds,linked?.index??-1,index);
+}}
+function draw(){$('clock').textContent=fmt(playhead);$('delayValue').textContent=delay.value;timing();lanes();comparison()}
 delay.oninput=()=>{table();draw()};$('center').onclick=()=>{delay.value=Math.round(median(matches.map(mid)));table();draw()};$('zoom').onchange=draw;$('excluded').onchange=draw;
 $('layout').value=JSON.stringify(data.layout,null,2);$('download').onclick=()=>{try{const value=JSON.parse($('layout').value),url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='layout.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('layoutError').textContent=''}catch(e){$('layoutError').textContent=e.message}};
 function overlay(){const canvas=$('overlay');canvas.width=$('preview').naturalWidth;canvas.height=$('preview').naturalHeight;const c=background(canvas),w=canvas.width,h=canvas.height;c.strokeStyle='#9cddbe';c.lineWidth=2;c.beginPath();c.moveTo(0,data.layout.receptor_y*h);c.lineTo(w,data.layout.receptor_y*h);c.stroke();for(const lane of data.layout.lanes){c.beginPath();c.moveTo(lane.x*w,data.layout.receptor_y*h);c.lineTo(lane.x*w,h*.95);c.stroke()}const [x,y,rw,rh]=data.layout.combo_roi;c.strokeStyle='#f1c478';c.strokeRect(x*w,y*h,rw*w,rh*h);if(data.judgment_roi){const [jx,jy,jw,jh]=data.judgment_roi;c.strokeStyle='#75bdea';c.strokeRect(jx*w,jy*h,jw*w,jh*h)}}
