@@ -4,7 +4,7 @@ export interface FieldEvidence<T> {
   [key: string]: unknown;
 }
 
-export interface ResultPlayer {
+export interface PlayerEvidence {
   player_id: "p1" | "p2";
   side: "left" | "right";
   presence: "recognized" | "uncertain";
@@ -18,8 +18,8 @@ export interface TimelineSegment {
   stage: 1 | 2 | 3 | 4 | 5 | 6 | null;
   song: string | null;
   chart: string | null;
-  players?: Partial<Record<"p1" | "p2", ResultPlayer>>;
-  results?: { players?: Partial<Record<"p1" | "p2", ResultPlayer>>; [key: string]: unknown };
+  players?: Partial<Record<"p1" | "p2", PlayerEvidence>>;
+  results?: { players?: Partial<Record<"p1" | "p2", PlayerEvidence>>; [key: string]: unknown };
   [key: string]: unknown;
 }
 
@@ -56,41 +56,91 @@ export function timestamp(seconds: number): string {
     : `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function label(segment: TimelineSegment): string {
+export function songLabel(segment: TimelineSegment): string {
   return [segment.song ?? "Unknown song", segment.chart].filter(Boolean).join(" ");
 }
 
-export function onlyPlayer(segment: TimelineSegment): ResultPlayer | undefined {
+export function onlyResultPlayer(segment: TimelineSegment): PlayerEvidence | undefined {
   const players = Object.values(segment.results?.players ?? {}).filter(
-    (player): player is ResultPlayer => player?.presence === "recognized",
+    (player): player is PlayerEvidence => player?.presence === "recognized",
   );
   return players.length === 1 ? players[0] : undefined;
 }
 
-export function field<T extends string | number>(player: ResultPlayer | undefined, name: string): T | undefined {
+export function field<T extends string | number>(player: PlayerEvidence | undefined, name: string): T | undefined {
   const evidence = player?.fields[name];
   return evidence?.status === "recognized" ? evidence.value as T : undefined;
 }
 
-
-export function hasDifferentPlayers(document: TimelineDocument): boolean {
-  const names = new Set(document.segments.flatMap(segment =>
-    Object.values(segment.players ?? {}).map(player => field<string>(player, "name")).filter(Boolean)));
-  return names.size > 1 || document.segments.some(segment =>
-    Object.values(segment.results?.players ?? {}).filter(p => p?.presence === "recognized").length > 1 ||
-    Object.values(segment.players ?? {}).filter(p => p?.presence === "recognized").length > 1);
+function participantIds(segment: TimelineSegment): ("p1" | "p2")[] {
+  return (["p1", "p2"] as const).filter(id =>
+    segment.players?.[id]?.presence === "recognized" || segment.results?.players?.[id]?.presence === "recognized");
 }
 
-export function playerLabel(segment: TimelineSegment, includeNames: boolean, nicknameOnly = false): string {
-  if (!includeNames) return label(segment);
-  const ids = (["p1", "p2"] as const).filter(id =>
-    segment.players?.[id]?.presence === "recognized" || segment.results?.players?.[id]?.presence === "recognized");
-  const names = ids.map(id => {
-    const account = field<string>(segment.players?.[id], "name") ?? "Unknown player";
-    const name = nicknameOnly ? account.replace(/\s*#\d{4}$/, "") : account;
-    const chart = field<string>(segment.players?.[id], "chart") ?? field<string>(segment.results?.players?.[id], "chart");
-    return ids.length > 1 ? [id.toUpperCase() + ":", name, chart].filter(Boolean).join(" ") : name;
-  });
-  const title = ids.length > 1 ? segment.song ?? "Unknown song" : label(segment);
-  return `${title} [${names.length ? names.join(" / ") : "Unknown player"}]`;
+function participantField(segment: TimelineSegment, id: "p1" | "p2", name: string): string | undefined {
+  const identity = segment.players?.[id];
+  const result = segment.results?.players?.[id];
+  return (identity?.presence === "recognized" ? field<string>(identity, name) : undefined)
+    ?? (result?.presence === "recognized" ? field<string>(result, name) : undefined);
+}
+
+function accountParts(account: string): { nickname: string; discriminator?: string } {
+  const match = account.trim().match(/^(.*?)\s*#(\d{4})$/);
+  return match ? { nickname: match[1].trim(), discriminator: match[2] } : { nickname: account.trim() };
+}
+
+export function hasMultiplePlayers(document: TimelineDocument): boolean {
+  const accounts = new Map<string, Set<string>>();
+  for (const segment of document.segments) {
+    const ids = participantIds(segment);
+    if (ids.length > 1) return true;
+    for (const id of ids) {
+      const account = participantField(segment, id, "name");
+      if (!account?.trim()) continue;
+      const { nickname, discriminator } = accountParts(account);
+      const discriminators = accounts.get(nickname) ?? new Set<string>();
+      // An unreadable discriminator does not establish a different account.
+      if (discriminator) discriminators.add(discriminator);
+      accounts.set(nickname, discriminators);
+    }
+  }
+  return accounts.size > 1 || [...accounts.values()].some(discriminators => discriminators.size > 1);
+}
+
+export interface SegmentLabelOptions {
+  /** Auto adds names only for multiple accounts or simultaneous participants. */
+  playerNames?: "auto" | "always" | "never";
+  accountDiscriminators?: boolean;
+}
+
+function participantName(segment: TimelineSegment, id: "p1" | "p2", accountDiscriminators = false): string {
+  const account = participantField(segment, id, "name");
+  return account?.trim() ? (accountDiscriminators ? account.trim() : accountParts(account).nickname) : "Unknown player";
+}
+
+/** Names only; song and chart text belong to the segment label. */
+export function playerNames(segment: TimelineSegment, options: { accountDiscriminators?: boolean } = {}): string {
+  const ids = participantIds(segment);
+  return ids.map(id => {
+    const name = participantName(segment, id, options.accountDiscriminators);
+    return ids.length > 1 ? `${id.toUpperCase()}: ${name}` : name;
+  }).join(" / ") || "Unknown player";
+}
+
+/** Build once per recording so automatic name visibility is consistent across plays. */
+export function createSegmentLabeler(document: TimelineDocument, options: SegmentLabelOptions = {}): (segment: TimelineSegment) => string {
+  const showNames = options.playerNames === "always"
+    || (options.playerNames !== "never" && hasMultiplePlayers(document));
+  return segment => {
+    const ids = participantIds(segment);
+    if (ids.length <= 1) {
+      return songLabel(segment) + (showNames ? ` [${playerNames(segment, options)}]` : "");
+    }
+    // Both charts remain visible even when a custom format explicitly hides names.
+    const participants = ids.map(id => {
+      return [id.toUpperCase() + ":", showNames ? participantName(segment, id, options.accountDiscriminators) : undefined,
+        participantField(segment, id, "chart")].filter(Boolean).join(" ");
+    });
+    return `${segment.song ?? "Unknown song"} [${participants.join(" / ")}]`;
+  };
 }

@@ -92,7 +92,7 @@ The default format produces:
 03:45 Song Name D20 end
 ```
 
-When a recording contains different recognized player accounts (including players taking turns), the default format adds `[Name]` to each play, omitting the account discriminator from presentation. Analysis retains the full account identity. Rival comparison accounts are excluded from participants. Simultaneous players retain separate names and charts. Unreadable identities remain `Unknown player`; one recognized account keeps the original compact output.
+When a recording contains different recognized player accounts (including players taking turns), the default format adds `[Name]` to each play, omitting the account discriminator from presentation. Analysis retains the full account identity. Rival comparison accounts are excluded from participants. Simultaneous players retain separate names and charts. Unreadable identities remain `Unknown player` when names are shown; one recognized account keeps the original compact output, including when its discriminator is unreadable in some plays. Two different recognized discriminators remain distinct accounts.
 
 Copy [formats/default/index.ts](formats/default/index.ts) to start a new format. Shared types and helpers are in [formats/lib/timeline.ts](formats/lib/timeline.ts). See [custom formats](docs/formats.md) for examples.
 
