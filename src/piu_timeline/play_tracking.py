@@ -193,9 +193,9 @@ def fit_track(track, receptor_y, spacing):
             'prediction_uncertainty_seconds': max(residual / abs(velocity), (step+hold_span)/2)}
 
 
-def glyphs(rgb):
+def glyphs(rgb, threshold=175):
     """Segment white combo digits; reject noise instead of guessing a number."""
-    binary = ((rgb.min(axis=2) > 175) & (rgb.max(axis=2) - rgb.min(axis=2) < 65)).astype('uint8')
+    binary = ((rgb.min(axis=2) > threshold) & (rgb.max(axis=2) - rgb.min(axis=2) < 65)).astype('uint8')
     count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, 8)
     components = []
     for label, (x, y, w, h, area) in enumerate(stats[1:count], 1):
@@ -252,8 +252,22 @@ class DigitReader:
                 reader.sources[digit] = set(bank['sources_' + digit].tolist())
         return reader
 
-    def read(self, rgb, expected=None):
-        digits = glyphs(rgb)
+    def read(self, rgb, expected=None, recover=True):
+        primary = self._read_digits(glyphs(rgb), expected)
+        if primary[0] is not None or not recover:
+            return primary
+        options = []
+        for threshold in (190, 205):
+            result = self._read_digits(glyphs(rgb, threshold), expected)
+            if result[0] is not None and result[1] >= .82:
+                options.append(result)
+        if options and len({value for value,_ in options}) == 1:
+            self.last_mode = 'threshold_template'
+            return max(options, key=lambda result: result[1])
+        self.last_mode = 'unreadable'
+        return None, 0.0
+
+    def _read_digits(self, digits, expected):
         self.last_mode = 'unreadable'
         if not digits:
             return None, 0.0

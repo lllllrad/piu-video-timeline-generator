@@ -3,8 +3,9 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import numpy as np
 
-from piu_timeline.play_frames import decode_frames
+from piu_timeline.play_frames import decode_frames, crop_region
 from piu_timeline.timeline import media_record
 
 
@@ -14,7 +15,7 @@ class NativeFrameTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             video = Path(temporary) / 'offset.mkv'
             subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-n', '-f', 'lavfi', '-i',
-                            'color=c=black:s=64x64:r=20:d=0.3', '-c:v', 'ffv1',
+                            'testsrc2=s=64x64:r=20:d=0.3', '-c:v', 'ffv1',
                             '-output_ts_offset', '5', str(video)], check=True, capture_output=True)
             record = media_record(video)
             before = video.read_bytes(), video.stat().st_mtime_ns
@@ -24,4 +25,10 @@ class NativeFrameTest(unittest.TestCase):
             for pts, playback, image in frames:
                 self.assertAlmostEqual(playback, pts - record['container_start_seconds'])
                 self.assertEqual(image.shape, (32, 32, 3))
+            region=(.22,.17,.35,.41)
+            crops=list(decode_frames(record,.05,.25,(0,0,64,64),width=32,region=region))
+            self.assertEqual(len(crops),len(frames))
+            for (pts,t,image),(cpts,ct,crop) in zip(frames,crops):
+                self.assertEqual((pts,t),(cpts,ct))
+                np.testing.assert_array_equal(crop,crop_region(image,region))
             self.assertEqual((video.read_bytes(), video.stat().st_mtime_ns), before)

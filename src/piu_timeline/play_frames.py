@@ -9,13 +9,20 @@ import threading
 import numpy as np
 
 
-def decode_frames(record, start, end, roi, width=650):
+def decode_frames(record, start, end, roi, width=650, region=None):
     x, y, w, h = roi
     height = max(1, round(width * h / w))
+    filters = f'showinfo,crop={w}:{h}:{x}:{y},scale={width}:{height}'
+    output_width, output_height = width, height
+    if region is not None:
+        rx,ry,rw,rh = region
+        left,top = int(rx*width),int(ry*height)
+        output_width,output_height = int((rx+rw)*width)-left,int((ry+rh)*height)-top
+        filters += f',format=rgb24,crop={output_width}:{output_height}:{left}:{top}:exact=1'
     command = ['ffmpeg', '-hide_banner', '-v', 'info', '-nostdin', '-ss', str(start),
                '-t', str(end - start), '-copyts', '-noautorotate', '-i', record['path'],
                '-map', f"0:{record['video_streams'][0]['index']}",
-               '-vf', f'showinfo,crop={w}:{h}:{x}:{y},scale={width}:{height}',
+               '-vf', filters,
                '-fps_mode', 'passthrough', '-pix_fmt', 'rgb24', '-an', '-f', 'rawvideo', 'pipe:1']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     timestamps, errors = queue.Queue(), deque(maxlen=12)
@@ -33,7 +40,7 @@ def decode_frames(record, start, end, roi, width=650):
         timestamps.put(None)
     thread = threading.Thread(target=read_info, daemon=True)
     thread.start()
-    size, last = width * height * 3, None
+    size, last = output_width * output_height * 3, None
     try:
         while True:
             data = bytearray()
@@ -57,7 +64,7 @@ def decode_frames(record, start, end, roi, width=650):
                 raise ValueError('Non-increasing source frame PTS; timing analysis requires distinct frames')
             last = pts
             if start - .000001 <= playback < end:
-                yield pts, playback, np.frombuffer(data, dtype='uint8').reshape(height, width, 3)
+                yield pts, playback, np.frombuffer(data, dtype='uint8').reshape(output_height, output_width, 3)
         if process.wait():
             raise ValueError('Frame decoding failed: ' + '\n'.join(errors))
     finally:

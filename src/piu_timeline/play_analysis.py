@@ -18,8 +18,8 @@ from .play_tracking import NoteTracker, DigitReader, ComboTracker, associate
 from .recognition import capture_game
 from .workflow import LOCAL_DATA, source_id
 
-VERSION = 8
-FRAME_OBSERVATION_VERSION = 2
+VERSION = 10
+FRAME_OBSERVATION_VERSION = 4
 COLORS = ('blue', 'red', 'yellow', 'red', 'blue')
 NAMES = ('DL', 'UL', 'C', 'UR', 'DR')
 
@@ -267,9 +267,73 @@ def resolve_timing(tracker, combo, display_delay_ms):
             'excluded_notes': dict(Counter(n['reason'] for n in notes if n['status'] == 'excluded'))}
 
 
+def refresh_counter_observations(cached, output):
+    """Decode only the small counter region; preserve all note observations."""
+    from itertools import zip_longest
+    digits = DigitReader.load(output / 'evidence/digit-templates.npz')
+    trace = output / 'frames.jsonl'
+    base = output / 'frames.base.jsonl'
+    if not base.is_file():
+        baseline = trace
+        # Older refinement output did not keep a baseline sidecar. Recover its
+        # immutable pre-refinement trace from the retained atomic-build backup.
+        if cached.get('frame_observation_version',2) >= 3:
+            number = cached['segment_number']
+            for previous in sorted(output.parent.glob(f'segment-{number:03}.previous-*/analysis.json')):
+                saved = json.loads(previous.read_text())
+                if (saved.get('play_analysis_version') in (6,7,8)
+                        and saved.get('frame_observation_version',2) == 2
+                        and all(saved.get(key)==cached.get(key) for key in
+                                ('media','start_seconds','end_seconds','analysis_width','layout'))):
+                    baseline = previous.parent / 'frames.jsonl'
+                    break
+        shutil.copyfile(baseline,base)
+    frames = [json.loads(line) for line in base.open()]
+    prior,following = [],[None]*len(frames)
+    known_before = known_after = None
+    for frame in frames:
+        prior.append(known_before)
+        if frame['combo'] is not None:
+            known_before = frame['combo'],frame['playback_seconds']
+    for i in reversed(range(len(frames))):
+        following[i] = known_after
+        if frames[i]['combo'] is not None:
+            known_after = frames[i]['combo'],frames[i]['playback_seconds']
+    combo,known,count = ComboTracker(),0,0
+    updated = output / 'frames.counter-update.jsonl'
+    crops = decode_frames(cached['media'],cached['start_seconds'],cached['end_seconds'],
+                          cached['game_roi'],cached['analysis_width'],region=cached['layout']['combo_roi'])
+    with updated.open('w') as target:
+        for i,(frame,decoded) in enumerate(zip_longest(frames,crops)):
+            if frame is None or decoded is None:
+                raise ValueError('Counter refresh frame count differs from saved native observations')
+            pts,seconds,crop = decoded
+            if abs(frame['source_pts_seconds']-pts)>1e-6 or abs(frame['playback_seconds']-seconds)>1e-6:
+                raise ValueError('Counter refresh PTS differs from saved note observations')
+            value,confidence = frame['combo'],frame['combo_confidence']
+            mode = frame.get('combo_read_mode','unreadable')
+            if value is None and prior[i] is not None and following[i] is not None:
+                before,before_time = prior[i];after,after_time = following[i]
+                if 0<=after-before<=10 and after_time-before_time<=.25:
+                    candidate,score = digits.read(crop,expected=before)
+                    if candidate is not None and before<=candidate<=after:
+                        value,confidence,mode = candidate,score,digits.last_mode
+                        frame['combo_recovered'] = True
+            combo.update(seconds,value)
+            frame.update(combo=value,combo_confidence=confidence,combo_read_mode=mode)
+            target.write(json.dumps(frame)+'\n')
+            known += value is not None;count += 1
+    updated.replace(trace)
+    return {'combo_readable_fraction':known/count,'refreshed_counter_only':True}
+
+
 def refit_saved(cached, previous, output, segment, display_delay_ms):
     """Rerun trajectories and row alignment using identical source observations."""
     shutil.copytree(previous, output)
+    refreshed = {}
+    if cached.get('frame_observation_version',2) < FRAME_OBSERVATION_VERSION:
+        print('Refreshing counter crops; preserving saved note observations, no OCR.',flush=True)
+        refreshed = refresh_counter_observations(cached,output)
     tracker = NoteTracker(cached['layout'], cached['analysis_width'], cached['analysis_height'])
     combo, count, last = ComboTracker(), 0, None
     for line in (output / 'frames.jsonl').open():
@@ -282,11 +346,11 @@ def refit_saved(cached, previous, output, segment, display_delay_ms):
         tracker.update(seconds, frame['notes']); combo.update(seconds, frame['combo'])
     if count != cached['frame_count']:
         raise ValueError('Saved native-frame observations are incomplete')
-    result = {**cached, **resolve_timing(tracker, combo, display_delay_ms),
+    result = {**cached, **refreshed, **resolve_timing(tracker, combo, display_delay_ms),
               'play_analysis_version': VERSION, 'frame_observation_version': FRAME_OBSERVATION_VERSION,
               'display_delay_correction_ms': display_delay_ms, 'reused_native_observations': True,
               'result_reference': result_reference(segment, cached.get('player'))}
-    print('Refitting saved native-frame observations; no decoding or OCR.', flush=True)
+    print('Refitting saved note observations; no OCR.', flush=True)
     return result
 
 
@@ -338,7 +402,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             signature = crop.tobytes()
             if signature != previous_mask:
                 expected = combo.stable if combo.last_seen is not None and playback-combo.last_seen <= .15 else None
-                previous_read = digits.read(crop, expected=expected)
+                previous_read = digits.read(crop, expected=expected, recover=False)
                 previous_mask = signature
             value, confidence = previous_read
             combo.update(playback, value)
@@ -353,6 +417,16 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     if not times:
         raise ValueError('No native gameplay frames decoded')
     digits.save(output / 'evidence/digit-templates.npz')
+    refinement = {}
+    if known:
+        refinement = refresh_counter_observations(
+            {'media': record, 'start_seconds': start, 'end_seconds': end, 'game_roi': list(roi),
+             'analysis_width': width, 'layout': layout, 'frame_observation_version': 2}, output)
+        combo = ComboTracker()
+        for line in (output / 'frames.jsonl').open():
+            frame = json.loads(line)
+            combo.update(frame['playback_seconds'],frame['combo'])
+        known = round(refinement['combo_readable_fraction']*observed)
     after = source.stat()
     if (after.st_size, after.st_mtime_ns) != (before.st_size, before.st_mtime_ns):
         raise ValueError('Source changed during play analysis')
@@ -363,6 +437,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             'calibration': calibration, 'analysis_width': width, 'analysis_height': round(width*roi[3]/roi[2]),
             'frame_count': observed, 'median_frame_interval_seconds': interval,
             'combo_readable_fraction': known/observed, 'bootstrap': bootstrap,
+            **refinement,
             'display_delay_correction_ms': display_delay_ms,
             'frame_observation_version': FRAME_OBSERVATION_VERSION,
             **resolve_timing(tracker, combo, display_delay_ms),
@@ -409,8 +484,8 @@ def run(source, segment_number=1, force=False, **options):
                              and cached.get('chart') == segments[segment_number-1].get('chart')
                              and cached.get('participant_slots',[]) == sorted(segments[segment_number-1].get('players',{}))
                              and (options.get('layout') is None or cached['layout'] == options['layout']))
-            can_refit = (same_source and same_settings and cached.get('play_analysis_version') in (6, 7, VERSION)
-                         and cached.get('frame_observation_version', 2 if cached.get('play_analysis_version') == 6 else None) == FRAME_OBSERVATION_VERSION
+            can_refit = (same_source and same_settings and cached.get('play_analysis_version') in (6, 7, 8, 9, VERSION)
+                         and cached.get('frame_observation_version', 2 if cached.get('play_analysis_version') == 6 else None) in (2, 3, FRAME_OBSERVATION_VERSION)
                          and (final / 'frames.jsonl').is_file())
             if (same_source and same_settings and cached.get('play_analysis_version') == VERSION
                     and cached.get('display_delay_correction_ms',0) == options.get('display_delay_ms',0)

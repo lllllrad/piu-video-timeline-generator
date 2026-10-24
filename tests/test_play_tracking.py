@@ -155,3 +155,12 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual(restored.read(image),reader.read(image))
         self.assertEqual(restored.sources,reader.sources)
         self.assertIsNone(restored.read(np.zeros_like(image),expected=12)[0])
+
+    def test_bright_background_is_separated_without_inventing_blank_digits(self):
+        image=np.zeros((60,150,3),dtype='uint8')
+        cv2.putText(image,'12',(5,45),cv2.FONT_HERSHEY_SIMPLEX,1.5,(255,255,255),3)
+        reader=DigitReader();reader.train(image,12,source=1);reader.train(image,12,source=2)
+        bright=image.copy();bright[bright[:,:,0]==0]=195
+        self.assertEqual(reader.read(bright)[0],12)
+        self.assertEqual(reader.last_mode,'threshold_template')
+        self.assertIsNone(reader.read(np.full_like(image,195),expected=12)[0])
