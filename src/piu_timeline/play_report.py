@@ -61,7 +61,11 @@ TEMPLATE = r'''<!doctype html>
 <button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
 <div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section></div>
 <section class="panel chart"><h2>Observed timing offsets</h2><canvas id="timing" width="1200" height="290"></canvas><small>Each bar compares the input estimate with the note target range, including both frame-bracket and fitted-target uncertainty. Blue: earlier; amber: later; green: overlapping ranges. Click to select a note and seek the recording. This is display-based evidence, not a judgment-window score.</small></section>
-<section class="panel chart"><div class="row"><h2>Reconstructed visible chart</h2><label>Window <select id="zoom"><option value="3">±3 seconds</option><option value="8">±8 seconds</option><option value="15">±15 seconds</option></select></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div><canvas id="lanes" width="1200" height="350"></canvas><small>Columns show fitted receptor-crossing times; rows show lanes. Blue bars show target ranges and amber bars show input estimates after latency correction. Dots mark fitted targets. Click a note to compare its ranges. Only supported visible note heads are reconstructed. Holds, rolls and unreliable motion are not scored.</small></section>
+<section class="panel chart"><div class="row"><h2>Vertical note chart</h2><label>Window <select id="zoom"><option value="0.5">±0.5 seconds</option><option value="1.5" selected>±1.5 seconds</option><option value="3">±3 seconds</option><option value="8">±8 seconds</option></select></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div>
+<p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Colored arrows mark fitted targets; blue bands show their uncertainty. Amber outlines show input ranges. An amber mark above its arrow is early; below is late. The green line follows the recording.</p>
+<div class="row"><button id="previousNote">Previous note</button><button id="nextNote">Next note</button><span id="chartPosition" class="pill"></span></div>
+<label>Recording position <input id="position" type="range" step="0.001" style="width:100%"></label>
+<canvas id="lanes" width="1000" height="680" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right"></canvas><small>Click an arrow or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Holds, rolls and unreliable motion remain unscored.</small></section>
 <section class="panel chart"><h2>Selected note: target vs input</h2><p class="muted">Select a note in the table or chart. Blue is the video-estimated target range; amber is the input estimate from a display refresh, after the latency correction above. Both use the same time axis, centered on the fitted target. These are uncertainty ranges, not game judgment windows or authoritative chart timestamps.</p><canvas id="comparison" width="1200" height="180" style="height:180px"></canvas><div id="comparisonDetails" aria-live="polite"></div></section>
 <section class="panel"><h2>Note timing comparison</h2><p class="muted">Times are absolute recording positions. Input − target includes uncertainty in both ranges: negative is early, positive is late. Overlapping ranges do not establish an early/late result. Unmatched notes have no input estimate; a possible MISS never supplies one. Chord heads share a refresh bracket; aggregate brackets can span several rows.</p><div class="scroll"><table><thead><tr><th>Note / lane</th><th>Target range (video estimate)</th><th>Input range (display estimate)</th><th>Input − target</th><th>Evidence / judgment</th></tr></thead><tbody id="events"></tbody></table></div></section>
 <section class="panel"><h2>Coverage and exclusions</h2><div id="exclusions"></div><ul id="limitations"></ul></section>
@@ -79,6 +83,7 @@ const matchByNote=new Map(matches.map((m,i)=>[m.note,{match:m,index:i}]));
 const possibleMissNotes=new Set((data.miss_candidates||[]).map(candidate=>candidate.note));
 const reviewNotes=data.notes.map((note,index)=>({note,index})).filter(({note})=>note.status==='estimated').sort((a,b)=>a.note.target_seconds-b.note.target_seconds);
 let selectedNote=matches[0]?.note??reviewNotes[0]?.index??null;
+if(selectedNote!==null)playhead=data.notes[selectedNote].target_seconds;
 const targetRange=note=>Number.isFinite(note.target_seconds)&&Number.isFinite(note.prediction_uncertainty_seconds)
   ?[note.target_seconds-note.prediction_uncertainty_seconds,note.target_seconds+note.prediction_uncertainty_seconds]:null;
 const observedRange=m=>{
@@ -121,18 +126,68 @@ for(const v of [-range,0,range]){c.strokeStyle='#314448';c.beginPath();c.moveTo(
 for(const [i,m] of matches.entries()){const [lo,hi]=offset(m);if(!Number.isFinite(lo)||!Number.isFinite(hi))continue;c.strokeStyle=hi<0?'#75bdea':lo>0?'#f1c478':'#9cddbe';c.lineWidth=i===selected?4:2;c.beginPath();c.moveTo(x(m.target_seconds),y(lo));c.lineTo(x(m.target_seconds),y(hi));c.stroke();c.fillStyle=c.strokeStyle;c.fillRect(x(m.target_seconds)-2,y((lo+hi)/2)-2,4,4)}
 c.strokeStyle='#9cddbe';c.lineWidth=1;c.beginPath();c.moveTo(x(playhead),0);c.lineTo(x(playhead),h);c.stroke();c.fillStyle='#9cb1b1';c.fillText(fmt(data.start_seconds),p,h-2);c.fillText(fmt(data.end_seconds),w-85,h-2);
 canvas.onclick=e=>{const t=data.start_seconds+((e.clientX-canvas.getBoundingClientRect().left)/canvas.clientWidth*w-p)/(w-2*p)*(data.end_seconds-data.start_seconds);if(matches.length){let i=0;for(let j=1;j<matches.length;j++)if(Math.abs(matches[j].target_seconds-t)<Math.abs(matches[i].target_seconds-t))i=j;seek(matches[i].target_seconds,i)}}}
-function lanes(){const canvas=$('lanes'),c=background(canvas),w=canvas.width,h=canvas.height,p=70,span=Number($('zoom').value),x=t=>p+(t-(playhead-span))/(2*span)*(w-p),step=(h-25)/data.layout.lanes.length;
-for(let i=0;i<data.layout.lanes.length;i++){const y=15+step*i;c.fillStyle='#9cb1b1';c.fillText(data.layout.lanes[i].name||String(i+1),2,y+4);c.strokeStyle='#314448';c.beginPath();c.moveTo(p,y);c.lineTo(w,y);c.stroke()}
-for(const [noteIndex,note] of data.notes.entries()){const t=note.target_seconds??note.points.at(-1)?.[0];if(t<playhead-span||t>playhead+span||note.status!=='estimated'&&!$('excluded').checked)continue;const y=15+note.lane*step;
-const target=targetRange(note),input=inputRange(matchByNote.get(noteIndex)?.match);
-for(const [range,color,dy] of [[target,'#75bdea',-4],[input,'#f1c478',4]])if(range){c.strokeStyle=color;c.lineWidth=3;c.beginPath();c.moveTo(x(range[0]),y+dy);c.lineTo(x(range[1]),y+dy);c.stroke()}
-c.fillStyle=note.status!=='estimated'?'#647371':data.layout.lanes[note.lane].color==='blue'?'#75bdea':data.layout.lanes[note.lane].color==='yellow'?'#f1c478':'#e89cba';c.beginPath();c.arc(x(t),y,5,0,Math.PI*2);c.fill()}
-c.strokeStyle='#9cddbe';c.beginPath();c.moveTo(x(playhead),0);c.lineTo(x(playhead),h);c.stroke();c.fillStyle='#9cb1b1';c.fillText(fmt(playhead-span),p,h-2);c.fillText(fmt(playhead+span),w-85,h-2);
-canvas.onclick=e=>{const t=playhead-span+((e.clientX-canvas.getBoundingClientRect().left)/canvas.clientWidth*w-p)/(w-p)*2*span;
-const lane=Math.round(((e.clientY-canvas.getBoundingClientRect().top)/canvas.clientHeight*h-15)/step);
-const candidates=reviewNotes.filter(({note})=>note.lane===lane&&Math.abs(note.target_seconds-t)<span*.08);
-const closest=candidates.sort((a,b)=>Math.abs(a.note.target_seconds-t)-Math.abs(b.note.target_seconds-t))[0];
-if(closest)seek(closest.note.target_seconds,matchByNote.get(closest.index)?.index??-1,closest.index);else seek(t)}}
+function laneGeometry(){
+const canvas=$('lanes'),left=95,right=canvas.width-20,top=58,bottom=canvas.height-32,span=Number($('zoom').value);
+const from=playhead-span,to=playhead+span,laneWidth=(right-left)/data.layout.lanes.length;
+return {left,right,top,bottom,from,to,laneWidth,x:lane=>left+(lane+.5)*laneWidth,y:t=>top+(t-from)/(to-from)*(bottom-top)};
+}
+function lanes(){
+const canvas=$('lanes'),c=background(canvas),g=laneGeometry(),w=canvas.width,h=canvas.height;
+const symbols=['↙','↖','●','↗','↘'];
+for(const [i,lane] of data.layout.lanes.entries()){
+const left=g.left+i*g.laneWidth;
+c.fillStyle=i%2?'#142124':'#192a2e';c.fillRect(left,g.top,g.laneWidth,g.bottom-g.top);
+c.strokeStyle='#314448';c.lineWidth=1;c.beginPath();c.moveTo(left,g.top);c.lineTo(left,g.bottom);c.stroke();
+c.fillStyle='#e5efeb';c.textAlign='center';c.font='13px system-ui';c.fillText(lane.name||String(i+1),g.x(i),24);
+c.fillStyle=lane.color==='blue'?'#75bdea':lane.color==='yellow'?'#f1c478':'#e89cba';c.font='bold 20px system-ui';c.fillText(symbols[i%5],g.x(i),47);
+}
+c.textAlign='left';c.font='12px system-ui';
+const tick=(g.to-g.from)<=1?.1:(g.to-g.from)<=3?.25:(g.to-g.from)<=6?.5:1;
+for(let t=Math.ceil(g.from/tick)*tick;t<=g.to;t+=tick){const y=g.y(t);c.strokeStyle='#314448';c.lineWidth=1;c.beginPath();c.moveTo(g.left,y);c.lineTo(g.right,y);c.stroke();c.fillStyle='#9cb1b1';c.fillText(fmt(t),0,y+4)}
+const visible=t=>t>=g.from&&t<=g.to;
+const band=(range,x,width,filled,color)=>{if(!range||range[1]<g.from||range[0]>g.to)return;
+const y1=Math.max(g.top,g.y(range[0])),y2=Math.min(g.bottom,g.y(range[1])),height=Math.max(2,y2-y1);
+c.fillStyle=color;c.strokeStyle=color;c.lineWidth=2;if(filled)c.fillRect(x-width/2,y1,width,height);else c.strokeRect(x-width/2,y1,width,height);
+};
+for(const [index,note] of data.notes.entries()){
+const t=note.target_seconds??note.points.at(-1)?.[0],x=g.x(note.lane),width=Math.min(65,g.laneWidth*.72);
+if(note.status!=='estimated'){
+if($('excluded').checked&&Number.isFinite(t)&&visible(t)){c.fillStyle='#647371';c.font='18px system-ui';c.textAlign='center';c.fillText('×',x,g.y(t)+6)}continue;
+}
+const target=targetRange(note),input=inputRange(matchByNote.get(index)?.match);
+if(!visible(t)&&(!input||input[1]<g.from||input[0]>g.to))continue;
+band(target,x,width,true,'#244f66');
+if(input){
+c.strokeStyle='#f1c478';c.lineWidth=1;c.beginPath();c.moveTo(x,Math.max(g.top,Math.min(g.bottom,g.y(t))));c.lineTo(x,Math.max(g.top,Math.min(g.bottom,g.y((input[0]+input[1])/2))));c.stroke();
+band(input,x,width+6,false,'#f1c478');
+}
+if(visible(t)){
+const lane=data.layout.lanes[note.lane];c.fillStyle=lane.color==='blue'?'#75bdea':lane.color==='yellow'?'#f1c478':'#e89cba';c.textAlign='center';c.font='bold 22px system-ui';c.fillText(symbols[note.lane%5],x,g.y(t)+7);
+if(index===selectedNote){c.strokeStyle='#ffffff';c.lineWidth=2;c.strokeRect(x-width/2-6,g.y(t)-14,width+12,28)}
+}
+}
+c.textAlign='left';c.font='12px system-ui';c.strokeStyle='#9cddbe';c.lineWidth=2;c.beginPath();c.moveTo(g.left,g.y(playhead));c.lineTo(g.right,g.y(playhead));c.stroke();c.fillStyle='#9cddbe';c.fillText('Now '+fmt(playhead),g.left+6,g.y(playhead)-8);
+canvas.onclick=e=>{
+const rect=canvas.getBoundingClientRect(),px=(e.clientX-rect.left)/canvas.clientWidth*w,py=(e.clientY-rect.top)/canvas.clientHeight*h;
+if(px<g.left||px>=g.right||py<g.top||py>g.bottom)return;
+const lane=Math.floor((px-g.left)/g.laneWidth),t=g.from+(py-g.top)/(g.bottom-g.top)*(g.to-g.from);
+const candidates=reviewNotes.filter(({note})=>note.lane===lane).map(item=>{
+const range=inputRange(matchByNote.get(item.index)?.match);
+const distance=Math.min(Math.abs(item.note.target_seconds-t),range?Math.max(range[0]-t,0,t-range[1]):Infinity);
+return {...item,distance};
+}).filter(item=>item.distance<(g.to-g.from)*.035).sort((a,b)=>a.distance-b.distance||Math.abs(a.note.target_seconds-t)-Math.abs(b.note.target_seconds-t));
+const closest=candidates[0];
+if(closest)seek(closest.note.target_seconds,matchByNote.get(closest.index)?.index??-1,closest.index);else seek(t);
+};
+}
+$('position').min=data.start_seconds;$('position').max=data.end_seconds;
+$('position').oninput=()=>seek(Number($('position').value));
+function stepNote(direction){
+const current=reviewNotes.findIndex(item=>item.index===selectedNote);
+const index=Math.max(0,Math.min(reviewNotes.length-1,current+direction));
+const item=reviewNotes[index];if(item)seek(item.note.target_seconds,matchByNote.get(item.index)?.index??-1,item.index);
+}
+$('previousNote').onclick=()=>stepNote(-1);$('nextNote').onclick=()=>stepNote(1);
 function comparison(){
 const canvas=$('comparison'),c=background(canvas),w=canvas.width,p=180,right=w-35,center=(p+right)/2;
 $('comparisonDetails').replaceChildren();
@@ -162,7 +217,7 @@ const possibleMiss=possibleMissNotes.has(index);
 text('td',m?(e?e.before+' → '+e.after:'Judgment only')+(m.judgment_label?' / '+m.judgment_label+(m.judgment_label_source==='post_combo_frames'?' (word frames)':''):' / Judgment unknown')+(m.aggregate_row_count>1?' (aggregate row bracket)':m.row_note_count>1?' (shared chord bracket)':''):possibleMiss?'Possible MISS / no press timestamp':'No matched input evidence',row);
 row.onclick=()=>seek(note.target_seconds,linked?.index??-1,index);
 }}
-function draw(){$('clock').textContent=fmt(playhead);$('delayValue').textContent=delay.value;timing();lanes();comparison()}
+function draw(){$('position').value=playhead;$('chartPosition').textContent=fmt(playhead);$('clock').textContent=fmt(playhead);$('delayValue').textContent=delay.value;timing();lanes();comparison()}
 delay.oninput=()=>{table();draw()};$('center').onclick=()=>{delay.value=Math.round(median(matches.map(mid)));table();draw()};$('zoom').onchange=draw;$('excluded').onchange=draw;
 $('layout').value=JSON.stringify(data.layout,null,2);$('download').onclick=()=>{try{const value=JSON.parse($('layout').value),url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='layout.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('layoutError').textContent=''}catch(e){$('layoutError').textContent=e.message}};
 function overlay(){const canvas=$('overlay');canvas.width=$('preview').naturalWidth;canvas.height=$('preview').naturalHeight;const c=background(canvas),w=canvas.width,h=canvas.height;c.strokeStyle='#9cddbe';c.lineWidth=2;c.beginPath();c.moveTo(0,data.layout.receptor_y*h);c.lineTo(w,data.layout.receptor_y*h);c.stroke();for(const lane of data.layout.lanes){c.beginPath();c.moveTo(lane.x*w,data.layout.receptor_y*h);c.lineTo(lane.x*w,h*.95);c.stroke()}const [x,y,rw,rh]=data.layout.combo_roi;c.strokeStyle='#f1c478';c.strokeRect(x*w,y*h,rw*w,rh*h);if(data.judgment_roi){const [jx,jy,jw,jh]=data.judgment_roi;c.strokeStyle='#75bdea';c.strokeRect(jx*w,jy*h,jw*w,jh*h)}}

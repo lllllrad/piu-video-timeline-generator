@@ -19,8 +19,13 @@ function element(tag) {
   };
 }
 const elements = new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match => [match[1], element(match[1])]));
+for (const match of html.matchAll(/<canvas id="([^"]+)" width="(\d+)" height="(\d+)"/g)) {
+  const canvas = elements.get(match[1]);
+  canvas.width = canvas.clientWidth = Number(match[2]);
+  canvas.height = canvas.clientHeight = Number(match[3]);
+}
 elements.get('data').textContent = payload;
-elements.get('zoom').value = '3';
+elements.get('zoom').value = '1.5';
 const context = vm.createContext({document: {
   getElementById(id) { assert.ok(elements.has(id), 'missing element '+id); return elements.get(id); },
   createElement: element,
@@ -29,8 +34,12 @@ vm.runInContext(runtime, context, {timeout: 10000});
 const evaluate = expression => JSON.parse(vm.runInContext('JSON.stringify('+expression+')', context));
 const rows = () => elements.get('events').children.map(row => row.children.map(cell => cell.textContent));
 const initialRows = rows();
+const verticalGeometry = evaluate('(()=>{const g=laneGeometry();return {earlier:g.y(playhead-.2),now:g.y(playhead),later:g.y(playhead+.2),firstLane:g.x(0),lastLane:g.x(data.layout.lanes.length-1)}})()');
+assert.ok(verticalGeometry.earlier < verticalGeometry.now && verticalGeometry.now < verticalGeometry.later);
+if (evaluate('data.layout.lanes.length') > 1) assert.ok(verticalGeometry.firstLane < verticalGeometry.lastLane);
 const data = JSON.parse(payload);
 assert.equal(initialRows.length, data.notes.filter(note => note.status === 'estimated').length);
+const verticalNotes = evaluate('reviewNotes.map(({note})=>({lane:note.lane,x:laneGeometry().x(note.lane),y:laneGeometry().y(note.target_seconds)}))');
 const targetRanges = evaluate('reviewNotes.map(({note})=>targetRange(note))');
 const initialInputs = evaluate('reviewNotes.map(({index})=>inputRange(matchByNote.get(index)?.match))');
 const initialDifferences = evaluate('reviewNotes.map(({note,index})=>difference(targetRange(note),inputRange(matchByNote.get(index)?.match)))');
@@ -47,12 +56,26 @@ for (const index of [...new Set([0, initialRows.length - 1])]) {
 }
 if (initialRows.length) {
   elements.get('events').children[0].onclick();
-  // The selected target is centered in its lane chart; clicking must retain it.
-  const lane = evaluate('data.notes[selectedNote].lane');
+  // Test hit coordinates after CSS scaling, including a click on the input band.
+  const canvas = elements.get('lanes');
+  canvas.clientWidth = canvas.width / 2;
+  canvas.clientHeight = canvas.height / 2;
   const before = evaluate('selectedNote');
-  elements.get('lanes').onclick({clientX: (70+1200)/2, clientY: 15+lane*(350-25)/data.layout.lanes.length});
+  const position = evaluate('(()=>{const g=laneGeometry(),n=data.notes[selectedNote];return {x:g.x(n.lane),y:g.y(n.target_seconds)}})()');
+  canvas.onclick({clientX: position.x/2, clientY: position.y/2});
   assert.equal(evaluate('selectedNote'), before);
+  const inputPosition = evaluate('(()=>{const g=laneGeometry(),n=data.notes[selectedNote],input=inputRange(matchByNote.get(selectedNote)?.match);return input?{x:g.x(n.lane),y:g.y((input[0]+input[1])/2)}:null})()');
+  if (inputPosition) canvas.onclick({clientX: inputPosition.x/2, clientY: inputPosition.y/2});
+  assert.equal(evaluate('selectedNote'), before);
+  elements.get('nextNote').onclick();
+  elements.get('previousNote').onclick();
+  assert.equal(evaluate('selectedNote'), before);
+  elements.get('position').value = '12';
+  elements.get('position').oninput();
+  assert.equal(evaluate('playhead'), 12);
+  assert.equal(elements.get('chartPosition').textContent, '0:12.000');
 }
+
 elements.get('center').onclick();
 elements.get('next').onclick();
 elements.get('previous').onclick();
@@ -62,4 +85,4 @@ elements.get('zoom').value = '8';
 elements.get('zoom').onchange();
 assert.deepEqual(evaluate('data'), data, 'embedded evidence changed');
 console.log(JSON.stringify({initialRows, correctedRows, details, targetRanges, initialInputs,
-  initialDifferences, correctedInputs, correctedDifferences}));
+  initialDifferences, correctedInputs, correctedDifferences, verticalGeometry, verticalNotes}));

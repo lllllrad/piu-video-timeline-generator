@@ -62,14 +62,14 @@ class ReportTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_layout({'lanes': [{'x': float('nan'), 'color': 'blue'}] * 5})
 
-    def report_runtime(self, notes, matches, miss_candidates=()):
+    def report_runtime(self, notes, matches, miss_candidates=(), lane_count=1):
         data = {'song': 'Song', 'chart': 'S20', 'media': {'path': '/tmp/source.mkv'},
                 'start_seconds': 8, 'end_seconds': 20, 'notes': notes, 'matches': matches,
                 'display_delay_correction_ms': 0, 'bootstrap': {'ocr_images': 0, 'missing_digits': []},
                 'frame_count': 100, 'combo_readable_fraction': 1, 'combo_events': [],
                 'judgment_events': [], 'excluded_notes': {}, 'limitations': [],
                 'miss_candidates': miss_candidates,
-                'layout': {'lanes': [{'name': 'C', 'color': 'yellow'}]}}
+                'layout': {'lanes': [{'name': str(i + 1), 'color': 'yellow'} for i in range(lane_count)]}}
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'report.html'
             write_report(data, path)
@@ -132,3 +132,17 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(result['initialInputs'], [None])
         self.assertIn('No matched input evidence', result['initialRows'][0][4])
         self.assertEqual(self.report_runtime([], [])['initialRows'], [])
+
+    def test_vertical_chart_orders_lanes_and_time_and_aligns_chords(self):
+        for lane_count in (5, 10):
+            with self.subTest(lanes=lane_count):
+                notes = [{'status': 'estimated', 'lane': lane, 'target_seconds': target,
+                          'prediction_uncertainty_seconds': .01}
+                         for lane, target in ((0, 10), (lane_count - 1, 10), (1, 10.4))]
+                result = self.report_runtime(notes, [], lane_count=lane_count)
+                first, chord, later = result['verticalNotes']
+                self.assertLess(first['x'], later['x'])
+                self.assertLess(later['x'], chord['x'])
+                self.assertEqual(first['y'], chord['y'])
+                self.assertLess(first['y'], later['y'])
+                self.assertEqual(result['initialInputs'], [None, None, None])

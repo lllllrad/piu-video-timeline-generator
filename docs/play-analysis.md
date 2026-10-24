@@ -13,7 +13,7 @@ just play VIDEO --all
 Open `.local/data/SOURCE_ID/play/segment-001/report.html` locally. The report embeds its data and uses no external scripts, fonts or services. It includes:
 
 - the original recording, with seek links from the charts and event table;
-- reconstructed visible note-head target ranges and display-based input ranges by lane;
+- a vertical lane chart with earlier notes above later notes, showing target and input ranges;
 - a note-by-note comparison table, including unmatched targets, and two aligned range bars for the selected note;
 - combo and judgment-word refresh brackets, their evidence source and timing offsets;
 - coverage, unreadable digits, excluded trajectories and ambiguous events;
@@ -45,6 +45,10 @@ An already matched single-row counter update can also receive a label from at le
 `judgments.jsonl` retains word observations, confidence, bounding boxes and original source PTS. `evidence/judgments/` contains sampled crops, OCR provenance, font templates and compressed native color features. Word detection/refresh changes can reuse those features and existing fonts without decoding or OCR; cached word classifications are invalidated when the reader changes. This path analyzes the current recording without creating or requiring a persistent chart catalog. The HTML shows the judgment and evidence source for matched heads, plus all observed word refreshes, including unassigned and MISS evidence.
 
 ## Comparing target and input ranges
+
+The **Vertical note chart** keeps lanes in their original left-to-right order and places time from top to bottom. Colored arrows locate fitted note targets; blue bands show target uncertainty, and amber outlines show corrected input ranges at the same lane position. An input above its target is earlier and one below is later. A connector makes the displacement visible; overlapping bands retain their uncertainty. Chords line up across lanes, and the selected target has a white outline. Gray crosses enabled by the exclusion control show only track endpoints.
+
+The green horizontal line follows video playback. Use the recording-position slider to scrub, **Previous note / Next note** to inspect supported heads including unmatched ones, and **Window** to change time scale. Click a target or input outline to select its note and seek the recording. The initial view opens at the first matched target (or first supported target when none match). A five-lane chart and a ten-lane chart use the same left-to-right layout without combining players.
 
 Select a note in the **Note timing comparison** table or lane chart to see its two ranges on the same axis. The target range is the fitted receptor crossing plus/minus its saved prediction uncertainty. The input estimate is the matched combo/judgment observation bracket with the selected display-delay correction subtracted. The table uses absolute recording positions; the selected-note plot uses milliseconds relative to the fitted crossing. Changing the correction updates input ranges, difference intervals and plots together, without moving the target or changing associations.
 
