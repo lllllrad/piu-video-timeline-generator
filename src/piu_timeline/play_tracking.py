@@ -236,6 +236,11 @@ class DigitReader:
         text = str(value)
         if len(digits) != len(text) or not text.isdigit():
             return False
+        # Contradicting a strongly recognized existing glyph must not poison
+        # the font bank when neural OCR misreads stylized counter text.
+        if any(self._read_digits([image], None)[0] not in (None, int(digit))
+               and self._read_digits([image], None)[1] >= .9 for digit,image in zip(text,digits)):
+            return False
         for digit, image in zip(text, digits):
             self.examples[digit] = (self.examples[digit] + [image])[-24:]
             self.sources[digit].add(source)

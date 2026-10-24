@@ -19,7 +19,7 @@ from .recognition import capture_game
 from .workflow import LOCAL_DATA, source_id
 from .play_judgments import augment_judgments, cache_current as judgment_cache_current
 
-VERSION = 12
+VERSION = 13
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 COLORS = ('blue', 'red', 'yellow', 'red', 'blue')
@@ -230,7 +230,12 @@ def bootstrap_digits(record, roi, start, end, layout, directory, width=650, samp
         crop_path = directory / f'combo-{i:02}.png'
         cv2.imwrite(str(crop_path), cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
         crops.append(crop_path); images.append(crop); metadata.append(frame)
-    unknown = [i for i,image in enumerate(images) if reader.read(image)[0] is None]
+    from .play_fonts import validated_reader
+    reader, validated = validated_reader(reader, images, LOCAL_DATA, record, directory)
+    if validated is not None:
+        reused_from = validated
+        print(f'  Reusing a pixel-validated digit font ({validated["validation_frames"]} current frames); no counter values transferred.', flush=True)
+    unknown = [i for i,image in enumerate(images) if reader.read(image)[0] is None] if validated is None else []
     for result, i in zip(ocr_images([crops[i] for i in unknown], english=True) if unknown else [], unknown):
         image, frame = images[i], metadata[i]
         lines = sorted(result['lines'], key=lambda line: line['box'][0])
@@ -272,7 +277,7 @@ def resolve_timing(tracker, combo, display_delay_ms):
             'excluded_notes': dict(Counter(n['reason'] for n in notes if n['status'] == 'excluded'))}
 
 
-def refresh_counter_observations(cached, output):
+def refresh_counter_observations(cached, output, replace_font=False):
     """Decode only the small counter region; preserve all note observations."""
     from itertools import zip_longest
     digits = DigitReader.load(output / 'evidence/digit-templates.npz')
@@ -316,7 +321,12 @@ def refresh_counter_observations(cached, output):
                 raise ValueError('Counter refresh PTS differs from saved note observations')
             value,confidence = frame['combo'],frame['combo_confidence']
             mode = frame.get('combo_read_mode','unreadable')
-            if value is None and prior[i] is not None and following[i] is not None:
+            if replace_font:
+                expected = combo.stable if combo.last_seen is not None and seconds-combo.last_seen <= .15 else None
+                candidate,score = digits.read(crop,expected=expected)
+                frame['combo_before_font_validation'] = frame['combo']
+                value,confidence,mode = candidate,score,digits.last_mode
+            elif value is None and prior[i] is not None and following[i] is not None:
                 before,before_time = prior[i];after,after_time = following[i]
                 if 0<=after-before<=10 and after_time-before_time<=.25:
                     candidate,score = digits.read(crop,expected=before)
@@ -338,9 +348,11 @@ def refit_saved(cached, previous, output, segment, display_delay_ms):
     relocate_evidence(output,output,source=previous)
     cached=json.loads((output/'analysis.json').read_text())
     refreshed = {}
-    if cached.get('frame_observation_version',2) < FRAME_OBSERVATION_VERSION:
+    from .play_fonts import refresh_reader
+    replaced_font = refresh_reader(cached, output, LOCAL_DATA)
+    if replaced_font or cached.get('frame_observation_version',2) < FRAME_OBSERVATION_VERSION:
         print('Refreshing counter crops; preserving saved note observations, no OCR.',flush=True)
-        refreshed = refresh_counter_observations(cached,output)
+        refreshed = refresh_counter_observations(cached,output,replace_font=replaced_font)
     tracker = NoteTracker(cached['layout'], cached['analysis_width'], cached['analysis_height'])
     combo, count, last = ComboTracker(), 0, None
     for line in (output / 'frames.jsonl').open():
