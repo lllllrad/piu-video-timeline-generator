@@ -8,7 +8,7 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from piu_timeline.play_holds import detect_bodies, reconstruct, presentation, feature_contract, augment_holds, acquire_features
+from piu_timeline.play_holds import detect_bodies, reconstruct, presentation, feature_contract, augment_holds, acquire_features, contextual_hold_support
 
 
 LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
@@ -16,6 +16,33 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_dim_short_hold_pulse_requires_local_change_body_and_positive_update(self):
+        frames = [{'playback_seconds': i*.017, 'source_pts_seconds': 10+i*.017,
+                   'receptor_white_fraction': [.1, .26, .1, .1, .1],
+                   'receptor_lit': [False]*5, 'bodies': [], 'common_receptor_flash': False} for i in range(20)]
+        frame = frames[10]
+        frame['receptor_white_fraction'][1] = .5
+        frame['bodies'] = [{'lane': 1, 'top': 20, 'bottom': 80}]
+        data = {'combo_events': [{'delta': 1, 'lower_seconds': .17, 'upper_seconds': .187}]}
+        result = contextual_hold_support(data, frames, 20, 20)
+        self.assertEqual(list(result), [(10, 1)])
+        self.assertEqual(result[(10, 1)][0]['kind'], 'combo_events')
+        self.assertFalse(contextual_hold_support({}, frames, 20, 20))
+        data['combo_events'][0]['delta'] = -1
+        self.assertFalse(contextual_hold_support(data, frames, 20, 20))
+        data = {'judgment_events': [{'label': 'MISS', 'lower_seconds': .17, 'upper_seconds': .187}]}
+        self.assertFalse(contextual_hold_support(data, frames, 20, 20))
+        data['judgment_events'][0]['label'] = 'PERFECT'
+        self.assertIn((10, 1), contextual_hold_support(data, frames, 20, 20))
+        frame['common_receptor_flash'] = True
+        self.assertFalse(contextual_hold_support(data, frames, 20, 20))
+        frame['common_receptor_flash'] = False; frame['bodies'] = []
+        self.assertFalse(contextual_hold_support(data, frames, 20, 20))
+        frame['bodies'] = [{'lane': 1, 'top': 20, 'bottom': 80}]
+        for previous in frames[:10]:
+            previous['receptor_white_fraction'][1] = .5
+        self.assertFalse(contextual_hold_support(data, frames, 20, 20))
+
     def test_moving_long_body_and_filled_receptor_form_one_sustained_note(self):
         width, height = 325, 183
         spacing = .06*width
@@ -50,6 +77,19 @@ class HoldTest(unittest.TestCase):
         self.assertIsNone(hold['input']['press_range'])
         self.assertIsNone(hold['input']['release_range'])
         self.assertGreater(hold['input']['segments'][0]['frames'], 10)
+        # A single dim frame needs a local pulse, body and positive HUD update.
+        dim = deepcopy(frames)
+        for frame in dim:
+            frame['receptor_lit'] = [False]*5
+            frame['receptor_white_fraction'] = [.1]*5
+        dim[45]['receptor_white_fraction'][2] = .5
+        contextual_data = {**data, 'combo_events': [{'delta': 1, 'lower_seconds': .9, 'upper_seconds': .92}]}
+        recovered_dim = reconstruct(contextual_data, dim)
+        self.assertEqual(len(recovered_dim), 1)
+        self.assertEqual(recovered_dim[0]['input']['segments'][0]['frames'], 1)
+        self.assertEqual(recovered_dim[0]['input']['segments'][0]['contextual_frames'], 1)
+        self.assertEqual(recovered_dim[0]['input']['segments'][0]['first_source_pts_seconds'], 10.9)
+        self.assertFalse(reconstruct(data, dim)[0]['input']['segments'])
         partial = reconstruct({**data, 'end_seconds': 1}, [frame for frame in frames if frame['playback_seconds'] < 1])
         self.assertTrue(partial)
         self.assertTrue(partial[0]['end_censored'])

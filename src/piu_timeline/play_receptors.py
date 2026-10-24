@@ -108,5 +108,6 @@ def reject_common_flashes(frames, scores):
         state=[bool(value>.55) for value in values]
         if common:
             state=[True if value>max(.55,baseline+.2) else False if value<.25 else None for value in values]
-        result.append({**frame,'receptor_lit':state,'common_receptor_flash':common})
+        result.append({**frame,'receptor_lit':state,'common_receptor_flash':common,
+                       'receptor_white_fraction': [float(value) for value in values]})
     return result
