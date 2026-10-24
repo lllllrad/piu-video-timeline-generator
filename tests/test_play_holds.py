@@ -159,3 +159,27 @@ class HoldTest(unittest.TestCase):
         self.assertEqual(supported['matches'][0]['combo_upper_seconds'],1.51)
         data['hold_analysis']['receptor_runs'][0]['onset_range']=None
         self.assertEqual(presentation(data)['matches'],[])
+
+    def test_one_obscured_onset_cannot_confirm_two_repeated_taps_during_a_hold(self):
+        hold={'id':0,'lane':0,'start_range':[1,1.02],'end_range':[2,2.02],
+              'start_censored':False,'end_censored':False,'head_note':0,
+              'covered_notes':[0],'input':{'segments':[]}}
+        data={'notes':[{'status':'estimated','lane':0,'target_seconds':1.01},
+                       {'status':'estimated','lane':1,'target_seconds':1.5},
+                       {'status':'estimated','lane':1,'target_seconds':1.6}],
+              'matches':[{'note':i,'target_seconds':t,'combo_event':i-1,
+                          'combo_lower_seconds':t,'combo_upper_seconds':t+.01} for i,t in [(1,1.5),(2,1.6)]],
+              'hold_analysis':{'holds':[hold],'receptor_runs':[
+                  {'lane':1,'lit':True,'frames':4,'previous_seconds':1.61,'previous_lit':None,
+                   'start_seconds':1.63,'end_seconds':1.7,'onset_range':[1.49,1.63]}]}}
+        original=deepcopy(data)
+        ambiguous=presentation(data)
+        self.assertEqual(ambiguous['matches'],[])
+        self.assertEqual(ambiguous['hold_tick_ambiguous_notes'],[1,2])
+        self.assertEqual(data,original)
+        # Two independently observed transitions can corroborate two presses.
+        data['hold_analysis']['receptor_runs']=[
+            {'lane':1,'lit':True,'frames':2,'previous_seconds':t-.01,'previous_lit':False,
+             'start_seconds':t,'end_seconds':t+.02,'onset_range':[t-.01,t]}
+            for t in (1.5,1.6)]
+        self.assertEqual(presentation(data)['matches'],data['matches'])

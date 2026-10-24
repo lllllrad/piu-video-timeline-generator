@@ -14,7 +14,7 @@ from .play_frames import decode_frames
 from .play_tracking import Track, fit_track
 
 FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 11}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 12}
 
 
 def fingerprint(value):
@@ -344,12 +344,24 @@ def presentation(data):
         return any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2) + .04
                    and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds'])
                    for hold in holds)
+    from .play_receptors import onset_overlaps
+    guard = 2*(data.get('median_frame_interval_seconds') or .017)
+    runs = data['hold_analysis'].get('receptor_runs', [])
+    owners, note_runs = {}, {}
+    for match in data['matches']:
+        index = match['note']
+        if index in suppressed:
+            continue
+        lo = match.get('observation_lower_seconds', match.get('combo_lower_seconds'))
+        hi = match.get('observation_upper_seconds', match.get('combo_upper_seconds'))
+        if lo is None or hi is None:
+            continue
+        for ri, run in enumerate(runs):
+            if run['lane'] == notes[index]['lane'] and onset_overlaps(run, lo, hi, guard):
+                owners.setdefault(ri, set()).add(index)
+                note_runs.setdefault(index, []).append(ri)
     def independent_onset(note_index, lo, hi):
-        from .play_receptors import onset_overlaps
-        lane = notes[note_index]['lane']
-        guard = 2*(data.get('median_frame_interval_seconds') or .017)
-        return any(run['lane'] == lane and onset_overlaps(run, lo, hi, guard)
-                   for run in data['hold_analysis'].get('receptor_runs', []))
+        return any(owners[ri] == {note_index} for ri in note_runs.get(note_index, []))
     matches, ambiguous = [], []
     for match in data['matches']:
         if match['note'] in suppressed:
