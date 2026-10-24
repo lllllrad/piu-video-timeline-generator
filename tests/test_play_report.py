@@ -62,12 +62,12 @@ class ReportTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_layout({'lanes': [{'x': float('nan'), 'color': 'blue'}] * 5})
 
-    def report_runtime(self, notes, matches, miss_candidates=(), lane_count=1):
+    def report_runtime(self, notes, matches, miss_candidates=(), lane_count=1, judgment_events=()):
         data = {'song': 'Song', 'chart': 'S20', 'media': {'path': '/tmp/source.mkv'},
                 'start_seconds': 8, 'end_seconds': 20, 'notes': notes, 'matches': matches,
                 'display_delay_correction_ms': 0, 'bootstrap': {'ocr_images': 0, 'missing_digits': []},
                 'frame_count': 100, 'combo_readable_fraction': 1, 'combo_events': [],
-                'judgment_events': [], 'excluded_notes': {}, 'limitations': [],
+                'judgment_events': judgment_events, 'excluded_notes': {}, 'limitations': [],
                 'miss_candidates': miss_candidates,
                 'layout': {'lanes': [{'name': str(i + 1), 'color': 'yellow'} for i in range(lane_count)]}}
         with tempfile.TemporaryDirectory() as temporary:
@@ -130,7 +130,7 @@ class ReportTest(unittest.TestCase):
         self.assertIsNone(result['initialInputs'][0])
         result = self.report_runtime([note], [])
         self.assertEqual(result['initialInputs'], [None])
-        self.assertIn('No matched input evidence', result['initialRows'][0][4])
+        self.assertIn('Input unknown', result['initialRows'][0][4])
         self.assertEqual(self.report_runtime([], [])['initialRows'], [])
 
     def test_vertical_chart_orders_lanes_and_time_and_aligns_chords(self):
@@ -146,3 +146,16 @@ class ReportTest(unittest.TestCase):
                 self.assertEqual(first['y'], chord['y'])
                 self.assertLess(first['y'], later['y'])
                 self.assertEqual(result['initialInputs'], [None, None, None])
+
+    def test_neighbor_frame_alternatives_are_shown_as_separate_ranges(self):
+        notes = [{'status': 'estimated', 'lane': 0, 'target_seconds': 10,
+                  'prediction_uncertainty_seconds': .01}]
+        events = [{'label': 'PERFECT', 'lower_seconds': lo, 'upper_seconds': hi,
+                   'trigger': 'animation_restart', 'status': 'excluded', 'reason': 'ambiguous'}
+                  for lo, hi in ((10.12, 10.14), (10.2, 10.23))]
+        result = self.report_runtime(notes, [], judgment_events=events)
+        self.assertIn(' ∪ ', result['initialRows'][0][2])
+        self.assertIn(' ∪ ', result['initialRows'][0][3])
+        self.assertIn('Possible refresh ranges', result['initialRows'][0][4])
+        self.assertIn('association is unresolved', result['details'][0][2])
+        self.assertAlmostEqual(result['correctedInputs'][0][0], 10.09)

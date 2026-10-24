@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const payload = html.match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1];
 const runtime = html.match(/<script>\s*(.*?)<\/script>/s)[1];
+const noteFonts=new Set();
 function element(tag) {
   return {tag, style: {}, children: [], textContent: '', value: '', width: 1200, height: 350,
     clientWidth: 1200, clientHeight: 350, complete: false, files: [],
@@ -13,6 +14,7 @@ function element(tag) {
     getBoundingClientRect() { return {left: 0, top: 0}; },
     getContext() {
       return new Proxy({}, {get: (object, key) => object[key] ?? ((...args) => {
+        if(key==='fillText'&&['↙','↖','●','↗','↘'].includes(args[0]))noteFonts.add(object.font);
         for (const value of args) if (typeof value === 'number') assert.ok(Number.isFinite(value), key+' has invalid geometry');
       })});
     }
@@ -25,7 +27,7 @@ for (const match of html.matchAll(/<canvas id="([^"]+)" width="(\d+)" height="(\
   canvas.height = canvas.clientHeight = Number(match[3]);
 }
 elements.get('data').textContent = payload;
-elements.get('zoom').value = '1.5';
+elements.get('spacingScale').value = '1';
 const context = vm.createContext({document: {
   getElementById(id) { assert.ok(elements.has(id), 'missing element '+id); return elements.get(id); },
   createElement: element,
@@ -41,30 +43,32 @@ const data = JSON.parse(payload);
 assert.equal(initialRows.length, data.notes.filter(note => note.status === 'estimated').length);
 const verticalNotes = evaluate('reviewNotes.map(({note})=>({lane:note.lane,x:laneGeometry().x(note.lane),y:laneGeometry().y(note.target_seconds)}))');
 const targetRanges = evaluate('reviewNotes.map(({note})=>targetRange(note))');
-const initialInputs = evaluate('reviewNotes.map(({index})=>inputRange(matchByNote.get(index)?.match))');
-const initialDifferences = evaluate('reviewNotes.map(({note,index})=>difference(targetRange(note),inputRange(matchByNote.get(index)?.match)))');
+const initialInputs = evaluate('reviewNotes.map(({index})=>inputRange(matchByNote.get(index)?.match,index))');
+const initialDifferences = evaluate('reviewNotes.map(({note,index})=>difference(targetRange(note),inputRange(matchByNote.get(index)?.match,index)))');
 elements.get('delay').value = '30';
 elements.get('delay').oninput();
 const correctedRows = rows();
-const correctedInputs = evaluate('reviewNotes.map(({index})=>inputRange(matchByNote.get(index)?.match))');
-const correctedDifferences = evaluate('reviewNotes.map(({note,index})=>difference(targetRange(note),inputRange(matchByNote.get(index)?.match)))');
+const correctedInputs = evaluate('reviewNotes.map(({index})=>inputRange(matchByNote.get(index)?.match,index))');
+const correctedDifferences = evaluate('reviewNotes.map(({note,index})=>difference(targetRange(note),inputRange(matchByNote.get(index)?.match,index)))');
 const details = [];
 for (const index of [...new Set([0, initialRows.length - 1])]) {
   if (!elements.get('events').children[index]) continue;
   elements.get('events').children[index].onclick();
   details.push(elements.get('comparisonDetails').children.map(node => node.textContent));
 }
-for (const height of [360, 1200, 20000]) {
-  const before = evaluate('({selectedNote,playhead,span:laneGeometry().to-laneGeometry().from})');
-  elements.get('chartHeight').value = String(height);
-  elements.get('chartHeight').oninput();
-  assert.equal(elements.get('lanes').height, height);
-  assert.equal(elements.get('lanes').style.height, height+'px');
-  assert.deepEqual(evaluate('({selectedNote,playhead,span:laneGeometry().to-laneGeometry().from})'), before);
+const scaleGeometry=[];
+for (const scale of [.25, 1, 16]) {
+  const before = evaluate('({selectedNote,playhead})');
+  elements.get('spacingScale').value = String(scale);
+  elements.get('spacingScale').oninput();
+  assert.equal(elements.get('lanes').height, 680);
+  assert.deepEqual(evaluate('({selectedNote,playhead})'), before);
   assert.deepEqual(evaluate('reviewNotes.map(({note})=>targetRange(note))'), targetRanges);
+  scaleGeometry.push(evaluate('(()=>{const g=laneGeometry();return g.y(playhead+.1)-g.y(playhead)})()'));
 }
-elements.get('chartHeight').value = '1200';
-elements.get('chartHeight').oninput();
+assert.ok(scaleGeometry[0]<scaleGeometry[1] && scaleGeometry[1]<scaleGeometry[2]);
+if(initialRows.length)assert.deepEqual([...noteFonts].sort(),['bold 20px system-ui','bold 44px system-ui']);
+elements.get('spacingScale').value = '1';elements.get('spacingScale').oninput();
 if (initialRows.length) {
   elements.get('events').children[0].onclick();
   // Test hit coordinates after CSS scaling, including a click on the input band.
@@ -73,10 +77,10 @@ if (initialRows.length) {
   canvas.clientHeight = canvas.height / 2;
   const before = evaluate('selectedNote');
   const position = evaluate('(()=>{const g=laneGeometry(),n=data.notes[selectedNote];return {x:g.x(n.lane),y:g.y(n.target_seconds)}})()');
-  canvas.onclick({clientX: position.x/2, clientY: position.y/2});
+  canvas.onclick({clientX: position.x*canvas.clientWidth/canvas.width, clientY: position.y*canvas.clientHeight/canvas.height});
   assert.equal(evaluate('selectedNote'), before);
-  const inputPosition = evaluate('(()=>{const g=laneGeometry(),n=data.notes[selectedNote],input=inputRange(matchByNote.get(selectedNote)?.match);return input?{x:g.x(n.lane),y:g.y((input[0]+input[1])/2)}:null})()');
-  if (inputPosition) canvas.onclick({clientX: inputPosition.x/2, clientY: inputPosition.y/2});
+  const inputPosition = evaluate('(()=>{const g=laneGeometry(),n=data.notes[selectedNote],input=inputRange(matchByNote.get(selectedNote)?.match,selectedNote);return input?{x:g.x(n.lane),y:g.y((input[0]+input[1])/2)}:null})()');
+  if (inputPosition) canvas.onclick({clientX: inputPosition.x*canvas.clientWidth/canvas.width, clientY: inputPosition.y*canvas.clientHeight/canvas.height});
   assert.equal(evaluate('selectedNote'), before);
   elements.get('nextNote').onclick();
   elements.get('previousNote').onclick();
@@ -92,10 +96,7 @@ elements.get('next').onclick();
 elements.get('previous').onclick();
 elements.get('excluded').checked = true;
 elements.get('excluded').onchange();
-elements.get('zoom').value = '0.1';
-elements.get('zoom').onchange();
-elements.get('zoom').value = '8';
-elements.get('zoom').onchange();
+elements.get('spacingScale').value = '8';elements.get('spacingScale').oninput();
 assert.deepEqual(evaluate('data'), data, 'embedded evidence changed');
 console.log(JSON.stringify({initialRows, correctedRows, details, targetRanges, initialInputs,
   initialDifferences, correctedInputs, correctedDifferences, verticalGeometry, verticalNotes}));
