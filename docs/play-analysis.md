@@ -101,3 +101,9 @@ Outputs stay under the ignored `.local/` directory:
 - `report.html`: local interactive presentation.
 
 Changing source metadata, play bounds, geometry, resolution, player or song/chart invalidates the observation cache. Compatible saved native observations can be refitted after a tracking/association change or latency-correction change without decoding or OCR. A counter-reader upgrade may decode only the small counter region and must match every saved source PTS; force a complete rebuild with `--force`. This feature is experimental: verify representative frames and report coverage before drawing conclusions about a player.
+
+## Cache compatibility
+
+Cache compatibility is checked by artifact format and dependencies, not by a list of analyzer releases. Pixel features record their encoding and source/ROI/time/width identity in `evidence/judgments/features.json`. Font files declare their binary-mask format. Reader output records the feature identity, font-content fingerprint and reader revision; associations additionally depend on notes, counter evidence, unsupported intervals, display correction and association revision. Changing association logic reuses saved word observations. Changing the reader reuses compatible pixel features and fonts. Source or feature-format changes reacquire pixels.
+
+Untagged legacy feature/font files are validated and normalized at the load boundary. Unknown formats are rejected. Native note traces are validated for normalized coordinates and original timestamps. Song spelling and level corrections update report metadata without reacquiring the same gameplay frames; a changed single/double layout requires compatible lane geometry. If metadata inserts a play and renumbers later reports, immutable retained snapshots are matched by original media, playback interval, ROI, width, player and layout. Copied evidence paths are relocated into the new report directory.

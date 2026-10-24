@@ -21,6 +21,7 @@ from .play_judgments import augment_judgments, cache_current as judgment_cache_c
 
 VERSION = 11
 FRAME_OBSERVATION_VERSION = 4
+NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 COLORS = ('blue', 'red', 'yellow', 'red', 'blue')
 NAMES = ('DL', 'UL', 'C', 'UR', 'DR')
 
@@ -285,8 +286,7 @@ def refresh_counter_observations(cached, output):
             number = cached['segment_number']
             for previous in sorted(output.parent.glob(f'segment-{number:03}.previous-*/analysis.json')):
                 saved = json.loads(previous.read_text())
-                if (saved.get('play_analysis_version') in (6,7,8)
-                        and saved.get('frame_observation_version',2) == 2
+                if (saved.get('frame_observation_version',2) == 2
                         and all(saved.get(key)==cached.get(key) for key in
                                 ('media','start_seconds','end_seconds','analysis_width','layout'))):
                     baseline = previous.parent / 'frames.jsonl'
@@ -334,6 +334,9 @@ def refresh_counter_observations(cached, output):
 def refit_saved(cached, previous, output, segment, display_delay_ms):
     """Rerun trajectories and row alignment using identical source observations."""
     shutil.copytree(previous, output)
+    from .storage import relocate_evidence
+    relocate_evidence(output,output,source=previous)
+    cached=json.loads((output/'analysis.json').read_text())
     refreshed = {}
     if cached.get('frame_observation_version',2) < FRAME_OBSERVATION_VERSION:
         print('Refreshing counter crops; preserving saved note observations, no OCR.',flush=True)
@@ -342,6 +345,16 @@ def refit_saved(cached, previous, output, segment, display_delay_ms):
     combo, count, last = ComboTracker(), 0, None
     for line in (output / 'frames.jsonl').open():
         frame = json.loads(line)
+        try:
+            if (not math.isfinite(frame['source_pts_seconds']) or not math.isfinite(frame['playback_seconds'])
+                    or not isinstance(frame['notes'],list)
+                    or frame['combo'] is not None and (type(frame['combo']) is not int or frame['combo']<0)
+                    or any(type(note['lane']) is not int or not 0<=note['lane']<len(cached['layout']['lanes'])
+                           or not all(isinstance(note[key],(int,float)) and math.isfinite(note[key]) and 0<=note[key]<=1 for key in ('x','y'))
+                           for note in frame['notes'])):
+                raise ValueError('Unsupported saved native observation format')
+        except (KeyError,TypeError) as error:
+            raise ValueError('Unsupported saved native observation format') from error
         seconds = frame['playback_seconds']
         if last is not None and seconds <= last:
             raise ValueError('Saved observation timestamps are not increasing')
@@ -352,6 +365,9 @@ def refit_saved(cached, previous, output, segment, display_delay_ms):
         raise ValueError('Saved native-frame observations are incomplete')
     result = {**cached, **refreshed, **resolve_timing(tracker, combo, display_delay_ms),
               'play_analysis_version': VERSION, 'frame_observation_version': FRAME_OBSERVATION_VERSION,
+              'native_frame_format':NATIVE_FRAME_FORMAT,
+              'song':segment.get('song'),'chart':segment.get('chart'),
+              'participant_slots':sorted(segment.get('players',{})),
               'display_delay_correction_ms': display_delay_ms, 'reused_native_observations': True,
               'result_reference': result_reference(segment, cached.get('player'))}
     print('Refitting saved note observations; no OCR.', flush=True)
@@ -444,6 +460,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             **refinement,
             'display_delay_correction_ms': display_delay_ms,
             'frame_observation_version': FRAME_OBSERVATION_VERSION,
+            'native_frame_format':NATIVE_FRAME_FORMAT,
             **resolve_timing(tracker, combo, display_delay_ms),
             'result_reference': result_reference(segment, player),
             'limitations': ['Combo display updates are a proxy, not measured physical switch input.',
@@ -453,6 +470,49 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                             'Chords share one judged-row bracket; skipped counter values retain an aggregate interval.',
                             'Holds, rolls, unresolved counter jumps, ambiguous associations and nonlinear trajectories are excluded.',
                             'No missed press is inferred from a combo reset or an unreadable counter.']}
+
+
+def observation_settings_match(cached, document, segment, start, end, options):
+    chart=segment.get('chart') or ''
+    lanes=10 if re.match(r'^(?:HD|D)\d',chart) else 5 if re.match(r'^(?:S\d|VERY HARD )',chart) else None
+    return (cached.get('media')==document.get('media') and cached.get('start_seconds')==start
+            and cached.get('end_seconds')==end and cached.get('game_roi')==document.get('game_roi')
+            and cached.get('analysis_width')==options.get('width',650)
+            and cached.get('player')==options.get('player')
+            and cached.get('participant_slots',[])==sorted(segment.get('players',{}))
+            and (lanes is None or len(cached.get('layout',{}).get('lanes',[]))==lanes)
+            and (options.get('layout') is None or cached.get('layout')==options['layout']))
+
+
+def cache_header(path):
+    """Read acquisition metadata without loading every saved note trajectory."""
+    parts=[]
+    with path.open() as stream:
+        for line in stream:
+            if line.startswith('  "notes":'):
+                return json.loads(''.join(parts).rstrip().rstrip(',')+'}')
+            parts.append(line)
+    return json.loads(''.join(parts))
+
+
+def find_saved_observations(root, final, document, segment, start, end, options):
+    # Backups are immutable snapshots, so another segment can reuse them safely
+    # while the numbered presentation directories are being updated.
+    paths=[p for p in root.glob('segment-*.previous-*/analysis.json') if p.parent!=final]
+    for path in sorted(paths,key=lambda p:p.stat().st_mtime_ns,reverse=True):
+        try:
+            cached=cache_header(path)
+            if (observation_settings_match(cached,document,segment,start,end,options)
+                    and (path.parent/'frames.jsonl').is_file()
+                    and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT):
+                cached=json.loads(path.read_text())
+                if (observation_settings_match(cached,document,segment,start,end,options)
+                        and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
+                        and all(key in cached for key in ('layout','analysis_height','frame_count'))):
+                    return cached,path.parent
+        except (OSError,ValueError):
+            continue
+    return None
 
 
 def run(source, segment_number=1, force=False, **options):
@@ -475,34 +535,37 @@ def run(source, segment_number=1, force=False, **options):
         expected_start = options.get('start') if options.get('start') is not None else segments[segment_number-1]['start_seconds']
         expected_end = min(segments[segment_number-1]['end_seconds'], expected_start + options['duration']) if options.get('duration') is not None else segments[segment_number-1]['end_seconds']
         can_refit = False
+        donor=final
         if previous.is_file() and not force:
             cached = json.loads(previous.read_text())
             stat = Path(document['media']['path']).stat()
             same_source = ((stat.st_size, stat.st_mtime_ns) == (cached['media']['size_bytes'], cached['media']['mtime_ns'])
                            and cached['media'] == document['media'])
-            same_settings = (cached['start_seconds'] == expected_start
-                             and cached['end_seconds'] == expected_end and cached['game_roi'] == document['game_roi']
-                             and cached['analysis_width'] == options.get('width',650)
-                             and cached.get('player') == options.get('player')
-                             and cached.get('song') == segments[segment_number-1].get('song')
-                             and cached.get('chart') == segments[segment_number-1].get('chart')
-                             and cached.get('participant_slots',[]) == sorted(segments[segment_number-1].get('players',{}))
-                             and (options.get('layout') is None or cached['layout'] == options['layout']))
-            can_refit = (same_source and same_settings and cached.get('play_analysis_version') in (6, 7, 8, 9, 10, VERSION)
-                         and cached.get('frame_observation_version', 2 if cached.get('play_analysis_version') == 6 else None) in (2, 3, FRAME_OBSERVATION_VERSION)
+            same_settings = observation_settings_match(cached,document,segments[segment_number-1],expected_start,expected_end,options)
+            can_refit = (same_source and same_settings
+                         and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
+                         and all(key in cached for key in ('layout','analysis_height','frame_count'))
                          and (final / 'frames.jsonl').is_file())
             if (same_source and same_settings and cached.get('play_analysis_version') == VERSION
+                    and cached.get('song')==segments[segment_number-1].get('song')
+                    and cached.get('chart')==segments[segment_number-1].get('chart')
                     and cached.get('display_delay_correction_ms',0) == options.get('display_delay_ms',0)
                     and cached.get('result_reference') == result_reference(segments[segment_number-1],options.get('player'))
-                    and judgment_cache_current(cached,root)):
+                    and judgment_cache_current(cached,root,final)):
                 from .play_report import write_report
                 write_report(cached, final / 'report.html', final)
                 print('Reusing saved native-frame play analysis; no decoding or OCR.')
                 print(final / 'report.html')
                 return final / 'report.html'
+        if not force and not can_refit and document.get('media'):
+            saved=find_saved_observations(root,final,document,segments[segment_number-1],expected_start,expected_end,options)
+            if saved:
+                cached,donor=saved
+                stat=Path(document['media']['path']).stat()
+                can_refit=(stat.st_size,stat.st_mtime_ns)==(cached['media']['size_bytes'],cached['media']['mtime_ns'])
         pending = root / f'segment-{segment_number:03}.build-{uuid.uuid4().hex[:8]}'
         if can_refit:
-            result = refit_saved(cached, final, pending, segments[segment_number-1], options.get('display_delay_ms',0))
+            result = refit_saved(cached, donor, pending, segments[segment_number-1], options.get('display_delay_ms',0))
         else:
             result = analyze_play(document, segments[segment_number-1], pending, **options)
         result = augment_judgments(result,pending)

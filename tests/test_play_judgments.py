@@ -6,7 +6,7 @@ import tempfile
 from unittest.mock import patch
 import cv2
 import numpy as np
-from piu_timeline.play_judgments import JudgmentReader, JudgmentTracker, feature_map, merge_judgments, augment_judgments, LABELS, VERSION
+from piu_timeline.play_judgments import JudgmentReader, JudgmentTracker, feature_map, merge_judgments, augment_judgments, collect_features, LABELS, VERSION, cache_contracts, template_document, TEMPLATE_FORMAT
 
 
 def observation(label='PERFECT',width=100,height=20,blank=False):
@@ -93,6 +93,7 @@ class JudgmentTest(unittest.TestCase):
             data=self.combo_data([1.],[(.94,1.01)])
             data.update(media={},analysis_width=650,judgment_analysis_version=VERSION,
                         judgment_template_labels=[],judgment_events=[])
+            data['judgment_cache']=cache_contracts(data,[])
             frames=[{'source_pts_seconds':t+5,'playback_seconds':t,**observation('PERFECT')}
                     for t in (1.01,1.027,1.044)]
             (output/'judgments.jsonl').write_text(''.join(json.dumps(frame)+'\n' for frame in frames))
@@ -130,8 +131,9 @@ class JudgmentTest(unittest.TestCase):
             np.savez_compressed(directory/'features-v3.npz',features=np.array([feature]*3),pts=pts,times=times)
             (directory/'samples.json').write_text('[]')
             data=self.combo_data([1.],[(.99,1.01)])
-            data.update(media={},analysis_width=260,judgment_analysis_version=7,
+            data.update(media={},analysis_width=260,judgment_analysis_version=-999,
                         judgment_template_labels=['PERFECT'],judgment_events=[],layout={'combo_roi':[.4,.5,.2,.1]})
+            (directory/'templates.json').write_text(json.dumps({'media':{},'analysis_width':260,'models':models}))
             with patch('piu_timeline.play_judgments.load_bank',return_value=models), \
                     patch('piu_timeline.play_judgments.decode_frames',side_effect=AssertionError('must not decode')), \
                     patch('piu_timeline.play_judgments.learn_models',side_effect=AssertionError('must not OCR')):
@@ -141,6 +143,54 @@ class JudgmentTest(unittest.TestCase):
             self.assertEqual(result['matches'][0]['judgment_label'],'PERFECT')
             readings=[json.loads(line) for line in (output/'judgments.jsonl').read_text().splitlines()]
             self.assertEqual([reading['source_pts_seconds'] for reading in readings],pts.tolist())
+
+    def test_cache_dependencies_are_independent_of_result_version(self):
+        data=self.combo_data([1.],[(.99,1.01)])
+        data.update(media={'path':'source'},analysis_width=650,layout={'combo_roi':[.4,.5,.2,.1]})
+        model={'label':'PERFECT','hue':9,'mask':[[1,0,1],[0,1,0],[1,0,1]]}
+        original=cache_contracts(data,[model])
+        data['judgment_analysis_version']='any application release'
+        self.assertEqual(cache_contracts(data,[model]),original)
+        data['display_delay_correction_ms']=15
+        changed=cache_contracts(data,[model])
+        self.assertEqual(changed['observations'],original['observations'])
+        self.assertNotEqual(changed['association'],original['association'])
+        data['notes'][0]['target_seconds']=1.02
+        self.assertEqual(cache_contracts(data,[model])['observations'],original['observations'])
+        data['layout']['judgment_roi']=[.2,.3,.4,.1]
+        self.assertNotEqual(cache_contracts(data,[model])['observations'],original['observations'])
+        model['mask'][1][1]=0
+        self.assertNotEqual(cache_contracts(data,[model])['observations']['templates'],original['observations']['templates'])
+
+    def test_legacy_template_format_is_normalized_and_unknown_formats_rejected(self):
+        saved={'media':{},'analysis_width':650,'models':[{'label':'PERFECT','hue':9,'mask':[[1,0,1],[0,1,0],[1,0,1]]}]}
+        normalized=template_document(saved)
+        self.assertEqual(normalized['format'],TEMPLATE_FORMAT)
+        self.assertNotIn('format',saved)
+        self.assertIsNone(template_document({**saved,'format':{'schema':'future'}}))
+        with patch('piu_timeline.play_judgments.TEMPLATE_FORMAT',{'schema':'new encoding'}):
+            self.assertIsNone(template_document(saved))
+        saved['models'][0]['mask'][1][1]=2
+        self.assertIsNone(template_document(saved))
+
+    def test_changed_pixel_input_invalidates_features_even_with_same_file_name(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output=Path(temporary);directory=output/'evidence/judgments';directory.mkdir(parents=True)
+            times=np.array([1.,1.02]);features=np.zeros((2,19,38),dtype='uint8')
+            np.savez_compressed(directory/'features-v3.npz',features=features,pts=times,times=times)
+            (directory/'samples.json').write_text('[]')
+            (output/'frames.jsonl').write_text(''.join(json.dumps({'source_pts_seconds':t,'playback_seconds':t})+'\n' for t in times))
+            data={'media':{},'start_seconds':1.,'end_seconds':2.,'game_roi':[0,0,100,100],
+                  'analysis_width':100,'frame_count':2,'layout':{'combo_roi':[.4,.5,.2,.1]}}
+            with patch('piu_timeline.play_judgments.decode_frames',side_effect=AssertionError('legacy pixels should be reused')):
+                result,_,_,_=collect_features(data,output)
+            np.testing.assert_array_equal(result,features)
+            data['layout']['judgment_roi']=[.2,.2,.4,.2]
+            decoded=[(t,t,np.zeros((20,40,3),dtype='uint8')) for t in times]
+            with patch('piu_timeline.play_judgments.decode_frames',return_value=iter(decoded)) as decode:
+                result,_,_,_=collect_features(data,output)
+            decode.assert_called_once()
+            self.assertTrue(np.all(result==255))
 
     def test_touching_objects_and_partial_occlusion_preserve_word_shapes(self):
         models=[];clean={};bounds={}

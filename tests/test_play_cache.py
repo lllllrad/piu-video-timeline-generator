@@ -8,9 +8,40 @@ import numpy as np
 
 from piu_timeline import play_analysis as play
 from piu_timeline.play_judgments import VERSION as JUDGMENT_VERSION
+from piu_timeline.play_judgments import cache_contracts
 
 
 class PlayCacheTest(unittest.TestCase):
+    def test_renumbered_play_reuses_input_matched_snapshot_and_relocates_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);source=root/'source.mkv';source.write_bytes(b'original')
+            media={'path':str(source),'size_bytes':source.stat().st_size,'mtime_ns':source.stat().st_mtime_ns}
+            segment={'start_seconds':1.,'end_seconds':2.,'song':'Corrected','chart':'S2','players':{}}
+            directory=root/'data/id';(directory/'analysis').mkdir(parents=True)
+            roi=[0,0,320,180]
+            (directory/'analysis/analysis.json').write_text(json.dumps({'media':media,'game_roi':roi,'segments':[{'start_seconds':0,'end_seconds':1},segment]}))
+            donor=directory/'play/segment-001.previous-example';(donor/'evidence').mkdir(parents=True)
+            (donor/'evidence/proof.png').write_bytes(b'original evidence')
+            layout={'receptor_y':.2,'combo_roi':[.4,.5,.2,.1],'lanes':[{'x':.1+.2*i} for i in range(5)]}
+            saved={**segment,'song':'Old OCR','chart':'S1','media':media,'game_roi':roi,'analysis_width':320,
+                   'analysis_height':180,'layout':layout,'frame_count':2,'participant_slots':[],
+                   'frame_observation_version':play.FRAME_OBSERVATION_VERSION,
+                   'judgment_events':[],'calibration':{'file':str(donor/'evidence/proof.png')}}
+            saved['judgment_cache']=cache_contracts(saved,[])
+            (donor/'analysis.json').write_text(json.dumps(saved,indent=2))
+            trace=''.join(json.dumps({'source_pts_seconds':t,'playback_seconds':t,'combo':None,'notes':[]})+'\n' for t in (1.,1.02))
+            (donor/'frames.jsonl').write_text(trace)
+            with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
+                    patch.object(play,'analyze_play',side_effect=AssertionError('must reuse original acquisition')):
+                report=play.run('id',2,width=320)
+            result=json.loads(report.with_name('analysis.json').read_text())
+            self.assertEqual(result['segment_number'],2)
+            self.assertEqual(result['song'],'Corrected')
+            self.assertEqual(report.with_name('frames.jsonl').read_text(),trace)
+            self.assertEqual(Path(result['calibration']['file']),report.parent/'evidence/proof.png')
+            self.assertEqual(Path(result['calibration']['file']).read_bytes(),b'original evidence')
+            self.assertEqual((donor/'evidence/proof.png').read_bytes(),b'original evidence')
+
     def test_counter_recovery_must_fit_neighboring_original_observations(self):
         with tempfile.TemporaryDirectory() as temporary:
             output=Path(temporary)
@@ -47,15 +78,21 @@ class PlayCacheTest(unittest.TestCase):
                    'analysis_width':320,'analysis_height':180,'player':None,'participant_slots':[],
                    'layout':layout,'frame_count':2,'display_delay_correction_ms':0,
                    'judgment_analysis_version':JUDGMENT_VERSION,'judgment_template_labels':[],'judgment_events':[]}
+            saved['play_analysis_version']='unrelated application release'
+            saved['judgment_cache']=cache_contracts(saved,[])
             (final/'analysis.json').write_text(json.dumps(saved))
-            trace=''.join(json.dumps({'playback_seconds':t,'notes':[],'combo':None})+'\n' for t in (1.,1.02))
+            trace=''.join(json.dumps({'source_pts_seconds':t,'playback_seconds':t,'notes':[],'combo':None})+'\n' for t in (1.,1.02))
             (final/'frames.jsonl').write_text(trace)
+            segment.update(song='Corrected title',chart='S2')
+            (directory/'analysis/analysis.json').write_text(json.dumps({'media':media,'game_roi':[0,0,320,180],'segments':[segment]}))
             with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
                     patch.object(play,'analyze_play',side_effect=AssertionError('must reuse observations')):
                 play.run('id',width=320,display_delay_ms=30)
             result=json.loads((final/'analysis.json').read_text())
             self.assertEqual(result['play_analysis_version'],play.VERSION)
             self.assertEqual(result['display_delay_correction_ms'],30)
+            self.assertEqual(result['song'],'Corrected title')
+            self.assertEqual(result['chart'],'S2')
             self.assertTrue(result['reused_native_observations'])
             self.assertEqual((final/'frames.jsonl').read_text(),trace)
             self.assertEqual((source.stat().st_size,source.stat().st_mtime_ns),(before.st_size,before.st_mtime_ns))
@@ -82,6 +119,8 @@ class PlayCacheTest(unittest.TestCase):
             final=directory/'play/segment-001';final.mkdir(parents=True)
             saved={**segment,'media':media,'game_roi':document['game_roi'],'play_analysis_version':play.VERSION,
                    'analysis_width':650,'player':None,'participant_slots':[],'judgment_analysis_version':JUDGMENT_VERSION,'judgment_template_labels':[],'judgment_events':[]}
+            saved['layout']={'lanes':[{'x':.1+.2*i} for i in range(5)],'combo_roi':[.4,.5,.2,.1]}
+            saved['judgment_cache']=cache_contracts(saved,[])
             (final/'analysis.json').write_text(json.dumps(saved))
             with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
                     patch.object(play,'analyze_play',side_effect=AssertionError('must reuse evidence')):
