@@ -287,7 +287,8 @@ def bootstrap_digits(record, roi, start, end, layout, directory, width=650, samp
         cv2.imwrite(str(crop_path), cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
         crops.append(crop_path); images.append(crop); metadata.append(frame)
     from .play_fonts import validated_reader
-    reader, validated = validated_reader(reader, images, LOCAL_DATA, record, directory)
+    reader, validated = validated_reader(reader, images, LOCAL_DATA, record, directory,
+                                        {'game_roi':list(roi),'analysis_width':width})
     if validated is not None:
         reused_from = validated
         print(f'  Reusing a pixel-validated digit font ({validated["validation_frames"]} current frames); no counter values transferred.', flush=True)

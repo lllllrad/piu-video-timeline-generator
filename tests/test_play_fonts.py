@@ -25,6 +25,31 @@ def complete_reader():
 
 
 class FontTest(unittest.TestCase):
+    def test_broadly_validated_font_can_repair_sparse_crops_of_unchanged_recording(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);archive=root/'source/play/segment-001/evidence';archive.mkdir(parents=True)
+            complete_reader().save(archive/'digit-templates.npz')
+            record={'path':'source.mkv','size_bytes':100,'mtime_ns':123}
+            settings={'game_roi':[0,0,100,100],'analysis_width':650}
+            metadata={'media':record,**settings,'bootstrap':{'reused_from':{
+                'kind':'pixel_validated_font','validation_frames':12,'validation_digit_classes':10}}}
+            path=archive.parent/'analysis.json';path.write_text(json.dumps(metadata))
+            images=[image('123'),image('456')]
+            result,provenance=validated_reader(DigitReader(),images,root,record,None,settings)
+            self.assertIsNotNone(provenance)
+            self.assertEqual(provenance['kind'],'recording_validated_font')
+            self.assertEqual(result.read(image('789'))[0],789)
+            # Sparse observations cannot validate unrelated media or a changed ROI.
+            for other_record,other_settings in [({**record,'mtime_ns':124},settings),
+                                                (record,{**settings,'game_roi':[0,0,200,100]})]:
+                _,rejected=validated_reader(DigitReader(),images,root,other_record,None,other_settings)
+                self.assertIsNone(rejected)
+            # A sparse within-recording validation cannot seed another sparse import.
+            metadata['bootstrap']['reused_from']['kind']='recording_validated_font'
+            path.write_text(json.dumps(metadata))
+            _,rejected=validated_reader(DigitReader(),images,root,record,None,settings)
+            self.assertIsNone(rejected)
+
     def test_new_pixel_validated_font_invalidates_weak_saved_reader_without_mutating_it(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);out=root/'current/play/segment-001';evidence=out/'evidence'

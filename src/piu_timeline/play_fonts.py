@@ -13,7 +13,7 @@ def quality(reader, images):
     return len(strong),len(labels),sum(score for value,score in strong)/max(1,len(strong))
 
 
-def validated_reader(reader, images, data_root, record, destination):
+def validated_reader(reader, images, data_root, record, destination, settings=None):
     """Require broad, strong agreement with this recording before importing a font."""
     current = quality(reader, images)
     # A complete, visually validated local font needs no cross-recording search.
@@ -26,22 +26,31 @@ def validated_reader(reader, images, data_root, record, destination):
             continue
         saved = json.loads(metadata.read_text())
         origin = saved.get('media',{})
-        if origin.get('path') == record.get('path'):
+        same_recording = origin == record
+        provenance = saved.get('bootstrap', {}).get('reused_from') or {}
+        same_geometry = (settings is not None and saved.get('game_roi') == settings.get('game_roi')
+                         and saved.get('analysis_width') == settings.get('analysis_width'))
+        trusted_recording_font = (same_recording and same_geometry
+                                  and provenance.get('kind') == 'pixel_validated_font'
+                                  and provenance.get('validation_frames', 0) >= 6
+                                  and provenance.get('validation_digit_classes', 0) >= 6)
+        if origin.get('path') == record.get('path') and not trusted_recording_font:
             continue
         candidate = DigitReader.load(path)
         if min(map(len,candidate.sources.values())) < 2:
             continue
         score = quality(candidate,images)
-        if score[0] < max(6,current[0]+3) or score[1] < 6 or score <= best:
+        minimum_frames, minimum_classes, improvement = (2,5,2) if trusted_recording_font else (6,6,3)
+        if score[0] < max(minimum_frames,current[0]+improvement) or score[1] < minimum_classes or score <= best:
             continue
-        best = score;selected=(candidate,path,origin)
+        best = score;selected=(candidate,path,origin,trusted_recording_font)
     if selected is None:
         return reader,None
-    candidate,path,origin = selected
+    candidate,path,origin,trusted_recording_font = selected
     imported = destination/'validated-font.npz' if destination is not None else path
     if destination is not None:
         shutil.copyfile(path,imported)
-    return candidate,{'kind':'pixel_validated_font','source_media':origin.get('path'),
+    return candidate,{'kind':'recording_validated_font' if trusted_recording_font else 'pixel_validated_font','source_media':origin.get('path'),
                       'template_archive':str(imported),'validation_frames':best[0],
                       'validation_digit_classes':best[1],
                       'minimum_validation_confidence':.9,
@@ -63,7 +72,7 @@ def cache_current(cached, output, data_root):
     reader, images = saved_inputs(output)
     if reader is None or not images:
         return True
-    _, provenance = validated_reader(reader, images, data_root, cached['media'], None)
+    _, provenance = validated_reader(reader, images, data_root, cached['media'], None, cached)
     return provenance is None
 
 
@@ -73,7 +82,7 @@ def refresh_reader(cached, output, data_root):
     if reader is None:
         return False
     evidence=output/'evidence';bank=evidence/'digit-templates.npz'
-    reader,provenance=validated_reader(reader,images,data_root,cached['media'],evidence)
+    reader,provenance=validated_reader(reader,images,data_root,cached['media'],evidence,cached)
     if provenance is None:
         return False
     reader.save(bank)
