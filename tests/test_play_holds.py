@@ -96,7 +96,7 @@ class HoldTest(unittest.TestCase):
                     'start_seconds': 0, 'end_seconds': 1}
             (root / 'hold-features.json').write_text(json.dumps({'contract': feature_contract(data)}))
             frames = [{'playback_seconds': time, 'source_pts_seconds': time+10,
-                       'bodies': [], 'receptor_lit': [False]*5} for time in (0, .02)]
+                       'bodies': [], 'receptor_lit': [False]*5, 'receptor_white_fraction':[0]*5} for time in (0, .02)]
             (root / 'hold-frames.jsonl').write_text(''.join(json.dumps(frame)+'\n' for frame in frames))
             with patch('piu_timeline.play_holds.decode_frames', side_effect=AssertionError('cached pixels')):
                 result = augment_holds(data, root)

@@ -14,7 +14,7 @@ from .play_frames import decode_frames
 from .play_tracking import Track, fit_track
 
 FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 9}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 10}
 
 
 def fingerprint(value):
@@ -83,8 +83,10 @@ def acquire_features(data, output):
                 if abs(pts - previous['source_pts_seconds']) > 1e-6 or abs(time - previous['playback_seconds']) > 1e-6:
                     raise ValueError('Hold acquisition PTS differs from saved native frames')
                 bodies, lit = detect_bodies(image, data['layout'])
+                from .play_receptors import fractions
+                scores = fractions(image, data['layout'])
                 target.write(json.dumps({'source_pts_seconds': pts, 'playback_seconds': time,
-                                         'bodies': bodies, 'receptor_lit': lit}) + '\n')
+                                         'bodies': bodies, 'receptor_lit': lit, 'receptor_white_fraction': scores}) + '\n')
                 count += 1
                 if count % 2400 == 0:
                     print(f'    Long notes: {time-data["start_seconds"]:.0f}/{data["end_seconds"]-data["start_seconds"]:.0f}s', flush=True)
@@ -265,7 +267,8 @@ def receptor_runs(frames):
                 run = {'lane': lane, 'lit': lit, 'start_seconds': frame['playback_seconds'],
                        'end_seconds': frame['playback_seconds'], 'frames': 1,
                        'first_source_pts_seconds': frame['source_pts_seconds'], 'last_source_pts_seconds': frame['source_pts_seconds'],
-                       'previous_seconds': previous['end_seconds'] if previous else None}
+                       'previous_seconds': previous['end_seconds'] if previous else None,
+                       'previous_lit': previous['lit'] if previous else None}
                 runs.append(run); current[lane] = run
     return runs
 
@@ -285,6 +288,8 @@ def augment_holds(data, output):
     acquire_features(data, output)
     with (output / 'hold-frames.jsonl').open() as stream:
         frames = [json.loads(line) for line in stream]
+    from .play_receptors import observations, reject_common_flashes
+    frames = reject_common_flashes(frames, observations(data, output, frames))
     holds = reconstruct(data, frames)
     result = {'feature_contract': contract, 'association_contract': association, 'holds': holds, 'receptor_runs': receptor_runs(frames),
               'semantics': 'Long notes are sustained states. Hold ticks are not independent presses; release is not measured.'}
@@ -325,7 +330,7 @@ def presentation(data):
         lane = notes[note_index]['lane']
         guard = 2*(data.get('median_frame_interval_seconds') or .017)
         return any(run['lane'] == lane and run['lit'] and run['frames'] >= 2
-                   and run['previous_seconds'] is not None and run['previous_seconds'] <= hi+guard
+                   and run['previous_seconds'] is not None and run.get('previous_lit',False) is False and run['previous_seconds'] <= hi+guard
                    and lo-guard <= run['start_seconds'] <= hi+guard
                    for run in data['hold_analysis'].get('receptor_runs', []))
     matches, ambiguous = [], []

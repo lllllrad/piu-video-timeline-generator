@@ -25,6 +25,8 @@ def candidates(data, events):
     lit = defaultdict(list)
     sensor = defaultdict(lambda: [0, 0])
     for run in data.get('hold_analysis', {}).get('receptor_runs', []):
+        if run['lit'] is None:
+            continue
         sensor[run['lane']][bool(run['lit'])] += run['frames']
         if run['lit']:
             lit[run['lane']].append(run)
@@ -97,7 +99,7 @@ def candidates(data, events):
                 rejected[index].add('receptor_lane_not_active');continue
             supports[index] = supported
             hold_tick = any(event.get('reason') == 'ongoing_hold_tick_not_new_press' for event in family['events']) or any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2)+.04 and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds']) for hold in data.get('hold_analysis', {}).get('holds', []))
-            if hold_tick and not any(run['previous_seconds'] is not None
+            if hold_tick and not any(run['previous_seconds'] is not None and run.get('previous_lit',False) is False
                                      and run['previous_seconds'] <= support_hi+frame*2
                                      and support_lo-frame*2 <= run['start_seconds'] <= support_hi+frame*2 for run in supported):
                 rejected[index].add('hold_tick_without_independent_lane_onset');continue
