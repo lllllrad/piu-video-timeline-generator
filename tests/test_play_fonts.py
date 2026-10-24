@@ -6,7 +6,7 @@ import unittest
 import cv2
 import numpy as np
 
-from piu_timeline.play_fonts import validated_reader
+from piu_timeline.play_fonts import validated_reader, cache_current, refresh_reader
 from piu_timeline.play_tracking import DigitReader
 
 
@@ -25,6 +25,25 @@ def complete_reader():
 
 
 class FontTest(unittest.TestCase):
+    def test_new_pixel_validated_font_invalidates_weak_saved_reader_without_mutating_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);out=root/'current/play/segment-001';evidence=out/'evidence'
+            evidence.mkdir(parents=True)
+            bank=evidence/'digit-templates.npz';DigitReader().save(bank)
+            for i in range(10):cv2.imwrite(str(evidence/f'combo-{i:02}.png'),image(i))
+            cached={'media':{'path':'current.mkv'}}
+            self.assertTrue(cache_current(cached,out,root))
+            original=bank.read_bytes()
+            reference=root/'new-recording/play/segment-001/evidence';reference.mkdir(parents=True)
+            complete_reader().save(reference/'digit-templates.npz')
+            reference.parent.joinpath('analysis.json').write_text(json.dumps({'media':{'path':'new.mkv'}}))
+            self.assertFalse(cache_current(cached,out,root))
+            self.assertEqual(bank.read_bytes(),original)
+            self.assertFalse((evidence/'validated-font.npz').exists())
+            self.assertTrue(refresh_reader(cached,out,root))
+            self.assertTrue(cache_current(cached,out,root))
+            self.assertEqual(cached['bootstrap']['missing_digits'],[])
+
     def test_shapes_transfer_only_after_broad_agreement_with_current_pixels(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

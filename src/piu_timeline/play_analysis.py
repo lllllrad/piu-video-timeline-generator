@@ -585,6 +585,7 @@ def find_saved_observations(root, final, document, segment, start, end, options)
 
 
 def run(source, segment_number=1, force=False, **options):
+    from .play_fonts import cache_current as digit_cache_current
     directory = LOCAL_DATA / source_id(source)
     analysis = directory / 'analysis/analysis.json'
     if not analysis.is_file():
@@ -620,6 +621,7 @@ def run(source, segment_number=1, force=False, **options):
                     and cached.get('chart')==segments[segment_number-1].get('chart')
                     and cached.get('display_delay_correction_ms',0) == options.get('display_delay_ms',0)
                     and cached.get('result_reference') == result_reference(segments[segment_number-1],options.get('player'))
+                    and digit_cache_current(cached,final,LOCAL_DATA)
                     and judgment_cache_current(cached,root,final)):
                 from .play_report import write_report
                 from .play_holds import augment_holds

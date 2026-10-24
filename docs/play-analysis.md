@@ -131,6 +131,8 @@ Changing source metadata, play bounds, geometry, resolution, player or song/char
 
 ## Cache compatibility
 
+Cache reuse also checks saved counter bootstrap crops against newly available local font banks. An incomplete reader can be invalidated by a newly available font only after the same broad pixel-validation requirements pass. The check does not mutate the cache or decode media. A successful replacement rereads only the native counter strip; note observations and source timestamps stay unchanged. A complete, locally validated reader does not depend on unrelated new recordings.
+
 Lane onset support retains an explicit bracket from the last observed unlit receptor to the first sustained lane-local light. A common screen flash may obscure the intermediate samples for at most 150 ms, provided adjacent native observations remain within 75 ms. The bracket retains both original source PTS. Unknown samples remain unknown; persistent light, an unknown initial state, unrelated unreadable samples and gaps in decoded observations cannot establish a new onset. This support can corroborate an independently observed display refresh; it does not measure a physical switch or turn a hold tick into a press.
 
 One lane transition cannot independently confirm multiple repeated taps. If several matched notes on that lane claim the same onset bracket, their hold-time associations remain ambiguous unless each has a separate unclaimed transition. Neighboring display refreshes remain available as review candidates.
