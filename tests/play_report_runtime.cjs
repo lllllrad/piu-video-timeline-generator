@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const payload = html.match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1];
 const runtime = html.match(/<script>\s*(.*?)<\/script>/s)[1];
-const noteFonts=new Set();
+const noteFonts=new Set(),lanePaint=[];
 function element(tag) {
   return {tag, style: {}, children: [], textContent: '', value: '', width: 1200, height: 350,
     clientWidth: 1200, clientHeight: 350, complete: false, files: [], paused: true, ended: false, currentTime: 0, handlers: {},
@@ -14,6 +14,10 @@ function element(tag) {
     getBoundingClientRect() { return {left: 0, top: 0}; },
     getContext() {
       return new Proxy({}, {get: (object, key) => object[key] ?? ((...args) => {
+        if(tag==='lanes'){
+          if(key==='clearRect')lanePaint.length=0;
+          if(['fillRect','arc','stroke'].includes(key))lanePaint.push({op:key,args,color:key==='stroke'?object.strokeStyle:object.fillStyle});
+        }
         if(key==='fillText'&&['↙','↖','●','↗','↘'].includes(args[0]))noteFonts.add(object.font);
         for (const value of args) if (typeof value === 'number') assert.ok(Number.isFinite(value), key+' has invalid geometry');
       })});
@@ -54,10 +58,12 @@ assert.equal(initialRows.length, data.notes.filter(note => note.status === 'esti
 const verticalNotes = evaluate('reviewNotes.map(({note})=>({lane:note.lane,x:laneGeometry().x(note.lane),y:laneGeometry().y(note.target_seconds)}))');
 const targetRanges = evaluate('reviewNotes.map(({note})=>targetRange(note))');
 const initialInputs = evaluate('reviewNotes.map(({index})=>inputRange(matchByNote.get(index)?.match,index))');
+const initialMarkers=lanePaint.filter(op=>op.op==='arc'&&['#b6ff59','#ff70dd'].includes(op.color));
 const initialDifferences = evaluate('reviewNotes.map(({note,index})=>difference(targetRange(note),inputRange(matchByNote.get(index)?.match,index)))');
 elements.get('delay').value = '30';
 elements.get('delay').oninput();
 const correctedRows = rows();
+const correctedMarkers=lanePaint.filter(op=>op.op==='arc'&&['#b6ff59','#ff70dd'].includes(op.color));
 const correctedInputs = evaluate('reviewNotes.map(({index})=>inputRange(matchByNote.get(index)?.match,index))');
 const correctedDifferences = evaluate('reviewNotes.map(({note,index})=>difference(targetRange(note),inputRange(matchByNote.get(index)?.match,index)))');
 const details = [];
@@ -67,6 +73,7 @@ for (const index of [...new Set([0, initialRows.length - 1])]) {
   details.push(elements.get('comparisonDetails').children.map(node => node.textContent));
 }
 const scaleGeometry=[];
+const squares=()=>lanePaint.filter(op=>op.op==='fillRect'&&['#267bcc','#c63c52','#d8a600'].includes(op.color)&&op.args[2]===op.args[3]);
 for (const scale of [.25, 1, 16]) {
   const before = evaluate('({selectedNote,playhead})');
   elements.get('spacingScale').value = String(scale);
@@ -74,6 +81,7 @@ for (const scale of [.25, 1, 16]) {
   assert.equal(elements.get('lanes').height, 680);
   assert.deepEqual(evaluate('({selectedNote,playhead})'), before);
   assert.deepEqual(evaluate('reviewNotes.map(({note})=>targetRange(note))'), targetRanges);
+  if(initialRows.length){assert.ok(squares().length,'visible note has a colored square');assert.ok(squares().every(op=>op.args[2]===32),'spacing must preserve square dimensions')}
   scaleGeometry.push(evaluate('(()=>{const g=laneGeometry();return g.y(playhead+.1)-g.y(playhead)})()'));
 }
 assert.ok(scaleGeometry[0]<scaleGeometry[1] && scaleGeometry[1]<scaleGeometry[2]);
@@ -82,7 +90,7 @@ elements.get('spacingInput').value = '1.01';elements.get('spacingInput').oninput
 assert.equal(elements.get('spacingScale').value,'1.01');
 assert.ok(Math.abs(evaluate('(()=>{const g=laneGeometry();return g.y(playhead+.1)-g.y(playhead)})()')/scaleGeometry[1]-1.01)<1e-8);
 const beforeSize=evaluate('({playhead,span:laneGeometry().to-laneGeometry().from})');
-for(const size of [16,64,32]){elements.get('noteSize').value=String(size);elements.get('noteSize').oninput();assert.equal(evaluate('noteSize()'),size);assert.deepEqual(evaluate('({playhead,span:laneGeometry().to-laneGeometry().from})'),beforeSize)}
+for(const size of [16,64,32]){elements.get('noteSize').value=String(size);elements.get('noteSize').oninput();assert.equal(evaluate('noteSize()'),size);assert.ok(squares().every(op=>op.args[2]===size));assert.deepEqual(evaluate('({playhead,span:laneGeometry().to-laneGeometry().from})'),beforeSize)}
 elements.get('spacingScale').value = '1';elements.get('spacingScale').oninput();
 if (initialRows.length) {
   elements.get('events').children[0].onclick();
@@ -131,4 +139,4 @@ video.paused=true;dispatch('pause');assert.equal(animationCallbacks.size,0);
 assert.equal(elements.get('events').children[0],tableRowBeforePlayback,'playback must not rebuild the note table');
 assert.deepEqual(evaluate('data'), data, 'embedded evidence changed');
 console.log(JSON.stringify({initialRows, correctedRows, details, targetRanges, initialInputs,
-  initialDifferences, correctedInputs, correctedDifferences, verticalGeometry, verticalNotes}));
+  initialDifferences, correctedInputs, correctedDifferences, verticalGeometry, verticalNotes, initialMarkers, correctedMarkers}));

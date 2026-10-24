@@ -95,6 +95,13 @@ class ReportTest(unittest.TestCase):
             self.assertAlmostEqual(actual, expected)
         self.assertIn('Later than target range', result['initialRows'][0][3])
         self.assertIn('Overlaps target range', result['correctedRows'][0][3])
+        # The corrected intervals coincide in time, but both colored markers
+        # must survive on opposite sides of the fixed square.
+        marks = {mark['color']: mark['args'] for mark in result['correctedMarkers']}
+        self.assertEqual(set(marks), {'#b6ff59', '#ff70dd'})
+        self.assertAlmostEqual(marks['#b6ff59'][1], marks['#ff70dd'][1])
+        self.assertLess(marks['#b6ff59'][0], result['verticalNotes'][0]['x'])
+        self.assertGreater(marks['#ff70dd'][0], result['verticalNotes'][0]['x'])
         self.assertIsNone(result['initialInputs'][1])
         self.assertIsNone(result['correctedDifferences'][1])
         self.assertEqual(result['correctedRows'][1][2], 'Unconfirmed')

@@ -70,17 +70,17 @@ TEMPLATE = r'''<!doctype html>
 <label>Choose the original file if this browser cannot open its relative path <input id="file" type="file" accept="video/*,.mkv"></label><small>The file stays in this browser. Unsupported codecs may require another browser. Nothing is uploaded or re-encoded.</small>
 <div class="row"><button id="begin">Go to play start</button><button id="previous">Previous match</button><button id="next">Next match</button><span id="clock" class="pill"></span></div></section>
 <section class="panel chart"><div class="row chart-controls"><h2>Vertical note chart</h2><label>Spacing <input id="spacingScale" type="range" min="0.05" max="16" step="0.01" value="1"> <input id="spacingInput" type="number" min="0.05" max="16" step="0.01" value="1" aria-label="Exact note spacing multiplier"> <output id="spacingValue">1.00×</output></label><label>Note size <input id="noteSize" type="range" min="16" max="64" step="1" value="32"> <output id="noteSizeValue">32 px</output></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div>
-<p class="muted">Earlier ↑ · later ↓. White ring: target. Amber point: input estimate. Solid range: matched; dashed range: possible. Long blue bodies: holds; amber strips: sustained recognition. Conditional neighbor bounds appear only in the table. The green line follows video playback.</p>
+<p class="muted">Earlier ↑ · later ↓. Fixed colored squares: notes. Lime left: chart target range. Magenta right: input range. Solid: matched; dashed: possible. Long bodies: holds; magenta strips: sustained recognition. Conditional neighbor bounds appear only in the table. The green line follows video playback.</p>
 <div class="row"><button id="previousNote">Previous note</button><button id="nextNote">Next note</button><span id="chartPosition" class="pill"></span></div>
 <label>Recording position <input id="position" type="range" step="0.001" style="width:100%"></label>
-<div style="overflow-x:auto"><canvas id="lanes" width="1000" height="680" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right"></canvas></div><small>Click an arrow or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Long bodies are holds; amber spans show recognized held states, not repeated presses. Rolls and unreliable motion remain unresolved.</small></section>
+<div style="overflow-x:auto"><canvas id="lanes" width="1000" height="680" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right"></canvas></div><small><span style="color:#b6ff59">● Left: chart target range</span> · <span style="color:#ff70dd">● Right: input range (dashed = candidate)</span><br>Click a note or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Long bodies are holds; magenta spans show recognized held states, not repeated presses. Rolls and unreliable motion remain unresolved.</small></section>
 </div>
-<details class="panel"><summary>How to read the vertical chart</summary><p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Note size and spacing are independent. Play the video on the left to follow the same recording position in this chart. White points mark fitted judgment targets; blue bands show their uncertainty. Amber points and solid outlines show matched input ranges; dashed outlines show alternative refresh ranges, not confirmed inputs. Points at interval centers are visual guides, not subframe measurements. An amber mark above its arrow is early; below is late. The green line follows the recording.</p></details>
+<details class="panel"><summary>How to read the vertical chart</summary><p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Note size and spacing are independent. Play the video on the left to follow the same recording position in this chart. Colored squares retain a fixed size as spacing changes. Lime points and capped lines on the left show chart target ranges. Magenta points and capped lines on the right show input ranges. Dashed magenta lines show alternative refresh ranges, not confirmed inputs. Both ranges remain visible when their times overlap. Points at interval centers are visual guides, not subframe measurements. A magenta mark above its note is early; below is late. The green line follows the recording.</p></details>
 <section class="panel"><h2>Timing evidence</h2><label>Display latency correction: <output id="delayValue"></output> ms<br><input id="delay" type="range" min="-500" max="500" step="1"></label>
 <button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
 <div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="timing-ranges.json">Per-note timing ranges</a> · <a href="holds.json">Long-note geometry and held-state evidence</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section>
 <section class="panel chart"><h2>Observed timing offsets</h2><canvas id="timing" width="1200" height="290"></canvas><small>Each bar compares the input estimate with the note target range, including both frame-bracket and fitted-target uncertainty. Blue: earlier; amber: later; green: overlapping ranges. Click to select a note and seek the recording. This is display-based evidence, not a judgment-window score.</small></section>
-<section class="panel chart"><h2>Selected note: target vs input</h2><p class="muted">Select a note in the table or chart. Blue is the video-estimated target range; amber is the input estimate from a display refresh, after the latency correction above. Both use the same time axis, centered on the fitted target. These are uncertainty ranges, not game judgment windows or authoritative chart timestamps.</p><canvas id="comparison" width="1200" height="180" style="height:180px"></canvas><div id="comparisonDetails" aria-live="polite"></div></section>
+<section class="panel chart"><h2>Selected note: target vs input</h2><p class="muted">Select a note in the table or chart. Lime is the video-estimated target range; magenta is the input estimate from a display refresh, after the latency correction above. Both use the same time axis, centered on the fitted target. These are uncertainty ranges, not game judgment windows or authoritative chart timestamps.</p><canvas id="comparison" width="1200" height="180" style="height:180px"></canvas><div id="comparisonDetails" aria-live="polite"></div></section>
 <section class="panel"><h2>Note timing comparison</h2><p class="muted">Times are absolute recording positions. Input − target includes uncertainty in both ranges: negative is early, positive is late. Overlapping ranges do not establish an early/late result. Unmatched notes show alternative observed refresh ranges or conditional bounds from neighboring processed rows; these do not establish an input assignment. When evidence is absent, the input stays unconfirmed; a possible MISS never supplies one. Chord heads share a refresh bracket; aggregate brackets can span several rows.</p><div class="scroll"><table><thead><tr><th>Note / lane</th><th>Target range (video estimate)</th><th>Input range (display estimate)</th><th>Input − target</th><th>Evidence / judgment</th></tr></thead><tbody id="events"></tbody></table></div></section>
 <section class="panel"><h2>Coverage and exclusions</h2><div id="exclusions"></div><ul id="limitations"></ul></section>
 <section class="panel"><h2>Observed combo updates, including unassigned evidence</h2><p class="muted">One increment represents a judged row. Chords share that row; counter jumps can contain several rows or hold ticks. An unassigned update is still observed evidence. Resets do not identify missed presses.</p><div class="scroll"><table><thead><tr><th>Observed bracket</th><th>Counter</th><th>Rows advanced</th><th>Association</th></tr></thead><tbody id="comboEvents"></tbody></table></div></section>
@@ -95,6 +95,8 @@ const matches=data.matches,delay=$('delay');delay.value=data.display_delay_corre
 const fmt=t=>{const ms=Math.round(Math.abs(t)*1000),m=Math.floor(ms/60000);return (t<0?'-':'')+m+':'+((ms%60000)/1000).toFixed(3).padStart(6,'0')};
 const matchByNote=new Map(matches.map((m,i)=>[m.note,{match:m,index:i}]));
 const rangeByNote=data.timing_ranges?.notes||{};
+const targetColor='#b6ff59',inputColor='#ff70dd';
+const notePalette={blue:['#267bcc','#83caff'],red:['#c63c52','#ff9da9'],yellow:['#d8a600','#ffe476']};
 const holds=data.hold_analysis?.holds||[],holdById=new Map(holds.map(hold=>[hold.id,hold]));
 const holdFor=note=>note?.note_type==='hold'?holdById.get(note.hold_id):null;
 const possibleMissNotes=new Set((data.miss_candidates||[]).map(candidate=>candidate.note));
@@ -173,7 +175,7 @@ const from=playhead-span,to=playhead+span,laneWidth=(right-left)/data.layout.lan
 return {left,right,top,bottom,from,to,laneWidth,x:lane=>left+(lane+.5)*laneWidth,y:t=>top+(t-from)/(to-from)*(bottom-top)};
 }
 function lanes(){
-const canvas=$('lanes'),minimumWidth=(115+data.layout.lanes.length*Math.max(40,noteSize()+12))+'px';if(canvas.style.minWidth!==minimumWidth)canvas.style.minWidth=minimumWidth;if(canvas.width!==canvas.clientWidth)canvas.width=canvas.clientWidth;
+const canvas=$('lanes'),minimumWidth=(115+data.layout.lanes.length*Math.max(56,noteSize()+36))+'px';if(canvas.style.minWidth!==minimumWidth)canvas.style.minWidth=minimumWidth;if(canvas.width!==canvas.clientWidth)canvas.width=canvas.clientWidth;
 const c=background(canvas),g=laneGeometry(),w=canvas.width,h=canvas.height;
 const symbols=['↙','↖','●','↗','↘'];
 for(const [i,lane] of data.layout.lanes.entries()){
@@ -193,45 +195,52 @@ const start=hold.start_censored?hold.start_range[1]:(hold.start_range[0]+hold.st
 const end=hold.end_range?(hold.end_range[0]+hold.end_range[1])/2:hold.last_body_seconds;
 if(end<g.from||start>g.to)continue;
 const x=g.x(hold.lane),bodyWidth=Math.max(8,noteSize()*.4),y1=Math.max(g.top,g.y(start)),y2=Math.min(g.bottom,g.y(end));
-c.fillStyle='#245c76';c.fillRect(x-bodyWidth/2,y1,bodyWidth,Math.max(2,y2-y1));
-c.strokeStyle='#75bdea';c.lineWidth=2;c.strokeRect(x-bodyWidth/2,y1,bodyWidth,Math.max(2,y2-y1));
-if(visible(end)){c.fillStyle='#75bdea';c.fillRect(x-noteSize()*.4,g.y(end)-2,noteSize()*.8,4);if(hold.end_censored){c.font='12px system-ui';c.fillText('?',x+noteSize()*.45,g.y(end)+4)}}
+const palette=notePalette[data.layout.lanes[hold.lane].color]||notePalette.yellow;
+c.fillStyle=palette[0];c.fillRect(x-bodyWidth/2,y1,bodyWidth,Math.max(2,y2-y1));
+c.strokeStyle=palette[1];c.lineWidth=2;c.strokeRect(x-bodyWidth/2,y1,bodyWidth,Math.max(2,y2-y1));
+if(visible(end)){c.fillStyle=palette[1];c.fillRect(x-noteSize()*.4,g.y(end)-2,noteSize()*.8,4);if(hold.end_censored){c.font='12px system-ui';c.fillText('?',x+noteSize()*.45,g.y(end)+4)}}
 const envelope=hold.input.recognition_envelope;
 if(envelope){const lower=envelope[0]-Number(delay.value)/1000,upper=envelope[1]-Number(delay.value)/1000;
-if(upper>=g.from&&lower<=g.to){c.strokeStyle='#b59762';c.lineWidth=3;c.setLineDash([4,4]);c.beginPath();c.moveTo(x+bodyWidth/2+6,Math.max(g.top,g.y(lower)));c.lineTo(x+bodyWidth/2+6,Math.min(g.bottom,g.y(upper)));c.stroke();c.setLineDash([])}}
+if(upper>=g.from&&lower<=g.to){c.strokeStyle=inputColor;c.lineWidth=3;c.setLineDash([4,4]);c.beginPath();c.moveTo(x+noteSize()/2+9,Math.max(g.top,g.y(lower)));c.lineTo(x+noteSize()/2+9,Math.min(g.bottom,g.y(upper)));c.stroke();c.setLineDash([])}}
 for(const state of hold.input.segments){const lower=state.lower_seconds-Number(delay.value)/1000,upper=state.upper_seconds-Number(delay.value)/1000;
 if(upper<g.from||lower>g.to)continue;
-c.fillStyle='#f1c478';c.fillRect(x+bodyWidth/2+4,Math.max(g.top,g.y(lower)),5,Math.max(2,Math.min(g.bottom,g.y(upper))-Math.max(g.top,g.y(lower))));
+c.fillStyle=inputColor;c.fillRect(x+noteSize()/2+7,Math.max(g.top,g.y(lower)),5,Math.max(2,Math.min(g.bottom,g.y(upper))-Math.max(g.top,g.y(lower))));
 }
 }
 
-const band=(range,x,width,filled,color)=>{if(!range||range[1]<g.from||range[0]>g.to)return;
-const y1=Math.max(g.top,g.y(range[0])),y2=Math.min(g.bottom,g.y(range[1])),height=Math.max(2,y2-y1);
-c.fillStyle=color;c.strokeStyle=color;c.lineWidth=2;if(filled)c.fillRect(x-width/2,y1,width,height);else c.strokeRect(x-width/2,y1,width,height);
+// Time ranges use separate side rails so overlapping intervals remain legible.
+const timingMarker=(range,x,color,possible=false)=>{
+if(!range||range[1]<g.from||range[0]>g.to)return;
+const y1=Math.max(g.top,g.y(range[0])),y2=Math.min(g.bottom,g.y(range[1]));
+c.strokeStyle=color;c.fillStyle=color;c.lineWidth=3;c.setLineDash(possible?[4,3]:[]);
+c.beginPath();c.moveTo(x,y1);c.lineTo(x,Math.max(y1+2,y2));c.stroke();c.setLineDash([]);
+for(const t of range)if(visible(t)){c.beginPath();c.moveTo(x-4,g.y(t));c.lineTo(x+4,g.y(t));c.stroke()}
+const middle=(range[0]+range[1])/2;if(visible(middle)){c.beginPath();c.arc(x,g.y(middle),3,0,Math.PI*2);if(possible)c.stroke();else c.fill()}
 };
 for(const [index,note] of data.notes.entries()){
-const t=note.target_seconds??note.points.at(-1)?.[0],x=g.x(note.lane),size=noteSize(),width=size+10;
+const t=note.target_seconds??note.points.at(-1)?.[0],x=g.x(note.lane),size=noteSize();
 if(note.status!=='estimated'){
 if($('excluded').checked&&Number.isFinite(t)&&visible(t)){c.fillStyle='#647371';c.font='18px system-ui';c.textAlign='center';c.fillText('×',x,g.y(t)+6)}continue;
 }
 const target=targetRange(note),hold=holdFor(note),bounded=rangeByNote[index]?.status==='bounded',input=hold||bounded?null:inputRange(matchByNote.get(index)?.match,index);
-if(!visible(t)&&(!input||input[1]<g.from||input[0]>g.to))continue;
-band(target,x,width,true,'#244f66');
-if(input){
-c.strokeStyle='#f1c478';c.lineWidth=1;c.beginPath();c.moveTo(x,Math.max(g.top,Math.min(g.bottom,g.y(t))));c.lineTo(x,Math.max(g.top,Math.min(g.bottom,g.y((input[0]+input[1])/2))));c.stroke();
-const possible=!matchByNote.has(index);c.setLineDash(possible?[5,4]:[]);
-for(const range of inputIntervals(matchByNote.get(index)?.match,index)){
-band(range,x,width+6,false,'#f1c478');}
-c.setLineDash([]);
+const targetVisible=target&&target[1]>=g.from&&target[0]<=g.to,tailVisible=hold?.end_range&&hold.end_range[1]>=g.from&&hold.end_range[0]<=g.to;
+if(!visible(t)&&!targetVisible&&!tailVisible&&(!input||input[1]<g.from||input[0]>g.to))continue;
+const rail=size/2+9;
+// Glyph geometry depends on noteSize only, never time spacing or uncertainty.
+if(g.y(t)+size/2>=g.top&&g.y(t)-size/2<=g.bottom){
+const palette=notePalette[data.layout.lanes[note.lane].color]||notePalette.yellow;
+c.fillStyle=palette[0];
+c.fillRect(x-size/2,g.y(t)-size/2,size,size);
+c.strokeStyle=palette[1];c.lineWidth=2;c.strokeRect(x-size/2,g.y(t)-size/2,size,size);
+c.fillStyle='#ffffff';c.textAlign='center';c.font='bold '+size+'px system-ui';c.fillText(hold?.start_censored?'?':symbols[note.lane%5],x,g.y(t)+size*.32);
+if(index===selectedNote){c.strokeStyle='#ffffff';c.lineWidth=2;c.strokeRect(x-size/2-3,g.y(t)-size/2-3,size+6,size+6)}
 }
-if(visible(t)){
-const lane=data.layout.lanes[note.lane];c.fillStyle=lane.color==='blue'?'#75bdea':lane.color==='yellow'?'#f1c478':'#e89cba';c.textAlign='center';c.font='bold '+size+'px system-ui';c.fillText(hold?.start_censored?'?':symbols[note.lane%5],x,g.y(t)+size*.32);
-if(!hold?.start_censored){c.strokeStyle='#ffffff';c.lineWidth=2;c.beginPath();c.arc(x,g.y(t),6,0,Math.PI*2);c.stroke();}
-if(index===selectedNote){c.strokeStyle='#ffffff';c.lineWidth=2;c.strokeRect(x-width/2-6,g.y(t)-size*.55,width+12,size*1.1)}
+// Draw ranges after the glyph; side-by-side rails cannot cover each other.
+if(!hold?.start_censored)timingMarker(target,x-rail,targetColor);
+if(hold?.end_range)timingMarker(hold.end_range,x-rail,targetColor);
+for(const range of hold||bounded?[]:inputIntervals(matchByNote.get(index)?.match,index))timingMarker(range,x+rail,inputColor,!matchByNote.has(index));
 }
-for(const range of hold||bounded?[]:inputIntervals(matchByNote.get(index)?.match,index)){
-const middle=(range[0]+range[1])/2;if(visible(middle)){c.fillStyle='#f1c478';c.beginPath();c.arc(x,g.y(middle),3,0,Math.PI*2);if(matchByNote.has(index))c.fill();else{c.strokeStyle='#f1c478';c.lineWidth=1;c.stroke()}}}
-}
+
 c.textAlign='left';c.font='12px system-ui';c.fillStyle='#9cddbe';c.fillText('Now '+fmt(playhead),g.left+6,g.y(playhead)-8);
 canvas.onclick=e=>{
 const rect=canvas.getBoundingClientRect(),px=(e.clientX-rect.left)/canvas.clientWidth*w,py=(e.clientY-rect.top)/canvas.clientHeight*h;
@@ -273,7 +282,7 @@ const match=matchByNote.get(selectedNote)?.match,hold=holdFor(note),target=hold?
 const extent=Math.max(100,...[...(target||[]),...(input||[])].map(t=>Math.abs(1000*(t-note.target_seconds))))*1.15;
 const x=t=>center+1000*(t-note.target_seconds)/extent*(right-p)/2;
 for(const ms of [-extent,0,extent]){const px=center+ms/extent*(right-p)/2;c.strokeStyle='#314448';c.lineWidth=1;c.beginPath();c.moveTo(px,15);c.lineTo(px,135);c.stroke();c.fillStyle='#9cb1b1';c.fillText(ms.toFixed(1)+' ms',px-25,160)}
-for(const [label,range,color,y] of [['Target (video)',target,'#75bdea',45],['Input (display)',input,'#f1c478',105]]){
+for(const [label,range,color,y] of [['Target (video)',target,targetColor,45],['Input (display)',input,inputColor,105]]){
 c.fillStyle=color;c.fillText(label,5,y+4);
 if(range){c.strokeStyle=color;c.lineWidth=8;c.setLineDash(!hold&&!match&&label==='Input (display)'?[5,4]:[]);
 for(const part of label==='Input (display)'?inputIntervals(match,selectedNote):[range]){c.beginPath();c.moveTo(x(part[0]),y);c.lineTo(x(part[1]),y);c.stroke();for(const t of part)c.fillRect(x(t)-1,y-9,2,18)}c.setLineDash([])}
