@@ -61,7 +61,7 @@ TEMPLATE = r'''<!doctype html>
 <button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
 <div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section></div>
 <section class="panel chart"><h2>Observed timing offsets</h2><canvas id="timing" width="1200" height="290"></canvas><small>Each bar compares the input estimate with the note target range, including both frame-bracket and fitted-target uncertainty. Blue: earlier; amber: later; green: overlapping ranges. Click to select a note and seek the recording. This is display-based evidence, not a judgment-window score.</small></section>
-<section class="panel chart"><div class="row"><h2>Vertical note chart</h2><label>Window <select id="zoom"><option value="0.5">±0.5 seconds</option><option value="1.5" selected>±1.5 seconds</option><option value="3">±3 seconds</option><option value="8">±8 seconds</option></select></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div>
+<section class="panel chart"><div class="row"><h2>Vertical note chart</h2><label>Window <select id="zoom"><option value="0.5">±0.5 seconds</option><option value="1.5" selected>±1.5 seconds</option><option value="3">±3 seconds</option><option value="8">±8 seconds</option></select></label><label>Chart height <input id="chartHeight" type="range" min="360" max="2400" step="20" value="680"> <output id="chartHeightValue">680 px</output></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div>
 <p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Colored arrows mark fitted targets; blue bands show their uncertainty. Amber outlines show input ranges. An amber mark above its arrow is early; below is late. The green line follows the recording.</p>
 <div class="row"><button id="previousNote">Previous note</button><button id="nextNote">Next note</button><span id="chartPosition" class="pill"></span></div>
 <label>Recording position <input id="position" type="range" step="0.001" style="width:100%"></label>
@@ -180,6 +180,10 @@ const closest=candidates[0];
 if(closest)seek(closest.note.target_seconds,matchByNote.get(closest.index)?.index??-1,closest.index);else seek(t);
 };
 }
+$('chartHeight').oninput=()=>{
+const height=Number($('chartHeight').value),canvas=$('lanes');
+canvas.height=height;canvas.style.height=height+'px';$('chartHeightValue').textContent=height+' px';draw();
+};
 $('position').min=data.start_seconds;$('position').max=data.end_seconds;
 $('position').oninput=()=>seek(Number($('position').value));
 function stepNote(direction){

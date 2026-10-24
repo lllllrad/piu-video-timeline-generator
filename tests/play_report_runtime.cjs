@@ -6,7 +6,7 @@ const html = fs.readFileSync(process.argv[2], 'utf8');
 const payload = html.match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1];
 const runtime = html.match(/<script>\s*(.*?)<\/script>/s)[1];
 function element(tag) {
-  return {tag, children: [], textContent: '', value: '', width: 1200, height: 350,
+  return {tag, style: {}, children: [], textContent: '', value: '', width: 1200, height: 350,
     clientWidth: 1200, clientHeight: 350, complete: false, files: [],
     appendChild(node) { this.children.push(node); return node; },
     replaceChildren() { this.children = []; }, addEventListener() {},
@@ -53,6 +53,15 @@ for (const index of [...new Set([0, initialRows.length - 1])]) {
   if (!elements.get('events').children[index]) continue;
   elements.get('events').children[index].onclick();
   details.push(elements.get('comparisonDetails').children.map(node => node.textContent));
+}
+for (const height of [360, 1200, 2400]) {
+  const before = evaluate('({selectedNote,playhead,span:laneGeometry().to-laneGeometry().from})');
+  elements.get('chartHeight').value = String(height);
+  elements.get('chartHeight').oninput();
+  assert.equal(elements.get('lanes').height, height);
+  assert.equal(elements.get('lanes').style.height, height+'px');
+  assert.deepEqual(evaluate('({selectedNote,playhead,span:laneGeometry().to-laneGeometry().from})'), before);
+  assert.deepEqual(evaluate('reviewNotes.map(({note})=>targetRange(note))'), targetRanges);
 }
 if (initialRows.length) {
   elements.get('events').children[0].onclick();
