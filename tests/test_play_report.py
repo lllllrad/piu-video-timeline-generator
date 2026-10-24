@@ -159,3 +159,17 @@ class ReportTest(unittest.TestCase):
         self.assertIn('Possible refresh ranges', result['initialRows'][0][4])
         self.assertIn('association is unresolved', result['details'][0][2])
         self.assertAlmostEqual(result['correctedInputs'][0][0], 10.09)
+
+    def test_individual_report_includes_side_by_side_layout_css(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'report.html'
+            write_report({'song': 'Song', 'chart': 'D20', 'media': {'path': '/tmp/source.mkv'}}, path)
+            report = path.read_text()
+        stylesheet = re.search(r'<style>(.*?)</style>', report, re.S)[1]
+        # Both the wrapper and its desktop grid rules must ship in the report,
+        # rather than only in the separate report index.
+        self.assertIn('class="playback-grid"', report)
+        layout = re.search(r'\.playback-grid\s*\{([^}]+)\}', stylesheet)[1]
+        self.assertIn('display:grid', layout)
+        self.assertIn('grid-template-columns:minmax(0,1fr) minmax(0,1fr)', layout)
+        self.assertRegex(stylesheet, r'\.video-panel\s*\{[^}]*position:sticky')
