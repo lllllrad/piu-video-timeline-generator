@@ -2,6 +2,7 @@
 import argparse
 from collections import Counter
 import fcntl
+from fractions import Fraction
 from hashlib import sha256
 import json
 import math
@@ -93,7 +94,7 @@ def remember_alias(repository, title, code):
     write_json(repository / 'aliases.json', aliases)
 
 
-def draft(template, data, alignment):
+def draft(template, data, alignment, extend_constant_tempo=False):
     """Place observed heads/holds, keeping collisions and censored ends unresolved."""
     from .play_holds import presentation
     view = presentation(data)
@@ -105,6 +106,29 @@ def draft(template, data, alignment):
         raise ValueError('Recognized chart mode conflicts with analyzed lane geometry')
     document = template.expanded(lanes)
     grid = list(document.grid())
+    extension = None
+    if extend_constant_tempo:
+        endpoints = [note['target_seconds']-alignment['song_start_seconds'] for note in view['notes']
+                     if note['status'] == 'estimated' and math.isfinite(note['target_seconds'])
+                     and note.get('prediction_uncertainty_seconds', .02) <= .08]
+        endpoints.extend(sum(hold['end_range'])/2-alignment['song_start_seconds']
+                         for hold in view.get('hold_analysis', {}).get('holds', [])
+                         if hold['end_range'] and not hold['end_censored'])
+        latest = min(max(endpoints, default=0)+.05, data['end_seconds']-alignment['song_start_seconds']+.1)
+        settings = {}
+        for section in document.sections:
+            settings.update(section.directives)
+        step = 60/(Fraction(settings['BPM'])*int(settings['Split']))
+        original_end = grid[-1][2]
+        additional = max(0, math.ceil((Fraction(str(latest))-original_end)/step))
+        if additional:
+            if additional*step > 900:
+                raise ValueError('Timing extension exceeds supported song duration')
+            document.sections[-1].rows.extend(['.'*lanes]*additional)
+            grid = list(document.grid())
+            extension = {'basis': 'constant_tempo_catalogue_and_template', 'additional_rows': additional,
+                         'original_last_row_seconds': float(original_end), 'extended_last_row_seconds': float(grid[-1][2]),
+                         'review_required': True}
     times = np.array([float(time) for _, _, time in grid])
     if not np.all(np.diff(times) > 0):
         raise ValueError('Overlapping UCS timing sections need manual placement')
@@ -170,14 +194,14 @@ def draft(template, data, alignment):
                            'end_section': ei, 'end_row': er, 'end_song_seconds': float(end_time)})
     if not placements:
         raise ValueError('No bounded notes can be placed on the official timing grid')
-    return document, {'placements': placements, 'unresolved': pending,
+    return document, {'placements': placements, 'unresolved': pending, 'timing_extension': extension,
                       'summary': {'placed_taps': sum(p['kind'] == 'tap' for p in placements),
                                   'placed_holds': sum(p['kind'] == 'hold' for p in placements),
                                   'unresolved_note_heads': len(pending),
                                   'excluded_observations': dict(Counter(note.get('reason') for note in view['notes'] if note['status'] != 'estimated'))}}
 
 
-def register(data, output, code=None, repository=None, song_start=None, revision='phoenix', client=None):
+def register(data, output, code=None, repository=None, song_start=None, revision='phoenix', client=None, rebuild_draft=False):
     repository = Path(repository) if repository is not None else default_repository()
     output = Path(output)
     if not repository.is_dir():
@@ -192,6 +216,7 @@ def register(data, output, code=None, repository=None, song_start=None, revision
         return {'status': 'pending', 'reason': 'Song has no unique official UCS identity; specify --ucs-index'}
     resolved = index(resolved)
     target = repository / 'charts' / resolved / chart / revision
+    previous = None
     with (repository / '.chart-data.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if code:
@@ -200,7 +225,14 @@ def register(data, output, code=None, repository=None, song_start=None, revision
             if not (target / 'chart.ucs').is_file() or not (target / 'metadata.json').is_file():
                 raise ValueError(f'Existing chart directory is incomplete; inspect {target}')
             ucs.parse((target / 'chart.ucs').read_text())
-            return {'status': 'existing', 'chart': str(target / 'chart.ucs'), 'index': resolved}
+            if not rebuild_draft:
+                return {'status': 'existing', 'chart': str(target / 'chart.ucs'), 'index': resolved}
+            old_chart = (target / 'chart.ucs').read_bytes()
+            old_metadata = (target / 'metadata.json').read_bytes()
+            old = json.loads(old_metadata)
+            if old.get('review_status') != 'unreviewed_draft' or old.get('generated_ucs_sha256') != sha256(old_chart).hexdigest():
+                raise ValueError('Cannot rebuild a reviewed or manually edited chart; create a new revision')
+            previous = (old_chart, old_metadata)
     provider = client or Client()
     template, music, url = provider.template(resolved)
     if song_start is not None:
@@ -209,8 +241,11 @@ def register(data, output, code=None, repository=None, song_start=None, revision
         alignment = {'method': 'explicit_song_start', 'song_start_seconds': song_start, 'uncertainty_seconds': 0, 'rate': 1}
     else:
         alignment = align(data, music)
-    document, evidence = draft(template, data, alignment)
     code_entry = next(item for item in catalogue(repository)['songs'] if item['index'] == resolved)
+    bpm = code_entry.get('bpm', '')
+    constant = (re.fullmatch(r'\d+(?:\.\d+)?', bpm) is not None
+                and {Fraction(value) for section in template.sections for key, value in section.directives if key == 'BPM'} == {Fraction(bpm)})
+    document, evidence = draft(template, data, alignment, extend_constant_tempo=constant)
     content = document.text().encode()
     metadata = {'schema': 1, 'identity': {'ucs_index': resolved, 'chart': chart, 'revision': revision},
                 'song': code_entry, 'review_status': 'unreviewed_draft', 'generated_ucs_sha256': sha256(content).hexdigest(),
@@ -226,7 +261,15 @@ def register(data, output, code=None, repository=None, song_start=None, revision
     with (repository / '.chart-data.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if target.exists():
-            return {'status': 'existing', 'chart': str(target / 'chart.ucs'), 'index': resolved}
+            if previous is None:
+                return {'status': 'existing', 'chart': str(target / 'chart.ucs'), 'index': resolved}
+            if previous != ((target/'chart.ucs').read_bytes(), (target/'metadata.json').read_bytes()):
+                raise ValueError('Chart changed while rebuilding; preserve the newer files')
+            # Preserve user-added metadata fields when explicitly rebuilding an
+            # untouched unreviewed UCS draft. Automatic runs never rebuild.
+            metadata = {**json.loads(previous[1]), **metadata}
+        elif previous is not None:
+            raise ValueError('Chart was removed while rebuilding; retry explicitly')
         timing = repository / 'timing' / f'{resolved}.ucs'
         if not timing.exists():
             atomic_write(timing, template.text().encode())
@@ -236,11 +279,19 @@ def register(data, output, code=None, repository=None, song_start=None, revision
             temporary.mkdir()
             (temporary / 'chart.ucs').write_bytes(content)
             write_json(temporary / 'metadata.json', metadata)
-            temporary.rename(target)
+            backup = target.with_name(target.name + '.build-previous-' + uuid.uuid4().hex)
+            if previous is not None:
+                target.rename(backup)
+            try:
+                temporary.rename(target)
+            except OSError:
+                if previous is not None:
+                    backup.rename(target)
+                raise
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary)
-    return {'status': 'created', 'chart': str(target / 'chart.ucs'), 'index': resolved, **evidence['summary']}
+    return {'status': 'rebuilt' if previous is not None else 'created', 'chart': str(target / 'chart.ucs'), 'index': resolved, **evidence['summary']}
 
 
 def auto_register(data, output, **options):
@@ -269,6 +320,7 @@ def main():
     add.add_argument('source'); add.add_argument('--segment', type=int, default=1)
     add.add_argument('--ucs-index'); add.add_argument('--song-start', type=float)
     add.add_argument('--revision', default='phoenix')
+    add.add_argument('--rebuild-draft', action='store_true', help='Explicitly rebuild only an untouched, unreviewed UCS draft; preserve a backup')
     sub.add_parser('sync', help='Register missing charts from all completed local play analyses')
     args = parser.parse_args()
     try:
@@ -297,7 +349,7 @@ def main():
         for path in paths:
             options = {'repository': args.repo}
             if args.command == 'add':
-                options.update(code=args.ucs_index, song_start=args.song_start, revision=args.revision)
+                options.update(code=args.ucs_index, song_start=args.song_start, revision=args.revision, rebuild_draft=args.rebuild_draft)
             result = auto_register(json.loads(path.read_text()), path.parent, **options)
             counts[result['status']] += 1
         print(json.dumps(dict(counts)))

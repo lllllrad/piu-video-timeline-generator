@@ -33,6 +33,43 @@ def data():
 
 
 class ChartDataTest(unittest.TestCase):
+    def test_constant_tempo_template_can_extend_without_moving_original_rows(self):
+        source = data()
+        source['end_seconds'] = 25
+        source['notes'].append({'status': 'estimated', 'lane': 4, 'target_seconds': 22,
+                                'prediction_uncertainty_seconds': .01})
+        alignment = {'song_start_seconds': 10, 'uncertainty_seconds': 0}
+        _, incomplete = draft(ucs.parse(TEMPLATE), source, alignment)
+        self.assertEqual(incomplete['summary']['unresolved_note_heads'], 1)
+        doc, complete = draft(ucs.parse(TEMPLATE), source, alignment, extend_constant_tempo=True)
+        self.assertEqual(complete['summary']['unresolved_note_heads'], 0)
+        self.assertTrue(complete['timing_extension']['review_required'])
+        self.assertEqual(complete['summary']['placed_taps'], 4)
+        grid = list(doc.grid())
+        self.assertIn((0, 1152, 12), grid)
+        self.assertEqual(doc.sections[0].rows[1152], '....X')
+        for si, ri, time in ucs.parse(TEMPLATE).grid():
+            self.assertIn((si, ri*24, time), grid)
+
+    def test_explicit_rebuild_preserves_backup_and_refuses_reviewed_or_edited_chart(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); repo = initialize(root/'repo', Provider()); output = root/'video/play/segment-001'
+            output.mkdir(parents=True)
+            result = register(data(), output, repository=repo, song_start=10, client=Provider())
+            chart = Path(result['chart']); original = chart.read_bytes()
+            result = register(data(), output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
+            self.assertEqual(result['status'], 'rebuilt')
+            backup = next(chart.parent.parent.glob('phoenix.build-previous-*'))
+            self.assertEqual((backup/'chart.ucs').read_bytes(), original)
+            chart.write_text(chart.read_text().replace('X....', '....X', 1))
+            with self.assertRaisesRegex(ValueError, 'manually edited'):
+                register(data(), output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
+            chart.write_bytes(original)
+            metadata = chart.with_name('metadata.json'); saved = json.loads(metadata.read_text())
+            saved['review_status'] = 'reviewed'; metadata.write_text(json.dumps(saved))
+            with self.assertRaisesRegex(ValueError, 'reviewed'):
+                register(data(), output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
+
     def test_taps_holds_and_double_rows_preserve_song_timing(self):
         source = data()
         source['chart'] = 'D22'; source['layout']['lanes'] = [{}]*10
