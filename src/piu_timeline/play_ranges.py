@@ -38,10 +38,12 @@ def timing_ranges(data):
                 continue
             lo, hi = event['lower_seconds'], event['upper_seconds']
             if math.isfinite(lo) and math.isfinite(hi) and lo <= hi:
-                events.append({'source': source, 'event': index, 'lower_seconds': lo,
+                events.append({'source': source, 'event': index, 'delta': event.get('delta', 1), 'lower_seconds': lo,
                                'upper_seconds': hi, 'reason': event.get('reason'),
                                **({'source_pts_seconds': event['source_pts_seconds']} if 'source_pts_seconds' in event else {})})
-    correction = data.get('display_delay_correction_ms', 0) / 1000
+    holds = {hold['id']: hold for hold in data.get('hold_analysis', {}).get('holds', [])}
+    from .play_candidates import candidates
+    constrained, rejected = candidates(data, events)
     ordered = sorted(matches.values(), key=lambda match: match['target_seconds'])
     def bracket(match):
         return (match.get('observation_lower_seconds', match.get('combo_lower_seconds')),
@@ -51,7 +53,16 @@ def timing_ranges(data):
         if note['status'] != 'estimated':
             continue
         target, uncertainty = note['target_seconds'], note['prediction_uncertainty_seconds']
-        record = {'target_range': [target - uncertainty, target + uncertainty], 'input_ranges': []}
+        record = {'target_range': [target - uncertainty, target + uncertainty], 'input_ranges': [],
+                  'rejected_candidates': rejected.get(index, [])}
+        if note.get('note_type') == 'hold':
+            hold = holds[note['hold_id']]
+            ranges = [[segment['lower_seconds'], segment['upper_seconds']] for segment in hold['input']['segments']]
+            result[index] = {**record, 'status': 'hold_state' if ranges else 'hold_unresolved',
+                             'input_ranges': ranges, 'target_range': hold['start_range'],
+                             'end_range': hold['end_range'], 'reason': 'sustained_state_not_repeated_presses',
+                             'input_kind': 'sustained_recognition', 'press_range': None, 'release_range': None}
+            continue
         match = matches.get(index)
         if match and match.get('judgment_label') != 'MISS':
             lo = match.get('observation_lower_seconds', match.get('combo_lower_seconds'))
@@ -65,10 +76,7 @@ def timing_ranges(data):
                 # Review a wider neighborhood than strict association, including
                 # delayed processing in nearby frames. Keep all alternatives and their provenance; this
                 # does not assert that any event belongs to this note.
-                low = target - uncertainty - .25 + correction
-                high = target + uncertainty + .25 + correction
-                alternatives = [event for event in events if event['lower_seconds'] <= high
-                                and event['upper_seconds'] >= low]
+                alternatives = constrained.get(index, [])
                 intervals = []
                 for lo, hi in sorted((event['lower_seconds'], event['upper_seconds']) for event in alternatives):
                     if intervals and lo <= intervals[-1][1]:
@@ -76,9 +84,9 @@ def timing_ranges(data):
                     else:
                         intervals.append([lo, hi])
                 record.update(status='possible' if alternatives else 'unknown', input_ranges=intervals,
-                              reason='ambiguous_display_association' if alternatives else 'no_nearby_positive_refresh',
+                              reason='ambiguous_display_association' if alternatives else 'nearby_refresh_rejected_by_constraints' if record['rejected_candidates'] else 'no_nearby_positive_refresh',
                               alternatives=alternatives)
-                if not intervals:
+                if not intervals and not record['rejected_candidates']:
                     before = next((match for match in reversed(ordered) if match['target_seconds'] < target - .025), None)
                     after = next((match for match in ordered if match['target_seconds'] > target + .025), None)
                     if before and after and after['target_seconds'] - before['target_seconds'] <= 3:

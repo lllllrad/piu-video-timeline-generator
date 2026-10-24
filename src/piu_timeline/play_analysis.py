@@ -553,8 +553,15 @@ def run(source, segment_number=1, force=False, **options):
                     and cached.get('result_reference') == result_reference(segments[segment_number-1],options.get('player'))
                     and judgment_cache_current(cached,root,final)):
                 from .play_report import write_report
+                from .play_holds import augment_holds
+                previous_holds = cached.get('hold_analysis')
+                cached = augment_holds(cached, final)
                 write_report(cached, final / 'report.html', final)
-                print('Reusing saved native-frame play analysis; no decoding or OCR.')
+                if cached.get('hold_analysis') != previous_holds:
+                    updated = final / 'analysis.holds-build.json'
+                    updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
+                    updated.replace(previous)
+                print('Reusing saved note/judgment analysis and compatible long-note evidence; no OCR.')
                 print(final / 'report.html')
                 return final / 'report.html'
         if not force and not can_refit and document.get('media'):
@@ -569,6 +576,8 @@ def run(source, segment_number=1, force=False, **options):
         else:
             result = analyze_play(document, segments[segment_number-1], pending, **options)
         result = augment_judgments(result,pending)
+        from .play_holds import augment_holds
+        result = augment_holds(result,pending)
         stat = Path(document['media']['path']).stat()
         if (stat.st_size,stat.st_mtime_ns) != (result['media']['size_bytes'],result['media']['mtime_ns']):
             raise ValueError('Source changed during play analysis')

@@ -27,6 +27,7 @@ Codex-only environment generation and optional mise installation are documented 
 - `evidence.py` resolves labels, player identity and stage-row associations across a credit.
 - `credits.py` samples screen transitions inside gameplay gaps and groups plays using observed credit boundaries.
 - `result_stats.py` extracts per-player result fields only from per-song results.
+- `play_holds.py` acquires small native-frame body/receptor features, reconstructs long-note endpoints and sustained recognition spans, and projects a hold-aware chart without converting ticks into presses. `play_candidates.py` constrains review alternatives using refresh ownership, processed-row order and per-lane receptor evidence.
 - `play_analysis.py` orchestrates opt-in visual analysis and caches evidence; `play_report.py` renders a self-contained local HTML view. `play_ranges.py` derives review-only alternative refresh intervals and conditional neighboring-row bounds from saved evidence without changing confirmed associations or reacquiring frames.
 - `play_judgments.py` learns a bounded set of judgment-word templates, detects native-frame label/animation refreshes independently of combo visibility, and merges evidence without duplicate note assignments. MISS never becomes a physical input timestamp.
 - `play_frames.py` streams native decoded frames with original PTS and no FPS conversion.
