@@ -67,6 +67,25 @@ class CandidateTest(unittest.TestCase):
         self.assertEqual(set(result), {0, 1})
         self.assertTrue(all(entries[0]['alternative_rows'] == 2 for entries in result.values()))
 
+    def test_tap_refresh_during_flash_uses_bracket_before_lane_light_becomes_visible(self):
+        from piu_timeline.play_holds import receptor_runs
+        frames=[{'playback_seconds':time,'source_pts_seconds':time+100,
+                 'receptor_lit':[lit],'common_receptor_flash':lit is None}
+                for time,lit in [(10,False),(10.02,False),(10.04,None),(10.06,None),
+                                 (10.08,True),(10.1,True)]]
+        data={'notes':[note(10.05)],'matches':[],
+              'hold_analysis':{'holds':[{'start_range':[9,9.01],'start_censored':False,'end_range':[11,11.01]}],
+                               'receptor_runs':receptor_runs(frames)}}
+        result,_=candidates(data,[event(10.04,10.05)])
+        self.assertIn(0,result)
+        self.assertEqual(result[0][0]['candidate_range'],[10.04,10.05])
+        self.assertEqual(result[0][0]['lane_support_runs'][0]['onset_range'],[10.02,10.08])
+        self.assertEqual(data['matches'],[])
+        frames[0]['receptor_lit']=[True];frames[1]['receptor_lit']=[True]
+        data['hold_analysis']['receptor_runs']=receptor_runs(frames)
+        result,_=candidates(data,[event(10.04,10.05)])
+        self.assertNotIn(0,result)
+
     def test_processed_row_order_rejects_earlier_note_after_a_later_anchor(self):
         data = {'notes': [note(10.1), note(9.99, 1), note(10.15, 1)], 'matches': [
             {'note': 0, 'target_seconds': 10.1, 'combo_event': 1,

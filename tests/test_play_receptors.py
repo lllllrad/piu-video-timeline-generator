@@ -6,13 +6,43 @@ from unittest.mock import patch
 
 import numpy as np
 
-from piu_timeline.play_receptors import fractions, observations, reject_common_flashes
+from piu_timeline.play_receptors import fractions, observations, reject_common_flashes, onset_overlaps
 from piu_timeline.play_holds import receptor_runs
 
 LAYOUT={'receptor_y':.15,'lanes':[{'x':.38+.06*i} for i in range(5)]}
 
 
 class ReceptorTest(unittest.TestCase):
+    def test_short_shared_flash_preserves_a_bounded_lane_transition(self):
+        frames = [{'playback_seconds':time,'source_pts_seconds':time+100,
+                   'receptor_lit':[lit],'common_receptor_flash':lit is None}
+                  for time,lit in [(10,False),(10.02,False),(10.04,None),(10.06,None),
+                                   (10.08,True),(10.1,True)]]
+        runs = receptor_runs(frames)
+        onset = runs[-1]
+        self.assertIsNone(onset['previous_lit'])
+        self.assertEqual(onset['onset_range'],[10.02,10.08])
+        self.assertEqual(onset['onset_source_pts_seconds'],[110.02,110.08])
+        self.assertTrue(onset_overlaps(onset,10.04,10.06))
+        self.assertFalse(onset_overlaps(onset,10.11,10.12))
+        self.assertEqual(frames[2]['receptor_lit'],[None])
+
+    def test_unknown_state_cannot_invent_an_onset_without_bounded_continuous_off_evidence(self):
+        cases = [
+            [(0,True,False),(.02,None,True),(.04,True,False),(.06,True,False)],
+            [(0,None,True),(.02,True,False),(.04,True,False)],
+            [(0,False,False),(.02,None,False),(.04,True,False),(.06,True,False)],
+            [(0,False,False),(.02,None,True),(.2,True,False),(.22,True,False)],
+            [(0,False,False)]+[(i*.02,None,True) for i in range(1,9)]+[(.18,True,False),(.2,True,False)],
+        ]
+        for samples in cases:
+            with self.subTest(samples=samples):
+                frames=[{'playback_seconds':time,'source_pts_seconds':time+100,
+                         'receptor_lit':[lit],'common_receptor_flash':flash} for time,lit,flash in samples]
+                onset=receptor_runs(frames)[-1]
+                self.assertIsNone(onset['onset_range'])
+                self.assertFalse(onset_overlaps(onset,0,.3))
+
     def test_shared_flash_is_unknown_while_local_signal_survives_its_decay(self):
         frames=[{'playback_seconds':i*.02,'source_pts_seconds':i*.02+10,'receptor_lit':[True]*5}
                 for i in range(6)]

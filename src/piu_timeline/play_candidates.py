@@ -2,6 +2,8 @@
 from collections import defaultdict
 from statistics import median
 
+from .play_receptors import onset_overlaps
+
 
 EARLY_SECONDS = .25
 LATE_SECONDS = .5
@@ -93,15 +95,14 @@ def candidates(data, events):
             if previous and target < previous['target']-.025 or following and target > following['target']+.025:
                 rejected[index].add('violates_processed_row_order');continue
             reliable = min(sensor[lane]) >= 3
-            supported = [run for run in lit[lane] if run['start_seconds'] <= support_hi+frame*2
-                         and run['end_seconds'] >= support_lo-frame*2 and run['frames'] >= 2]
+            supported = [run for run in lit[lane] if run['frames'] >= 2 and (
+                         run['start_seconds'] <= support_hi+frame*2 and run['end_seconds'] >= support_lo-frame*2
+                         or onset_overlaps(run, support_lo, support_hi, frame*2))]
             if reliable and not supported:
                 rejected[index].add('receptor_lane_not_active');continue
             supports[index] = supported
             hold_tick = any(event.get('reason') == 'ongoing_hold_tick_not_new_press' for event in family['events']) or any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2)+.04 and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds']) for hold in data.get('hold_analysis', {}).get('holds', []))
-            if hold_tick and not any(run['previous_seconds'] is not None and run.get('previous_lit',False) is False
-                                     and run['previous_seconds'] <= support_hi+frame*2
-                                     and support_lo-frame*2 <= run['start_seconds'] <= support_hi+frame*2 for run in supported):
+            if hold_tick and not any(onset_overlaps(run, support_lo, support_hi, frame*2) for run in supported):
                 rejected[index].add('hold_tick_without_independent_lane_onset');continue
             distance = max(0, abs(target+offset-(lo+hi)/2)-(hi-lo)/2-uncertainty)
             if rows and abs(target-rows[-1]['target']) < .025:

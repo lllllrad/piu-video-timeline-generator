@@ -14,7 +14,7 @@ from .play_frames import decode_frames
 from .play_tracking import Track, fit_track
 
 FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 10}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 11}
 
 
 def fingerprint(value):
@@ -257,11 +257,16 @@ def reconstruct(data, frames):
 
 
 def receptor_runs(frames):
-    runs, current = [], {}
+    runs, current, known, bridge = [], {}, {}, {}
+    previous_time = None
     for frame in frames:
+        time = frame['playback_seconds']
+        continuous = previous_time is None or 0 < time-previous_time <= .075
         for lane, lit in enumerate(frame['receptor_lit']):
+            if not continuous:
+                bridge[lane] = False
             previous = current.get(lane)
-            if previous is not None and previous['lit'] == lit:
+            if previous is not None and previous['lit'] == lit and continuous:
                 previous.update(end_seconds=frame['playback_seconds'], last_source_pts_seconds=frame['source_pts_seconds'], frames=previous['frames']+1)
             else:
                 run = {'lane': lane, 'lit': lit, 'start_seconds': frame['playback_seconds'],
@@ -270,6 +275,19 @@ def receptor_runs(frames):
                        'previous_seconds': previous['end_seconds'] if previous else None,
                        'previous_lit': previous['lit'] if previous else None}
                 runs.append(run); current[lane] = run
+                if lit is True:
+                    before = known.get(lane)
+                    run['onset_range'] = None
+                    if (bridge.get(lane) and before is not None and before['lit'] is False
+                            and time-before['end_seconds'] <= .15):
+                        run['onset_range'] = [before['end_seconds'], time]
+                        run['onset_source_pts_seconds'] = [before['last_source_pts_seconds'], frame['source_pts_seconds']]
+            if lit is None:
+                bridge[lane] = bridge.get(lane, False) and frame.get('common_receptor_flash', False)
+            else:
+                known[lane] = current[lane]
+                bridge[lane] = lit is False
+        previous_time = time
     return runs
 
 
@@ -327,11 +345,10 @@ def presentation(data):
                    and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds'])
                    for hold in holds)
     def independent_onset(note_index, lo, hi):
+        from .play_receptors import onset_overlaps
         lane = notes[note_index]['lane']
         guard = 2*(data.get('median_frame_interval_seconds') or .017)
-        return any(run['lane'] == lane and run['lit'] and run['frames'] >= 2
-                   and run['previous_seconds'] is not None and run.get('previous_lit',False) is False and run['previous_seconds'] <= hi+guard
-                   and lo-guard <= run['start_seconds'] <= hi+guard
+        return any(run['lane'] == lane and onset_overlaps(run, lo, hi, guard)
                    for run in data['hold_analysis'].get('receptor_runs', []))
     matches, ambiguous = [], []
     for match in data['matches']:

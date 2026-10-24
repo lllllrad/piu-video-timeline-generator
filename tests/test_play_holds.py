@@ -150,3 +150,12 @@ class HoldTest(unittest.TestCase):
         supported = presentation(data)
         self.assertEqual(supported['matches'],data['matches'])
         self.assertEqual(supported['combo_events'][0]['reason'],'tap_with_independent_lane_onset_during_hold')
+        # Light can first become distinguishable after the judgment refresh.
+        data['hold_analysis']['receptor_runs']=[{'lane':1,'lit':True,'frames':3,
+            'previous_seconds':1.56,'previous_lit':None,'start_seconds':1.58,'end_seconds':1.62,
+            'onset_range':[1.48,1.58],'onset_source_pts_seconds':[101.48,101.58]}]
+        supported = presentation(data)
+        self.assertEqual(supported['matches'],data['matches'])
+        self.assertEqual(supported['matches'][0]['combo_upper_seconds'],1.51)
+        data['hold_analysis']['receptor_runs'][0]['onset_range']=None
+        self.assertEqual(presentation(data)['matches'],[])

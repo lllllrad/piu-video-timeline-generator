@@ -11,6 +11,19 @@ from .play_frames import decode_frames
 FORMAT = {'schema': 1, 'width': 325, 'measurement': 'white_fraction_190_65'}
 
 
+def onset_overlaps(run, lo, hi, guard=0):
+    """Require a bounded, observed off-to-on transition, not persistent light."""
+    if run['lit'] is not True or run['frames'] < 2:
+        return False
+    if 'onset_range' in run:
+        interval = run['onset_range']
+    else:
+        # Legacy runs have no bridge provenance; only adjacent known states count.
+        interval = ([run['previous_seconds'], run['start_seconds']]
+                    if run.get('previous_lit', False) is False and run.get('previous_seconds') is not None else None)
+    return interval is not None and interval[0] <= hi+guard and interval[1] >= lo-guard
+
+
 def fractions(rgb, layout, full_height=None, y_offset=0):
     height = full_height or rgb.shape[0]
     width = rgb.shape[1]
@@ -80,7 +93,7 @@ def reject_common_flashes(frames, scores):
     """Shared receptor whitening is unknown, rather than a press on every lane.
 
     Keep strong lane-local light above the shared level, including its trailing
-    frames. Unknown samples cannot establish a fresh independent input onset.
+    frames. Unknown samples alone cannot establish an independent input onset.
     """
     if scores is None:
         return frames
