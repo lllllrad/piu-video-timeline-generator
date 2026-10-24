@@ -1,7 +1,12 @@
 import unittest
+from copy import deepcopy
+import json
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
 import cv2
 import numpy as np
-from piu_timeline.play_judgments import JudgmentReader, JudgmentTracker, feature_map, merge_judgments, LABELS
+from piu_timeline.play_judgments import JudgmentReader, JudgmentTracker, feature_map, merge_judgments, augment_judgments, LABELS, VERSION
 
 
 def observation(label='PERFECT',width=100,height=20,blank=False):
@@ -9,6 +14,95 @@ def observation(label='PERFECT',width=100,height=20,blank=False):
 
 
 class JudgmentTest(unittest.TestCase):
+    def combo_data(self,times,brackets):
+        return {'notes':[{'lane':0,'status':'estimated','target_seconds':t} for t in times],
+                'combo_events':[{'before':i+4,'after':i+5,'delta':1,'status':'matched',
+                                 'lower_seconds':lo,'upper_seconds':hi} for i,(lo,hi) in enumerate(brackets)],
+                'matches':[{'note':i,'combo_event':i,'target_seconds':t,
+                            'combo_lower_seconds':lo,'combo_upper_seconds':hi,
+                            'raw_offset_lower_ms':1000*(lo-t),'raw_offset_upper_ms':1000*(hi-t)}
+                           for i,(t,(lo,hi)) in enumerate(zip(times,brackets))],
+                'coverage':{}}
+
+    def test_synchronized_refresh_uses_counter_instead_of_nearest_fitted_note(self):
+        # GOOD is closer to the predicted crossing, but the counter updates
+        # with PERFECT. Independent nearest-time association used to attach GOOD.
+        data=self.combo_data([1.04],[(1.067,1.083)])
+        events=[{'label':'GOOD','lower_seconds':1.033,'upper_seconds':1.05},
+                {'label':'PERFECT','lower_seconds':1.067,'upper_seconds':1.083}]
+        result=merge_judgments(data,events)
+        match=result['matches'][0]
+        self.assertEqual(match['judgment_label'],'PERFECT')
+        self.assertEqual(match['judgment_label_source'],'synchronized_refresh')
+        self.assertEqual(match['observation_upper_seconds'],1.083)
+        self.assertEqual(len(result['matches']),1)
+
+    def test_counter_anchor_removes_a_competing_neighbor_from_alignment(self):
+        data=self.combo_data([1.00],[(.99,1.01)])
+        data['notes'].append({'lane':0,'status':'estimated','target_seconds':1.045})
+        events=[{'label':'PERFECT','lower_seconds':.99,'upper_seconds':1.01},
+                {'label':'GREAT','lower_seconds':1.025,'upper_seconds':1.035}]
+        result=merge_judgments(data,events)
+        self.assertEqual([(m['note'],m['judgment_label']) for m in result['matches']],[(0,'PERFECT'),(1,'GREAT')])
+
+    def test_counter_frames_supply_label_without_inventing_a_word_refresh(self):
+        data=self.combo_data([1.],[(.99,1.01)])
+        frames=[{'source_pts_seconds':t+5,'playback_seconds':t,**observation('PERFECT')} for t in (1.01,1.027,1.044)]
+        result=merge_judgments(data,[],frames)
+        match=result['matches'][0]
+        self.assertEqual(match['judgment_label'],'PERFECT')
+        self.assertIsNone(match['judgment_event'])
+        self.assertEqual(result['judgment_events'],[])
+        self.assertEqual(match['judgment_label_source'],'post_combo_frames')
+        self.assertEqual([f['source_pts_seconds'] for f in match['judgment_observations']],[f['source_pts_seconds'] for f in frames])
+        self.assertEqual(match['observation_upper_seconds'],1.01)
+        self.assertEqual(result['coverage']['combo_frame_labeled_note_heads'],1)
+        expected=deepcopy(result['matches'])
+        again=merge_judgments(result,[],frames)
+        self.assertEqual(again['matches'],expected)
+
+    def test_equally_close_refreshes_do_not_force_a_counter_anchor(self):
+        data=self.combo_data([1.02],[(1.,1.02)])
+        events=[{'label':'GOOD','lower_seconds':.99,'upper_seconds':1.01},
+                {'label':'PERFECT','lower_seconds':1.01,'upper_seconds':1.03}]
+        result=merge_judgments(data,events)
+        self.assertFalse(any('anchor_combo_event' in e for e in result['judgment_events']))
+        self.assertNotIn('judgment_label',result['matches'][0])
+
+    def test_counter_frames_reject_conflicting_words_miss_and_aggregate_rows(self):
+        for labels,delta in [(('PERFECT','GREAT','GREAT'),1),(('MISS',)*3,1),(('PERFECT',)*3,2)]:
+            with self.subTest(labels=labels,delta=delta):
+                data=self.combo_data([1.],[(.99,1.01)])
+                data['combo_events'][0]['delta']=delta
+                frames=[{'source_pts_seconds':t+5,'playback_seconds':t,**observation(label)}
+                        for t,label in zip((1.01,1.027,1.044),labels)]
+                result=merge_judgments(data,[],frames)
+                self.assertNotIn('judgment_label',result['matches'][0])
+
+    def test_counter_frames_stop_before_the_next_input(self):
+        data=self.combo_data([1.,1.04],[(.99,1.01),(1.025,1.04)])
+        frames=[{'source_pts_seconds':t+5,'playback_seconds':t,**observation(label)}
+                for t,label in [(1.01,'PERFECT'),(1.027,'GREAT'),(1.044,'GREAT'),(1.061,'GREAT')]]
+        result=merge_judgments(data,[],frames)
+        self.assertNotIn('judgment_label',result['matches'][0])
+        self.assertEqual(result['matches'][1]['judgment_label'],'GREAT')
+
+    def test_previous_word_observations_upgrade_without_decoding_or_ocr(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output=Path(temporary)
+            data=self.combo_data([1.],[(.94,1.01)])
+            data.update(media={},analysis_width=650,judgment_analysis_version=6,
+                        judgment_template_labels=[],judgment_events=[])
+            frames=[{'source_pts_seconds':t+5,'playback_seconds':t,**observation('PERFECT')}
+                    for t in (1.01,1.027,1.044)]
+            (output/'judgments.jsonl').write_text(''.join(json.dumps(frame)+'\n' for frame in frames))
+            with patch('piu_timeline.play_judgments.collect_features',side_effect=AssertionError('must reuse native observations')), \
+                    patch('piu_timeline.play_judgments.ocr_images',side_effect=AssertionError('must not OCR')):
+                result=augment_judgments(data,output)
+            self.assertEqual(result['judgment_analysis_version'],VERSION)
+            self.assertEqual(result['matches'][0]['judgment_label'],'PERFECT')
+            self.assertEqual(result['matches'][0]['observation_lower_seconds'],.94)
+
     def test_all_five_words_are_classified_by_shape_without_counter(self):
         models=[];images={}
         for label in LABELS:

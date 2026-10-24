@@ -1,5 +1,6 @@
 """Native-frame judgment words and refresh evidence independent of the counter."""
 from copy import deepcopy
+from bisect import bisect_left, bisect_right
 import json
 from pathlib import Path
 import re
@@ -11,7 +12,7 @@ from .ocr import ocr_images
 from .play_frames import crop_region, decode_frames
 from .play_tracking import associate
 
-VERSION = 6
+VERSION = 7
 LABELS = ('PERFECT', 'GREAT', 'GOOD', 'BAD', 'MISS')
 
 
@@ -277,9 +278,70 @@ class JudgmentTracker:
             self.last = observation
 
 
-def merge_judgments(data, events):
+def synchronized_refreshes(data, events):
+    """Pair mutually unique display brackets before using predicted note times."""
+    links = []
+    for ji,event in enumerate(events):
+        if event['status']!='candidate' or event['upper_seconds']-event['lower_seconds']>.05:
+            continue
+        for ci,counter in enumerate(data.get('combo_events',[])):
+            if counter['delta']!=1 or counter['upper_seconds']-counter['lower_seconds']>.1:
+                continue
+            if counter['status']!='matched' and counter.get('reason')!='ambiguous_note_or_combo_association':
+                continue
+            overlap=min(event['upper_seconds'],counter['upper_seconds'])-max(event['lower_seconds'],counter['lower_seconds'])
+            distance=abs(event['upper_seconds']-counter['upper_seconds'])
+            if overlap>=-1e-6 and distance<=.025:
+                links.append((distance,ji,ci))
+    pairs=[]
+    for distance,ji,ci in links:
+        alternatives=[other for other,j,c in links if (j,c)!=(ji,ci) and (j==ji or c==ci)]
+        if not alternatives or min(alternatives)-distance>=.008:
+            pairs.append((ji,ci))
+    # Display order must agree in both channels. Conflicting pairs stay unresolved.
+    return [(j,c) for j,c in pairs if all((j-j2)*(c-c2)>0 for j2,c2 in pairs if j2!=j)]
+
+
+def label_counter_frames(data, observations):
+    """Read labels after an already observed counter update; invent no refresh."""
+    if not observations:
+        return
+    times=[frame['playback_seconds'] for frame in observations]
+    groups={}
+    for match in data['matches']:
+        if match['combo_event'] is not None:
+            groups.setdefault(match['combo_event'],[]).append(match)
+    count=0
+    for ci,group in groups.items():
+        if any(match.get('judgment_label') for match in group):
+            continue
+        event=data['combo_events'][ci]
+        if event['delta']!=1 or event['upper_seconds']-event['lower_seconds']>.1:
+            continue
+        start=event['upper_seconds']
+        stop=start+.050001
+        if ci+1<len(data['combo_events']):
+            stop=min(stop,data['combo_events'][ci+1]['lower_seconds']-1e-6)
+        frames=observations[bisect_left(times,start-1e-6):bisect_right(times,stop)]
+        labels={frame['label'] for frame in frames if frame['label'] is not None}
+        known=[frame for frame in frames if frame['label'] is not None and frame['confidence']>=.8]
+        if (len(labels)!=1 or 'MISS' in labels or len(known)<2 or len(known)<len(frames)*.6
+                or known[0]['playback_seconds']>start+.035
+                or len({frame['source_pts_seconds'] for frame in known})<2):
+            continue
+        for match in group:
+            match.update(evidence_source='combo+judgment',judgment_label=known[0]['label'],
+                         judgment_event=None,judgment_label_source='post_combo_frames',
+                         judgment_observations=[{key:frame[key] for key in
+                             ('source_pts_seconds','playback_seconds','label','confidence')} for frame in known])
+            count+=1
+    data['coverage']['combo_frame_labeled_note_heads']=count
+
+
+def merge_judgments(data, events, observations=()):
     events = deepcopy(events)
     for event in events:
+        event.pop('anchor_combo_event',None)
         event.update(status=event.get('detection_status','candidate'),reason=event.get('detection_reason'))
         if event['label']=='MISS':
             event.update(status='excluded',reason='miss_is_not_a_press_timestamp')
@@ -287,14 +349,42 @@ def merge_judgments(data, events):
                  and event['lower_seconds']<=interval['end_seconds']+.1
                  for interval in data.get('unsupported_intervals',[])):
             event.update(status='excluded',reason='possible_hold_or_dense_stack')
-    matches = data['matches']
+    matches = [match for match in data['matches'] if match['combo_event'] is not None]
     combo_matches = list(matches)
     by_note = {match['note']:match for match in matches}
     for match in matches:
         match['evidence_source']='combo'
         match['observation_lower_seconds']=match['combo_lower_seconds']
         match['observation_upper_seconds']=match['combo_upper_seconds']
-    judge_matches = associate(data['notes'],events,display_delay=data.get('display_delay_correction_ms',0)/1000)
+        for key in ('judgment_label','judgment_event','judgment_label_source','judgment_observations'):
+            match.pop(key,None)
+    counter_groups={}
+    for match in matches:
+        counter_groups.setdefault(match['combo_event'],[]).append(match)
+    anchors=[]
+    anchored_counters=set()
+    for ji,ci in synchronized_refreshes(data,events):
+        group=counter_groups.get(ci)
+        if not group:
+            continue
+        event=events[ji]
+        event.update(status='corroborating',reason=None,anchor_combo_event=ci)
+        for match in group:
+            match.update(evidence_source='combo+judgment',judgment_label=event['label'],
+                         judgment_event=ji,judgment_label_source='synchronized_refresh')
+        anchors.append((ji,{match['note'] for match in group}))
+        anchored_counters.add(ci)
+    constraints={}
+    for ji,event in enumerate(events):
+        if event['status']!='candidate':continue
+        before=[ids for index,ids in anchors if index<ji]
+        after=[ids for index,ids in anchors if index>ji]
+        low=max((max(data['notes'][n]['target_seconds'] for n in ids) for ids in before),default=-float('inf'))
+        high=min((min(data['notes'][n]['target_seconds'] for n in ids) for ids in after),default=float('inf'))
+        constraints[ji]={n for n,note in enumerate(data['notes']) if note['status']=='estimated'
+                         and low<note['target_seconds']<high}
+    judge_matches = associate(data['notes'],events,display_delay=data.get('display_delay_correction_ms',0)/1000,
+                              event_note_constraints=constraints)
     groups = {}
     for match in judge_matches:
         groups.setdefault(match['combo_event'],[]).append(match)
@@ -302,6 +392,7 @@ def merge_judgments(data, events):
         event = events[index]
         note_ids = {match['note'] for match in group}
         conflicting = [match for match in combo_matches if match['note'] not in note_ids
+                       and match['combo_event'] not in anchored_counters
                        and event['lower_seconds']-.025<=match['combo_upper_seconds']
                        and event['upper_seconds']+.025>=match['combo_lower_seconds']]
         if conflicting:
@@ -311,6 +402,7 @@ def merge_judgments(data, events):
             existing = by_note.get(match['note'])
             if existing is not None:
                 existing.update(evidence_source='combo+judgment',judgment_label=event['label'],judgment_event=index)
+                existing['judgment_label_source']='aligned_refresh'
                 event['status']='corroborating'
             else:
                 match.pop('combo_event')
@@ -334,7 +426,11 @@ def merge_judgments(data, events):
     data['matches']=sorted(matches,key=lambda match:match['target_seconds'])
     data['judgment_events']=events
     data['miss_candidates']=miss_candidates
+    data['coverage']['combo_frame_labeled_note_heads']=0
+    label_counter_frames(data,observations)
     data['coverage'].update(timed_note_heads=len(matches),
+                            judgment_labeled_note_heads=sum(bool(m.get('judgment_label')) for m in matches),
+                            unlabeled_timed_note_heads=sum(not m.get('judgment_label') for m in matches),
                             judgment_only_note_heads=sum(m['evidence_source']=='judgment' for m in matches),
                             observed_judgment_updates=len(events),
                             observed_miss_updates=sum(e['label']=='MISS' for e in events))
@@ -344,20 +440,31 @@ def merge_judgments(data, events):
 def augment_judgments(data, output):
     models = load_bank(output.parent,data['media'],data['analysis_width'])
     available = {model['label'] for model in models}
-    if data.get('judgment_analysis_version')==VERSION and available.issubset(set(data.get('judgment_template_labels',[]))):
-        return merge_judgments(data,data.get('judgment_events',[]))
+    trace=output/'judgments.jsonl'
+    if (data.get('judgment_analysis_version') in (6,VERSION)
+            and available.issubset(set(data.get('judgment_template_labels',[])))
+            and (data.get('judgment_analysis_version')==VERSION or trace.is_file())):
+        observations=[]
+        if trace.is_file():
+            with trace.open() as saved:
+                observations=[json.loads(line) for line in saved]
+        data['judgment_analysis_version']=VERSION
+        print('Reusing saved judgment observations; no decoding or OCR.',flush=True)
+        return merge_judgments(data,data.get('judgment_events',[]),observations)
     print('Reading native judgment words independently of combo visibility...',flush=True)
     features,pts,times,samples = collect_features(data,output)
     models = learn_models(data,output,models,samples)
     bootstrap=output/'evidence/judgments/bootstrap.json'
     data['judgment_bootstrap_ocr_images']=json.loads(bootstrap.read_text())['ocr_images'] if bootstrap.is_file() else 0
     reader,tracker = JudgmentReader(models),JudgmentTracker()
-    with (output/'judgments.jsonl').open('w') as trace:
+    with trace.open('w') as stream:
         for feature,source_pts,seconds in zip(features,pts,times):
             observation=reader.read(feature)
             tracker.update(float(seconds),observation)
-            trace.write(json.dumps({'source_pts_seconds':float(source_pts),'playback_seconds':float(seconds),**observation})+'\n')
+            stream.write(json.dumps({'source_pts_seconds':float(source_pts),'playback_seconds':float(seconds),**observation})+'\n')
     data.update(judgment_analysis_version=VERSION,judgment_roi=judgment_region(data['layout']),
                 judgment_template_labels=sorted({model['label'] for model in models}),
                 judgment_missing_labels=sorted(set(LABELS)-{model['label'] for model in models}))
-    return merge_judgments(data,tracker.events)
+    with trace.open() as saved:
+        observations=[json.loads(line) for line in saved]
+    return merge_judgments(data,tracker.events,observations)

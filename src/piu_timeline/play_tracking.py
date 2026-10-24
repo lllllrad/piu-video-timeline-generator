@@ -343,7 +343,7 @@ class ComboTracker:
         self.stable, self.last_seen, self.pending = value, seconds, None
 
 
-def associate(notes, combo_events, window=.045, display_delay=0.0):
+def associate(notes, combo_events, window=.045, display_delay=0.0, event_note_constraints=None):
     """Align judged rows, not individual heads, to observed counter increments.
 
     A chord is one row. A skipped counter value can cover consecutive rows,
@@ -361,7 +361,7 @@ def associate(notes, combo_events, window=.045, display_delay=0.0):
     lengths = [event.get('delta',1) for _,event in events]
     weights = np.zeros((len(events),len(rows)))
     links = []
-    for i,(_,event) in enumerate(events):
+    for i,(event_index,event) in enumerate(events):
         count = lengths[i]
         center = (event['lower_seconds']+event['upper_seconds'])/2
         span = event['upper_seconds']-event['lower_seconds']
@@ -370,6 +370,9 @@ def associate(notes, combo_events, window=.045, display_delay=0.0):
             continue
         for j in range(len(rows)-count+1):
             group = rows[j:j+count]
+            allowed = (event_note_constraints or {}).get(event_index)
+            if allowed is not None and any(k not in allowed for row in group for k in row['notes']):
+                continue
             if any(len({notes[k]['lane'] for k in row['notes']}) != len(row['notes']) for row in group):
                 continue
             distances = [abs(row['seconds']+display_delay-center) for row in group]
