@@ -6,7 +6,7 @@ Generate a paste-ready song timeline from a Pump It Up Phoenix gameplay video.
 mise exec -- just auto 'https://www.youtube.com/watch?v=VIDEO_ID'
 ```
 
-With mise installed, run `mise install` once to provision the tools in `mise.toml`. Recipes automatically create `.venv` and install Python dependencies on first use. On Linux, the requirements include EasyOCR. Later runs reuse the environment; dependency changes trigger an update. Initial setup needs network access.
+With mise installed, run `mise install` once to provision the tools in `mise.toml`. Recipes automatically create `.venv` and install Python dependencies on first use. On Linux, the requirements include the local ONNX OCR runtime. Later runs reuse the environment; dependency changes trigger an update. Initial setup needs network access.
 
 The command downloads or opens the source, detects plays, recognizes songs, charts and result data, runs the default TypeScript format, prints the timeline, and saves everything under:
 
@@ -45,15 +45,15 @@ just auto VIDEO_ID
 
 The import refuses to overwrite an existing cached video. It moves the export to `.local/data/<video-id>/raw/`; the following `auto` command therefore makes no network request.
 
-Automatic OCR uses macOS Vision on macOS or EasyOCR on Linux. It requires a clearly visible Phoenix game screen. For a direct game capture or a different stream layout, specify the game rectangle:
+Automatic OCR uses macOS Vision on macOS or official PaddleOCR PP-OCRv5 models on Linux, running locally through ONNX Runtime. It requires a clearly visible Phoenix game screen. For a direct game capture or a different stream layout, specify the game rectangle:
 
 ```sh
 just auto VIDEO --game-roi 0,0,1920,1080
 ```
 
-On Linux, recipes install EasyOCR automatically from `requirements.txt`.
+On Linux, recipes install the ONNX Runtime and image-processing dependencies automatically from `requirements.txt`. Separate Korean/English recognition models and a lightweight text detector are downloaded on first use.
 
-Linux automatically uses an available GPU supported by the installed PyTorch build, with CPU fallback. No device setting is needed for `just auto`. To force CPU inference:
+Linux automatically uses an available CUDA provider supported by the installed ONNX Runtime, with CPU fallback. The default dependency uses the CPU runtime. No device setting is needed for `just auto`. To force CPU inference:
 
 ```sh
 PIU_OCR_DEVICE=cpu just auto VIDEO
@@ -61,7 +61,7 @@ PIU_OCR_DEVICE=cpu just auto VIDEO
 
 Progress includes per-segment elapsed time, OCR image counts (including focused crops), cache reuse and OCR time.
 
-Models are downloaded on first use into `.local/cache/easyocr/`; inference is local. See [development](docs/development.md) for explicit device selection and validation limits.
+Models are downloaded on first use into `.local/cache/paddleocr/`; pinned model revisions and SHA-256 checksums are verified before local inference. Existing EasyOCR installations remain available explicitly with `PIU_OCR_BACKEND=easyocr`. See [development](docs/development.md) for explicit device selection and validation limits.
 
 ## Visual play analysis
 

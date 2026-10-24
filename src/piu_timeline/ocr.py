@@ -18,18 +18,26 @@ ROOT = Path(__file__).resolve().parents[2]
 def configuration():
     backend = os.environ.get("PIU_OCR_BACKEND", "auto").lower()
     if backend == "auto":
-        backend = "vision" if sys.platform == "darwin" else "easyocr"
+        backend = "vision" if sys.platform == "darwin" else "paddleocr"
     device = os.environ.get("PIU_OCR_DEVICE", "auto").lower()
-    if backend not in {"vision", "easyocr"}:
-        raise ValueError("PIU_OCR_BACKEND must be auto, vision or easyocr")
+    if backend not in {"vision", "easyocr", "paddleocr"}:
+        raise ValueError("PIU_OCR_BACKEND must be auto, vision, paddleocr or easyocr")
     if device not in {"cpu", "auto", "cuda", "mps"} and not (device.startswith("cuda:") and device[5:].isdigit()):
         raise ValueError("PIU_OCR_DEVICE must be cpu, auto, cuda, cuda:N or mps")
     return {"backend": backend, "device": "native" if backend == "vision" else device}
 
 
+def cache_identity():
+    config=configuration()
+    if config['backend']=='paddleocr':
+        from .paddle_ocr import PIPELINE
+        return {**config,'pipeline':PIPELINE}
+    return config
+
+
 def ocr_binary():
     if sys.platform != "darwin" or not shutil.which("swiftc"):
-        raise ValueError("Vision requires macOS and Xcode Command Line Tools; use PIU_OCR_BACKEND=easyocr on Linux")
+        raise ValueError("Vision requires macOS and Xcode Command Line Tools; use PIU_OCR_BACKEND=paddleocr on Linux")
     source = ROOT / "native/ocr.swift"
     binary = ROOT / ".local/bin/piu-ocr"
     cache = ROOT / ".local/cache/swift"
@@ -47,7 +55,7 @@ def reader(english, device):
     try:
         import easyocr
     except ImportError as error:
-        raise ValueError('Install OCR dependencies with .venv/bin/python -m pip install -r requirements.txt') from error
+        raise ValueError('Legacy EasyOCR requires easyocr==1.7.2; install it explicitly or use the default paddleocr backend') from error
     return easyocr.Reader(["en"] if english else ["ko", "en"],
                           gpu=False if device == "cpu" else True if device == "auto" else device,
                           model_storage_directory=str(ROOT / ".local/cache/easyocr/models"),
@@ -57,8 +65,8 @@ def reader(english, device):
 
 def normalized_line(points, text, confidence, width, height):
     xs, ys = zip(*points)
-    x0, x1 = max(0, min(xs)), min(width, max(xs))
-    y0, y1 = max(0, min(ys)), min(height, max(ys))
+    x0, x1 = float(max(0, min(xs))), float(min(width, max(xs)))
+    y0, y1 = float(max(0, min(ys))), float(min(height, max(ys)))
     return {"text": text, "confidence": float(confidence),
             "box": [x0 / width, y0 / height, (x1 - x0) / width, (y1 - y0) / height]}
 
@@ -68,6 +76,9 @@ def _ocr_images_uncached(paths, english=False):
     if not paths:
         return []
     config = configuration()
+    if config['backend']=='paddleocr':
+        from .paddle_ocr import read_image
+        return [{'path':str(path),'lines':read_image(path,english,config['device'])} for path in paths]
     if config["backend"] == "vision":
         result = subprocess.run([str(ocr_binary()), *(["--english"] if english else []), *map(str, paths)],
                                 capture_output=True, text=True)
@@ -110,10 +121,10 @@ def ocr_images(paths, english=False):
     if not paths:
         return []
     started = perf_counter()
-    config = configuration()
+    config = cache_identity()
     keys, missing = [], {}
     for path in paths:
-        key = (config["backend"], config["device"], english, sha256(Path(path).read_bytes()).digest())
+        key = (json.dumps(config,sort_keys=True), english, sha256(Path(path).read_bytes()).digest())
         keys.append(key)
         if key not in _IMAGE_CACHE:
             missing.setdefault(key, path)

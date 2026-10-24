@@ -15,10 +15,10 @@ def screen_lines(frame, width, height, controls_only=False):
     """Return English UI anchors mapped into the original game coordinates."""
     frame = Path(frame)
     paths, regions = [], []
-    # EasyOCR already depends on Pillow. Decode once and crop in memory on
-    # that backend; Vision keeps the dependency-free FFmpeg path.
+    # Linux image processing uses Pillow. Decode once and crop in memory;
+    # Vision keeps the FFmpeg path.
     image = None
-    if configuration()["backend"] == "easyocr":
+    if configuration()["backend"] != "vision":
         from PIL import Image
         with Image.open(frame) as source:
             image = source.convert("RGB")
@@ -59,7 +59,7 @@ class SceneRouter:
 
     @staticmethod
     def signatures(frame):
-        if configuration()["backend"] != "easyocr":
+        if configuration()["backend"] == "vision":
             return None
         import numpy as np
         from PIL import Image

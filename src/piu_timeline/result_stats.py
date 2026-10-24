@@ -77,9 +77,10 @@ def focused_stats(frame, directory, index, width, height):
         processing = f"crop={pw}:{ph}:{px}:{py},scale=iw*4:ih*4"
         if name.endswith("counts"):
             processing += r",format=gray,lut=y=if(gt(val\,180)\,255\,0)"
-        subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(frame),
-                        "-vf", processing, str(path)],
-                       check=True, capture_output=True)
+        if not path.is_file():
+            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(frame),
+                            "-vf", processing, str(path)],
+                           check=True, capture_output=True)
         paths.append(path)
         regions.append((px / width, py / height, pw / width, ph / height))
     mapped = []

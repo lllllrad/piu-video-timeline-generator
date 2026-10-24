@@ -12,7 +12,7 @@ from piu_timeline import ocr
 class OCRBackendTest(unittest.TestCase):
     def test_defaults_follow_host_and_linux_selects_device_automatically(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(sys, "platform", "linux"):
-            self.assertEqual(ocr.configuration(), {"backend": "easyocr", "device": "auto"})
+            self.assertEqual(ocr.configuration(), {"backend": "paddleocr", "device": "auto"})
         with patch.dict(os.environ, {}, clear=True), patch.object(sys, "platform", "darwin"):
             self.assertEqual(ocr.configuration(), {"backend": "vision", "device": "native"})
 
@@ -87,6 +87,19 @@ class OCRContentCacheTest(unittest.TestCase):
     def setUp(self):
         ocr._IMAGE_CACHE.clear()
         self.addCleanup(ocr._IMAGE_CACHE.clear)
+
+    def test_model_pipeline_identity_invalidates_same_image_content(self):
+        from piu_timeline import paddle_ocr
+        with tempfile.TemporaryDirectory() as temporary:
+            image=Path(temporary)/'image.png';image.write_bytes(b'identical pixels')
+            result=[{'path':str(image),'lines':[]}]
+            with patch.object(ocr,'configuration',return_value={'backend':'paddleocr','device':'cpu'}), \
+                    patch.object(ocr,'_ocr_images_uncached',return_value=result) as infer:
+                ocr.ocr_images([image]);ocr.ocr_images([image])
+                self.assertEqual(infer.call_count,1)
+                with patch.object(paddle_ocr,'PIPELINE',{'schema':1,'models':{'new':'weights'}}):
+                    ocr.ocr_images([image])
+                self.assertEqual(infer.call_count,2)
 
     def test_content_language_and_changed_pixels_are_independent(self):
         with tempfile.TemporaryDirectory() as temporary:

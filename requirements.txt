@@ -1,6 +1,9 @@
-# Runtime Python modules. Linux OCR runs locally with EasyOCR.
+# Linux OCR runs official PaddleOCR models locally on ONNX Runtime.
 yt-dlp==2026.8.19
-easyocr==1.7.2; sys_platform != "darwin"
+onnxruntime==1.31.0; sys_platform != "darwin"
+PyYAML>=6,<7; sys_platform != "darwin"
+pyclipper>=1.3,<2; sys_platform != "darwin"
+Pillow>=10,<13
 
 # Native-frame visual play analysis on Linux and macOS.
 numpy>=1.26,<3

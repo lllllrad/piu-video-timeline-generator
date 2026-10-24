@@ -236,8 +236,9 @@ def focused_lines(frame, phase, game_width, game_height):
         px, py, pw, ph = pixels
         path = Path(frame).with_name(Path(frame).stem + f"-{phase}-v5-focus-{index}.png")
         processing = f"crop={pw}:{ph}:{px}:{py},scale=iw*3:ih*3"
-        subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(frame),
-                        "-vf", processing, str(path)], check=True, capture_output=True)
+        if not path.is_file():
+            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(frame),
+                            "-vf", processing, str(path)], check=True, capture_output=True)
         paths.append(path)
         regions.append((px / game_width, py / game_height, pw / game_width, ph / game_height))
     recognized = ocr_images(paths[:1]) + ocr_images(paths[1:], english=True)
@@ -256,9 +257,10 @@ def focused_lines(frame, phase, game_width, game_height):
         # white-text isolation when OCR has merged off-center BGA credits or failed.
         if title is None or abs(center(title)[0] - .5) > .035:
             path = paths[0].with_name(paths[0].stem + "-white.png")
-            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(paths[0]),
-                            "-vf", r"format=gray,lut=y=if(gt(val\,180)\,255\,0)", str(path)],
-                           check=True, capture_output=True)
+            if not path.is_file():
+                subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", str(paths[0]),
+                                "-vf", r"format=gray,lut=y=if(gt(val\,180)\,255\,0)", str(path)],
+                               check=True, capture_output=True)
             result = ocr_images([path])[0]
             x, y, w, h = regions[0]
             filtered = [{**line, "box": [x + line["box"][0] * w, y + line["box"][1] * h,
@@ -327,7 +329,8 @@ def summary_stage_row(lines, stage):
 
 
 def consensus(observations, field):
-    candidates = [item[field] for item in observations if item.get(field)]
+    candidates = [item[field] for item in observations if item.get(field)
+                  and (field!='chart' or item[field]['confidence']>=.7)]
     # Spacing is unstable in small Korean UI labels; keep the most common display form below.
     keys = [re.sub(r"\s+", "", unicodedata.normalize("NFKC", item["text"])).casefold() for item in candidates]
     counts = Counter(keys)

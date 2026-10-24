@@ -11,6 +11,26 @@ from piu_timeline import auto_timeline as auto
 
 
 class AutoTest(unittest.TestCase):
+    def test_ocr_backend_change_preserves_acquisition_and_invalidates_only_text(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);segment=root/'evidence/segment-001';segment.mkdir(parents=True)
+            stats=root/'evidence/stats-001';stats.mkdir()
+            image=segment/'frame.png';image.write_bytes(b'unchanged pixels')
+            acquisition={'file':str(image),'source_pts_seconds':8.25,'playback_seconds':3.25,
+                         'requested_seconds':3.2,'roi':[0,0,100,100],'window':'result'}
+            (segment/'ocr.json').write_text(json.dumps([{**acquisition,'ocr':[{'text':'old'}],
+                                                       'scene':'result','focused_ocr':[{'text':'old'}]}]))
+            (segment/'stage.json').write_text(json.dumps({**acquisition,'recognized':{'value':1},'ocr':[]}))
+            plan=segment/'result-transitions.json';plan.write_text('[3.2, 4.0]')
+            (stats/'frames.json').write_text('[]');crop=stats/'crop.png';crop.write_bytes(b'old input crop')
+            auto.reset_ocr_evidence(root)
+            self.assertEqual(json.loads((segment/'ocr.json').read_text()),[acquisition])
+            self.assertEqual(json.loads((segment/'stage.json').read_text()),acquisition)
+            self.assertEqual(plan.read_text(),'[3.2, 4.0]')
+            self.assertEqual(image.read_bytes(),b'unchanged pixels')
+            self.assertEqual(crop.read_bytes(),b'old input crop')
+            self.assertFalse((stats/'frames.json').exists())
+
     def setUp(self):
         visual = patch.object(auto.SceneRouter, "signatures", return_value=None)
         visual.start()

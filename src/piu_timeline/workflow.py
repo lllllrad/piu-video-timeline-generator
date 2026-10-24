@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .auto_timeline import ANALYSIS_VERSION, analyze, resolve_source
 from .detect import roi_value
-from .ocr import configuration
+from .ocr import cache_identity as configuration
 from .storage import relocate_evidence
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL_DATA = ROOT / ".local/data"
@@ -140,8 +140,7 @@ def _run(source, format_name="default", game_roi=None):
         effective_roi = game_roi or (tuple(document["game_roi"]) if document and document.get("game_roi") else None)
         # Reuse source-verified acquisition; acquire missing scene/identity
         # samples while preserving decoded boundaries and result evidence.
-        reusable = (document and document.get("analysis_version") in {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29}
-                    and document.get("ocr_configuration") == configuration()
+        reusable = (document
                     and document.get("game_roi") == list(effective_roi or [])
                     and document.get("media", {}).get("size_bytes") == video.stat().st_size
                     and document.get("media", {}).get("mtime_ns") == video.stat().st_mtime_ns

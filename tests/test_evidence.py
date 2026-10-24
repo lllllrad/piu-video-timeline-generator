@@ -15,6 +15,16 @@ def observation(pts, scene, song, chart):
 
 
 class EvidenceTest(unittest.TestCase):
+    def test_repeated_low_confidence_chart_does_not_become_a_confirmed_level(self):
+        frames=[observation(i,'result','Example','S55') for i in range(3)]
+        for frame in frames:frame['chart']['confidence']=.65
+        labels,_=resolve_labels(frames)
+        self.assertEqual(labels['song'],'Example')
+        self.assertIsNone(labels['chart'])
+        for i in range(3,5):frames.append(observation(i,'result','Example','S15'))
+        labels,_=resolve_labels(frames)
+        self.assertEqual(labels['chart'],'S15')
+
     def test_summary_never_becomes_a_result_even_with_score_markers(self):
         lines = [line(t) for t in ("PLAY RESULT", "SCORE", "PERFECT")]
         self.assertFalse(is_result_screen(lines))

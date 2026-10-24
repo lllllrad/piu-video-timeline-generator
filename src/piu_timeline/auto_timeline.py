@@ -13,14 +13,14 @@ from .recognition import (capture_game, focused_lines, frame_labels, ocr_images,
 from .timeline import media_record, write_json
 from .result_stats import extract_stats
 from .evidence import resolve_labels, resolve_players, reconcile_sessions, exclude_rivals
-from .ocr import configuration, ocr_metrics
+from .ocr import cache_identity as configuration, ocr_metrics
 from .screen_ocr import screen_lines, SceneRouter, VERSION as SCREEN_OCR_VERSION
 from .credits import transition_samples, reconcile_players, recover_summary_stages
 
 
 MAX_FOCUSED_FRAMES = 6
 SELECTION_OFFSETS = (-14, -13, -10, -9, -6, -5, -3)
-ANALYSIS_VERSION = 30
+ANALYSIS_VERSION = 31
 
 
 def resolve_source(source, raw_dir=None):
@@ -389,6 +389,10 @@ def recognize_segment(record, roi, start, end, directory, stage=None, previous_e
 
 def recover_stage(path, width, height):
     evidence = json.loads(path.read_text())
+    if isinstance(evidence,dict) and 'ocr' not in evidence:
+        evidence['ocr']=ocr_images([evidence['file']],english=True)[0]['lines']
+        evidence['recognized']=stage_number(evidence['ocr'])
+        path.write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n')
     if not isinstance(evidence, dict):
         return None
     recognized = evidence.get("recognized") or stage_number(evidence.get("focused_ocr", [])) or stage_number(evidence.get("ocr", []))
@@ -408,9 +412,10 @@ def recover_stage(path, width, height):
     x, y, w, h = max(0, center(labels[0])[0] - .04), 0., .08, .085
     px, py, pw, ph = int(x * width), int(y * height), int(w * width), int(h * height)
     crop = path.with_name("stage-focus-v2.png")
-    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", evidence["file"],
-                    "-vf", f"crop={pw}:{ph}:{px}:{py},scale=iw*6:ih*6", str(crop)],
-                   check=True, capture_output=True)
+    if not crop.is_file():
+        subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-n", "-i", evidence["file"],
+                        "-vf", f"crop={pw}:{ph}:{px}:{py},scale=iw*6:ih*6", str(crop)],
+                       check=True, capture_output=True)
     lines = []
     for line in ocr_images([crop], english=True)[0]["lines"]:
         bx, by, bw, bh = line["box"]
@@ -434,6 +439,19 @@ def recognize_stage(record, roi, start, end, directory):
     return (recognized["value"] if recognized else None), str(directory / "stage.json")
 
 
+def reset_ocr_evidence(directory):
+    """Retain source images/PTS/transition plans, invalidate derived text only."""
+    acquisition=('file','requested_seconds','source_pts_seconds','playback_seconds','roi','window')
+    for path in directory.glob('evidence/segment-*/ocr.json'):
+        observations=json.loads(path.read_text())
+        path.write_text(json.dumps([{key:frame[key] for key in acquisition if key in frame} for frame in observations],indent=2)+'\n')
+    for path in directory.glob('evidence/segment-*/stage.json'):
+        frame=json.loads(path.read_text())
+        if isinstance(frame,dict):path.write_text(json.dumps({key:frame[key] for key in acquisition if key in frame},indent=2)+'\n')
+    for path in directory.glob('evidence/stats-*/frames.json'):
+        path.unlink()
+
+
 def analyze(video, output, game_roi=None, provenance=None, retained=None):
     """Persist recognition data independently of player selection or presentation."""
     record = media_record(video)
@@ -447,10 +465,12 @@ def analyze(video, output, game_roi=None, provenance=None, retained=None):
     reuse_summary = False
     if retained:
         retained_document = json.loads((retained / "analysis.json").read_text())
-        reuse_summary = retained_document.get("analysis_version", 0) >= 9
+        reuse_summary = retained_document.get('ocr_configuration')==configuration()
         from .storage import relocate_evidence
         shutil.copytree(retained, output)
         relocate_evidence(output, output, source=retained)
+        if not reuse_summary:
+            reset_ocr_evidence(output)
         (output / "analysis.json").unlink(missing_ok=True)
         evidence_dir = output / "evidence"
         profiles = json.loads((output / "profiles.json").read_text())
