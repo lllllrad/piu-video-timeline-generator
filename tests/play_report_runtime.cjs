@@ -8,9 +8,9 @@ const runtime = html.match(/<script>\s*(.*?)<\/script>/s)[1];
 const noteFonts=new Set();
 function element(tag) {
   return {tag, style: {}, children: [], textContent: '', value: '', width: 1200, height: 350,
-    clientWidth: 1200, clientHeight: 350, complete: false, files: [],
+    clientWidth: 1200, clientHeight: 350, complete: false, files: [], paused: true, ended: false, currentTime: 0, handlers: {},
     appendChild(node) { this.children.push(node); return node; },
-    replaceChildren() { this.children = []; }, addEventListener() {},
+    replaceChildren() { this.children = []; }, addEventListener(event, callback) { (this.handlers[event]??=[]).push(callback); },
     getBoundingClientRect() { return {left: 0, top: 0}; },
     getContext() {
       return new Proxy({}, {get: (object, key) => object[key] ?? ((...args) => {
@@ -28,10 +28,20 @@ for (const match of html.matchAll(/<canvas id="([^"]+)" width="(\d+)" height="(\
 }
 elements.get('data').textContent = payload;
 elements.get('spacingScale').value = '1';
+elements.get('spacingInput').value = '1';
+elements.get('noteSize').value = '32';
+let callbackId=0;
+const videoCallbacks=new Map(),animationCallbacks=new Map();
+const video=elements.get('video');
+video.requestVideoFrameCallback=callback=>{const id=++callbackId;videoCallbacks.set(id,callback);return id};
+video.cancelVideoFrameCallback=id=>videoCallbacks.delete(id);
+const dispatch=event=>{for(const handler of video.handlers[event]||[])handler()};
 const context = vm.createContext({document: {
   getElementById(id) { assert.ok(elements.has(id), 'missing element '+id); return elements.get(id); },
   createElement: element,
-}, URL, Blob, setTimeout});
+}, URL, Blob, setTimeout,
+requestAnimationFrame:callback=>{const id=++callbackId;animationCallbacks.set(id,callback);return id},
+cancelAnimationFrame:id=>animationCallbacks.delete(id)});
 vm.runInContext(runtime, context, {timeout: 10000});
 const evaluate = expression => JSON.parse(vm.runInContext('JSON.stringify('+expression+')', context));
 const rows = () => elements.get('events').children.map(row => row.children.map(cell => cell.textContent));
@@ -67,7 +77,12 @@ for (const scale of [.25, 1, 16]) {
   scaleGeometry.push(evaluate('(()=>{const g=laneGeometry();return g.y(playhead+.1)-g.y(playhead)})()'));
 }
 assert.ok(scaleGeometry[0]<scaleGeometry[1] && scaleGeometry[1]<scaleGeometry[2]);
-if(initialRows.length)assert.deepEqual([...noteFonts].sort(),['bold 20px system-ui','bold 44px system-ui']);
+if(initialRows.length)assert.deepEqual([...noteFonts].sort(),['bold 20px system-ui','bold 32px system-ui']);
+elements.get('spacingInput').value = '1.01';elements.get('spacingInput').oninput();
+assert.equal(elements.get('spacingScale').value,'1.01');
+assert.ok(Math.abs(evaluate('(()=>{const g=laneGeometry();return g.y(playhead+.1)-g.y(playhead)})()')/scaleGeometry[1]-1.01)<1e-8);
+const beforeSize=evaluate('({playhead,span:laneGeometry().to-laneGeometry().from})');
+for(const size of [16,64,32]){elements.get('noteSize').value=String(size);elements.get('noteSize').oninput();assert.equal(evaluate('noteSize()'),size);assert.deepEqual(evaluate('({playhead,span:laneGeometry().to-laneGeometry().from})'),beforeSize)}
 elements.get('spacingScale').value = '1';elements.get('spacingScale').oninput();
 if (initialRows.length) {
   elements.get('events').children[0].onclick();
@@ -97,6 +112,23 @@ elements.get('previous').onclick();
 elements.get('excluded').checked = true;
 elements.get('excluded').onchange();
 elements.get('spacingScale').value = '8';elements.get('spacingScale').oninput();
+const tableRowBeforePlayback=elements.get('events').children[0];
+video.currentTime=12.1;video.paused=false;dispatch('play');dispatch('play');
+assert.equal(videoCallbacks.size,1,'only one frame clock should run');
+let [id,callback]=videoCallbacks.entries().next().value;videoCallbacks.delete(id);callback(0,{mediaTime:12.125});
+assert.equal(evaluate('playhead'),12.125);
+assert.equal(elements.get('chartPosition').textContent,'0:12.125');
+video.playbackRate=.5;
+[id,callback]=videoCallbacks.entries().next().value;videoCallbacks.delete(id);callback(0,{mediaTime:12.25});
+assert.equal(evaluate('playhead'),12.25,'use presented media time, independently of playback speed');
+video.currentTime=12.25;video.paused=true;dispatch('pause');assert.equal(videoCallbacks.size,0);
+video.currentTime=14.125;dispatch('seeked');assert.equal(evaluate('playhead'),14.125);
+video.requestVideoFrameCallback=undefined;video.paused=false;dispatch('play');assert.equal(animationCallbacks.size,1);
+video.currentTime=14.25;
+[id,callback]=animationCallbacks.entries().next().value;animationCallbacks.delete(id);callback(0);
+assert.equal(evaluate('playhead'),14.25);
+video.paused=true;dispatch('pause');assert.equal(animationCallbacks.size,0);
+assert.equal(elements.get('events').children[0],tableRowBeforePlayback,'playback must not rebuild the note table');
 assert.deepEqual(evaluate('data'), data, 'embedded evidence changed');
 console.log(JSON.stringify({initialRows, correctedRows, details, targetRanges, initialInputs,
   initialDifferences, correctedInputs, correctedDifferences, verticalGeometry, verticalNotes}));
