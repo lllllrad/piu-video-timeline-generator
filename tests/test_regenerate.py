@@ -32,7 +32,7 @@ class RegenerationTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as error:
                     regenerate.main()
             self.assertEqual(error.exception.code, 1)
-            report = json.loads(next(root.glob(".local/regeneration-*/report.json")).read_text())
+            report = json.loads(next(root.glob(".local/runs/regeneration-*/report.json")).read_text())
             results = {item["source"]: item for item in report}
             self.assertEqual(len(results), 2)
             self.assertIn("could not launch", results["abcdefghijk"]["error"])

@@ -75,6 +75,8 @@ node formats/default/index.ts PATH/TO/analysis.json
 
 ## Data and recognition rules
 
+Keep the `.local/` root organized by purpose. `data/`, `formats/`, `cache/`, `bin/`, `mise_home/` and `tmp/` are runtime locations. Put batch logs and execution manifests under `runs/`, standalone review reports under `reports/`, local helper scripts under `tools/`, and superseded experiments under `archive/`. Disposable test files belong in `tmp/`. Do not move a live job's directories until all producers and consumers have finished; open log files can be renamed without interrupting their writers. Update relative media links when relocating HTML reports.
+
 - Keep downloaded media, analysis output, caches and personal formats under `.local/`.
 - Never overwrite or retime source media.
 - Preserve unknown and conflicting OCR values as `null` or explicit field states.
@@ -104,4 +106,4 @@ Install a compatible GPU-enabled ONNX Runtime for CUDA inference; the default pa
 sh scripts/run.sh .venv/bin/python scripts/regenerate.py --jobs 3
 ```
 
-This runs the existing `just auto` interface over cached source IDs, without downloading media when each `raw/` directory contains one completed recording. Per-source logs and a report with exit status, elapsed time and before/after source metadata are saved in `.local/regeneration-*/`. Failed sources do not prevent the remaining sources from running. The command exits non-zero if any source failed or changed. Keep concurrency low on GPU hosts to avoid loading multiple model copies into limited VRAM.
+This runs the existing `just auto` interface over cached source IDs, without downloading media when each `raw/` directory contains one completed recording. Per-source logs and a report with exit status, elapsed time and before/after source metadata are saved in `.local/runs/regeneration-*/`. Failed sources do not prevent the remaining sources from running. The command exits non-zero if any source failed or changed. Keep concurrency low on GPU hosts to avoid loading multiple model copies into limited VRAM.

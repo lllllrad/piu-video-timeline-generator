@@ -24,7 +24,7 @@ def main():
         if any(name not in indexed for name in args.sources):
             parser.error("Every --sources value must name an existing cached source")
         sources = [indexed[name] for name in dict.fromkeys(args.sources)]
-    destination = ROOT / ".local" / f"regeneration-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    destination = ROOT / ".local/runs" / f"regeneration-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
     destination.mkdir(parents=True)
 
     def run(directory):
