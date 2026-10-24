@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+import tempfile
 
 import cv2
 import numpy as np
@@ -30,12 +32,12 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual(event['delta'], 1)
         self.assertEqual(jump['status'], 'candidate')
 
-    def test_association_never_assigns_one_combo_to_multiple_notes(self):
+    def test_one_combo_increment_matches_a_chord_row(self):
         notes = [{'status': 'estimated', 'target_seconds': 1.0, 'lane': 0},
                  {'status': 'estimated', 'target_seconds': 1.0, 'lane': 1}]
         events = [{'status': 'candidate', 'lower_seconds': .99, 'upper_seconds': 1.02}]
-        self.assertEqual(associate(notes, events), [])
-        self.assertEqual(events[0]['reason'], 'ambiguous_note_or_combo_association')
+        self.assertEqual(len(associate(notes, events)), 2)
+        self.assertEqual(events[0]['status'], 'matched')
 
     def test_clipped_head_centers_do_not_look_like_deceleration(self):
         points = [(i / 60, 250 - 500 * i / 60) for i in range(23)]
@@ -44,13 +46,36 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual(result['status'], 'estimated')
         self.assertAlmostEqual(result['target_seconds'], .4)
 
-    def test_chord_requires_matching_combo_increment(self):
+    def test_repeated_render_frames_are_not_a_scroll_gimmick(self):
+        track = Track(0, [(i/60, 200-500*(i//2)/30) for i in range(20)])
+        result = fit_track(track, 50, 40)
+        self.assertEqual(result['status'], 'estimated')
+        self.assertAlmostEqual(result['target_seconds'], .3, delta=.02)
+        self.assertGreaterEqual(result['prediction_uncertainty_seconds'], .015)
+
+    def test_counter_jump_retains_one_aggregate_bracket_for_two_rows(self):
+        notes = [{'status':'estimated','target_seconds':t,'lane':0} for t in (1.02,1.08)]
+        event = {'status':'candidate','delta':2,'lower_seconds':1.,'upper_seconds':1.1}
+        matches = associate(notes,[event])
+        self.assertEqual(len(matches),2)
+        self.assertEqual({m['aggregate_row_count'] for m in matches},{2})
+        self.assertEqual({(m['combo_lower_seconds'],m['combo_upper_seconds']) for m in matches},{(1.,1.1)})
+
+    def test_prediction_survives_combo_overlay_occlusion(self):
+        layout = {'lanes':[{'x':.1+.2*i} for i in range(5)],'receptor_y':.2,
+                  'combo_roi':[.4,.52,.2,.075]}
+        tracker = NoteTracker(layout,320,180)
+        for t in (0,.05,.10,.15,.20,.25,.30,.35):
+            visible = t <= .15 or t >= .35
+            tracker.update(t,[{'lane':2,'y':(180-400*t)/180}] if visible else [])
+        self.assertEqual(len(tracker.active),1)
+        self.assertEqual(len(tracker.finished),0)
+        self.assertEqual(len(tracker.active[0].points),5)
+
+    def test_counter_jump_cannot_be_explained_by_head_count(self):
         notes = [{'status': 'estimated', 'target_seconds': 1., 'lane': lane} for lane in (0, 1)]
         event = {'status': 'candidate', 'delta': 2, 'lower_seconds': .99, 'upper_seconds': 1.02}
-        matches = associate(notes, [event])
-        self.assertEqual(len(matches), 2)
-        self.assertEqual({m['combo_event'] for m in matches}, {0})
-        self.assertEqual({m['row_note_count'] for m in matches}, {2})
+        self.assertEqual(associate(notes, [event]), [])
 
     def test_monotone_alignment_recovers_close_successive_inputs(self):
         notes = [{'status': 'estimated', 'target_seconds': t, 'lane': 0} for t in (1 + i*.06 for i in range(300))]
@@ -119,3 +144,14 @@ class TrackingTest(unittest.TestCase):
         reader.train(draw('12'), 12)
         self.assertEqual(reader.read(draw('12'))[0], 12)
         self.assertIsNone(reader.read(draw('13'))[0])
+
+    def test_digit_bank_preserves_predictions_and_distinct_source_confirmation(self):
+        image=np.zeros((60,150,3),dtype='uint8')
+        cv2.putText(image,'12',(5,45),cv2.FONT_HERSHEY_SIMPLEX,1.5,(255,255,255),3)
+        reader=DigitReader();reader.train(image,12,source=1);reader.train(image,12,source=2)
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'templates.npz';reader.save(path)
+            restored=DigitReader.load(path)
+        self.assertEqual(restored.read(image),reader.read(image))
+        self.assertEqual(restored.sources,reader.sources)
+        self.assertIsNone(restored.read(np.zeros_like(image),expected=12)[0])

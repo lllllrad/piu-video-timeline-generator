@@ -29,7 +29,7 @@ Codex-only environment generation and optional mise installation are documented 
 - `result_stats.py` extracts per-player result fields only from per-song results.
 - `play_analysis.py` orchestrates opt-in visual analysis and caches evidence; `play_report.py` renders a self-contained local HTML view.
 - `play_frames.py` streams native decoded frames with original PTS and no FPS conversion.
-- `play_tracking.py` tracks visible colored note heads, rejects nonlinear motion, learns combo digit templates and brackets confirmed combo updates. It does not equate display refresh with physical switch input.
+- `play_tracking.py` locates colored note-head outlines, bridges bounded UI occlusions, distinguishes repeated render frames from nonlinear motion, learns combo digit templates and aligns judged rows with confirmed combo updates. A chord occupies one judged row. Compatible native observations can be refitted without frame decoding or OCR; font examples are reusable across plays from unchanged source media. It does not equate display refresh with physical switch input.
 - `formats/` contains Node.js TypeScript presentation programs.
 - `timeline.py`, `evaluate.py` and `relabel_analysis.py` are internal review and diagnostic tools.
 
@@ -53,6 +53,7 @@ The public interface intentionally stays small:
 ```sh
 just auto SOURCE [FORMAT]
 just play SOURCE --segment N
+just play SOURCE --all
 just fetch URL_OR_ID
 just import-studio URL_OR_ID VIDEO_PATH
 just check

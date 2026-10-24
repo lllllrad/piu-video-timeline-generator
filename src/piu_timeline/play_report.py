@@ -17,6 +17,31 @@ def write_report(data, path, final_directory=None):
     path.write_text(content, encoding='utf-8')
 
 
+def write_index(document, root):
+    """List every metadata segment, including failures and incomplete analyses."""
+    rows = []
+    for number, segment in enumerate(document['segments'], 1):
+        relative = f'segment-{number:03}'
+        analysis = root / relative / 'analysis.json'
+        title = html.escape(f"{segment.get('song') or 'Unknown song'} · {segment.get('chart') or 'Unknown chart'}")
+        if analysis.is_file():
+            data = json.loads(analysis.read_text())
+            coverage = data['coverage']
+            cells = (f'<a href="{relative}/report.html">{title}</a>', str(coverage['visible_note_heads']),
+                     str(coverage['timed_note_heads']), str(coverage['matched_combo_updates']),
+                     f"{100*data['combo_readable_fraction']:.0f}%", str(data['play_analysis_version']))
+        else:
+            cells = (title, 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable')
+        rows.append('<tr><td>'+str(number)+'</td>'+''.join('<td>'+cell+'</td>' for cell in cells)+'</tr>')
+    path = root / 'index.html'
+    path.write_text('''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Play timing reports</title><style>body{font:16px/1.6 system-ui;max-width:1200px;margin:40px auto;padding:20px;background:#101719;color:#e5efeb}a{color:#9cddbe}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #314448}.scroll{overflow:auto}</style>
+<h1>Play timing reports</h1><p>Each report compares visible note trajectories with observed combo refreshes. A chord is one judged row and may contain several heads. Counts are partial reconstruction, not a complete chart or physical switch measurement. Open a report for excluded motion and unassigned counter evidence.</p>
+<div class="scroll"><table><thead><tr><th>Segment</th><th>Play</th><th>Reconstructed heads</th><th>Heads with timing</th><th>Matched refreshes</th><th>Readable counter frames</th><th>Analyzer version</th></tr></thead><tbody>'''
+                    + ''.join(rows) + '</tbody></table></div></html>', encoding='utf-8')
+    return path
+
+
 TEMPLATE = r'''<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__ · Play timing</title>
@@ -39,6 +64,7 @@ TEMPLATE = r'''<!doctype html>
 <section class="panel chart"><div class="row"><h2>Reconstructed visible chart</h2><label>Window <select id="zoom"><option value="3">±3 seconds</option><option value="8">±8 seconds</option><option value="15">±15 seconds</option></select></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div><canvas id="lanes" width="1200" height="350"></canvas><small>Columns show fitted receptor-crossing times; rows show lanes. Only supported visible note heads are reconstructed. Holds, rolls and unreliable motion are not scored.</small></section>
 <div class="grid"><section class="panel"><h2>Matched note heads</h2><div class="scroll"><table><thead><tr><th>Target</th><th>Lane</th><th>Fit uncertainty</th><th>Offset interval</th><th>Combo</th></tr></thead><tbody id="events"></tbody></table></div></section>
 <section class="panel"><h2>Coverage and exclusions</h2><div id="exclusions"></div><ul id="limitations"></ul></section></div>
+<section class="panel"><h2>Observed combo updates, including unassigned evidence</h2><p class="muted">One increment represents a judged row. Chords share that row; counter jumps can contain several rows or hold ticks. An unassigned update is still observed evidence. Resets do not identify missed presses.</p><div class="scroll"><table><thead><tr><th>Observed bracket</th><th>Counter</th><th>Rows advanced</th><th>Association</th></tr></thead><tbody id="comboEvents"></tbody></table></div></section>
 <details class="panel"><summary>Inspect or correct calibration</summary><p>Check receptor centers and combo crop against the original game panel. Download an edited layout and rerun with <code>--layout layout.json</code>. Geometry changes require reanalysis.</p><div class="preview"><img id="preview" src="preview.png" alt="Original gameplay calibration frame"><canvas id="overlay" width="1300" height="730"></canvas></div><textarea id="layout" spellcheck="false"></textarea><button id="download">Download layout.json</button><span id="layoutError"></span></details>
 </main><script id="data" type="application/json">__DATA__</script>
 <script>
@@ -60,6 +86,7 @@ if(!matches.length){const p=text('p','No unambiguous matches. Check calibration 
 for(const [reason,count] of Object.entries(data.excluded_notes))text('p',reason.replaceAll('_',' ')+': '+count,$('exclusions'));
 const comboReasons={};for(const e of data.combo_events)if(e.status==='excluded')comboReasons[e.reason]=(comboReasons[e.reason]||0)+1;
 for(const [reason,count] of Object.entries(comboReasons))text('p',reason.replaceAll('_',' ')+': '+count,$('exclusions'));
+for(const e of data.combo_events){const row=text('tr','',$('comboEvents'));text('td',fmt(e.lower_seconds)+' … '+fmt(e.upper_seconds),row);text('td',e.before+' → '+e.after,row);text('td',e.delta>0?e.delta:'Reset',row);text('td',(e.reason||e.status).replaceAll('_',' '),row);row.onclick=()=>seek(e.upper_seconds)}
 for(const limitation of data.limitations)text('li',limitation,$('limitations'));
 function seek(t,index=-1){playhead=t;selected=index;try{video.currentTime=t}catch(_){}draw()}
 $('file').onchange=()=>{if(objectUrl)URL.revokeObjectURL(objectUrl);if($('file').files[0]){objectUrl=URL.createObjectURL($('file').files[0]);video.src=objectUrl;video.load()}};
@@ -78,7 +105,7 @@ for(let i=0;i<data.layout.lanes.length;i++){const y=15+step*i;c.fillStyle='#9cb1
 for(const note of data.notes){const t=note.target_seconds??note.points.at(-1)?.[0];if(t<playhead-span||t>playhead+span||note.status!=='estimated'&&!$('excluded').checked)continue;const y=15+note.lane*step;c.fillStyle=note.status!=='estimated'?'#647371':data.layout.lanes[note.lane].color==='blue'?'#75bdea':data.layout.lanes[note.lane].color==='yellow'?'#f1c478':'#e89cba';c.beginPath();c.arc(x(t),y,5,0,Math.PI*2);c.fill()}
 c.strokeStyle='#9cddbe';c.beginPath();c.moveTo(x(playhead),0);c.lineTo(x(playhead),h);c.stroke();c.fillStyle='#9cb1b1';c.fillText(fmt(playhead-span),p,h-2);c.fillText(fmt(playhead+span),w-85,h-2);
 canvas.onclick=e=>seek(playhead-span+((e.clientX-canvas.getBoundingClientRect().left)/canvas.clientWidth*w-p)/(w-p)*2*span)}
-function table(){$('events').replaceChildren();for(const [i,m] of matches.entries()){const row=text('tr','',$('events')),[lo,hi]=offset(m);text('td',fmt(m.target_seconds),row);text('td',data.layout.lanes[data.notes[m.note].lane].name||String(data.notes[m.note].lane+1),row);text('td','±'+(1000*data.notes[m.note].prediction_uncertainty_seconds).toFixed(1)+' ms',row);text('td',lo.toFixed(1)+' … '+hi.toFixed(1)+' ms',row);const e=data.combo_events[m.combo_event];text('td',e.before+' → '+e.after+(m.row_note_count>1?' (shared chord bracket)':''),row);row.onclick=()=>seek(m.target_seconds,i)}}
+function table(){$('events').replaceChildren();for(const [i,m] of matches.entries()){const row=text('tr','',$('events')),[lo,hi]=offset(m);text('td',fmt(m.target_seconds),row);text('td',data.layout.lanes[data.notes[m.note].lane].name||String(data.notes[m.note].lane+1),row);text('td','±'+(1000*data.notes[m.note].prediction_uncertainty_seconds).toFixed(1)+' ms',row);text('td',lo.toFixed(1)+' … '+hi.toFixed(1)+' ms',row);const e=data.combo_events[m.combo_event];text('td',e.before+' → '+e.after+(m.aggregate_row_count>1?' (aggregate row bracket)':m.row_note_count>1?' (shared chord bracket)':''),row);row.onclick=()=>seek(m.target_seconds,i)}}
 function draw(){$('clock').textContent=fmt(playhead);$('delayValue').textContent=delay.value;timing();lanes()}
 delay.oninput=()=>{table();draw()};$('center').onclick=()=>{delay.value=Math.round(median(matches.map(mid)));table();draw()};$('zoom').onchange=draw;$('excluded').onchange=draw;
 $('layout').value=JSON.stringify(data.layout,null,2);$('download').onclick=()=>{try{const value=JSON.parse($('layout').value),url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='layout.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('layoutError').textContent=''}catch(e){$('layoutError').textContent=e.message}};

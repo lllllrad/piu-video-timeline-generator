@@ -23,8 +23,8 @@ class PlayIntegrationTest(unittest.TestCase):
             image = np.zeros((180, 320, 3), dtype='uint8')
             y = round(236 - 250*t)
             if y > 20:
-                cv2.rectangle(image, (19, y-13), (45,y+13), (255,255,255), -1)
-                cv2.rectangle(image, (22, y-10), (42,y+10), (0,200,255), -1)
+                cv2.rectangle(image, (8, y-24), (56,y+24), (255,255,255), -1)
+                cv2.rectangle(image, (12, y-20), (52,y+20), (0,200,255), -1)
             value = 10 if t < .84 else 11
             cv2.putText(image,str(value),(137,135),cv2.FONT_HERSHEY_SIMPLEX,.8,(255,255,255),2)
             return image
