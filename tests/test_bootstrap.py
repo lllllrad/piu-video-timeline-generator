@@ -28,9 +28,11 @@ class BootstrapTest(unittest.TestCase):
                     patch.object(bootstrap.subprocess, "run") as install:
                 bootstrap.prepare(root)
                 bootstrap.prepare(root)
-                create.assert_called_once_with(root / ".venv", with_pip=True)
+                create.assert_called_once_with(root / ".venv", with_pip=False)
                 self.assertEqual(install.call_count, 1)
                 self.assertIn("requirements-dev.txt", install.call_args.args[0])
+                self.assertEqual(install.call_args.args[0][:5],
+                                 ["uv", "pip", "install", "--python", str(root / ".venv/bin/python")])
                 (root / "pyproject.toml").write_text("changed dependency")
                 bootstrap.prepare(root)
                 self.assertEqual(install.call_count, 2)
@@ -40,7 +42,7 @@ class BootstrapTest(unittest.TestCase):
             root = Path(temporary)
             self.checkout(root)
             with patch.object(bootstrap.venv, "create", side_effect=self.create_venv), \
-                    patch.object(bootstrap.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "pip")):
+                    patch.object(bootstrap.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "uv")):
                 with self.assertRaises(subprocess.CalledProcessError):
                     bootstrap.prepare(root)
             self.assertFalse((root / ".venv/.bootstrap.json").exists())

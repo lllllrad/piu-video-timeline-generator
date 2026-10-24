@@ -2,7 +2,7 @@
 
 ## Setup
 
-The project requires Python 3.12, FFmpeg, Node.js 24 or newer and `just`.
+The project requires Python 3.12, uv, FFmpeg, Node.js 24 or newer and `just`.
 
 ```sh
 mise install
@@ -10,7 +10,7 @@ mise exec -- just check
 mise exec -- just auto SOURCE
 ```
 
-Recipes automatically create `.venv` and install the project dependencies. `requirements.txt` includes ONNX Runtime, PyYAML and polygon-processing dependencies on Linux using platform markers. Installation is serialized across concurrent recipes and cached under `.venv`; changes to dependency declarations trigger an update. Failed installations are retried on the next run. If the required tools are already on PATH, `just` can be used directly.
+Mise provisions uv and creates and activates `.venv`. The explicit `_.python.venv` setting supports this requirements-based project without a `uv.lock`; `python.uv_venv_auto` is also enabled for future uv project discovery. Recipes create `.venv` when necessary and install the project dependencies with `uv pip install --python .venv/bin/python`. No pip installation inside the virtualenv is required. `requirements.txt` includes ONNX Runtime, PyYAML and polygon-processing dependencies on Linux using platform markers. Installation is serialized across concurrent recipes and cached under `.venv`; changes to dependency declarations trigger an update. Failed installations are retried on the next run. If the required tools are already on PATH, `just` can be used directly.
 
 No shell activation is required; recipes use `scripts/run.sh` to apply project-local cache paths and invoke `.venv` explicitly.
 

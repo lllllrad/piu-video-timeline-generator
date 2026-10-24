@@ -21,8 +21,8 @@ def prepare(root=ROOT):
         python = environment / "bin/python"
         if not python.exists():
             print("Preparing project Python environment...", file=sys.stderr)
-            venv.create(environment, with_pip=True)
-        digest = hashlib.sha256(str(root.resolve()).encode())
+            venv.create(environment, with_pip=False)
+        digest = hashlib.sha256(b"uv-pip-v1\0" + str(root.resolve()).encode())
         for name in ("pyproject.toml", "requirements.txt", "requirements-dev.txt"):
             digest.update((root / name).read_bytes())
         signature = digest.hexdigest()
@@ -33,7 +33,7 @@ def prepare(root=ROOT):
             state = {}
         if state.get("signature") != signature:
             print("Installing project dependencies...", file=sys.stderr)
-            command = [str(python), "-m", "pip", "install", "--disable-pip-version-check", "-r", "requirements-dev.txt"]
+            command = ["uv", "pip", "install", "--python", str(python), "-r", "requirements-dev.txt"]
             # Keep stdout reserved for the requested command's result.
             subprocess.run(command, cwd=root, check=True, stdout=sys.stderr)
             marker.write_text(json.dumps({"signature": signature}) + "\n")

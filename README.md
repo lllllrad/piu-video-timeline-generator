@@ -6,7 +6,7 @@ Generate a paste-ready song timeline from a Pump It Up Phoenix gameplay video.
 mise exec -- just auto 'https://www.youtube.com/watch?v=VIDEO_ID'
 ```
 
-With mise installed, run `mise install` once to provision the tools in `mise.toml`. Recipes automatically create `.venv` and install Python dependencies on first use. On Linux, the requirements include the local ONNX OCR runtime. Later runs reuse the environment; dependency changes trigger an update. Initial setup needs network access.
+With mise installed, run `mise install` once to provision the tools in `mise.toml`, including uv. Mise creates and activates `.venv`; recipes also support creating it without shell activation and install Python dependencies with `uv pip` on first use. On Linux, the requirements include the local ONNX OCR runtime. Later runs reuse the environment; dependency changes trigger an update. Initial setup needs network access.
 
 The command downloads or opens the source, detects plays, recognizes songs, charts and result data, runs the default TypeScript format, prints the timeline, and saves everything under:
 
