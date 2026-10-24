@@ -634,6 +634,8 @@ def run(source, segment_number=1, force=False, **options):
                     updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
                     updated.replace(previous)
                 print('Reusing saved note/judgment analysis and compatible long-note evidence; no OCR.')
+                from .chart_data import auto_register
+                auto_register(cached, final)
                 print(final / 'report.html')
                 return final / 'report.html'
         if not force and not can_refit and document.get('media'):
@@ -668,6 +670,8 @@ def run(source, segment_number=1, force=False, **options):
             if backup.exists() and not final.exists():
                 backup.rename(final)
             raise
+        from .chart_data import auto_register
+        auto_register(result, final)
         print(final / 'report.html')
         return final / 'report.html'
 

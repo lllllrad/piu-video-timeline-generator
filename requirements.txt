@@ -8,3 +8,6 @@ Pillow>=10,<13
 # Native-frame visual play analysis on Linux and macOS.
 numpy>=1.26,<3
 opencv-python-headless>=4.8,<6
+
+# Official UCS song catalogue parsing.
+pypdf>=6,<7

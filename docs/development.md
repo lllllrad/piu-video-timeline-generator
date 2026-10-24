@@ -31,6 +31,7 @@ Codex-only environment generation and optional mise installation are documented 
 - `play_analysis.py` orchestrates opt-in visual analysis and caches evidence; `play_report.py` renders a self-contained local HTML view with retained SVG geometry and browser-driven CSS transform playback. Bounded time pages limit DOM size; video time anchors animations without per-frame note rebuilding. `play_ranges.py` derives review-only alternative refresh intervals and conditional neighboring-row bounds from saved evidence without changing confirmed associations or reacquiring frames.
 - `play_judgments.py` learns a bounded set of judgment-word templates, detects native-frame label/animation refreshes independently of combo visibility, and merges evidence without duplicate note assignments. MISS never becomes a physical input timestamp.
 - `play_frames.py` streams native decoded frames with original PTS and no FPS conversion.
+- `official_ucs.py` downloads and validates the official song catalogue and blank timing archives. `ucs.py` preserves exact section timing; `chart_audio.py` aligns reference music without retiming; `chart_data.py` registers editable, unreviewed chart drafts in a separate repository without replacing existing files. See [chart data](chart-data.md).
 - `play_tracking.py` locates colored note-head outlines, bridges bounded UI occlusions, distinguishes repeated render frames from nonlinear motion, learns combo digit templates and aligns judged rows with confirmed combo updates. A chord occupies one judged row. Compatible native observations can be refitted without frame decoding or OCR; font examples are reusable across plays from unchanged source media. It does not equate display refresh with physical switch input.
 - `formats/` contains Node.js TypeScript presentation programs. `formats/lib/timeline.ts` separates song labels, player names and recording-aware segment labels; both bundled formats share the same automatic name-visibility policy. See [custom formats](formats.md).
 - `timeline.py`, `evaluate.py` and `relabel_analysis.py` are internal review and diagnostic tools.
@@ -56,6 +57,9 @@ The public interface intentionally stays small:
 just auto SOURCE [FORMAT]
 just play SOURCE --segment N
 just play SOURCE --all
+just charts init
+just charts add SOURCE --segment N --ucs-index CS349
+just charts sync
 just fetch URL_OR_ID
 just import-studio URL_OR_ID VIDEO_PATH
 just check

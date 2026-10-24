@@ -8,6 +8,10 @@ auto +args:
 play +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.play_analysis "$@"
 
+# Manage official UCS timing and editable chart drafts in a separate repository.
+charts +args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.chart_data "$@"
+
 # Download a YouTube video into the cache used by `auto`.
 fetch +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.workflow fetch "$@"
