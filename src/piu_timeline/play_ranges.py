@@ -3,6 +3,8 @@ from collections import Counter
 import math
 import json
 
+from .play_candidates import EARLY_SECONDS, LATE_SECONDS, association_window, intersect_window
+
 
 def counter_frame_ranges(path):
     """Keep positive raw-reader changes as alternatives, never confirmed events."""
@@ -54,7 +56,8 @@ def timing_ranges(data):
         if note['status'] != 'estimated':
             continue
         target, uncertainty = note['target_seconds'], note['prediction_uncertainty_seconds']
-        record = {'target_range': [target - uncertainty, target + uncertainty], 'input_ranges': [],
+        window = association_window(note, data.get('display_delay_correction_ms', 0) / 1000)
+        record = {'association_window': window, 'target_range': [target - uncertainty, target + uncertainty], 'input_ranges': [],
                   'rejected_candidates': rejected.get(index, [])}
         if note.get('note_type') == 'hold':
             hold = holds[note['hold_id']]
@@ -69,7 +72,10 @@ def timing_ranges(data):
             lo = match.get('observation_lower_seconds', match.get('combo_lower_seconds'))
             hi = match.get('observation_upper_seconds', match.get('combo_upper_seconds'))
             if lo is not None and hi is not None:
-                record.update(status='matched', input_ranges=[[lo, hi]], reason='matched_display_refresh')
+                clipped = intersect_window([lo, hi], window)
+                record.update(status='matched' if clipped else 'unknown', input_ranges=[clipped] if clipped else [],
+                              observed_input_range=[lo, hi],
+                              reason='matched_display_refresh' if clipped else 'outside_association_window')
         if 'status' not in record:
             if index in misses or match and match.get('judgment_label') == 'MISS':
                 record.update(status='possible_miss', reason='possible_miss_has_no_press_timestamp')
@@ -79,7 +85,7 @@ def timing_ranges(data):
                 # does not assert that any event belongs to this note.
                 alternatives = constrained.get(index, [])
                 intervals = []
-                for lo, hi in sorted((event['lower_seconds'], event['upper_seconds']) for event in alternatives):
+                for lo, hi in sorted(event['candidate_range'] for event in alternatives):
                     if intervals and lo <= intervals[-1][1]:
                         intervals[-1][1] = max(intervals[-1][1], hi)
                     else:
@@ -93,11 +99,12 @@ def timing_ranges(data):
                     if before and after and after['target_seconds'] - before['target_seconds'] <= 3:
                         lo, _ = bracket(before)
                         _, hi = bracket(after)
-                        if lo is not None and hi is not None and lo <= hi:
+                        clipped = intersect_window([lo, hi], window) if lo is not None and hi is not None else None
+                        if clipped:
                             record.update(status='bounded', reason='between_neighboring_processed_rows',
-                                          input_ranges=[[lo, hi]], anchors=[before['note'], after['note']],
+                                          input_ranges=[clipped], neighbor_observation_range=[lo, hi], anchors=[before['note'], after['note']],
                                           condition='Bounds assume this note was pressed in chart-row order; they do not establish a press.')
-        if record['status'] == 'unknown':
+        if record['status'] == 'unknown' and record['reason'] != 'outside_association_window':
             if any(event.get('delta', 0) <= 0 and event['lower_seconds'] <= target <= event['upper_seconds']
                    for event in data.get('combo_events', [])):
                 record['reason'] = 'counter_reset_without_resolved_press'
@@ -110,5 +117,5 @@ def timing_ranges(data):
                 record['reason'] = 'after_last_detected_positive_refresh'
         result[index] = record
     return {'notes': result, 'counts': dict(Counter(record['status'] for record in result.values())),
-            'candidate_window_seconds': .25,
-            'note': 'Possible ranges are alternative observed refreshes, not confirmed input assignments.'}
+            'association_limits_seconds': {'early': EARLY_SECONDS, 'late': LATE_SECONDS},
+            'note': 'Connected ranges intersect original observations with hard timing limits. Possible ranges remain unconfirmed; original observations and source PTS are preserved.'}

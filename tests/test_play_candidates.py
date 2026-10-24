@@ -82,3 +82,37 @@ class CandidateTest(unittest.TestCase):
         result, _ = candidates(data, [aggregate, event(10, 10.02, 'judgment')])
         self.assertEqual([entry['source'] for entry in result[0]], ['combo'])
         self.assertEqual({entry['source'] for entry in result[1]}, {'combo', 'judgment'})
+
+    def test_asymmetric_hard_limits_include_boundaries_and_reject_beyond_them(self):
+        data = {'notes': [note(10)]}
+        for lo, hi, expected in ((9.75, 9.75, True), (10.5, 10.5, True),
+                                 (9.74, 9.749, False), (10.501, 10.51, False),
+                                 (10.4, 10.42, True)):
+            with self.subTest(lo=lo, hi=hi):
+                result, _ = candidates(data, [event(lo, hi)])
+                self.assertEqual(0 in result, expected)
+
+    def test_wide_bracket_is_intersected_without_changing_source_evidence(self):
+        observed = {**event(9, 11), 'source_pts_seconds': [109, 111]}
+        result, _ = candidates({'notes': [note(10)]}, [observed])
+        accepted = result[0][0]
+        self.assertEqual(accepted['candidate_range'], [9.75, 10.5])
+        self.assertEqual([accepted['lower_seconds'], accepted['upper_seconds']], [9, 11])
+        self.assertEqual(accepted['source_pts_seconds'], [109, 111])
+        self.assertNotIn('candidate_range', observed)
+
+    def test_uncertainty_and_context_offset_cannot_expand_the_hard_window(self):
+        target = {**note(10), 'prediction_uncertainty_seconds': 5}
+        result, _ = candidates({'notes': [target]}, [event(10.51, 10.52)])
+        self.assertFalse(result)
+        data = {'notes': [note(9.9, 1), note(10)], 'matches': [
+            {'note': 0, 'target_seconds': 9.9, 'combo_event': 1,
+             'combo_lower_seconds': 10.7, 'combo_upper_seconds': 10.72}]}
+        result, _ = candidates(data, [event(10.8, 10.82)])
+        self.assertNotIn(1, result)
+
+    def test_outside_word_cannot_ride_inside_a_wide_counter_family(self):
+        result, _ = candidates({'notes': [note(10)]}, [
+            {**event(9, 10.7), 'delta': 2}, event(10.68, 10.7, 'judgment')])
+        self.assertEqual([entry['source'] for entry in result[0]], ['combo'])
+        self.assertEqual(result[0][0]['candidate_range'], [9.75, 10.5])

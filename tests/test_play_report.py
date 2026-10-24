@@ -165,6 +165,8 @@ class ReportTest(unittest.TestCase):
         self.assertIn(' ∪ ', result['initialRows'][0][3])
         self.assertIn('Possible refresh ranges', result['initialRows'][0][4])
         self.assertIn('association is unresolved', result['details'][0][2])
+        self.assertEqual(result['defaultCandidateConnections'], 0)
+        self.assertGreater(result['optionalCandidateConnections'], 0)
         self.assertAlmostEqual(result['correctedInputs'][0][0], 10.09)
 
     def test_individual_report_includes_side_by_side_layout_css(self):

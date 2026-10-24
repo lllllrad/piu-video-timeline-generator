@@ -61,6 +61,24 @@ const targetRanges = evaluate('reviewNotes.map(({note})=>targetRange(note))');
 const initialInputs = evaluate('reviewNotes.map(({index})=>inputRange(matchByNote.get(index)?.match,index))');
 const markers=()=>{const shift=evaluate('(chartScene.origin-playhead)*chartScene.pps'),g=evaluate('({top:laneGeometry().top,bottom:laneGeometry().bottom})');return descendants(elements.get('lanes')).filter(node=>node.tag==='circle'&&['#b6ff59','#ff70dd'].includes(node.getAttribute('stroke'))).map(node=>({color:node.getAttribute('stroke'),args:[Number(node.getAttribute('cx')),Number(node.getAttribute('cy'))+shift]})).filter(mark=>mark.args[1]>=g.top&&mark.args[1]<=g.bottom)};
 const initialMarkers=markers();
+const defaultCandidateConnections=descendants(elements.get('lanes')).filter(node=>node.getAttribute('data-kind')==='candidate-connection').length;
+assert.equal(defaultCandidateConnections,0,'unconfirmed candidates must be hidden by default');
+assert.ok(!descendants(elements.get('lanes')).some(node=>node.getAttribute('stroke-dasharray')),'no unlinked hold envelope is drawn');
+elements.get('candidates').checked=true;elements.get('candidates').onchange();
+const optionalConnections=descendants(elements.get('lanes')).filter(node=>node.getAttribute('data-kind')==='candidate-connection');
+for(const group of optionalConnections){
+  const index=Number(group.getAttribute('data-note')),target=data.notes[index].target_seconds;
+  assert.ok(Number(group.getAttribute('data-range-start'))>=target-.25-1e-9);
+  assert.ok(Number(group.getAttribute('data-range-end'))<=target+.5+1e-9);
+  assert.equal(group.children[0].getAttribute('stroke-dasharray'),'4 3','candidate has a link from its note');
+}
+const optionalCandidateConnections=optionalConnections.length;
+elements.get('candidates').checked=false;elements.get('candidates').onchange();
+for(const {index,note} of evaluate('reviewNotes')){
+  if(note.note_type==='hold')continue;
+  const intervals=evaluate('inputIntervals(matchByNote.get('+index+')?.match,'+index+')');
+  for(const range of intervals){assert.ok(range[0]>=note.target_seconds-.25-1e-9);assert.ok(range[1]<=note.target_seconds+.5+1e-9)}
+}
 const initialDifferences = evaluate('reviewNotes.map(({note,index})=>difference(targetRange(note),inputRange(matchByNote.get(index)?.match,index)))');
 elements.get('delay').value = '30';
 elements.get('delay').oninput();
@@ -122,7 +140,7 @@ if (initialRows.length) {
   const position = evaluate('(()=>{const g=laneGeometry(),n=data.notes[selectedNote];return {x:chartScene.selectionRects.get(selectedNote)?Number(chartScene.selectionRects.get(selectedNote).getAttribute("x"))+(noteSize()+6)/2:g.x(n.lane),y:g.y(n.target_seconds)}})()');
   canvas.onclick({clientX: position.x*canvas.clientWidth/svgWidth, clientY: position.y*canvas.clientHeight/svgHeight});
   assert.equal(evaluate('selectedNote'), before);
-  const inputPosition = evaluate('(()=>{const g=laneGeometry(),n=data.notes[selectedNote],input=inputRange(matchByNote.get(selectedNote)?.match,selectedNote);return input?{x:g.x(n.lane),y:g.y((input[0]+input[1])/2)}:null})()');
+  const inputPosition = evaluate('(()=>{const g=laneGeometry(),n=data.notes[selectedNote],intervals=chartInputIntervals(selectedNote),input=intervals.length?[intervals[0][0],intervals.at(-1)[1]]:null;return input?{x:g.x(n.lane),y:g.y((input[0]+input[1])/2)}:null})()');
   const [,,currentWidth,currentHeight]=canvas.getAttribute('viewBox').split(' ').map(Number);
   if (inputPosition) canvas.onclick({clientX: inputPosition.x*canvas.clientWidth/currentWidth, clientY: inputPosition.y*canvas.clientHeight/currentHeight});
   assert.equal(evaluate('selectedNote'), before);
@@ -182,4 +200,4 @@ video.paused=true;dispatch('pause');
 assert.equal(elements.get('events').children[0],tableRowBeforePlayback,'playback must not rebuild the note table');
 assert.deepEqual(evaluate('data'), data, 'embedded evidence changed');
 console.log(JSON.stringify({initialRows, correctedRows, details, targetRanges, initialInputs,
-  initialDifferences, correctedInputs, correctedDifferences, verticalGeometry, verticalNotes, initialMarkers, correctedMarkers}));
+  initialDifferences, correctedInputs, correctedDifferences, verticalGeometry, verticalNotes, initialMarkers, correctedMarkers, defaultCandidateConnections, optionalCandidateConnections}));

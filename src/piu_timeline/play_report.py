@@ -69,13 +69,13 @@ TEMPLATE = r'''<!doctype html>
 <div class="playback-grid"><section class="panel video-panel"><h2>Original recording</h2><video id="video" controls preload="metadata" src="__MEDIA__"></video>
 <label>Choose the original file if this browser cannot open its relative path <input id="file" type="file" accept="video/*,.mkv"></label><small>The file stays in this browser. Unsupported codecs may require another browser. Nothing is uploaded or re-encoded.</small>
 <div class="row"><button id="begin">Go to play start</button><button id="previous">Previous match</button><button id="next">Next match</button><span id="clock" class="pill"></span></div></section>
-<section class="panel chart"><div class="row chart-controls"><h2>Vertical note chart</h2><label>Spacing <input id="spacingScale" type="range" min="0.05" max="16" step="0.01" value="1"> <input id="spacingInput" type="number" min="0.05" max="16" step="0.01" value="1" aria-label="Exact note spacing multiplier"> <output id="spacingValue">1.00×</output></label><label>Note size <input id="noteSize" type="range" min="8" max="64" step="1" value="24"> <output id="noteSizeValue">24 px</output></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label></div>
-<p class="muted">Earlier ↑ · later ↓. Fixed colored squares: notes. Lime left: chart target range. Magenta right: input range. Solid: matched; dashed: possible. Long bodies: holds; magenta strips: sustained recognition. Conditional neighbor bounds appear only in the table. The green line follows video playback.</p>
+<section class="panel chart"><div class="row chart-controls"><h2>Vertical note chart</h2><label>Spacing <input id="spacingScale" type="range" min="0.05" max="16" step="0.01" value="1"> <input id="spacingInput" type="number" min="0.05" max="16" step="0.01" value="1" aria-label="Exact note spacing multiplier"> <output id="spacingValue">1.00×</output></label><label>Note size <input id="noteSize" type="range" min="8" max="64" step="1" value="24"> <output id="noteSizeValue">24 px</output></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label><label><input id="candidates" type="checkbox"> Show candidate connections</label></div>
+<p class="muted">Earlier ↑ · later ↓. Fixed colored squares: notes. Lime left: chart target range. Magenta right: input range. Matched inputs are shown by default; candidate connections are optional (early ≤250 ms, late ≤500 ms). Long bodies: holds; magenta strips: sustained recognition. Conditional neighbor bounds appear only in the table. The green line follows video playback.</p>
 <div class="row"><button id="previousNote">Previous note</button><button id="nextNote">Next note</button><span id="chartPosition" class="pill"></span></div>
 <label>Recording position <input id="position" type="range" step="0.001" style="width:100%"></label>
-<div class="chart-viewport"><svg id="lanes" viewBox="0 0 1000 680" role="img" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right"></svg></div><small><span style="color:#b6ff59">● Left: chart target range</span> · <span style="color:#ff70dd">● Right: input range (dashed = candidate)</span><br>Click a note or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Long bodies are holds; magenta spans show recognized held states, not repeated presses. Rolls and unreliable motion remain unresolved.</small></section>
+<div class="chart-viewport"><svg id="lanes" viewBox="0 0 1000 680" role="img" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right"></svg></div><small><span style="color:#b6ff59">● Left: chart target range</span> · <span style="color:#ff70dd">● Right: input range (optional dashed connections = candidates)</span><br>Click a note or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Long bodies are holds; magenta spans show recognized held states, not repeated presses. Rolls and unreliable motion remain unresolved.</small></section>
 </div>
-<details class="panel"><summary>How to read the vertical chart</summary><p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Note size and spacing are independent. Notes fit the available width automatically so all lanes and both timing ranges remain visible; the size label indicates when fitting reduces your chosen size. Play the video on the left to follow the same recording position in this chart. Colored squares retain a fixed size as spacing changes. Lime points and capped lines on the left show chart target ranges. Magenta points and capped lines on the right show input ranges. Dashed magenta lines show alternative refresh ranges, not confirmed inputs. Both ranges remain visible when their times overlap. Points at interval centers are visual guides, not subframe measurements. A magenta mark above its note is early; below is late. The green line follows the recording.</p></details>
+<details class="panel"><summary>How to read the vertical chart</summary><p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Note size and spacing are independent. Notes fit the available width automatically so all lanes and both timing ranges remain visible; the size label indicates when fitting reduces your chosen size. Play the video on the left to follow the same recording position in this chart. Colored squares retain a fixed size as spacing changes. Lime points and capped lines on the left show chart target ranges. Magenta points and capped lines on the right show input ranges. Enable Show candidate connections to see dashed links from notes to alternative input ranges, limited to 250 ms early and 500 ms late. Unlinked candidate windows and hold envelopes are hidden. Both ranges remain visible when their times overlap. Points at interval centers are visual guides, not subframe measurements. A magenta mark above its note is early; below is late. The green line follows the recording.</p></details>
 <section class="panel"><h2>Timing evidence</h2><label>Display latency correction: <output id="delayValue"></output> ms<br><input id="delay" type="range" min="-500" max="500" step="1"></label>
 <button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
 <div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="timing-ranges.json">Per-note timing ranges</a> · <a href="holds.json">Long-note geometry and held-state evidence</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section>
@@ -91,7 +91,7 @@ TEMPLATE = r'''<!doctype html>
 'use strict';
 const data=JSON.parse(document.getElementById('data').textContent),$=id=>document.getElementById(id),video=$('video');
 let playhead=data.start_seconds,selected=-1,objectUrl=null;
-const matches=data.matches,delay=$('delay');delay.value=data.display_delay_correction_ms||0;
+const matches=data.matches.filter(match=>data.timing_ranges?.notes?.[match.note]?.status==='matched'),delay=$('delay');delay.value=data.display_delay_correction_ms||0;
 const fmt=t=>{const ms=Math.round(Math.abs(t)*1000),m=Math.floor(ms/60000);return (t<0?'-':'')+m+':'+((ms%60000)/1000).toFixed(3).padStart(6,'0')};
 const matchByNote=new Map(matches.map((m,i)=>[m.note,{match:m,index:i}]));
 const rangeByNote=data.timing_ranges?.notes||{};
@@ -105,15 +105,18 @@ let selectedNote=matches[0]?.note??reviewNotes[0]?.index??null;
 if(selectedNote!==null)playhead=data.notes[selectedNote].target_seconds;
 const targetRange=note=>Number.isFinite(note.target_seconds)&&Number.isFinite(note.prediction_uncertainty_seconds)
   ?[note.target_seconds-note.prediction_uncertainty_seconds,note.target_seconds+note.prediction_uncertainty_seconds]:null;
-const observedRange=m=>{
-  if(!m||m.judgment_label==='MISS')return null;
-  const lo=m.observation_lower_seconds??m.combo_lower_seconds,hi=m.observation_upper_seconds??m.combo_upper_seconds;
-  return Number.isFinite(lo)&&Number.isFinite(hi)&&lo<=hi?[lo,hi]:null;
-};
 const inputIntervals=(m,index=m?.note)=>{
-const observed=observedRange(m),ranges=observed?[observed]:(rangeByNote[index]?.input_ranges||[]);
-return ranges.map(range=>range.map(t=>t-Number(delay.value)/1000));
+const record=rangeByNote[index]||{},note=data.notes[index];
+const ranges=record.status==='matched'&&record.observed_input_range?[record.observed_input_range]
+ :record.status==='possible'?(record.alternatives||[]).map(event=>[event.lower_seconds,event.upper_seconds])
+ :record.status==='bounded'&&record.neighbor_observation_range?[record.neighbor_observation_range]:record.input_ranges||[];
+const shifted=ranges.map(range=>range.map(t=>t-Number(delay.value)/1000));
+if(holdFor(note))return shifted;
+const limits=data.timing_ranges.association_limits_seconds,center=note?.target_seconds;
+const clipped=shifted.map(range=>[Math.max(range[0],center-limits.early),Math.min(range[1],center+limits.late)]).filter(range=>range[0]<=range[1]).sort((a,b)=>a[0]-b[0]);
+const merged=[];for(const range of clipped){if(merged.length&&range[0]<=merged.at(-1)[1])merged.at(-1)[1]=Math.max(merged.at(-1)[1],range[1]);else merged.push(range)}return merged;
 };
+const chartInputIntervals=index=>rangeByNote[index]?.status==='bounded'?[]:holdFor(data.notes[index])||matchByNote.has(index)||$('candidates').checked?inputIntervals(matchByNote.get(index)?.match,index):[];
 const inputRange=(m,index=m?.note)=>{const ranges=inputIntervals(m,index);return ranges.length?[ranges[0][0],ranges.at(-1)[1]]:null};
 const difference=(target,input)=>target&&input?[1000*(input[0]-target[1]),1000*(input[1]-target[0])]:null;
 const offset=m=>difference(targetRange(data.notes[m.note]),inputRange(m))??[NaN,NaN];
@@ -228,7 +231,7 @@ const g=laneGeometry(),size=noteSize(),requested=Number($('noteSize').value)||24
 $('noteSizeValue').textContent=size+' px'+(size<requested?' (fit to width)':'');
 // Nearby retained SVG pages bound DOM size and transform distances at every zoom.
 const pageSeconds=Math.max(.5,g.span*4),page=Math.floor(playhead/pageSeconds);
-const key=JSON.stringify([g.width,size,g.pps,delay.value,Boolean($('excluded').checked),page]);
+const key=JSON.stringify([g.width,size,g.pps,delay.value,Boolean($('excluded').checked),Boolean($('candidates').checked),page]);
 if(!chartScene||chartScene.key!==key){
 cancelChartAnimation();
 const origin=page*pageSeconds,start=origin-g.span-pageSeconds/2,end=origin+2*pageSeconds+g.span;
@@ -249,8 +252,9 @@ for(let t=Math.ceil(start/tick)*tick;t<=end;t+=tick){line(grid,g.left,y(t),g.rig
 const intersects=range=>range&&range[1]>=start&&range[0]<=end;
 const marker=(range,x,color,index,possible=false)=>{
 if(!intersects(range))return;
-const group=svgNode('g',{'data-note':index,'data-kind':color===targetColor?'target-range':'input-range'},ranges);
-line(group,x,y(Math.max(start,range[0])),x,y(Math.min(end,Math.max(range[0]+2/g.pps,range[1]))),color,3,possible?'4 3':null);
+const group=svgNode('g',{'data-note':index,'data-kind':possible?'candidate-connection':color===targetColor?'target-range':'input-range','data-range-start':range[0],'data-range-end':range[1]},ranges);
+if(possible)line(group,g.x(data.notes[index].lane),y(data.notes[index].target_seconds),x,y((range[0]+range[1])/2),color,1,'4 3');
+line(group,x,y(Math.max(start,range[0])),x,y(Math.min(end,range[1])),color,3,possible?'4 3':null);
 for(const t of range)if(t>=start&&t<=end)line(group,x-3,y(t),x+3,y(t),color,3);
 const middle=(range[0]+range[1])/2;if(middle>=start&&middle<=end)svgNode('circle',{cx:x,cy:y(middle),r:3,fill:possible?'none':color,stroke:color,'stroke-width':2},group);
 };
@@ -261,8 +265,7 @@ const x=g.x(hold.lane),bodyWidth=Math.max(4,size*.4),palette=notePalette[data.la
 const group=svgNode('g',{'data-note':hold.display_note,'data-kind':'hold-body'},bodies);
 svgNode('rect',{x:x-bodyWidth/2,y:y(Math.max(first,start)),width:bodyWidth,height:Math.max(2,(Math.min(last,end)-Math.max(first,start))*g.pps),fill:palette[0],stroke:palette[1],'stroke-width':2},group);
 if(last>=start&&last<=end){line(group,x-size*.4,y(last),x+size*.4,y(last),palette[1],4);if(hold.end_censored)label(group,'?',x+size*.45,y(last)+4,palette[1])}
-const shift=Number(delay.value)/1000,envelope=hold.input.recognition_envelope;
-if(envelope&&intersects(envelope.map(t=>t-shift)))line(group,x+size/2+5,y(Math.max(start,envelope[0]-shift)),x+size/2+5,y(Math.min(end,envelope[1]-shift)),inputColor,3,'4 4');
+const shift=Number(delay.value)/1000;
 for(const state of hold.input.segments){const lo=Math.max(start,state.lower_seconds-shift),hi=Math.min(end,state.upper_seconds-shift);if(lo<=hi)line(group,x+size/2+5,y(lo),x+size/2+5,y(hi),inputColor,5)}
 }
 const selectionRects=new Map();
@@ -271,7 +274,7 @@ const t=note.target_seconds??note.points.at(-1)?.[0],x=g.x(note.lane);
 if(note.status!=='estimated'){
 if($('excluded').checked&&Number.isFinite(t)&&t>=start&&t<=end)label(notes,'×',x,y(t)+6,'#647371',18,'middle');continue;
 }
-const target=targetRange(note),hold=holdFor(note),bounded=rangeByNote[index]?.status==='bounded';
+const target=targetRange(note),hold=holdFor(note);
 if(t>=start&&t<=end){
 const palette=notePalette[data.layout.lanes[note.lane].color]||notePalette.yellow;
 const group=svgNode('g',{'data-note':index,'data-kind':'note',role:'button',tabindex:0,'aria-label':'Note '+(index+1)+' at '+fmt(t)},notes);
@@ -282,7 +285,7 @@ group.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();seek(t,m
 }
 if(!hold?.start_censored)marker(target,x-size/2-5,targetColor,index);
 if(hold?.end_range)marker(hold.end_range,x-size/2-5,targetColor,index);
-for(const range of hold||bounded?[]:inputIntervals(matchByNote.get(index)?.match,index))marker(range,x+size/2+5,inputColor,index,!matchByNote.has(index));
+for(const range of hold?[]:chartInputIntervals(index))marker(range,x+size/2+5,inputColor,index,!matchByNote.has(index));
 }
 line(root,g.left,g.center,g.right,g.center,'#9cddbe',2);
 const now=label(root,'Now '+fmt(playhead),g.left+6,g.center-8,'#9cddbe');
@@ -293,7 +296,7 @@ const rect=root.getBoundingClientRect(),px=(e.clientX-rect.left)/root.clientWidt
 if(px<g.left||px>=g.right||py<g.top||py>g.bottom)return;
 const lane=Math.floor((px-g.left)/g.laneWidth),t=playhead+(py-g.center)/g.pps;
 const candidates=reviewNotes.filter(({note})=>note.lane===lane).map(item=>{
-const intervals=inputIntervals(matchByNote.get(item.index)?.match,item.index),hold=holdFor(item.note),holdDistance=hold?Math.max((hold.start_censored?hold.start_range[1]:hold.start_range[0])-t,0,t-(hold.end_range?.[1]??hold.last_body_seconds)):Infinity;
+const intervals=chartInputIntervals(item.index),hold=holdFor(item.note),holdDistance=hold?Math.max((hold.start_censored?hold.start_range[1]:hold.start_range[0])-t,0,t-(hold.end_range?.[1]??hold.last_body_seconds)):Infinity;
 return {...item,distance:Math.min(Math.abs(item.note.target_seconds-t),holdDistance,...intervals.map(range=>Math.max(range[0]-t,0,t-range[1])))};
 }).filter(item=>item.distance<(current.to-current.from)*.035).sort((a,b)=>a.distance-b.distance||Math.abs(a.note.target_seconds-t)-Math.abs(b.note.target_seconds-t));
 const closest=candidates[0];if(closest)seek(closest.note.target_seconds,matchByNote.get(closest.index)?.index??-1,closest.index);else seek(t);
@@ -327,7 +330,7 @@ const w=1200,p=180,right=w-35,center=(p+right)/2,root=svgRoot('comparison',w,180
 $('comparisonDetails').replaceChildren();
 const note=data.notes[selectedNote];
 if(!note){label(root,'No supported target ranges to compare.',p,70);return}
-const match=matchByNote.get(selectedNote)?.match,hold=holdFor(note),target=hold?[hold.start_censored?hold.start_range[1]:hold.start_range[0],hold.end_range?.[1]??hold.last_body_seconds]:targetRange(note),input=inputRange(match,selectedNote),delta=difference(target,input);
+const match=matchByNote.get(selectedNote)?.match,hold=holdFor(note),target=hold?[hold.start_censored?hold.start_range[1]:hold.start_range[0],hold.end_range?.[1]??hold.last_body_seconds]:targetRange(note),input=hold||match||rangeByNote[selectedNote]?.status==='possible'&&$('candidates').checked?inputRange(match,selectedNote):null,delta=difference(target,input);
 const extent=Math.max(100,...[...(target||[]),...(input||[])].map(t=>Math.abs(1000*(t-note.target_seconds))))*1.15;
 const x=t=>center+1000*(t-note.target_seconds)/extent*(right-p)/2;
 for(const ms of [-extent,0,extent]){const px=center+ms/extent*(right-p)/2;line(root,px,15,px,135,'#314448');label(root,ms.toFixed(1)+' ms',px-25,160)}
@@ -369,7 +372,7 @@ row.onclick=()=>seek(note.target_seconds,linked?.index??-1,index);
 }}
 function drawPlayback(){$('position').value=playhead;$('chartPosition').textContent=fmt(playhead);$('clock').textContent=fmt(playhead);lanes();if(timingPlayhead){const x=60+1080*(playhead-data.start_seconds)/(data.end_seconds-data.start_seconds);timingPlayhead.setAttribute('x1',x);timingPlayhead.setAttribute('x2',x)}}
 function draw(){$('delayValue').textContent=delay.value;drawPlayback();timing();comparison()}
-delay.oninput=()=>{table();draw()};$('center').onclick=()=>{delay.value=Math.round(median(matches.map(mid)));table();draw()};$('excluded').onchange=draw;
+delay.oninput=()=>{table();draw()};$('center').onclick=()=>{delay.value=Math.round(median(matches.map(mid)));table();draw()};$('excluded').onchange=draw;$('candidates').onchange=draw;
 $('layout').value=JSON.stringify(data.layout,null,2);$('download').onclick=()=>{try{const value=JSON.parse($('layout').value),url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='layout.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('layoutError').textContent=''}catch(e){$('layoutError').textContent=e.message}};
 function overlay(){
 const w=$('preview').naturalWidth,h=$('preview').naturalHeight,root=svgRoot('overlay',w,h);
