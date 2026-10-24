@@ -93,9 +93,9 @@ def receptor_centers(rgb):
     return centers
 
 
-def locate_layout(rgb, chart, player=None):
+def locate_layout(rgb, chart, player=None, centers=None):
     height, width = rgb.shape[:2]
-    centers = receptor_centers(rgb)
+    centers = receptor_centers(rgb) if centers is None else centers
     expected = (10 if str(chart).startswith(('D', 'HD')) else 5) if chart else None
     if len(centers) == 10 and expected == 5 and player:
         centers = centers[:5] if player == 'p1' else centers[5:]
@@ -110,6 +110,38 @@ def locate_layout(rgb, chart, player=None):
                             'note_y_max': .95, 'combo_roi': [middle - .07, .52, .14, .075],
                             'lanes': [{'x': x / width, 'color': COLORS[i % 5],
                                        'name': f'{i // 5 + 1}:{NAMES[i % 5]}'} for i, (x, _) in enumerate(centers)]})
+
+
+
+def combine_receptor_observations(seen, width, height, expected=None):
+    """Recover only receivers observed in at least two distinct native frames."""
+    groups = []
+    for centers, observation in seen:
+        pts = observation.get('source_pts_seconds')
+        if pts is None:
+            continue
+        for x, y in centers:
+            compatible = [group for group in groups
+                          if abs(x-np.median([p[0] for p in group])) < .008*width
+                          and abs(y-np.median([p[1] for p in group])) < .012*height]
+            if len(compatible) == 1:
+                compatible[0].append((x,y,pts))
+            elif not compatible:
+                groups.append([(x,y,pts)])
+    stable = sorted((float(np.median([p[0] for p in group])),float(np.median([p[1] for p in group])))
+                    for group in groups if len({p[2] for p in group}) >= 2)
+    choices = []
+    for count in ((expected,) if expected else (10,5)):
+        for begin in range(len(stable)-count+1):
+            centers = stable[begin:begin+count]
+            spacing = np.diff([p[0] for p in centers])
+            if (np.std(spacing)/np.mean(spacing) <= .10
+                    and np.std([p[1] for p in centers]) <= height*.012):
+                choices.append(centers)
+        if choices:
+            break
+    # Two competing grids cannot be resolved by choosing a convenient one.
+    return choices[0] if len(choices) == 1 else None
 
 
 def recover_layout(record, roi, segment, preview, rgb, calibration, player=None):
@@ -148,6 +180,14 @@ def recover_layout(record, roi, segment, preview, rgb, calibration, player=None)
                     if source.get('shared_from'):
                         calibration['geometry_reference'] = source['shared_from']
                     return result
+        combined = combine_receptor_observations(seen, width, height, expected)
+        if combined is not None:
+            try:
+                result = locate_layout(image, segment.get('chart'), player, centers=combined)
+                result['method'] = 'corroborated_partial_receptor_outlines'
+                return result
+            except ValueError:
+                pass
         return None
 
     layout = observe(rgb, calibration)
@@ -163,6 +203,22 @@ def recover_layout(record, roi, segment, preview, rgb, calibration, player=None)
         image = cv2.cvtColor(cv2.imread(str(path)), cv2.COLOR_BGR2RGB)
         images.append(image); observations.append(observation)
         layout = observe(image, observation)
+        if layout is not None:
+            calibration['supporting_frames'] = observations
+            return layout
+    # Widely spaced integer-second samples can repeatedly hit the same beat
+    # flash. Observe distinct native frames in a short off-phase window before
+    # taking a median that may erase every receiver it was meant to reveal.
+    window_start = min(segment['start_seconds']+3.137, segment['end_seconds']-.1)
+    window_end = min(window_start+.8, segment['end_seconds'])
+    for index,(pts,seconds,image) in enumerate(decode_frames(record,window_start,window_end,roi,rgb.shape[1])):
+        if index % 3:
+            continue
+        path = directory / f'native-{index:02}.png'
+        cv2.imwrite(str(path),cv2.cvtColor(image,cv2.COLOR_RGB2BGR))
+        observation = {'source_pts_seconds':pts,'playback_seconds':seconds,'roi':list(roi),'file':str(path)}
+        observations.append(observation)
+        layout = observe(image,observation)
         if layout is not None:
             calibration['supporting_frames'] = observations
             return layout
