@@ -28,14 +28,56 @@ class TrackingTest(unittest.TestCase):
         event, jump = tracker.events
         self.assertEqual((event['lower_seconds'], event['upper_seconds']), (.02, .04))
         self.assertEqual(event['delta'], 1)
-        self.assertEqual(jump['status'], 'excluded')
+        self.assertEqual(jump['status'], 'candidate')
 
     def test_association_never_assigns_one_combo_to_multiple_notes(self):
         notes = [{'status': 'estimated', 'target_seconds': 1.0, 'lane': 0},
                  {'status': 'estimated', 'target_seconds': 1.0, 'lane': 1}]
         events = [{'status': 'candidate', 'lower_seconds': .99, 'upper_seconds': 1.02}]
         self.assertEqual(associate(notes, events), [])
-        self.assertEqual(events[0]['reason'], 'chord_or_duplicate_track')
+        self.assertEqual(events[0]['reason'], 'ambiguous_note_or_combo_association')
+
+    def test_clipped_head_centers_do_not_look_like_deceleration(self):
+        points = [(i / 60, 250 - 500 * i / 60) for i in range(23)]
+        points += [(23 / 60, 74), (24 / 60, 73), (25 / 60, 72)]
+        result = fit_track(Track(0, points), 50, 40)
+        self.assertEqual(result['status'], 'estimated')
+        self.assertAlmostEqual(result['target_seconds'], .4)
+
+    def test_chord_requires_matching_combo_increment(self):
+        notes = [{'status': 'estimated', 'target_seconds': 1., 'lane': lane} for lane in (0, 1)]
+        event = {'status': 'candidate', 'delta': 2, 'lower_seconds': .99, 'upper_seconds': 1.02}
+        matches = associate(notes, [event])
+        self.assertEqual(len(matches), 2)
+        self.assertEqual({m['combo_event'] for m in matches}, {0})
+        self.assertEqual({m['row_note_count'] for m in matches}, {2})
+
+    def test_monotone_alignment_recovers_close_successive_inputs(self):
+        notes = [{'status': 'estimated', 'target_seconds': t, 'lane': 0} for t in (1 + i*.06 for i in range(300))]
+        events = [{'status': 'candidate', 'delta': 1, 'lower_seconds': t+.01, 'upper_seconds': t+.03}
+                  for t in (1 + i*.06 for i in range(300))]
+        matches = associate(notes, events)
+        self.assertEqual([m['note'] for m in matches], list(range(300)))
+
+    def test_equal_cost_competing_alignments_remain_ambiguous(self):
+        notes = [{'status': 'estimated', 'target_seconds': t, 'lane': 0} for t in (.97, 1.03)]
+        event = {'status': 'candidate', 'delta': 1, 'lower_seconds': .99, 'upper_seconds': 1.01}
+        self.assertEqual(associate(notes, [event]), [])
+
+    def test_implausible_counter_read_does_not_corrupt_baseline(self):
+        tracker = ComboTracker()
+        for t, value in [(0, 140), (.02, 140), (.04, 4140), (.06, 4140), (.08, 141), (.10, 141)]:
+            tracker.update(t, value)
+        self.assertEqual(len(tracker.events), 1)
+        self.assertEqual((tracker.events[0]['before'], tracker.events[0]['after']), (140, 141))
+
+    def test_same_lane_head_fragments_are_not_counted_as_chords(self):
+        layout = {'lanes': [{'x': .1+.2*i} for i in range(5)], 'receptor_y': .2}
+        tracker = NoteTracker(layout, 320, 180)
+        tracker.finished = [Track(0, [(i/60, y-500*i/60) for i in range(12)]) for y in (180, 184)]
+        notes = tracker.finish()
+        self.assertEqual(sum(n['status'] == 'estimated' for n in notes), 1)
+        self.assertEqual(sum(n['reason'] == 'duplicate_head_component' for n in notes), 1)
 
     def test_repeated_digit_in_one_source_is_not_corroboration(self):
         image=np.zeros((60,180,3),dtype='uint8')

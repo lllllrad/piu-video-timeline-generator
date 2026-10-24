@@ -18,9 +18,26 @@ from .play_tracking import NoteTracker, DigitReader, ComboTracker, associate
 from .recognition import capture_game
 from .workflow import LOCAL_DATA, source_id
 
-VERSION = 3
+VERSION = 4
 COLORS = ('blue', 'red', 'yellow', 'red', 'blue')
 NAMES = ('DL', 'UL', 'C', 'UR', 'DR')
+
+
+def result_reference(segment, player=None):
+    """Reuse corroborated result OCR as a coverage reference, not a chart count."""
+    results = segment.get('results') or {}
+    players = results.get('players', {})
+    if player is None and len(players) == 1:
+        player = next(iter(players))
+    result = players.get(player, {})
+    fields = result.get('fields', {})
+    names = ('perfect', 'great', 'good', 'bad', 'miss')
+    if not all(fields.get(name, {}).get('status') == 'recognized'
+               and isinstance(result.get(name), int) for name in names):
+        return None
+    counts = {name: result[name] for name in names}
+    return {'player': player, 'counts': counts, 'total': sum(counts.values()),
+            'max_combo': result.get('max_combo'), 'evidence': results.get('evidence')}
 
 
 def validate_layout(layout):
@@ -194,11 +211,18 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             'combo_readable_fraction': known/observed, 'bootstrap': bootstrap,
             'display_delay_correction_ms': display_delay_ms, 'notes': notes,
             'combo_events': combo.events, 'matches': matches, 'unsupported_intervals': tracker.unsupported_intervals,
+            'result_reference': result_reference(segment, player),
+            'coverage': {'visible_note_heads': sum(n['status'] == 'estimated' for n in notes),
+                         'timed_note_heads': len(matches),
+                         'matched_combo_updates': len({m['combo_event'] for m in matches}),
+                         'observed_combo_updates': sum(e['delta'] > 0 for e in combo.events)},
             'excluded_notes': dict(Counter(note['reason'] for note in notes if note['status'] == 'excluded')),
             'limitations': ['Combo display updates are a proxy, not measured physical switch input.',
                             'Display/input latency is unknown unless externally calibrated.',
                             'Chart reconstruction covers visible supported-color note heads, not an authoritative chart file.',
-                            'Holds, rolls, chords, combo jumps, ambiguous associations and nonlinear trajectories are excluded.',
+                            'Coverage is partial. Result judgments include hold ticks and are not a visible note-head count.',
+                            'Chords share a bracket only when the visible row size equals the counter increment.',
+                            'Holds, rolls, unresolved counter jumps, ambiguous associations and nonlinear trajectories are excluded.',
                             'No missed press is inferred from a combo reset or an unreadable counter.']}
 
 

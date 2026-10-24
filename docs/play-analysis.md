@@ -26,7 +26,9 @@ This reconstructs visible supported-color note heads from the recording. It does
 
 For each usable note track, a local linear fit predicts when its center crosses the observed receptor row. A confirmed combo change is bracketed between the last frame with the old counter and the first frame with the new counter. Two observations must confirm each counter value. Matching uses those time intervals, never fabricated subframe input timestamps.
 
-The default association tolerance is 45 ms around the observed update interval. Only unique single-note/single-increment associations are accepted. Chords, holds, rolls, resets, counter jumps, frame gaps and competing associations remain excluded. A long colored component reaching the receptor region blocks timing matches in its interval (with a 100 ms guard), because hold ticks and dense overlapping stacks cannot be attributed safely. A reset is not proof of a missed note. Sparse results indicate limited visual evidence, not a lack of player inputs.
+The default association tolerance is 45 ms around the observed update interval. A monotone sequence alignment compares rows and counter updates in time order, so close successive notes do not all get discarded merely because their search windows overlap. Near-equal competing alignments remain excluded. A multi-head row shares one observed bracket only when its head count equals the counter increment; an unmatched counter jump does not create input timestamps. Holds, rolls, resets and observation gaps remain excluded. Implausible large jumps and high-valued backwards digit reads do not replace the stable counter baseline. A long colored component reaching the receptor region blocks timing matches in its interval (with a 100 ms guard), because hold ticks and dense overlapping stacks cannot be attributed safely. A reset is not proof of a missed note. Sparse results indicate limited visual evidence, not a lack of player inputs.
+
+The report separates reconstructed note heads, heads with timing evidence, and matched counter refreshes. It also reuses confirmed result-panel judgments as a whole-song reference when available, without extra OCR. Judgments include hold ticks, so their total is not a note-head count or a coverage percentage. A short analysis window still shows the whole-song reference. Missing matches are analysis gaps, not evidence of absent inputs.
 
 The raw offset contains input/render/display latency. It is not a measured physical switch time, hardware latency or game judgment-window score. A positive externally calibrated delay is subtracted with:
 
@@ -38,7 +40,7 @@ The HTML slider changes the displayed offsets only; changing associations requir
 
 ## Variable speed and uncertain motion
 
-The tracker does not assume one scroll speed for the song. It fits at most the last twelve observations of each head, compares earlier/later slopes, checks residuals and limits extrapolation to 160 ms. Nonlinear, stopped/reverse, distant and insufficient tracks are excluded. A sufficiently linear portion after a speed change may still be usable. There is no attempt to reconstruct arbitrary gimmicks, disappearing notes or unsupported skins.
+The tracker does not assume one scroll speed for the song. It excludes bounding-box centers clipped near the receptor, then fits at most the last twelve unclipped observations of each head. It compares earlier/later slopes with pixel-rounding tolerance, checks residuals and limits extrapolation to 250 ms and 2.5 lane spacings. Same-lane crossing estimates within 35 ms are treated as duplicate colored head fragments; excluded duplicates remain in the evidence. Nonlinear, stopped/reverse, distant and insufficient tracks are excluded. A sufficiently linear portion after a speed change may still be usable. There is no attempt to reconstruct arbitrary gimmicks, disappearing notes or unsupported skins.
 
 ## Geometry and limited windows
 

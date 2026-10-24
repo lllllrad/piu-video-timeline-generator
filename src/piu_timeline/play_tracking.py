@@ -89,17 +89,35 @@ class NoteTracker:
                 self.active.append(Track(note['lane'], [(seconds, note['y'] * self.height)]))
 
     def finish(self):
-        return [fit_track(track, self.layout['receptor_y'] * self.height, self.spacing)
-                for track in self.finished + self.active]
+        notes = [fit_track(track, self.layout['receptor_y'] * self.height, self.spacing)
+                 for track in self.finished + self.active]
+        # One arrow can yield multiple disconnected colored components. Keep the
+        # best trajectory when same-lane crossings coincide within two frames.
+        kept = []
+        for index in sorted(range(len(notes)), key=lambda i: (notes[i].get('prediction_uncertainty_seconds', math.inf),
+                                                              -len(notes[i]['points']))):
+            note = notes[index]
+            if note['status'] != 'estimated':
+                continue
+            duplicate = next((j for j in kept if notes[j]['lane'] == note['lane']
+                              and abs(notes[j]['target_seconds'] - note['target_seconds']) < .035), None)
+            if duplicate is not None:
+                note.update(status='excluded', reason='duplicate_head_component', duplicate_of=duplicate)
+            else:
+                kept.append(index)
+        return notes
 
 
 def fit_track(track, receptor_y, spacing):
     result = {'lane': track.lane, 'points': [[float(t), float(y)] for t, y in track.points],
               'status': 'excluded', 'reason': None, 'target_seconds': None}
-    if len(track.points) < 4 or track.points[-1][0] - track.points[0][0] < .065:
+    # The detection crop clips a head as it approaches the receptor. Those
+    # bounding-box centers flatten even during perfectly constant scrolling.
+    visible = [p for p in track.points if p[1] > receptor_y + .85 * spacing]
+    if len(visible) < 4 or visible[-1][0] - visible[0][0] < .065:
         return {**result, 'reason': 'insufficient_track'}
     # A local fit must itself be linear; never use an average song scroll speed.
-    points = np.asarray(track.points[-12:], dtype=float)
+    points = np.asarray(visible[-12:], dtype=float)
     t = points[:, 0] - points[-1, 0]
     y = points[:, 1]
     velocity, intercept = np.polyfit(t, y, 1)
@@ -112,11 +130,13 @@ def fit_track(track, receptor_y, spacing):
     last = np.polyfit(t[half:], y[half:], 1)[0]
     change = abs(first - last) / max(abs(velocity), 1)
     result['speed_change_fraction'] = float(change)
-    if residual > spacing * .14 or change > .18:
+    # Pixel rounding is a larger slope error for slow/short trajectories.
+    quantization = 2 / max(abs(velocity) * (t[-1] - t[half]), 1)
+    if residual > spacing * .14 or change > .18 + quantization:
         return {**result, 'reason': 'variable_speed_or_tracking_error'}
     target = float(points[-1, 0] + (receptor_y - intercept) / velocity)
     extrapolation = target - points[-1, 0]
-    if not 0 <= extrapolation <= .16:
+    if not 0 <= extrapolation <= .25 or intercept - receptor_y > 2.5 * spacing:
         return {**result, 'reason': 'receptor_not_observed_closely'}
     return {**result, 'status': 'estimated', 'target_seconds': target,
             'prediction_uncertainty_seconds': max(residual / abs(velocity), float(np.median(np.diff(points[:,0]))) / 2)}
@@ -193,6 +213,12 @@ class ComboTracker:
     def update(self, seconds, value):
         if value is None:
             return
+        # Impossible positive jumps and high-valued backwards reads are usually
+        # split/misclassified glyphs. They must not replace the stable baseline.
+        if self.stable is not None and value != self.stable:
+            elapsed = seconds - self.last_seen
+            if value - self.stable > max(10, 50 * elapsed) or value < self.stable and value > 10:
+                return
         if value == self.stable:
             self.last_seen = seconds
             self.pending = None
@@ -205,14 +231,18 @@ class ComboTracker:
             delta = value - self.stable
             self.events.append({'before': self.stable, 'after': value, 'delta': delta,
                                 'lower_seconds': previous, 'upper_seconds': self.pending['first'],
-                                'status': 'candidate' if delta == 1 and self.pending['first'] - previous <= .1 else 'excluded',
-                                'reason': None if delta == 1 and self.pending['first'] - previous <= .1
+                                'status': 'candidate' if 1 <= delta <= 10 and self.pending['first'] - previous <= .1 else 'excluded',
+                                'reason': None if 1 <= delta <= 10 and self.pending['first'] - previous <= .1
                                 else 'combo_reset' if delta <= 0 else 'combo_jump_or_observation_gap'})
         self.stable, self.last_seen, self.pending = value, seconds, None
 
 
 def associate(notes, combo_events, window=.045, display_delay=0.0):
-    """Accept only unique, single-head associations; preserve ambiguous evidence."""
+    """Monotone maximum-weight row alignment, with competing paths excluded.
+
+    A chord shares one observed bracket only if its head count equals the
+    counter increment. Skipped counter values never invent individual timings.
+    """
     rows = []
     for index, note in sorted(enumerate(notes), key=lambda item: item[1].get('target_seconds') or math.inf):
         if note['status'] != 'estimated':
@@ -221,27 +251,54 @@ def associate(notes, combo_events, window=.045, display_delay=0.0):
             rows[-1]['notes'].append(index)
         else:
             rows.append({'seconds': note['target_seconds'], 'notes': [index]})
-    candidates = {}
-    for i, event in enumerate(combo_events):
-        if event['status'] == 'candidate':
-            candidates[i] = [j for j, row in enumerate(rows)
-                             if event['lower_seconds'] - window <= row['seconds'] + display_delay <= event['upper_seconds'] + window]
-    use_count = {j: sum(j in options for options in candidates.values()) for j in range(len(rows))}
+    events = [(i, event) for i, event in enumerate(combo_events) if event['status'] == 'candidate']
+    weights = np.zeros((len(events), len(rows)))
+    for i, (_, event) in enumerate(events):
+        center = (event['lower_seconds'] + event['upper_seconds']) / 2
+        radius = (event['upper_seconds'] - event['lower_seconds']) / 2 + window
+        for j, row in enumerate(rows):
+            distance = abs(row['seconds'] + display_delay - center)
+            if distance <= radius and len(row['notes']) == event.get('delta', 1):
+                weights[i, j] = 1 - .5 * (distance / radius) ** 2
+    # A note row and counter observation can each be used once, in time order.
+    forward = np.zeros((len(events) + 1, len(rows) + 1))
+    backward = np.zeros_like(forward)
+    for i in range(len(events)):
+        for j in range(len(rows)):
+            forward[i+1, j+1] = max(forward[i, j+1], forward[i+1, j], forward[i, j] + weights[i, j])
+    for i in reversed(range(len(events))):
+        for j in reversed(range(len(rows))):
+            backward[i, j] = max(backward[i+1, j], backward[i, j+1], backward[i+1, j+1] + weights[i, j])
+    path, i, j = [], len(events), len(rows)
+    while i and j:
+        if weights[i-1, j-1] and abs(forward[i,j] - forward[i-1,j-1] - weights[i-1,j-1]) < 1e-9:
+            path.append((i-1,j-1)); i -= 1; j -= 1
+        elif forward[i-1,j] >= forward[i,j-1]:
+            i -= 1
+        else:
+            j -= 1
+    accepted = {}
+    optimum = forward[-1,-1]
+    for i, j in path:
+        # An almost equally good full-song path means attribution is unresolved.
+        alternatives = [forward[i,k] + weights[i,k] + backward[i+1,k+1]
+                        for k in np.flatnonzero(weights[i]) if k != j]
+        alternatives += [forward[k,j] + weights[k,j] + backward[k+1,j+1]
+                         for k in np.flatnonzero(weights[:,j]) if k != i]
+        if not alternatives or optimum - max(alternatives) > .08:
+            accepted[i] = j
     matches = []
-    for i, options in candidates.items():
-        event = combo_events[i]
-        if len(options) != 1 or use_count[options[0]] != 1:
+    for i, (event_index, event) in enumerate(events):
+        if i not in accepted:
             event.update(status='excluded', reason='ambiguous_note_or_combo_association')
             continue
-        row = rows[options[0]]
-        if len(row['notes']) != 1:
-            event.update(status='excluded', reason='chord_or_duplicate_track')
-            continue
-        index = row['notes'][0]
-        target = notes[index]['target_seconds']
-        event['status'] = 'matched'
-        matches.append({'note': index, 'combo_event': i, 'target_seconds': target,
-                        'combo_lower_seconds': event['lower_seconds'], 'combo_upper_seconds': event['upper_seconds'],
-                        'raw_offset_lower_ms': 1000 * (event['lower_seconds'] - target),
-                        'raw_offset_upper_ms': 1000 * (event['upper_seconds'] - target)})
-    return matches
+        row = rows[accepted[i]]
+        event.update(status='matched', reason=None)
+        for index in row['notes']:
+            target = notes[index]['target_seconds']
+            matches.append({'note': index, 'combo_event': event_index, 'target_seconds': target,
+                            'row_note_count': len(row['notes']),
+                            'combo_lower_seconds': event['lower_seconds'], 'combo_upper_seconds': event['upper_seconds'],
+                            'raw_offset_lower_ms': 1000 * (event['lower_seconds'] - target),
+                            'raw_offset_upper_ms': 1000 * (event['upper_seconds'] - target)})
+    return sorted(matches, key=lambda match: match['target_seconds'])

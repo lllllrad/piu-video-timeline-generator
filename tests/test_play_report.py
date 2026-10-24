@@ -6,10 +6,22 @@ import tempfile
 import unittest
 
 from piu_timeline.play_report import write_report
-from piu_timeline.play_analysis import validate_layout, locate_layout
+from piu_timeline.play_analysis import validate_layout, locate_layout, result_reference
 
 
 class ReportTest(unittest.TestCase):
+    def test_judgment_reference_requires_all_fields_and_one_selected_player(self):
+        names = ('perfect', 'great', 'good', 'bad', 'miss')
+        result = {name: value for name, value in zip(names, (1071, 22, 3, 1, 3))}
+        result['fields'] = {name: {'status': 'recognized'} for name in names}
+        segment = {'results': {'players': {'p2': result}}}
+        self.assertEqual(result_reference(segment)['total'], 1100)
+        segment['results']['players']['p1'] = result
+        self.assertIsNone(result_reference(segment))
+        self.assertEqual(result_reference(segment, 'p2')['total'], 1100)
+        result['fields']['miss']['status'] = 'unknown'
+        self.assertIsNone(result_reference(segment, 'p2'))
+
     def test_embedded_data_and_title_cannot_break_out_of_html(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'report.html'
