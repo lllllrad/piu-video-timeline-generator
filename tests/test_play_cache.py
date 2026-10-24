@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import numpy as np
 
 from piu_timeline import play_analysis as play
+from piu_timeline.play_judgments import VERSION as JUDGMENT_VERSION
 
 
 class PlayCacheTest(unittest.TestCase):
@@ -44,7 +45,8 @@ class PlayCacheTest(unittest.TestCase):
             layout={'receptor_y':.2,'lanes':[{'x':.1+.2*i} for i in range(5)]}
             saved={**segment,'media':media,'game_roi':[0,0,320,180],'play_analysis_version':play.VERSION,'frame_observation_version':play.FRAME_OBSERVATION_VERSION,
                    'analysis_width':320,'analysis_height':180,'player':None,'participant_slots':[],
-                   'layout':layout,'frame_count':2,'display_delay_correction_ms':0}
+                   'layout':layout,'frame_count':2,'display_delay_correction_ms':0,
+                   'judgment_analysis_version':JUDGMENT_VERSION,'judgment_template_labels':[],'judgment_events':[]}
             (final/'analysis.json').write_text(json.dumps(saved))
             trace=''.join(json.dumps({'playback_seconds':t,'notes':[],'combo':None})+'\n' for t in (1.,1.02))
             (final/'frames.jsonl').write_text(trace)
@@ -79,7 +81,7 @@ class PlayCacheTest(unittest.TestCase):
             (directory/'analysis/analysis.json').write_text(json.dumps(document))
             final=directory/'play/segment-001';final.mkdir(parents=True)
             saved={**segment,'media':media,'game_roi':document['game_roi'],'play_analysis_version':play.VERSION,
-                   'analysis_width':650,'player':None,'participant_slots':[]}
+                   'analysis_width':650,'player':None,'participant_slots':[],'judgment_analysis_version':JUDGMENT_VERSION,'judgment_template_labels':[],'judgment_events':[]}
             (final/'analysis.json').write_text(json.dumps(saved))
             with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
                     patch.object(play,'analyze_play',side_effect=AssertionError('must reuse evidence')):

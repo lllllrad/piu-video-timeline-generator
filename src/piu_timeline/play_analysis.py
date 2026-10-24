@@ -17,8 +17,9 @@ from .play_frames import decode_frames, crop_region
 from .play_tracking import NoteTracker, DigitReader, ComboTracker, associate
 from .recognition import capture_game
 from .workflow import LOCAL_DATA, source_id
+from .play_judgments import augment_judgments, cache_current as judgment_cache_current
 
-VERSION = 10
+VERSION = 11
 FRAME_OBSERVATION_VERSION = 4
 COLORS = ('blue', 'red', 'yellow', 'red', 'blue')
 NAMES = ('DL', 'UL', 'C', 'UR', 'DR')
@@ -58,12 +59,15 @@ def validate_layout(layout):
     bottom = layout.get('note_y_max', .95)
     if not isinstance(receptor, (int, float)) or not isinstance(bottom, (int, float)) or not 0 < receptor < bottom < 1:
         raise ValueError('Layout needs 0 < receptor_y < note_y_max < 1')
-    region = layout.get('combo_roi', [])
-    if len(region) != 4 or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in region):
-        raise ValueError('combo_roi needs four finite fractions')
-    x, y, w, h = region
-    if not (0 <= x < x + w <= 1 and 0 <= y < y + h <= 1):
-        raise ValueError('combo_roi must fit inside the game image')
+    for name in ('combo_roi','judgment_roi'):
+        if name=='judgment_roi' and name not in layout:
+            continue
+        region=layout.get(name,[])
+        if len(region)!=4 or any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) for v in region):
+            raise ValueError(f'{name} needs four finite fractions')
+        x,y,w,h=region
+        if not (0<=x<x+w<=1 and 0<=y<y+h<=1):
+            raise ValueError(f'{name} must fit inside the game image')
     return layout
 
 
@@ -484,12 +488,13 @@ def run(source, segment_number=1, force=False, **options):
                              and cached.get('chart') == segments[segment_number-1].get('chart')
                              and cached.get('participant_slots',[]) == sorted(segments[segment_number-1].get('players',{}))
                              and (options.get('layout') is None or cached['layout'] == options['layout']))
-            can_refit = (same_source and same_settings and cached.get('play_analysis_version') in (6, 7, 8, 9, VERSION)
+            can_refit = (same_source and same_settings and cached.get('play_analysis_version') in (6, 7, 8, 9, 10, VERSION)
                          and cached.get('frame_observation_version', 2 if cached.get('play_analysis_version') == 6 else None) in (2, 3, FRAME_OBSERVATION_VERSION)
                          and (final / 'frames.jsonl').is_file())
             if (same_source and same_settings and cached.get('play_analysis_version') == VERSION
                     and cached.get('display_delay_correction_ms',0) == options.get('display_delay_ms',0)
-                    and cached.get('result_reference') == result_reference(segments[segment_number-1],options.get('player'))):
+                    and cached.get('result_reference') == result_reference(segments[segment_number-1],options.get('player'))
+                    and judgment_cache_current(cached,root)):
                 from .play_report import write_report
                 write_report(cached, final / 'report.html', final)
                 print('Reusing saved native-frame play analysis; no decoding or OCR.')
@@ -500,6 +505,7 @@ def run(source, segment_number=1, force=False, **options):
             result = refit_saved(cached, final, pending, segments[segment_number-1], options.get('display_delay_ms',0))
         else:
             result = analyze_play(document, segments[segment_number-1], pending, **options)
+        result = augment_judgments(result,pending)
         stat = Path(document['media']['path']).stat()
         if (stat.st_size,stat.st_mtime_ns) != (result['media']['size_bytes'],result['media']['mtime_ns']):
             raise ValueError('Source changed during play analysis')

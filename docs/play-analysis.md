@@ -14,7 +14,7 @@ Open `.local/data/SOURCE_ID/play/segment-001/report.html` locally. The report em
 
 - the original recording, with seek links from the charts and event table;
 - reconstructed visible note-head crossing times by lane;
-- combo update brackets and their timing offsets;
+- combo and judgment-word refresh brackets, their evidence source and timing offsets;
 - coverage, unreadable digits, excluded trajectories and ambiguous events;
 - a receptor/combo overlay and an editable, downloadable layout;
 - display-latency correction and relative median centering.
@@ -25,11 +25,21 @@ If the browser cannot read the relative media path, select the original file in 
 
 This reconstructs visible supported-color note heads from the recording. It does not load an authoritative chart or recover unseen notes, beat positions or hold durations.
 
-For each usable note track, a local linear fit predicts when its center crosses the observed receptor row. A confirmed combo change is bracketed between the last frame with the old counter and the first frame with the new counter. Two observations must confirm each counter value. Matching uses those time intervals, never fabricated subframe input timestamps.
+For each usable note track, a local linear fit predicts when its center crosses the observed receptor row. A confirmed combo change is bracketed between the last frame with the old counter and the first frame with the new counter. Two observations must confirm each counter value. Judgment words are observed independently of the counter, including before combo 4 and after a combo break. Matching uses those time intervals, never fabricated subframe input timestamps.
 
 The default association tolerance is 45 ms around the observed update interval. A monotone sequence alignment compares rows and counter updates in time order, so close successive notes do not all get discarded merely because their search windows overlap. Near-equal competing alignments remain excluded. The counter advances per judged row, not per head: a multi-head chord shares one increment and one observed bracket. If a counter jump spans multiple consecutive rows, every associated row retains the original aggregate bracket; individual timestamps are never invented. The row span must fit inside the observed bracket plus 20 ms of fitting tolerance. Unassigned updates remain visible in a separate evidence table. Holds, rolls, resets and observation gaps remain excluded. Implausible large jumps and high-valued backwards digit reads do not replace the stable counter baseline. A long colored component reaching the receptor region blocks timing matches in its interval (with a 100 ms guard), because hold ticks and dense overlapping stacks cannot be attributed safely. A reset is not proof of a missed note. Sparse results indicate limited visual evidence, not a lack of player inputs.
 
 The report separates reconstructed note heads, heads with timing evidence, and matched counter refreshes. It also reuses confirmed result-panel judgments as a whole-song reference when available, without extra OCR. Judgments include hold ticks, so their total is not a note-head count or a coverage percentage. A short analysis window still shows the whole-song reference. Missing matches are analysis gaps, not evidence of absent inputs.
+
+## Judgment words without a visible counter
+
+PERFECT, GREAT, GOOD, BAD and MISS use a separate native-frame region. An optional `judgment_roi` layout field overrides the automatically derived region; the default includes the expanded initial word animation. At most 24 representative word crops receive English OCR, balanced across observed text colors. Exact vocabulary repeated across distinct source timestamps can corroborate stylized low-confidence text. Learned word shapes and colors are then matched by normalized contours, without per-frame OCR. Font templates are reusable across unchanged source media. Unknown words remain unknown, and the report lists unlearned labels.
+
+A new label, reappearance after a confirmed blank, or a sudden proportional scale restart can establish a refresh. Two source frames confirm it. A persistent PERFECT is not counted repeatedly; unreadable/occluded frames are not assumed blank. Scale restarts require adjacent visible observations, consistent geometry and confirmation. Onsets with more than 100 ms of observation uncertainty remain unscored.
+
+Judgment rows are aligned to the visible chart independently, then merged with counter evidence. One note is counted once, with `combo`, `combo+judgment` or `judgment` provenance. Competing counter evidence and hold/dense-stack intervals remain excluded. MISS is observed failure evidence, never a press timestamp or timing-offset sample. A unique unmatched visible row in a bounded preceding window may be listed as a possible miss; dense ambiguous cases retain only the observed MISS event.
+
+`judgments.jsonl` retains word observations, confidence, bounding boxes and original source PTS. `evidence/judgments/` contains sampled crops, OCR provenance, font templates and compressed native color features. Word detection/refresh changes can reuse those features without decoding or OCR. The HTML shows the judgment and evidence source for matched heads, plus all observed word refreshes, including unassigned and MISS evidence.
 
 The raw offset contains input/render/display latency. It is not a measured physical switch time, hardware latency or game judgment-window score. A positive externally calibrated delay is subtracted with:
 

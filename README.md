@@ -65,14 +65,14 @@ Models are downloaded on first use into `.local/cache/easyocr/`; inference is lo
 
 ## Visual play analysis
 
-After `just auto`, analyze one play's visible notes and combo update timing:
+After `just auto`, analyze one play's visible notes and combo/judgment update timing:
 
 ```sh
 just play VIDEO --segment 1
 just play VIDEO --all
 ```
 
-Open `.local/data/SOURCE_ID/play/segment-001/report.html`. The local HTML report shows reconstructed note trajectories, timing intervals, source-video seek links and exclusions. Combo refresh is a proxy for input timing; physical switch timing and display latency are not measured. Chords share one judged-row observation; unresolved holds, ambiguous events and nonlinear motion remain excluded. `--all` writes a linked overview at `.local/data/SOURCE_ID/play/index.html`. See [play analysis](docs/play-analysis.md) for calibration, latency correction and limited windows.
+Open `.local/data/SOURCE_ID/play/segment-001/report.html`. The local HTML report shows reconstructed note trajectories, timing intervals, source-video seek links and exclusions. PERFECT/GREAT/GOOD/BAD refreshes also supply timing evidence before combo 4 or after a break; MISS remains failure evidence without a press timestamp. Display refresh is a proxy for input timing; physical switch timing and display latency are not measured. Chords share one judged-row observation; unresolved holds, ambiguous events and nonlinear motion remain excluded. `--all` writes a linked overview at `.local/data/SOURCE_ID/play/index.html`. See [play analysis](docs/play-analysis.md) for calibration, latency correction and limited windows.
 
 ## Output formats
 

@@ -11,11 +11,58 @@ import numpy as np
 from piu_timeline.play_analysis import analyze_play
 from piu_timeline.play_frames import crop_region
 from piu_timeline.play_tracking import DigitReader
+from piu_timeline.play_judgments import augment_judgments, feature_map
 from piu_timeline.timeline import media_record
 
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg unavailable')
 class PlayIntegrationTest(unittest.TestCase):
+    def test_first_three_inputs_match_judgments_with_no_combo_anywhere(self):
+        layout={'lanes':[{'x':.1+.2*i,'color':('blue','red','yellow','red','blue')[i]} for i in range(5)],
+                'receptor_y':.2,'note_y_max':.95,'combo_roi':[.4,.6,.24,.2],
+                'judgment_roi':[.25,.43,.65,.2]}
+        targets=(.8,1.2,1.6);labels=('PERFECT','GREAT','BAD')
+        colors=((0,230,255),(30,255,70),(220,0,255))
+        models=[]
+        for label,color in zip(labels,colors):
+            crop=np.zeros((36,208,3),dtype='uint8')
+            text_width=cv2.getTextSize(label,cv2.FONT_HERSHEY_SIMPLEX,.6,2)[0][0]
+            cv2.putText(crop,label,((208-text_width)//2,24),cv2.FONT_HERSHEY_SIMPLEX,.6,color,2)
+            feature=feature_map(crop);ys,xs=np.nonzero(feature<18)
+            models.append({'label':label,'hue':int(np.median(feature[ys,xs])),
+                           'mask':(feature[ys.min():ys.max()+1,xs.min():xs.max()+1]<18).astype('uint8').tolist()})
+        def frame(t):
+            image=np.zeros((180,320,3),dtype='uint8')
+            for target in targets:
+                y=round(36+250*(target-t))
+                if 10<y<205:
+                    cv2.rectangle(image,(8,y-24),(56,y+24),(255,255,255),-1)
+                    cv2.rectangle(image,(12,y-20),(52,y+20),(0,200,255),-1)
+            active=[i for i,target in enumerate(targets) if t>=target]
+            if active:
+                i=active[-1];width=cv2.getTextSize(labels[i],cv2.FONT_HERSHEY_SIMPLEX,.6,2)[0][0]
+                cv2.putText(image,labels[i],(80+(208-width)//2,101),cv2.FONT_HERSHEY_SIMPLEX,.6,colors[i],2)
+            return image
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);video=root/'counter-free.mkv'
+            subprocess.run(['ffmpeg','-v','error','-nostdin','-n','-f','rawvideo','-pixel_format','rgb24',
+                            '-video_size','320x180','-framerate','60','-i','pipe:0','-c:v','ffv1',str(video)],
+                           input=b''.join(frame(i/60).tobytes() for i in range(120)),check=True,capture_output=True)
+            record=media_record(video);before=video.read_bytes(),video.stat().st_mtime_ns
+            with patch('piu_timeline.play_analysis.bootstrap_digits',return_value=(DigitReader(),{'ocr_images':0,'missing_digits':list('0123456789')})):
+                data=analyze_play({'media':record,'game_roi':[0,0,320,180]},
+                                  {'start_seconds':0,'end_seconds':2},root/'out',layout=layout,width=320)
+            self.assertEqual(data['matches'],[])
+            with patch('piu_timeline.play_judgments.learn_models',return_value=models), \
+                    patch('piu_timeline.play_judgments.ocr_images',side_effect=AssertionError('no per-frame OCR')):
+                data=augment_judgments(data,root/'out')
+            self.assertEqual(len(data['matches']),3,data['judgment_events'])
+            self.assertEqual([m['judgment_label'] for m in data['matches']],list(labels))
+            self.assertTrue(all(m['combo_event'] is None for m in data['matches']))
+            for match,target in zip(data['matches'],targets):
+                self.assertAlmostEqual(match['target_seconds'],target,delta=.03)
+            self.assertEqual((video.read_bytes(),video.stat().st_mtime_ns),before)
+
     def test_synthetic_note_combo_delay_and_source_integrity(self):
         layout = {'lanes': [{'x': .1 + .2*i, 'color': ('blue','red','yellow','red','blue')[i], 'name': str(i)} for i in range(5)],
                   'receptor_y': .2, 'note_y_max': .95, 'combo_roi': [.40, .60, .24, .20]}
