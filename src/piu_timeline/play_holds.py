@@ -471,6 +471,11 @@ def presentation(data):
                     event.update(status='hold_state_or_tap', reason='ongoing_hold_tick_not_new_press')
             result.append(event)
         return result
+    from .play_recovery import recover_rows
+    matches, lane_recovered = recover_rows({**data, 'notes': notes, 'matches': matches,
+                                          'combo_events': events('combo_events'),
+                                          'judgment_events': events('judgment_events'),
+                                          'hold_analysis': {**data['hold_analysis'], 'holds': projected}})
     coverage = dict(data.get('coverage', {}))
     coverage.update(visible_note_heads=sum(note['status']=='estimated' for note in notes),
                     timed_note_heads=len(matches),
@@ -487,5 +492,6 @@ def presentation(data):
             'excluded_notes': dict(Counter(note.get('reason') for note in notes if note['status'] == 'excluded')),
             'miss_candidates': [candidate for candidate in data.get('miss_candidates', []) if candidate['note'] not in suppressed],
             'combo_events': events('combo_events'), 'judgment_events': events('judgment_events'),
-            'hold_tick_ambiguous_notes': ambiguous, 'recovered_dense_notes': recovered,
+            'hold_tick_ambiguous_notes': [index for index in ambiguous if index not in lane_recovered],
+            'recovered_dense_notes': recovered, 'recovered_lane_supported_notes': lane_recovered,
             'hold_analysis': {**data['hold_analysis'], 'holds': projected}, 'coverage': coverage}
