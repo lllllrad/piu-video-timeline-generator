@@ -63,6 +63,12 @@ alone is insufficient. Partial body tracks can be accounted for by a uniquely
 matching, repeatedly observed cap identity. All supporting observations remain in
 the evidence. An unresolved end stays unknown even when the body disappears.
 
+Word-template matching includes the shrinking part of the judgment animation
+(0.7–1.4 times a sampled template in the partial-word channel). A touching note
+can corrupt the connected-component bounds at those sizes too. Shape coverage,
+agreement across word sections and the margin against competing labels remain
+required; a readable persistent label alone does not establish a new refresh.
+
 ## Long notes and sustained recognition
 
 When enough extended-body frames identify the upper cap, they determine head

@@ -230,6 +230,24 @@ class JudgmentTest(unittest.TestCase):
             tracker.update(.034+i/60,reader.read(feature_map(moving)))
         self.assertEqual(len(tracker.events),1)
 
+    def test_shrunken_word_with_touching_note_is_read_without_a_smaller_font_sample(self):
+        image=np.zeros((80,300,3),dtype='uint8')
+        cv2.putText(image,'GREAT',(60,50),cv2.FONT_HERSHEY_SIMPLEX,1.1,(0,230,255),2)
+        feature=feature_map(image);ys,xs=np.nonzero(feature<18)
+        mask=(feature[ys.min():ys.max()+1,xs.min():xs.max()+1]<18).astype('uint8')
+        hue=int(np.median(feature[ys,xs]))
+        reader=JudgmentReader([{'label':'GREAT','hue':hue,'mask':mask.tolist()}])
+        for scale in (.7,.8,.9):
+            with self.subTest(scale=scale):
+                small=cv2.resize(mask,None,fx=scale,fy=scale,interpolation=cv2.INTER_LINEAR)
+                h,w=small.shape;left=(300-w)//2;top=35
+                damaged=np.zeros_like(image)
+                damaged[top:top+h,left:left+w][small>0]=(0,230,255)
+                cv2.rectangle(damaged,(left+w//3,0),(left+w//3+3,79),(0,230,255),-1)
+                reading=reader.read(feature_map(damaged))
+                self.assertEqual(reading['label'],'GREAT')
+                self.assertEqual(reading['read_mode'],'partial_template')
+
 
     def test_persistent_word_and_unreadable_gap_do_not_create_inputs(self):
         tracker=JudgmentTracker()

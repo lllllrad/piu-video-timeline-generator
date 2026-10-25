@@ -14,7 +14,7 @@ from piu_timeline.play.frames import crop_region, decode_frames
 from piu_timeline.play.tracking import associate
 
 VERSION = 8
-OBSERVATION_VERSION = 2
+OBSERVATION_VERSION = 3
 LABELS = ('PERFECT', 'GREAT', 'GOOD', 'BAD', 'MISS')
 FEATURE_FORMAT = {'schema': 1, 'encoding': 'hue10-s90-v155-white-s70-v190'}
 TEMPLATE_FORMAT = {'schema': 1, 'encoding': FEATURE_FORMAT['encoding'], 'mask': 'binary'}
@@ -142,7 +142,10 @@ class JudgmentReader:
                 continue
             normalized=cv2.resize(mask,(max(8,round(w/h*24)),24),interpolation=cv2.INTER_LINEAR)
             self.templates.append((model['label'],model['hue'],w/h,h,normalized))
-            for scale in (1.,1.2,1.4):
+            # The launch animation shrinks below the sampled template size.
+            # A touching note can defeat component bounds at those smaller
+            # scales too; preserve the same shape/coverage tests there.
+            for scale in (.7,.8,.9,1.,1.1,1.2,1.4):
                 scaled=cv2.resize(mask,(round(w*scale),round(h*scale)),interpolation=cv2.INTER_LINEAR)
                 self.partial_templates.append((model['label'],model['hue'],scaled))
 
