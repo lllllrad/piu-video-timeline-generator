@@ -8,8 +8,10 @@ from urllib.parse import quote
 
 
 def write_report(data, path, final_directory=None):
+    from .chart_policy import attach_regions, apply_projection
+    data = attach_regions(data, path.parent)
     from .play_holds import presentation
-    data = presentation(data)
+    data = apply_projection(presentation(data))
     from .play_ranges import timing_ranges, counter_frame_ranges
     ranges = timing_ranges(data)
     frames = path.with_name('frames.jsonl')
@@ -35,7 +37,8 @@ def write_index(document, root):
         title = html.escape(f"{segment.get('song') or 'Unknown song'} · {segment.get('chart') or 'Unknown chart'}")
         if analysis.is_file():
             from .play_holds import presentation
-            data = presentation(json.loads(analysis.read_text()))
+            from .chart_policy import attach_regions, apply_projection
+            data = apply_projection(presentation(attach_regions(json.loads(analysis.read_text()), analysis.parent)))
             coverage = data['coverage']
             cells = (f'<a href="{relative}/report.html">{title}</a>', str(coverage['visible_note_heads']),
                      str(coverage.get('long_notes', 0)), str(coverage['timed_note_heads']), str(coverage['matched_combo_updates']),str(coverage.get('judgment_only_note_heads',0)),
@@ -87,6 +90,7 @@ TEMPLATE = r'''<!doctype html>
 <section class="panel"><h2>Observed judgments, including counter-free evidence</h2><p class="muted">Word changes, reappearance after a confirmed blank, and animation restarts can establish display refreshes before combo 4 or after a break. A persistent word is not counted repeatedly. MISS is failure evidence, never a press timestamp.</p><div class="scroll"><table><thead><tr><th>Observed bracket</th><th>Judgment</th><th>Refresh evidence</th><th>Association</th></tr></thead><tbody id="judgmentEvents"></tbody></table></div></section>
 <details class="panel"><summary>Inspect or correct calibration</summary><p>Check receptor centers and combo crop against the original game panel. Download an edited layout and rerun with <code>--layout layout.json</code>. Geometry changes require reanalysis.</p><div class="preview"><img id="preview" src="preview.png" alt="Original gameplay calibration frame"><svg id="overlay" viewBox="0 0 1300 730" role="img"></svg></div><textarea id="layout" spellcheck="false"></textarea><button id="download">Download layout.json</button><span id="layoutError"></span></details>
 </main><script id="data" type="application/json">__DATA__</script>
+<details class="panel" id="chartPolicyPanel" hidden><summary>Chart region handling</summary><div id="chartPolicyDetails"></div></details>
 <script>
 'use strict';
 const data=JSON.parse(document.getElementById('data').textContent),$=id=>document.getElementById(id),video=$('video');
@@ -97,6 +101,16 @@ const matchByNote=new Map(matches.map((m,i)=>[m.note,{match:m,index:i}]));
 const rangeByNote=data.timing_ranges?.notes||{};
 const targetColor='#b6ff59',inputColor='#ff70dd';
 const notePalette={blue:['#267bcc','#83caff'],red:['#c63c52','#ff9da9'],yellow:['#d8a600','#ffe476']};
+if(data.chart_policy){
+  $('chartPolicyPanel').hidden=false;
+  if(data.chart_policy.status==='invalid'){
+    const warning=document.createElement('p');warning.textContent='Chart region policies were not applied: '+data.chart_policy.reason;$('chartPolicyDetails').appendChild(warning);
+  }
+  for(const region of data.chart_policy.regions||[]){
+    const item=document.createElement('p');item.textContent=region.id+' / song '+fmt(region.start_seconds)+' … '+fmt(region.end_seconds)+' / '+region.processing+' / '+region.reason+(region.check_exceptions.length?' / check exceptions: '+region.check_exceptions.join(', '):'')+(region.details?' / '+region.details:'');
+    const jump=document.createElement('button');jump.textContent='Seek region';jump.onclick=()=>seek(region.playback_start_seconds);item.appendChild(jump);$('chartPolicyDetails').appendChild(item);
+  }
+}
 const holds=data.hold_analysis?.holds||[],holdById=new Map(holds.map(hold=>[hold.id,hold]));
 const holdFor=note=>note?.note_type==='hold'?holdById.get(note.hold_id):null;
 const possibleMissNotes=new Set((data.miss_candidates||[]).map(candidate=>candidate.note));
@@ -367,7 +381,7 @@ text('td','#'+(index+1)+' / '+(data.layout.lanes[note.lane].name||String(note.la
 text('td',formatRange(target),row);text('td',inputIntervals(m,index).map(formatRange).join(' ∪ ')||'Unconfirmed',row);const differences=inputIntervals(m,index).map(range=>difference(target,range));text('td',(differences.map(formatDifference).join(' ∪ ')||'Unconfirmed')+' / '+(differences.length>1?'Alternative intervals':alignment(delta)),row);
 const e=m?.combo_event!=null?data.combo_events[m.combo_event]:null;
 const possibleMiss=possibleMissNotes.has(index);
-text('td',m?(e?e.before+' → '+e.after:'Judgment only')+(m.judgment_label?' / '+m.judgment_label+(m.judgment_label_source==='post_combo_frames'?' (word frames)':''):' / Judgment unknown')+(m.aggregate_row_count>1?' (aggregate row bracket)':m.row_note_count>1?' (shared chord bracket)':''):possibleMiss?'Possible MISS / no press timestamp':rangeByNote[index]?.status==='possible'?'Possible refresh ranges / association unresolved':rangeByNote[index]?.status==='bounded'?'Conditional bounds between processed rows / press unconfirmed':'Input unknown / '+(rangeByNote[index]?.reason||'no_nearby_positive_refresh').replaceAll('_',' '),row);
+text('td',m?(e?e.before+' → '+e.after:'Judgment only')+(m.judgment_label?' / '+m.judgment_label+(m.judgment_label_source==='post_combo_frames'?' (word frames)':''):' / Judgment unknown')+(m.aggregate_row_count>1?' (aggregate row bracket)':m.row_note_count>1?' (shared chord bracket)':''):rangeByNote[index]?.status==='policy_excluded'?'Timing excluded by chart policy / '+(rangeByNote[index].chart_policy?.reasons||[]).join('; '):possibleMiss?'Possible MISS / no press timestamp':rangeByNote[index]?.status==='possible'?'Possible refresh ranges / association unresolved':rangeByNote[index]?.status==='bounded'?'Conditional bounds between processed rows / press unconfirmed':'Input unknown / '+(rangeByNote[index]?.reason||'no_nearby_positive_refresh').replaceAll('_',' '),row);
 row.onclick=()=>seek(note.target_seconds,linked?.index??-1,index);
 }}
 function drawPlayback(){$('position').value=playhead;$('chartPosition').textContent=fmt(playhead);$('clock').textContent=fmt(playhead);lanes();if(timingPlayhead){const x=60+1080*(playhead-data.start_seconds)/(data.end_seconds-data.start_seconds);timingPlayhead.setAttribute('x1',x);timingPlayhead.setAttribute('x2',x)}}

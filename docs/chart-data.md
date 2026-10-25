@@ -38,6 +38,48 @@ Detected note geometry supplies chart notes independently of successful input/ju
 
 Generated metadata explicitly records `review_status: unreviewed_draft`, source ID/segment, source identity, analysis fingerprint, timing source/hash, alignment evidence and placements. These drafts must not validate the same recording from which they were extracted. A human can edit `chart.ucs` directly and mark metadata reviewed after independent checking. Normalized timing-template hashes identify parsed timing content, not original ZIP bytes.
 
+## Region processing and automatic-check exceptions
+
+Each chart's `metadata.json` can contain human-authored `regions`. Times are seconds from the reference song origin, not recording timestamps. Intervals include `start_seconds` and exclude `end_seconds`. Membership is determined by a note's head time, so a hold is handled as one note rather than independent ticks. These settings apply to association and report projection; raw native detections and original media remain intact.
+
+```json
+{
+  "regions": [
+    {
+      "id": "nonlinear-scroll",
+      "start_seconds": 42.5,
+      "end_seconds": 47.25,
+      "processing": "exclude_timing",
+      "check_exceptions": ["timing_evidence"],
+      "reason": "Extreme speed changes prevent a reliable trajectory fit.",
+      "details": "Inspect the video and fill this part of the UCS manually."
+    },
+    {
+      "id": "hold-gimmick",
+      "start_seconds": 76,
+      "end_seconds": 79,
+      "processing": "hold_state_only",
+      "check_exceptions": [],
+      "reason": "Interpret this section as sustained holds rather than new tap inputs."
+    }
+  ]
+}
+```
+
+Supported processing methods:
+
+| Value | Behavior |
+| --- | --- |
+| `standard` | Keep normal association and recognition; may still declare scoped check exceptions. |
+| `exclude_timing` | Keep visible notes and native observations, suppress automatic input connections for member notes. |
+| `hold_state_only` | Keep reconstructed hold-state evidence; suppress discrete tap connections for member notes. |
+
+`check_exceptions` is independent of processing. `timing_evidence` removes only member notes from the eligible timing-evidence check count; the unfiltered count and unresolved status remain available. `stage_grade_totals` declares a partial exemption for that region, not proof that whole-stage grade totals agree. It never fills labels to match result quotas. A recording-specific cut or freeze should not be encoded as a permanent chart gimmick shared by every performance.
+
+Every region needs a unique ID, bounded interval and reason. Unknown fields, invalid methods and conflicting overlapping processing rules are rejected. Overlapping standard annotations and check exceptions may be combined. Run `just charts validate` to check both UCS text and region policies; `schema.json` also supports JSON editors. Explicit draft rebuilding preserves these human-authored regions.
+
+Every report build rereads the metadata. A verified per-recording reference-audio alignment maps regions to original playback time; another recording never reuses the seed recording's offset. Alignment is cached separately from frames. Invalid metadata or failed alignment is shown in the HTML and `chart-policy.json`, without silently applying exceptions. The report's **Chart region handling** panel lists mapped regions, reasons and seek links. `timing-ranges.json` includes per-note policy information, unfiltered `counts`, and `eligible_counts` after scoped timing exceptions. No automatic exception is created merely because a note failed recognition.
+
 ## Downloads
 
 ZIPs, PDFs and music remain under `.local/cache/ucs/`; no archive member is extracted to an archive-controlled path. Size limits and expected UCS/music members are checked, and HTML login/error responses are rejected. HTTPS certificate and hostname verification remain enabled. Anonymous SSO cookies are kept in memory only; one retry of the original URL handles the site's malformed first callback. `PIU_UCS_CA_FILE` can supplement the trust chain when the server omits intermediate certificates; a locally provisioned `intermediates.pem` in the UCS cache is also recognized. No credentials or session cookies are stored with chart data.

@@ -47,12 +47,16 @@ def initialize(repository, client=None):
                 '`review_status` to `reviewed` only after independent verification. '
                 'Automatic registration never replaces an existing chart directory. '
                 'Use a new revision directory for game chart updates.\n\n'
+                'Use metadata `regions` for song-relative processing methods and scoped automatic-check exceptions. '
+                'Every region requires a reason. The root `schema.json` documents editable fields.\n\n'
                 'Reference audio, recordings, caches and generated HTML belong outside this repository.\n',
             '.gitignore': '.chart-data.lock\n*.build-*\n*.mp3\n*.mp4\n*.mkv\n*.zip\ncache/\n',
             'aliases.json': '{}\n',
         }.items():
             if not (repository / name).exists():
                 atomic_write(repository / name, content.encode())
+        if not (repository / 'schema.json').exists():
+            atomic_write(repository / 'schema.json', (ROOT / 'schemas/chart-metadata.schema.json').read_bytes())
         if not (repository / 'catalog.json').exists():
             write_json(repository / 'catalog.json', catalogue)
         if not (repository / '.git').exists():
@@ -208,6 +212,8 @@ def register(data, output, code=None, repository=None, song_start=None, revision
         return {'status': 'disabled', 'reason': 'Initialize a chart repository with just charts init'}
     if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}', revision):
         raise ValueError('Invalid chart revision')
+    if song_start is not None and not math.isfinite(song_start):
+        raise ValueError('Explicit song start must be finite')
     chart = data.get('chart') or ''
     if not re.fullmatch(r'[SD]\d{1,2}', chart):
         return {'status': 'pending', 'reason': 'Chart mode/level is unresolved'}
@@ -217,6 +223,12 @@ def register(data, output, code=None, repository=None, song_start=None, revision
     resolved = index(resolved)
     target = repository / 'charts' / resolved / chart / revision
     previous = None
+    def existing_result():
+        result = {'status': 'existing', 'chart': str(target / 'chart.ucs'), 'index': resolved,
+                  'revision': revision, 'chart_mode': chart, 'repository': str(repository.resolve())}
+        if song_start is not None:
+            result['alignment'] = {'method': 'explicit_song_start', 'song_start_seconds': song_start, 'uncertainty_seconds': 0, 'rate': 1}
+        return result
     with (repository / '.chart-data.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if code:
@@ -226,7 +238,7 @@ def register(data, output, code=None, repository=None, song_start=None, revision
                 raise ValueError(f'Existing chart directory is incomplete; inspect {target}')
             ucs.parse((target / 'chart.ucs').read_text())
             if not rebuild_draft:
-                return {'status': 'existing', 'chart': str(target / 'chart.ucs'), 'index': resolved}
+                return existing_result()
             old_chart = (target / 'chart.ucs').read_bytes()
             old_metadata = (target / 'metadata.json').read_bytes()
             old = json.loads(old_metadata)
@@ -236,8 +248,6 @@ def register(data, output, code=None, repository=None, song_start=None, revision
     provider = client or Client()
     template, music, url = provider.template(resolved)
     if song_start is not None:
-        if not math.isfinite(song_start):
-            raise ValueError('Explicit song start must be finite')
         alignment = {'method': 'explicit_song_start', 'song_start_seconds': song_start, 'uncertainty_seconds': 0, 'rate': 1}
     else:
         alignment = align(data, music)
@@ -247,7 +257,8 @@ def register(data, output, code=None, repository=None, song_start=None, revision
                 and {Fraction(value) for section in template.sections for key, value in section.directives if key == 'BPM'} == {Fraction(bpm)})
     document, evidence = draft(template, data, alignment, extend_constant_tempo=constant)
     content = document.text().encode()
-    metadata = {'schema': 1, 'identity': {'ucs_index': resolved, 'chart': chart, 'revision': revision},
+    metadata = {'$schema': '../../../../schema.json', 'schema': 1, 'regions': [],
+                'identity': {'ucs_index': resolved, 'chart': chart, 'revision': revision},
                 'song': code_entry, 'review_status': 'unreviewed_draft', 'generated_ucs_sha256': sha256(content).hexdigest(),
                 'timing_source': {'url': url, 'ucs_sha256': sha256(template.text().encode()).hexdigest()},
                 'source': {'source_id': output.parents[1].name, 'segment_number': data.get('segment_number'),
@@ -262,12 +273,13 @@ def register(data, output, code=None, repository=None, song_start=None, revision
         fcntl.flock(lock, fcntl.LOCK_EX)
         if target.exists():
             if previous is None:
-                return {'status': 'existing', 'chart': str(target / 'chart.ucs'), 'index': resolved}
+                return existing_result()
             if previous != ((target/'chart.ucs').read_bytes(), (target/'metadata.json').read_bytes()):
                 raise ValueError('Chart changed while rebuilding; preserve the newer files')
             # Preserve user-added metadata fields when explicitly rebuilding an
             # untouched unreviewed UCS draft. Automatic runs never rebuild.
             metadata = {**json.loads(previous[1]), **metadata}
+            metadata['regions'] = json.loads(previous[1]).get('regions', [])
         elif previous is not None:
             raise ValueError('Chart was removed while rebuilding; retry explicitly')
         timing = repository / 'timing' / f'{resolved}.ucs'
@@ -291,16 +303,37 @@ def register(data, output, code=None, repository=None, song_start=None, revision
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary)
-    return {'status': 'rebuilt' if previous is not None else 'created', 'chart': str(target / 'chart.ucs'), 'index': resolved, **evidence['summary']}
+    return {'status': 'rebuilt' if previous is not None else 'created', 'chart': str(target / 'chart.ucs'), 'index': resolved,
+            'alignment': alignment, 'revision': revision, 'chart_mode': chart, 'repository': str(repository.resolve()), **evidence['summary']}
 
 
 def auto_register(data, output, **options):
     """A failed optional download cannot invalidate successful native analysis."""
+    registration = Path(output) / 'chart-registration.json'
     try:
+        previous = json.loads(registration.read_text()) if registration.is_file() else {}
+    except (ValueError, OSError):
+        previous = {}
+    try:
+        if 'repository' not in options and previous.get('repository'):
+            selected = Path(previous['repository'])
+            if (selected / 'catalog.json').is_file():
+                options['repository'] = selected
+        selected = Path(options.get('repository') or default_repository())
+        if ('revision' not in options and previous.get('revision') and previous.get('chart_mode') == data.get('chart')
+                and (selected / 'catalog.json').is_file()
+                and resolve_code(selected, data.get('song')) == previous.get('index')):
+            options['revision'] = previous['revision']
         result = register(data, output, **options)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         result = {'status': 'pending', 'reason': str(error)}
-    write_json(Path(output) / 'chart-registration.json', result)
+    if result.get('alignment', {}).get('method') == 'explicit_song_start':
+        result['alignment_media'] = data.get('media')
+    elif result['status'] == 'existing' and registration.is_file():
+        if (previous.get('index') == result.get('index') and previous.get('alignment_media') == data.get('media')
+                and previous.get('alignment', {}).get('method') == 'explicit_song_start'):
+            result.update(alignment=previous['alignment'], alignment_media=previous['alignment_media'])
+    write_json(registration, result)
     if result['status'] != 'disabled':
         print(f'Chart data: {result["status"]}; {result.get("chart", result.get("reason", ""))}', flush=True)
     return result
@@ -312,6 +345,7 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('init', help='Initialize a separate Git repository and save the official catalogue')
     sub.add_parser('refresh-catalog', help='Refresh the official catalogue, preserving aliases and charts')
+    sub.add_parser('validate', help='Validate all current UCS files and human-authored region policies')
     listing = sub.add_parser('list', help='Find official UCS codes by title or code')
     listing.add_argument('query', nargs='?', default='')
     alias = sub.add_parser('alias', help='Explicitly associate a video song title with an official code')
@@ -328,6 +362,16 @@ def main():
             print(initialize(args.repo)); return
         if args.command == 'refresh-catalog':
             write_json(args.repo / 'catalog.json', Client().catalogue(refresh=True)); return
+        if args.command == 'validate':
+            from .chart_policy import validate_regions
+            count = 0
+            for path in sorted((args.repo / 'charts').glob('*/*/*/metadata.json')):
+                if '.build-' in path.parent.name:
+                    continue
+                validate_regions(json.loads(path.read_text()))
+                ucs.parse(path.with_name('chart.ucs').read_text())
+                count += 1
+            print(f'Validated {count} charts and their region policies'); return
         if args.command == 'list':
             for song in catalogue(args.repo)['songs']:
                 if args.query.casefold() in (song['index']+' '+song['title']+' '+song.get('artist', '')).casefold():

@@ -29,6 +29,14 @@ def counter_frame_ranges(path):
 
 
 def timing_ranges(data):
+    from .chart_policy import note_policy
+    def with_policy(record, note):
+        policy = note_policy(data, note)
+        if policy:
+            record['chart_policy'] = policy
+            if policy['suppress_timing']:
+                record.update(status='policy_excluded', reason='chart_region_processing_exception', input_ranges=[])
+        return record
     matches = {match['note']: match for match in data.get('matches', [])}
     misses = {candidate['note'] for candidate in data.get('miss_candidates', [])}
     events = []
@@ -62,10 +70,10 @@ def timing_ranges(data):
         if note.get('note_type') == 'hold':
             hold = holds[note['hold_id']]
             ranges = [[segment['lower_seconds'], segment['upper_seconds']] for segment in hold['input']['segments']]
-            result[index] = {**record, 'status': 'hold_state' if ranges else 'hold_unresolved',
+            result[index] = with_policy({**record, 'status': 'hold_state' if ranges else 'hold_unresolved',
                              'input_ranges': ranges, 'target_range': hold['start_range'],
                              'end_range': hold['end_range'], 'reason': 'sustained_state_not_repeated_presses',
-                             'input_kind': 'sustained_recognition', 'press_range': None, 'release_range': None}
+                             'input_kind': 'sustained_recognition', 'press_range': None, 'release_range': None}, note)
             continue
         match = matches.get(index)
         if match and match.get('judgment_label') != 'MISS':
@@ -115,7 +123,9 @@ def timing_ranges(data):
                 record['reason'] = 'before_first_detected_positive_refresh'
             elif events and target > max(event['upper_seconds'] for event in events):
                 record['reason'] = 'after_last_detected_positive_refresh'
-        result[index] = record
+        result[index] = with_policy(record, note)
     return {'notes': result, 'counts': dict(Counter(record['status'] for record in result.values())),
+            'eligible_counts': dict(Counter(record['status'] for record in result.values()
+                                           if record['status'] != 'policy_excluded' and 'timing_evidence' not in record.get('chart_policy', {}).get('check_exceptions', []))),
             'association_limits_seconds': {'early': EARLY_SECONDS, 'late': LATE_SECONDS},
             'note': 'Connected ranges intersect original observations with hard timing limits. Possible ranges remain unconfirmed; original observations and source PTS are preserved.'}

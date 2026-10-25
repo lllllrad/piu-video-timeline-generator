@@ -89,6 +89,8 @@ The default repository is `../piu-chart-data`; override it with `PIU_CHART_DATA_
 
 Notes are stored as editable UCS text at `charts/CS349/S21/phoenix/chart.ucs`, with provenance, unresolved placements and `unreviewed_draft` status in `metadata.json`. Reference music aligns song time to original recording time using independent matching windows; it never changes playback speed. If audio is missing or ambiguous, provide a reviewed `--song-start SECONDS` recording position. Holds use UCS head/body/tail cells; censored endpoints and conflicting placements remain unresolved. Existing chart directories are never overwritten. For an updated game chart, register a distinct `--revision NAME`. Downloaded ZIPs and reference music stay in the ignored cache. See [chart data](docs/chart-data.md).
 
+The metadata also supports song-time `regions` with processing methods (`standard`, `exclude_timing`, `hold_state_only`), reasons/details, and scoped automatic-check exceptions. Reports show applied policies and retain unfiltered evidence alongside eligible check counts. `just charts validate` checks chart text and region settings; rebuilding a draft preserves human-authored regions. See [region configuration examples](docs/chart-data.md#region-processing-and-automatic-check-exceptions).
+
 ## Output formats
 
 Choose a bundled or local format with the optional second argument:

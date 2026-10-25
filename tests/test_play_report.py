@@ -62,7 +62,7 @@ class ReportTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_layout({'lanes': [{'x': float('nan'), 'color': 'blue'}] * 5})
 
-    def report_runtime(self, notes, matches, miss_candidates=(), lane_count=1, judgment_events=(), hold_analysis=None):
+    def report_runtime(self, notes, matches, miss_candidates=(), lane_count=1, judgment_events=(), hold_analysis=None, chart_policy=None):
         data = {'song': 'Song', 'chart': 'S20', 'media': {'path': '/tmp/source.mkv'},
                 'start_seconds': 8, 'end_seconds': 20, 'notes': notes, 'matches': matches,
                 'display_delay_correction_ms': 0, 'bootstrap': {'ocr_images': 0, 'missing_digits': []},
@@ -70,12 +70,25 @@ class ReportTest(unittest.TestCase):
                 'judgment_events': judgment_events, 'excluded_notes': {}, 'limitations': [],
                 'miss_candidates': miss_candidates, 'hold_analysis': hold_analysis or {'holds': []},
                 'layout': {'lanes': [{'name': str(i + 1), 'color': 'yellow'} for i in range(lane_count)]}}
+        if chart_policy:
+            data['chart_policy'] = chart_policy
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'report.html'
             write_report(data, path)
             result = subprocess.run(['node', str(Path(__file__).with_name('play_report_runtime.cjs')), str(path)],
                                     check=True, capture_output=True, text=True)
         return json.loads(result.stdout)
+
+    def test_region_policy_is_rendered_without_input_markers_or_erasing_notes(self):
+        notes = [{'status':'estimated','lane':0,'target_seconds':10,'prediction_uncertainty_seconds':.01}]
+        matches = [{'note':0,'target_seconds':10,'observation_lower_seconds':10.02,'observation_upper_seconds':10.04}]
+        policy = {'status':'applied','regions':[{'id':'scroll','start_seconds':0,'end_seconds':4,
+                    'playback_start_seconds':8,'playback_end_seconds':12,'processing':'exclude_timing',
+                    'check_exceptions':['timing_evidence'],'reason':'Nonlinear motion.'}]}
+        result = self.report_runtime(notes, matches, chart_policy=policy)
+        self.assertEqual(result['initialInputs'], [None])
+        self.assertTrue(all(marker['color'] != '#ff70dd' for marker in result['initialMarkers']))
+        self.assertIn('Timing excluded by chart policy', result['initialRows'][0][4])
 
     def test_comparison_includes_both_uncertainties_and_latency_correction(self):
         notes = [{'status': 'estimated', 'lane': 0, 'target_seconds': 10,

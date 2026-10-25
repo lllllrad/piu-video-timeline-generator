@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Editable PIU chart metadata",
+  "type": "object",
+  "properties": {
+    "schema": {"const": 1},
+    "review_status": {"enum": ["unreviewed_draft", "reviewed"]},
+    "regions": {
+      "type": "array",
+      "description": "Human-authored handling by half-open song-time intervals, independent of recording offsets.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "start_seconds", "end_seconds", "reason"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "start_seconds": {"type": "number", "minimum": 0},
+          "end_seconds": {"type": "number", "exclusiveMinimum": 0},
+          "processing": {"enum": ["standard", "exclude_timing", "hold_state_only"], "default": "standard"},
+          "check_exceptions": {
+            "type": "array", "uniqueItems": true,
+            "items": {"enum": ["timing_evidence", "stage_grade_totals"]}
+          },
+          "reason": {"type": "string", "minLength": 1},
+          "details": {"type": "string"}
+        }
+      }
+    }
+  }
+}

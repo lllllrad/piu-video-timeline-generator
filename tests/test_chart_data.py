@@ -33,6 +33,21 @@ def data():
 
 
 class ChartDataTest(unittest.TestCase):
+    def test_explicit_origin_survives_cache_reuse_only_for_same_recording(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); repo = initialize(root/'repo', Provider()); output = root/'video/play/segment-001'
+            output.mkdir(parents=True)
+            auto_register(data(), output, repository=repo, song_start=10, client=Provider())
+            reused = auto_register(data(), output, repository=repo, client=Provider())
+            self.assertEqual(reused['alignment']['song_start_seconds'], 10)
+            changed = data(); changed['media']['mtime_ns'] += 1
+            replaced = auto_register(changed, output, repository=repo, client=Provider())
+            self.assertNotIn('alignment', replaced)
+            selected = auto_register(data(), output, repository=repo, song_start=10, revision='updated', client=Provider())
+            persisted = auto_register(data(), output, repository=repo, client=Provider())
+            self.assertEqual(persisted['revision'], 'updated')
+            self.assertEqual(selected['chart'], persisted['chart'])
+
     def test_constant_tempo_template_can_extend_without_moving_original_rows(self):
         source = data()
         source['end_seconds'] = 25
@@ -57,8 +72,14 @@ class ChartDataTest(unittest.TestCase):
             output.mkdir(parents=True)
             result = register(data(), output, repository=repo, song_start=10, client=Provider())
             chart = Path(result['chart']); original = chart.read_bytes()
+            metadata_path = chart.with_name('metadata.json')
+            annotations = json.loads(metadata_path.read_text())
+            annotations['regions'] = [{'id':'gimmick','start_seconds':1,'end_seconds':2,
+                                       'processing':'exclude_timing','reason':'Nonlinear motion.'}]
+            metadata_path.write_text(json.dumps(annotations))
             result = register(data(), output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
             self.assertEqual(result['status'], 'rebuilt')
+            self.assertEqual(json.loads(metadata_path.read_text())['regions'], annotations['regions'])
             backup = next(chart.parent.parent.glob('phoenix.build-previous-*'))
             self.assertEqual((backup/'chart.ucs').read_bytes(), original)
             chart.write_text(chart.read_text().replace('X....', '....X', 1))
