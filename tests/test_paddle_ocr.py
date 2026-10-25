@@ -13,6 +13,18 @@ from piu_timeline import paddle_ocr as paddle
 
 
 class PaddleOCRTest(unittest.TestCase):
+    def test_known_text_region_bypasses_detector_without_changing_pixels(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'digits.png';cv2.imwrite(str(path),np.zeros((24,48,3),dtype='uint8'))
+            before=path.read_bytes()
+            with patch.object(paddle,'recognizer',return_value=(None,[])), \
+                    patch.object(paddle,'recognize_crops',return_value=[('15',.99)]), \
+                    patch.object(paddle,'detect_boxes',side_effect=AssertionError('known region')):
+                result=paddle.read_image(path,english=True,single_line=True)
+            self.assertEqual(result[0]['text'],'15')
+            self.assertEqual(result[0]['box'],[0,0,1,1])
+            self.assertEqual(path.read_bytes(),before)
+
     def test_ctc_repeats_blanks_unicode_and_confidence(self):
         indices=[0,1,1,0,1,2,2,0]
         probabilities=np.full((len(indices),3),.01,dtype='float32')

@@ -98,12 +98,30 @@ def remember_alias(repository, title, code):
     write_json(repository / 'aliases.json', aliases)
 
 
+def canonical_chart(data):
+    """Keep display labels; accept basic-mode identity only with summary proof."""
+    chart = data.get('chart') or ''
+    if re.fullmatch(r'[SD]\d{1,2}', chart):
+        return chart
+    identity = data.get('chart_identity') or {}
+    frames = identity.get('source_frames', [])
+    pts = {frame.get('source_pts_seconds') for frame in frames
+           if frame.get('file') and isinstance(frame.get('source_pts_seconds'), (int, float))
+           and math.isfinite(frame['source_pts_seconds'])}
+    if (identity.get('status') == 'recognized' and identity.get('method') == 'matching_title_summary_badge'
+            and identity.get('display_chart') == chart and len(pts) >= 2
+            and re.fullmatch(r'VERY HARD \d{1,2}', chart)
+            and identity.get('chart') == 'S'+chart.removeprefix('VERY HARD ')):
+        return identity['chart']
+    return None
+
+
 def draft(template, data, alignment, extend_constant_tempo=False):
     """Place observed heads/holds, keeping collisions and censored ends unresolved."""
     from .play_holds import presentation
     view = presentation(data)
-    chart = view.get('chart') or ''
-    if not re.fullmatch(r'[SD]\d{1,2}', chart):
+    chart = canonical_chart(view)
+    if chart is None:
         raise ValueError('A recognized Single/Double chart and level are required')
     lanes = 5 if chart.startswith('S') else 10
     if len(view['layout']['lanes']) != lanes:
@@ -214,8 +232,8 @@ def register(data, output, code=None, repository=None, song_start=None, revision
         raise ValueError('Invalid chart revision')
     if song_start is not None and not math.isfinite(song_start):
         raise ValueError('Explicit song start must be finite')
-    chart = data.get('chart') or ''
-    if not re.fullmatch(r'[SD]\d{1,2}', chart):
+    chart = canonical_chart(data)
+    if chart is None:
         return {'status': 'pending', 'reason': 'Chart mode/level is unresolved'}
     resolved = resolve_code(repository, data.get('song'), code)
     if resolved is None:
@@ -259,6 +277,7 @@ def register(data, output, code=None, repository=None, song_start=None, revision
     content = document.text().encode()
     metadata = {'$schema': '../../../../schema.json', 'schema': 1, 'regions': [],
                 'identity': {'ucs_index': resolved, 'chart': chart, 'revision': revision},
+                'display_chart': data.get('chart'), 'chart_identity_evidence': data.get('chart_identity'),
                 'song': code_entry, 'review_status': 'unreviewed_draft', 'generated_ucs_sha256': sha256(content).hexdigest(),
                 'timing_source': {'url': url, 'ucs_sha256': sha256(template.text().encode()).hexdigest()},
                 'source': {'source_id': output.parents[1].name, 'segment_number': data.get('segment_number'),

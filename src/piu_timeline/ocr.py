@@ -71,14 +71,14 @@ def normalized_line(points, text, confidence, width, height):
             "box": [x0 / width, y0 / height, (x1 - x0) / width, (y1 - y0) / height]}
 
 
-def _ocr_images_uncached(paths, english=False):
+def _ocr_images_uncached(paths, english=False, single_line=False):
     paths = list(paths)
     if not paths:
         return []
     config = configuration()
     if config['backend']=='paddleocr':
         from .paddle_ocr import read_image
-        return [{'path':str(path),'lines':read_image(path,english,config['device'])} for path in paths]
+        return [{'path':str(path),'lines':read_image(path,english,config['device'], single_line=single_line)} for path in paths]
     if config["backend"] == "vision":
         result = subprocess.run([str(ocr_binary()), *(["--english"] if english else []), *map(str, paths)],
                                 capture_output=True, text=True)
@@ -116,7 +116,7 @@ def ocr_metrics():
     return dict(_METRICS)
 
 
-def ocr_images(paths, english=False):
+def ocr_images(paths, english=False, single_line=False):
     paths = list(paths)
     if not paths:
         return []
@@ -124,14 +124,15 @@ def ocr_images(paths, english=False):
     config = cache_identity()
     keys, missing = [], {}
     for path in paths:
-        key = (json.dumps(config,sort_keys=True), english, sha256(Path(path).read_bytes()).digest())
+        key = (json.dumps(config,sort_keys=True), english, single_line, sha256(Path(path).read_bytes()).digest())
         keys.append(key)
         if key not in _IMAGE_CACHE:
             missing.setdefault(key, path)
     fresh = {}
     if missing:
+        options = {'english': english, **({'single_line': True} if single_line else {})}
         fresh = {key: result["lines"] for key, result in
-                 zip(missing, _ocr_images_uncached(list(missing.values()), english=english))}
+                 zip(missing, _ocr_images_uncached(list(missing.values()), **options))}
     results = []
     for path, key in zip(paths, keys):
         lines = fresh[key] if key in fresh else _IMAGE_CACHE[key]

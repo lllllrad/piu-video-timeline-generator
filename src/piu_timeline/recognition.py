@@ -72,6 +72,8 @@ def rival_slots(lines):
 
 def frame_labels(lines, phase):
     """Read Phoenix title and selected chart regions, never scores or chat."""
+    from .chart_badges import prefer_badges
+    lines = prefer_badges(lines)
     if phase == "result":
         blocked = rival_slots(lines)
         lines = [line for line in lines if not (("p1" in blocked and center(line)[0] < .45)
@@ -93,6 +95,7 @@ def frame_labels(lines, phase):
         if not (.15 < cx < .85 and ((.24 < cy < .4) if phase == "result" else (.65 < cy < .9))):
             continue
         numbers = [candidate for candidate in lines if re.fullmatch(r"\d{1,2}", candidate["text"])
+                   and (not line.get('badge_read') or candidate.get('badge_id') == line['badge_id'])
                    and 1 <= int(candidate["text"]) <= 99 and candidate["confidence"] >= .5
                    and abs(center(candidate)[0] - cx) < .045
                    and 0 < center(candidate)[1] - cy < .085]
@@ -283,11 +286,16 @@ def focused_lines(frame, phase, game_width, game_height):
             if (alternative and abs(center(alternative)[0] - .5) <= .035
                     and alternative["confidence"] >= title["confidence"]):
                 mapped = [line for line in mapped if line["image"] != title["image"]] + latin
+    if phase in ('result', 'summary'):
+        from .chart_badges import read_badges
+        mapped += read_badges(frame, phase, mapped)
     return mapped
 
 
 def summary_stage_row(lines, stage):
     """Read a numbered title independently of either player's chart badge."""
+    from .chart_badges import prefer_badges
+    lines = prefer_badges(lines)
     ordinals = [line for line in lines if stage is not None and ordinal_number(line["text"]) == stage]
     titles, matches = [], []
     for ordinal in ordinals:
@@ -300,11 +308,14 @@ def summary_stage_row(lines, stage):
                            "evidence": [ordinal, title]})
             title_y = center(title)[1]
             for mode_line in lines:
+                if mode_line.get('badge_read') and mode_line.get('badge_stage') != stage:
+                    continue
                 mode = chart_mode(mode_line["text"])
                 cx, cy = center(mode_line)
                 if not mode or not ((.15 < cx < .31 or .69 < cx < .87) and -.09 < cy - title_y < -.025):
                     continue
                 digits = [item for item in lines if re.fullmatch(r"\d{1,2}", item["text"])
+                          and (not mode_line.get('badge_read') or item.get('badge_id') == mode_line['badge_id'])
                           and 1 <= int(item["text"]) <= 99 and item["confidence"] >= .5
                           and abs(center(item)[0] - cx) < .04 and 0 < center(item)[1] - cy < .075]
                 # Raw/focused readings from one source frame may duplicate a

@@ -183,7 +183,7 @@ def recognize_crops(session,characters,crops):
     return results
 
 
-def read_image(path,english=False,device='auto'):
+def read_image(path,english=False,device='auto',single_line=False):
     import cv2
     import numpy as np
     from .ocr import normalized_line
@@ -191,6 +191,10 @@ def read_image(path,english=False,device='auto'):
     image=cv2.imread(str(path))
     if image is None:raise ValueError(f'Cannot read OCR image: {path}')
     height,width=image.shape[:2]
+    if single_line:
+        text,confidence=recognize_crops(session,characters,[image])[0]
+        return ([{'text':text,'confidence':confidence,'box':[0.,0.,1.,1.],
+                  'method':'known_text_region'}] if text.strip() else [])
     boxes,crops=[],[]
     for points in detect_boxes(image,device):
         points=np.asarray(points,dtype='float32')

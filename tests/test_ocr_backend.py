@@ -101,6 +101,17 @@ class OCRContentCacheTest(unittest.TestCase):
                     ocr.ocr_images([image])
                 self.assertEqual(infer.call_count,2)
 
+    def test_known_line_inference_does_not_reuse_detection_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            image=Path(temporary)/'line.png';image.write_bytes(b'same encoded image')
+            with patch.object(ocr,'_ocr_images_uncached',return_value=[{'lines':[]}]) as infer:
+                ocr.ocr_images([image],english=True)
+                ocr.ocr_images([image],english=True,single_line=True)
+                self.assertEqual(infer.call_count,2)
+                self.assertTrue(infer.call_args.kwargs['single_line'])
+                ocr.ocr_images([image],english=True,single_line=True)
+                self.assertEqual(infer.call_count,2)
+
     def test_content_language_and_changed_pixels_are_independent(self):
         with tempfile.TemporaryDirectory() as temporary:
             first, second = Path(temporary) / "first.png", Path(temporary) / "second.png"

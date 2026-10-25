@@ -444,6 +444,7 @@ def refit_saved(cached, previous, output, segment, display_delay_ms):
               'play_analysis_version': VERSION, 'frame_observation_version': FRAME_OBSERVATION_VERSION,
               'native_frame_format':NATIVE_FRAME_FORMAT,
               'song':segment.get('song'),'chart':segment.get('chart'),
+              'chart_identity':segment.get('chart_identity'),
               'participant_slots':sorted(segment.get('players',{})),
               'display_delay_correction_ms': display_delay_ms, 'reused_native_observations': True,
               'result_reference': result_reference(segment, cached.get('player'))}
@@ -530,6 +531,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     interval = float(np.median(np.diff(times))) if len(times) > 1 else None
     return {'schema_version': 1, 'play_analysis_version': VERSION, 'media': record,
             'participant_slots': sorted(segment.get('players',{})), 'song': segment.get('song'), 'chart': segment.get('chart'), 'player': player,
+            'chart_identity': segment.get('chart_identity'),
             'start_seconds': start, 'end_seconds': end, 'game_roi': list(roi), 'layout': layout,
             'calibration': calibration, 'analysis_width': width, 'analysis_height': round(width*roi[3]/roi[2]),
             'frame_count': observed, 'median_frame_interval_seconds': interval,
@@ -627,6 +629,7 @@ def run(source, segment_number=1, force=False, **options):
             if (same_source and same_settings and cached.get('play_analysis_version') == VERSION
                     and cached.get('song')==segments[segment_number-1].get('song')
                     and cached.get('chart')==segments[segment_number-1].get('chart')
+                    and cached.get('chart_identity')==segments[segment_number-1].get('chart_identity')
                     and cached.get('display_delay_correction_ms',0) == options.get('display_delay_ms',0)
                     and cached.get('result_reference') == result_reference(segments[segment_number-1],options.get('player'))
                     and digit_cache_current(cached,final,LOCAL_DATA)

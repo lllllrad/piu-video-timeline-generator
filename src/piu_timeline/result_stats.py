@@ -277,6 +277,27 @@ def extract_stats(observations, directory, width, height):
             score["method"] = "caption_contrast_ocr"
             resolved["score"] = score["value"]
             resolved["fields"]["score"] = score
+    # Recover stylized badge numerals independently of judgment-count crops.
+    # A detector failure must not force a second movie/OCR acquisition pass.
+    if any(p['fields']['chart']['status'] != 'recognized' for p in result['players'].values()):
+        from .chart_badges import FORMAT, read_badges
+        from .chart_badge_recovery import sample, direct_chart, recovered_field
+        selected = sample(frames)
+        for frame in selected:
+            if frame.get('badge_format') != FORMAT and Path(frame['file']).is_file():
+                frame['badge_ocr'] = read_badges(frame['file'], 'result', frame['ocr'])
+                frame['badge_format'] = FORMAT
+        for slot, player in result['players'].items():
+            votes = []
+            for frame in selected:
+                observed = parse_result(frame['ocr'] + frame.get('badge_ocr', []))[slot]
+                chart = observed['fields']['chart']
+                if observed['present'] and chart and direct_chart(chart['raw']):
+                    votes.append({**chart, 'file': frame['file'], 'source_pts_seconds': frame['source_pts_seconds']})
+            chart = recovered_field(votes)
+            if chart['status'] == 'recognized':
+                player['chart'] = chart['value']
+                player['fields']['chart'] = chart
     for player in result["players"].values():
         player["needs_review"] = player["presence"] != "recognized" or any(
             field["status"] != "recognized" for field in player["fields"].values())

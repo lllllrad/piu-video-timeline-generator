@@ -165,6 +165,11 @@ def _run(source, format_name="default", game_roi=None):
         document = json.loads(analysis_file.read_text(encoding="utf-8"))
     if document.get("method") != "automatic_hud_ocr":
         raise ValueError("Saved analysis is not an automatic HUD analysis")
+    from .chart_badge_recovery import refresh
+    if refresh(document, analysis_dir):
+        pending = analysis_file.with_suffix('.badges-build.json')
+        pending.write_text(json.dumps(document, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+        pending.replace(analysis_file)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.unlink(missing_ok=True)
     text = run_formatter(script, analysis_file)
