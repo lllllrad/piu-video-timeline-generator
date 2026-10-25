@@ -19,7 +19,7 @@ from piu_timeline.metadata.recognition import capture_game
 from piu_timeline.workflow import LOCAL_DATA, source_id
 from piu_timeline.play.judgments import augment_judgments, cache_current as judgment_cache_current
 
-VERSION = 16
+VERSION = 17
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 COLORS = ('blue', 'red', 'yellow', 'red', 'blue')

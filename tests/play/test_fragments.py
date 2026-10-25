@@ -6,6 +6,21 @@ from piu_timeline.play.fragments import stitch_tracks
 
 
 class FragmentTest(unittest.TestCase):
+    def test_hud_shifted_centers_do_not_override_the_intact_approach(self):
+        layout = {'receptor_y': .1, 'note_y_max': .95, 'combo_roi': [.4, .5, .2, .1],
+                  'lanes': [{'x': .5}]}
+        points = [(i*.025, 430-400*i*.025+(8 if i*.025 >= .3 else 0)) for i in range(17)]
+        first = Track(0, points)
+        second = Track(0, [(t, 430-400*t) for t in (.7, .72, .74, .76, .78, .8, .82)])
+        original = deepcopy([first, second])
+        result = stitch_tracks([first, second], 50, 40, layout=layout)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0].points, points+second.points)
+        self.assertEqual([first, second], original)
+        # A competing continuation keeps the gap unresolved.
+        competitor = Track(0, [(t, y+1) for t, y in second.points])
+        self.assertEqual(len(stitch_tracks([first, second, competitor], 50, 40, layout=layout)), 3)
+
     def test_head_hidden_between_two_linear_native_observations_is_recovered(self):
         # The first part is too far from the receptor; the last three points
         # cannot independently establish a trajectory. Their shared path can.
