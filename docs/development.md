@@ -18,6 +18,8 @@ Codex-only environment generation and optional mise installation are documented 
 
 ## Architecture
 
+Read the [gameplay visual model](gameplay-visual-model.md) before changing note geometry or recognition rules. Keep observed game behavior, measurement assumptions and implementation thresholds distinct; passing a test does not establish the visual model.
+
 - `workflow.py` owns the public `just auto` flow, stable source IDs and `.local/data/` layout.
 - `media.py` prepares YouTube media with yt-dlp or inspects local input.
 - `auto_timeline.py` detects gameplay, refines boundaries and saves structured evidence.

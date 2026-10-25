@@ -1,5 +1,7 @@
 # Visual play timing analysis
 
+The independent [gameplay visual model](gameplay-visual-model.md) defines what receptors, heads, bodies, tails and display changes mean, how their geometry relates, and what video evidence can establish. This document describes the implementation and its operating limits.
+
 Run metadata analysis once, then opt into native-frame play analysis:
 
 ```sh
