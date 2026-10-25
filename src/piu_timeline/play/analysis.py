@@ -24,7 +24,7 @@ from piu_timeline.play.layout import (validate_layout, receptor_centers, locate_
 from piu_timeline.play.fonts import previous_digit_reader, bootstrap_digits
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':2,'time_epsilon_seconds':TIME_EPSILON}
+TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON}
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 
@@ -49,7 +49,14 @@ def result_reference(segment, player=None):
 
 def resolve_timing(tracker, combo, display_delay_ms):
     notes = tracker.finish()
-    candidates = associate(notes, combo.events, display_delay=display_delay_ms/1000)
+    from piu_timeline.play.counter_refinement import refine_events, refinement_constraints
+    original = combo.events
+    combo.events = refine_events(original,combo.observations)
+    constraints = None
+    if len(combo.events) != len(original):
+        baseline = associate(notes,[dict(e) for e in original],display_delay=display_delay_ms/1000)
+        constraints = refinement_constraints(notes,original,baseline,combo.events)
+    candidates = associate(notes,combo.events,display_delay=display_delay_ms/1000,event_note_constraints=constraints)
     matches, deferred = [], []
     for match in candidates:
         if any(match['combo_upper_seconds'] >= interval['start_seconds'] - .1
@@ -125,7 +132,7 @@ def refresh_counter_observations(cached, output, replace_font=False):
                     if candidate is not None and before<=candidate<=after:
                         value,confidence,mode = candidate,score,digits.last_mode
                         frame['combo_recovered'] = True
-            combo.update(seconds,value)
+            combo.update(seconds,value,confidence,mode,pts)
             frame.update(combo=value,combo_confidence=confidence,combo_read_mode=mode)
             target.write(json.dumps(frame)+'\n')
             known += value is not None;count += 1
@@ -164,7 +171,8 @@ def refit_saved(cached, previous, output, segment, display_delay_ms):
             raise ValueError('Saved observation timestamps are not increasing')
         last = seconds; count += 1
         tracker.hold_candidate = frame.get('possible_hold_or_dense_stack', False)
-        tracker.update(seconds, frame['notes'], frame['source_pts_seconds']); combo.update(seconds, frame['combo'])
+        tracker.update(seconds, frame['notes'], frame['source_pts_seconds']); combo.update(seconds,frame['combo'],frame.get('combo_confidence'),
+                          frame.get('combo_read_mode'),frame['source_pts_seconds'])
     if count != cached['frame_count']:
         raise ValueError('Saved native-frame observations are incomplete')
     result = {**cached, **refreshed, **resolve_timing(tracker, combo, display_delay_ms),
@@ -230,7 +238,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                 previous_read = digits.read(crop, expected=expected, recover=False)
                 previous_mask = signature
             value, confidence = previous_read
-            combo.update(playback, value)
+            combo.update(playback,value,confidence,digits.last_mode,pts)
             if value is not None and value == combo.stable and value != last_adapted and confidence >= .88:
                 digits.train(crop, value, source=pts)
                 last_adapted = value
@@ -250,7 +258,8 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
         combo = ComboTracker()
         for line in (output / 'frames.jsonl').open():
             frame = json.loads(line)
-            combo.update(frame['playback_seconds'],frame['combo'])
+            combo.update(frame['playback_seconds'],frame['combo'],frame.get('combo_confidence'),
+                         frame.get('combo_read_mode'),frame['source_pts_seconds'])
         known = round(refinement['combo_readable_fraction']*observed)
     after = source.stat()
     if (after.st_size, after.st_mtime_ns) != (before.st_size, before.st_mtime_ns):

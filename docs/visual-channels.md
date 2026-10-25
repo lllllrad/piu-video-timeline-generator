@@ -209,3 +209,19 @@ the original aggregate timing bracket. Each label still requires its own
 observed refresh; the final visible grade is never copied to the other rows.
 Words outside that counter group and incomplete/invalid bursts retain the
 normal conflict checks.
+
+A single native-frame counter value can split an otherwise confirmed short
+aggregate burst when its neighboring values are independently stabilized.
+Every intermediate integer must actually be observed with independent digit
+recognition confidence of at least 0.9, in monotone order. Contextual or weak
+reads, missing states, backward glitches, bursts over 100 ms and confirmation
+delays over 75 ms retain the original aggregate. Each resulting bracket uses
+the last actual previous-value frame and the first actual next-value frame,
+with original source PTS. No times are interpolated and no judgment grade is
+inherited. A true configured +10 without intermediate observations remains +10.
+
+Splitting a burst preserves the uniquely aligned row domains of the original
+counter sequence. Unaffected counter events retain their original unique row
+identities; refined constituents still have to satisfy their tighter native
+brackets, ordering and ambiguity checks. Newly available events cannot steal
+an unrelated anchored row just because the dynamic-programming score changes.

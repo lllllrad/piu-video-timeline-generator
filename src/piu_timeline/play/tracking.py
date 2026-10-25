@@ -341,10 +341,13 @@ class ComboTracker:
         self.last_seen = None
         self.pending = None
         self.events = []
+        self.observations = []
 
-    def update(self, seconds, value):
+    def update(self, seconds, value, confidence=None, read_mode=None, source_pts=None):
         if value is None:
             return
+        self.observations.append({'playback_seconds':seconds,'value':value,'confidence':confidence or 0,
+                                  'read_mode':read_mode,'source_pts_seconds':source_pts})
         # Impossible positive jumps and high-valued backwards reads are usually
         # split/misclassified glyphs. They must not replace the stable baseline.
         if self.stable is not None and value != self.stable:
@@ -364,6 +367,7 @@ class ComboTracker:
             bounded = 1 <= delta <= 10 and self.pending['first']-previous <= .1+TIME_EPSILON
             self.events.append({'before': self.stable, 'after': value, 'delta': delta,
                                 'lower_seconds': previous, 'upper_seconds': self.pending['first'],
+                                'confirmation_seconds':seconds,
                                 'status': 'candidate' if bounded else 'excluded',
                                 'reason': None if bounded
                                 else 'combo_reset' if delta <= 0 else 'combo_jump_or_observation_gap'})
