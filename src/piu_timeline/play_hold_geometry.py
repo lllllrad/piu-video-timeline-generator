@@ -33,8 +33,10 @@ class HoldGeometry:
     def from_analysis(cls, data, width):
         height = round(width * data['game_roi'][3] / data['game_roi'][2])
         spacing = float(np.median(np.diff([lane['x']*width for lane in data['layout']['lanes']])))
+        note_height = data.get('analysis_height', round(
+            data.get('analysis_width', width)*data['game_roi'][3]/data['game_roi'][2]))
         return cls(width, height, data['layout']['receptor_y']*height, spacing,
-                   width/data.get('analysis_width', width))
+                   height/note_height)
 
 
 def hold_start(hold):
@@ -104,9 +106,9 @@ def edge_alignment(note, track, spacing, scale, endpoint, receptor=None):
     return median_error(errors)
 
 
-def tail_from_head_track(data, track, spacing, start, width):
+def tail_from_head_track(data, track, geometry, start):
     """Corroborate a tail-shaped arrow with the connected body's lower edge."""
-    scale = width / data.get('analysis_width', width)
+    spacing, scale = geometry.spacing, geometry.note_scale
     options = []
     for index, note in enumerate(data['notes']):
         velocity = note.get('velocity_pixels_per_second', 0) * scale
@@ -132,7 +134,7 @@ def median_error(values):
 
 def resolve_geometry(data, track, geometry):
     """Return supported chart geometry, independently of displayed input state."""
-    width, spacing, receptor = geometry.width, geometry.spacing, geometry.receptor
+    spacing, receptor = geometry.spacing, geometry.receptor
     longs = [point for point in track if point['long'] and point.get('stripe_support', 1) >= STRONG_STRIPE_SUPPORT]
     needs_edges = len(longs) < MIN_BODY_OBSERVATIONS or longs[-1]['time'] - longs[0]['time'] < MIN_BODY_SPAN_SECONDS
     if needs_edges:
@@ -166,7 +168,7 @@ def resolve_geometry(data, track, geometry):
         return None
     # A directly tracked tail shares the native heads' motion clock. Prefer
     # it even when the noisier body-box endpoint could be extrapolated.
-    tail_end, tail_note = tail_from_head_track(data, track, spacing, start[1] if censored else sum(start)/2, width)
+    tail_end, tail_note = tail_from_head_track(data, track, geometry, start[1] if censored else sum(start)/2)
     if needs_edges and tail_note is None:
         return None
     if tail_end is not None:

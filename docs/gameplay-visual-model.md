@@ -33,6 +33,8 @@ flowchart LR
 
 At the inspected 1300 × 730 game crop, neighboring receptors are about 77 pixels apart and their center row is about y = 104. Complete moving-head contours include roughly 71 × 71-pixel inner outlines and approximately 75–80-pixel outer bounds. These are observations of this crop, not constants for another video. At 650-pixel analysis width, the same geometry is approximately half as large. A one-pixel position error contributes roughly `1 / scroll_speed_pixels_per_second` seconds to a crossing estimate.
 
+Convert coordinates using each image's actual dimensions. Rounding the resized height can make the vertical scale differ from the horizontal scale: a 650 × 365 analysis image becomes 325 × 182, so vertical coordinates scale by 182/365, not 325/650. Positions and velocities on the same axis must use the same transform.
+
 A head is fully visible only when its relevant outline is inside the visible field and not clipped by the receptor mask, screen edge or overlay. A partial contour's bounding-box center can move even when the original head does not. Such centers must not be treated as equivalent to intact-head observations. The lower boundary must be checked as well as the receptor boundary.
 
 White outlines, lane color, shape, size and trajectory jointly support a head. Color alone also occurs in backgrounds and effects. Multiple nested outlines in one head are not multiple notes. A detector should preserve its observed bounds and registration convention when it acquires them, so later stages can examine this distinction without decoding the video again. Legacy traces that save centers alone have less evidence; absent bounds must not be invented.

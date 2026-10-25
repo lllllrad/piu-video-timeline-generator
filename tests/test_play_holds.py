@@ -10,7 +10,7 @@ import numpy as np
 
 from piu_timeline.play_holds import reconstruct, presentation, augment_holds
 from piu_timeline.play_hold_features import detect_bodies, feature_contract, acquire_features
-from piu_timeline.play_hold_geometry import HoldGeometry
+from piu_timeline.play_hold_geometry import HoldGeometry, edge_alignment
 from piu_timeline.play_hold_state import contextual_hold_support, recognition_segments, recognition_window
 
 
@@ -19,6 +19,20 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_normalized_vertical_positions_agree_across_rounded_image_heights(self):
+        data = {'layout': LAYOUT, 'game_roi': [0, 0, 1300, 730],
+                'analysis_width': 650, 'analysis_height': 365}
+        geometry = HoldGeometry.from_analysis(data, 325)
+        # These are the same vertical positions in two resized images. Width
+        # halves exactly, while the rounded image heights do not.
+        positions = [(i/60, .8-i*.01) for i in range(8)]
+        note = {'points': [(time, y*365) for time, y in positions]}
+        track = [{'time': time, 'bottom': y*182+.45*geometry.spacing,
+                  'long': True, 'tail_visible': True} for time, y in positions]
+        error = edge_alignment(note, track, geometry.spacing, geometry.note_scale, 'bottom')
+        self.assertAlmostEqual(error, 0)
+        self.assertNotEqual(geometry.note_scale, 325/650)
+
     def test_visible_response_window_does_not_widen_target_or_consume_next_tap(self):
         data = {'layout': LAYOUT, 'game_roi': [0, 0, 325, 183], 'analysis_width': 650,
                 'notes': [{'status': 'estimated', 'lane': 2, 'target_seconds': target,
