@@ -54,6 +54,23 @@ class HoldTest(unittest.TestCase):
             self.assertEqual(projected['notes'][1]['note_type'], 'hold_component')
             self.assertEqual(projected['notes'][2]['status'], 'estimated')
         self.assertEqual(data, original)
+        weak = deepcopy(frames)
+        for frame in weak:
+            frame['bodies'][0]['stripe_support'] = .76
+        recovered = reconstruct(data, weak)
+        self.assertEqual(len(recovered), 1)
+        self.assertEqual(recovered[0]['body_evidence'], 'stripe_and_tracked_edges')
+        self.assertEqual(recovered[0]['covered_notes'], [0, 1])
+        # Weak stripes alone, a nearby target, or only one connected edge
+        # cannot turn two independent taps into a hold.
+        no_tail = {**data, 'notes': [notes[0], notes[2]]}
+        self.assertFalse(reconstruct(no_tail, weak))
+        wrong_head = deepcopy(data)
+        wrong_head['notes'][0]['points'] = [(time, y+60) for time, y in notes[0]['points']]
+        self.assertFalse(reconstruct(wrong_head, weak))
+        for frame in weak:
+            frame['bodies'][0]['stripe_support'] = .6
+        self.assertFalse(reconstruct(data, weak))
 
     def test_dim_short_hold_pulse_requires_local_change_body_and_positive_update(self):
         frames = [{'playback_seconds': i*.017, 'source_pts_seconds': 10+i*.017,

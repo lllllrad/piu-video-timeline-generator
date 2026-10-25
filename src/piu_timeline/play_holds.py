@@ -14,7 +14,7 @@ from .play_frames import decode_frames
 from .play_tracking import Track, fit_track
 
 FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 16}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 17}
 
 
 def fingerprint(value):
@@ -147,12 +147,24 @@ def fit_endpoint(track, receptor, spacing, endpoint):
     return [fitted['target_seconds'] - uncertainty, fitted['target_seconds'] + uncertainty]
 
 
-def tail_from_head_track(data, track, spacing, start):
-    """Corroborate a tail-shaped arrow with the connected body's lower edge."""
+def edge_alignment(note, track, spacing, scale, endpoint, receptor=None):
+    """Compare a native arrow trajectory with an extended body's visible edge."""
     # Compare while the body is extended: a shrinking body near the receptor
     # can put its head and tail within the same positional tolerance.
     visible = {round(point['time'], 6): point for point in track
-               if point['tail_visible'] and point['long']}
+               if point['long'] and (point['tail_visible'] if endpoint == 'bottom'
+                                    else point['top'] > receptor + 1.2*spacing)}
+    offset = -.45*spacing if endpoint == 'bottom' else .45*spacing
+    errors = [abs(y*scale-(visible[round(time, 6)][endpoint]+offset))
+              for time, y in note.get('points', []) if round(time, 6) in visible]
+    if (len(errors) < 4 or median_error(errors) > .55*spacing
+            or sum(error <= .55*spacing for error in errors) < max(4, .65*len(errors))):
+        return None
+    return median_error(errors)
+
+
+def tail_from_head_track(data, track, spacing, start):
+    """Corroborate a tail-shaped arrow with the connected body's lower edge."""
     scale = FEATURE_FORMAT['width'] / data.get('analysis_width', FEATURE_FORMAT['width'])
     options = []
     for index, note in enumerate(data['notes']):
@@ -160,13 +172,11 @@ def tail_from_head_track(data, track, spacing, start):
         if (note['status'] != 'estimated' or note['lane'] != track[0]['lane'] or velocity >= 0
                 or not start < note['target_seconds'] <= track[-1]['time'] + .25):
             continue
-        errors = [abs(y*scale-(visible[round(time, 6)]['bottom']-.45*spacing))
-                  for time, y in note.get('points', []) if round(time, 6) in visible]
-        if (len(errors) < 4 or median_error(errors) > .55*spacing
-                or sum(error <= .55*spacing for error in errors) < max(4, .65*len(errors))):
+        error = edge_alignment(note, track, spacing, scale, 'bottom')
+        if error is None:
             continue
         uncertainty = note['prediction_uncertainty_seconds'] + .55*spacing/abs(velocity)
-        options.append((median_error(errors), index,
+        options.append((error, index,
                         [note['target_seconds']-uncertainty, note['target_seconds']+uncertainty]))
     selected = min(options, default=None)
     return (selected[2], selected[1]) if selected else (None, None)
@@ -229,8 +239,14 @@ def reconstruct(data, frames):
     contextual = contextual_hold_support(data, frames, receptor, spacing)
     for track in body_tracks(frames, spacing):
         longs = [point for point in track if point['long'] and point.get('stripe_support', 1) >= .8]
-        if len(longs) < 5 or longs[-1]['time'] - longs[0]['time'] < .08:
-            continue
+        needs_edges = len(longs) < 5 or longs[-1]['time'] - longs[0]['time'] < .08
+        if needs_edges:
+            # Compression, diagonal caps and HUD overlays can reduce the colored
+            # stripe fraction. Weaker pixels require BOTH tracked endpoints;
+            # time proximity or one plausible edge alone cannot create a hold.
+            longs = [point for point in track if point['long'] and point.get('stripe_support', 1) >= .72]
+            if len(longs) < 5 or longs[-1]['time'] - longs[0]['time'] < .08:
+                continue
         lane = track[0]['lane']
         start = fit_endpoint(track, receptor, spacing, 'top')
         end = fit_endpoint(track, receptor, spacing, 'bottom')
@@ -250,9 +266,14 @@ def reconstruct(data, frames):
             censored = False
             start = [head[1]['target_seconds']-head[1]['prediction_uncertainty_seconds'],
                      head[1]['target_seconds']+head[1]['prediction_uncertainty_seconds']]
+        if needs_edges and (censored or head is None or edge_alignment(
+                head[1], track, spacing, width/data.get('analysis_width', width), 'top', receptor) is None):
+            continue
         # A directly tracked tail shares the native heads' motion clock. Prefer
         # it even when the noisier body-box endpoint could be extrapolated.
         tail_end, tail_note = tail_from_head_track(data, track, spacing, start[1] if censored else sum(start)/2)
+        if needs_edges and tail_note is None:
+            continue
         if tail_end is not None:
             end = tail_end
         if short_body_fit and tail_note is None:
@@ -296,6 +317,7 @@ def reconstruct(data, frames):
                 'start_censored': censored, 'end_censored': end is None,
                 'last_body_seconds': track[-1]['time'], 'head_note': head[0] if head else None, 'tail_note': tail_note,
                 'covered_notes': covered, 'body_frames': len(track), 'long_body_frames': len(longs),
+                'body_evidence': 'stripe_and_tracked_edges' if needs_edges else 'strong_stripe',
                 'source_pts_range': [track[0]['pts'], track[-1]['pts']],
                 'input': {'kind': 'sustained_recognition', 'segments': segments,
                           'press_range': None, 'release_range': None,
