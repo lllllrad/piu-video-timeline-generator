@@ -13,6 +13,12 @@ than being imported from another test case. `tests/integration/vision_ocr.py` is
 an optional host Vision run invoked by `just check-ocr`; it is deliberately not
 part of offline discovery.
 
+QG's shared `tests` check runs this discovery command from both `just check`
+and the pre-commit hook. `tests/tools/test_quality_gate.py` exercises the
+installed CLI against an isolated Python suite: a failing assertion must block
+the gate, and a passing assertion must allow it. The fixture does not change
+the checkout's hooks or configuration.
+
 ## What the suite establishes
 
 | Suite | Coverage |
@@ -42,3 +48,10 @@ ships its layout rules.
 Contract and regression tests do not measure corpus recognition accuracy.
 Timing-evidence coverage and consistency with result-grade totals require
 independent review of recordings and saved analysis results.
+
+Play maintenance tests cover source/contract invalidation, segment-lock
+deferral, new-play discovery, public-command replay, failure isolation and
+retry only after input changes. Audit tests retain unresolved classifications,
+flag changed sources, escape report text and verify that evidence is not
+rewritten. Report runtime tests execute the JavaScript embedded from the
+shipped HTML/CSS/JS resources, including their standalone output.

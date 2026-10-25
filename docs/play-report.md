@@ -95,4 +95,3 @@ just play VIDEO --segment 1 --display-delay-ms 30
 ```
 
 The HTML slider changes the displayed offsets only; changing associations requires rerunning the command. Median centering is relative alignment, not hardware calibration.
-

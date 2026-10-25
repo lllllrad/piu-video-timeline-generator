@@ -56,3 +56,11 @@ _evaluate +args:
 
 _relabel +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.relabel "$@"
+
+# Refresh completed play caches, optionally acquiring missing plays or watching promotions.
+_replay *args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.replay "$@"
+
+# Classify saved recognition warnings without changing source media or analyses.
+_audit *args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.audit "$@"

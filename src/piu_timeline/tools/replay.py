@@ -1,0 +1,180 @@
+"""Acquire or refresh local play analyses through the public play command."""
+import argparse
+from collections import Counter
+from datetime import datetime, timezone
+import fcntl
+import html
+import json
+from pathlib import Path
+import subprocess
+import time
+
+from piu_timeline import ROOT
+from piu_timeline.play.analysis import VERSION
+from piu_timeline.play.judgments import cache_current as judgment_current
+from piu_timeline.play.holds.analysis import ASSOCIATION_FORMAT, fingerprint
+from piu_timeline.play.holds.features import feature_contract
+
+
+def write_json(path, data):
+    pending = path.with_suffix('.build-json')
+    pending.write_text(json.dumps(data, ensure_ascii=False, indent=2)+'\n')
+    pending.replace(path)
+
+
+def busy(path):
+    if not path.exists():
+        return False
+    with path.open() as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        fcntl.flock(lock, fcntl.LOCK_UN)
+    return False
+
+
+def file_signature(path):
+    try:
+        stat = path.stat()
+        return stat.st_mtime_ns, stat.st_size, stat.st_ino
+    except FileNotFoundError:
+        return None
+
+
+def current(path):
+    """Check derived artifact contracts without decoding, OCR or cache writes."""
+    if not all(path.with_name(name).is_file() for name in
+               ('frames.jsonl', 'report.html', 'recognition-warnings.json', 'timing-ranges.json')):
+        return False
+    data = json.loads(path.read_text())
+    holds = data.get('hold_analysis', {})
+    contract = holds.get('association_contract', {})
+    if data.get('play_analysis_version') != VERSION or contract.get('format') != ASSOCIATION_FORMAT:
+        return False
+    media = data['media']; stat = Path(media['path']).stat()
+    return ((stat.st_size, stat.st_mtime_ns) == (media['size_bytes'], media['mtime_ns'])
+            and holds.get('feature_contract') == feature_contract(data)
+            and contract.get('notes') == fingerprint(data.get('notes', []))
+            and contract.get('hud_events') == fingerprint({key:data.get(key, [])
+                                                          for key in ('combo_events', 'judgment_events')})
+            and judgment_current(data, path.parent.parent, path.parent))
+
+
+def discover(root, sources=(), segments=(), acquire=False):
+    data = root/'.local/data'; selected = []
+    for source in sorted(data.iterdir()) if data.is_dir() else []:
+        if not source.is_dir():
+            continue
+        if sources and source.name not in sources:
+            continue
+        if acquire:
+            metadata = source/'analysis/analysis.json'
+            if not metadata.is_file():
+                continue
+            try:
+                count = len(json.loads(metadata.read_text()).get('segments', []))
+            except (OSError, ValueError):
+                continue  # A producer may still be promoting this metadata.
+            numbers = range(1, count+1)
+        else:
+            numbers = [int(p.parent.name.removeprefix('segment-'))
+                       for p in (source/'play').glob('segment-[0-9][0-9][0-9]/frames.jsonl')
+                       if p.with_name('analysis.json').is_file()]
+        selected.extend((source.name, number) for number in sorted(numbers) if not segments or number in segments)
+    order = {name:i for i,name in enumerate(sources)}
+    return sorted(selected, key=lambda item:(order.get(item[0], len(order)), item))
+
+
+class Replay:
+    def __init__(self, root, output, sources=(), segments=(), acquire=False):
+        self.root, self.output = Path(root), Path(output)
+        self.sources, self.segments, self.acquire = sources, segments, acquire
+        self.records = {}
+        self.output.mkdir(parents=True, exist_ok=True)
+        self.started = datetime.now(timezone.utc).isoformat()
+
+    def progress(self, state, active=None):
+        records = list(self.records.values())
+        doc = {'started':self.started, 'updated':datetime.now(timezone.utc).isoformat(),
+               'state':state, 'active':active, 'counts':dict(Counter(r['status'] for r in records)),
+               'play_analysis_version':VERSION, 'hold_association_format':ASSOCIATION_FORMAT,
+               'plays':records}
+        write_json(self.output/'progress.json', doc)
+        rows = ''.join('<tr><td>'+html.escape(r['source'])+'</td><td>'+str(r['segment'])
+                       +'</td><td>'+html.escape(r['status'])+'</td><td>'+html.escape(r.get('detail', ''))+'</td></tr>'
+                       for r in records)
+        page = ('<!doctype html><meta charset="utf-8"><title>Play replay progress</title>'
+                '<h1>Play replay progress</h1><p>'+html.escape(state)+'</p><table>'
+                '<tr><th>Source</th><th>Segment</th><th>Status</th><th>Details</th></tr>'+rows+'</table>')
+        pending = self.output/'index.build-html'; pending.write_text(page); pending.replace(self.output/'index.html')
+
+    def cycle(self):
+        for source, number in discover(self.root, self.sources, self.segments, self.acquire):
+            key = f'{source}/{number:03}'
+            directory = self.root/'.local/data'/source/'play'/f'segment-{number:03}'
+            path = directory/'analysis.json'
+            record = self.records.setdefault(key, {'source':source, 'segment':number})
+            # Public play also checks this lock, closing the race after this check.
+            if busy(directory.parent/f'.segment-{number:03}.lock'):
+                record.update(status='busy', detail='Deferred: another analyzer owns this segment.'); continue
+            signature = [file_signature(p)
+                         for p in (path, directory.parent.parent/'analysis/analysis.json')]
+            try:
+                if current(path):
+                    record.update(status='current', detail='Artifact contracts are current.'); continue
+            except (OSError, ValueError, KeyError) as error:
+                record['detail'] = str(error)
+            if record.get('status') == 'failed' and record.get('failed_signature') == signature:
+                continue
+            record.update(status='running'); self.progress('refreshing', key)
+            log = self.output/f'{source}-{number:03}.log'; begin = time.monotonic()
+            try:
+                with log.open('w') as stream:
+                    result = subprocess.run(['just', 'play', source, '--segment', str(number)],
+                                            cwd=self.root, stdout=stream, stderr=subprocess.STDOUT)
+                valid = result.returncode == 0 and current(path)
+                record.update(returncode=result.returncode,
+                              status='current' if valid else 'queued' if result.returncode == 0 else 'failed',
+                              detail='Completed through the public play command.' if valid else 'See '+log.name)
+                if result.returncode and 'already being analyzed' in log.read_text():
+                    record.update(status='busy', detail='Another analyzer acquired the segment lock.')
+            except (OSError, ValueError, KeyError) as error:
+                record.update(status='failed', detail=str(error))
+            record.update(elapsed_seconds=round(time.monotonic()-begin, 2), log=log.name)
+            if record['status'] == 'failed':
+                record['failed_signature'] = signature
+            self.progress('refreshing')
+        pending = any(r['status'] in ('queued', 'busy') for r in self.records.values())
+        self.progress('deferred' if pending else 'complete')
+        return any(r['status'] == 'failed' for r in self.records.values())
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--sources', nargs='+')
+    parser.add_argument('--segments', nargs='+', type=int)
+    parser.add_argument('--acquire', action='store_true', help='Include metadata plays without native observations')
+    parser.add_argument('--watch', action='store_true', help='Discover newly completed/promoted plays every 30 seconds')
+    parser.add_argument('--run-dir', type=Path)
+    args = parser.parse_args()
+    if args.segments and min(args.segments) < 1:
+        parser.error('Segment numbers start at 1')
+    destination = args.run_dir or ROOT/'.local/runs'/('play-replay-'+time.strftime('%Y%m%d-%H%M%S'))
+    if not destination.resolve().is_relative_to(ROOT/'.local'):
+        parser.error('--run-dir must stay under .local/')
+    runner = Replay(ROOT, destination, args.sources or (), args.segments or (), args.acquire)
+    with (destination/'.runner.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            parser.error('This replay run directory is already in use')
+        while True:
+            failed = runner.cycle()
+            if not args.watch:
+                raise SystemExit(int(failed))
+            time.sleep(30)
+
+
+if __name__ == '__main__':
+    main()

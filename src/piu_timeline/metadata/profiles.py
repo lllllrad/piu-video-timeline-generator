@@ -114,5 +114,3 @@ def refine_boundary(record, roi, reference, approximate, kind, threshold=.9, rad
     return seconds, {"refined": True, "grid_step_seconds": step,
                      "search_window": [begin, stop], "transition_bracket": [round(seconds - step, 3), seconds],
                      "note": "Decoded frame sampling; allow one sampling step of quantization error"}
-
-

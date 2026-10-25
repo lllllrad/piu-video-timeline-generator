@@ -154,5 +154,3 @@ class JudgmentTracker:
         self.last_frame = seconds
         if self.pending is None:
             self.last = observation
-
-
