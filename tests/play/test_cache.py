@@ -132,6 +132,33 @@ class PlayCacheTest(unittest.TestCase):
             self.assertEqual(report,final/'report.html')
             self.assertTrue(report.is_file())
 
+    def test_word_association_upgrade_does_not_refit_notes_or_rewrite_observations(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);source=root/'recording.mkv';source.write_bytes(b'original')
+            stat=source.stat();media={'path':str(source),'size_bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns}
+            segment={'start_seconds':1,'end_seconds':2,'song':'Example','chart':'S1','players':{}}
+            directory=root/'data/id';(directory/'analysis').mkdir(parents=True)
+            roi=[0,0,320,180]
+            (directory/'analysis/analysis.json').write_text(json.dumps({'media':media,'game_roi':roi,'segments':[segment]}))
+            final=directory/'play/segment-001';final.mkdir(parents=True)
+            saved={**segment,'media':media,'game_roi':roi,'analysis_width':650,'player':None,'participant_slots':[],
+                   'play_analysis_version':play.VERSION,'timing_format':play.TIMING_FORMAT,
+                   'notes':[],'matches':[],'coverage':{},'combo_events':[],'judgment_events':[],
+                   'layout':{'lanes':[{'x':.1+.2*i} for i in range(5)],'combo_roi':[.4,.5,.2,.1]}}
+            saved['judgment_cache']=cache_contracts(saved,[])
+            saved['judgment_cache']['association']['format']={'schema':1,'revision':0}
+            (final/'analysis.json').write_text(json.dumps(saved))
+            raw=json.dumps({'playback_seconds':1,'source_pts_seconds':41,'label':None,'blank':False})+'\n'
+            (final/'judgments.jsonl').write_text(raw)
+            with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
+                    patch.object(play,'refit_saved',side_effect=AssertionError('note trajectories are already current')), \
+                    patch.object(play,'analyze_play',side_effect=AssertionError('must not reacquire frames')):
+                report=play.run('id')
+            result=json.loads(report.with_name('analysis.json').read_text())
+            self.assertEqual(result['judgment_cache'],cache_contracts(result,[]))
+            self.assertEqual((final/'judgments.jsonl').read_text(),raw)
+            self.assertEqual((source.read_bytes(),source.stat().st_mtime_ns),(b'original',stat.st_mtime_ns))
+
     def test_failed_rebuild_preserves_the_previous_report(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);directory=root/'id';(directory/'analysis').mkdir(parents=True)

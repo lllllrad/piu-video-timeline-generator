@@ -113,6 +113,15 @@ def cache_current(data, root, directory=None):
     return data.get('judgment_cache')==cache_contracts(data,models)
 
 
+def observations_current(data, root, directory):
+    """Association changes can replay complete compatible word observations."""
+    models=load_bank(root,data['media'],data['analysis_width'])
+    if models and not (directory/'evidence/judgments/templates.json').is_file():
+        return False
+    return ((directory/'judgments.jsonl').is_file()
+            and data.get('judgment_cache',{}).get('observations') == cache_contracts(data,models)['observations'])
+
+
 def collect_features(data, output):
     directory = output/'evidence/judgments';directory.mkdir(parents=True,exist_ok=True)
     cache = directory/'features-v3.npz'

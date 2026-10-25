@@ -17,7 +17,7 @@ from piu_timeline.play.frames import decode_frames, crop_region, TIME_EPSILON
 from piu_timeline.play.tracking import NoteTracker, DigitReader, ComboTracker, associate
 from piu_timeline.metadata.recognition import capture_game
 from piu_timeline.workflow import LOCAL_DATA, source_id
-from piu_timeline.play.judgments import augment_judgments, cache_current as judgment_cache_current
+from piu_timeline.play.judgments import augment_judgments, cache_current as judgment_cache_current, observations_current as judgment_observations_current
 
 from piu_timeline.play.layout import (validate_layout, receptor_centers, locate_layout,
                                      combine_receptor_observations, recover_layout)
@@ -361,18 +361,23 @@ def run(source, segment_number=1, force=False, **options):
                     and cached.get('display_delay_correction_ms',0) == options.get('display_delay_ms',0)
                     and cached.get('result_reference') == result_reference(segments[segment_number-1],options.get('player'))
                     and digit_cache_current(cached,final,LOCAL_DATA)
-                    and judgment_cache_current(cached,root,final)):
+                    and ((judgments_current := judgment_cache_current(cached,root,final))
+                         or judgment_observations_current(cached,root,final))):
                 from piu_timeline.play.report import write_report
                 from piu_timeline.play.holds.analysis import augment_holds
+                previous_judgments = cached.get('judgment_cache')
+                if not judgments_current:
+                    cached = augment_judgments(cached,final)
                 previous_holds = cached.get('hold_analysis')
                 previous_channels = cached.get('visual_channels')
                 cached = augment_holds(cached, final)
                 write_report(cached, final / 'report.html', final)
-                if cached.get('hold_analysis') != previous_holds or cached.get('visual_channels') != previous_channels:
-                    updated = final / 'analysis.holds-build.json'
+                if (cached.get('judgment_cache') != previous_judgments or cached.get('hold_analysis') != previous_holds
+                        or cached.get('visual_channels') != previous_channels):
+                    updated = final / 'analysis.refresh-build.json'
                     updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
                     updated.replace(previous)
-                print('Reusing saved note/judgment analysis and compatible long-note evidence; no OCR.')
+                print('Reusing saved note trajectories and compatible word/long-note evidence; no OCR.')
                 from piu_timeline.charts.data import auto_register
                 auto_register(cached, final)
                 print(final / 'report.html')

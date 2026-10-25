@@ -275,3 +275,9 @@ Original PTS and playback values are retained without rounding or retiming.
 Counter/row derivation has a separate `timing_format` contract: a timing-rule
 change refits saved native observations and replays word reads without repeating
 OCR or invalidating native appearance pixels.
+
+A judgment-association upgrade with compatible saved word observations replays
+those reads without refitting note trajectories. Reader/template changes retain
+the isolated rebuild path; they must not rewrite the live observation trace
+through the association-only fast path. Refreshed association contracts are
+persisted even when no long-note or channel artifacts change.
