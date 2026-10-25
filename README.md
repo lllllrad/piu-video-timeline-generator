@@ -61,7 +61,7 @@ PIU_OCR_DEVICE=cpu just auto VIDEO
 
 Progress includes per-segment elapsed time, OCR image counts (including focused crops), cache reuse and OCR time.
 
-Models are downloaded on first use into `.local/cache/paddleocr/`; pinned model revisions and SHA-256 checksums are verified before local inference. Existing EasyOCR installations remain available explicitly with `PIU_OCR_BACKEND=easyocr`. See [development](docs/development.md) for explicit device selection and validation limits.
+Models are downloaded on first use into `.local/cache/paddleocr/`; pinned model revisions and SHA-256 checksums are verified before local inference. EasyOCR is available explicitly with `PIU_OCR_BACKEND=easyocr`. See [development](docs/development.md) for explicit device selection and validation limits.
 
 ## Visual play analysis
 
@@ -109,7 +109,7 @@ The default format produces:
 03:45 Song Name D20 end
 ```
 
-When a recording contains different recognized player accounts (including players taking turns), the default format adds `[Name]` to each play, omitting the account discriminator from presentation. Analysis retains the full account identity. Rival comparison accounts are excluded from participants. Simultaneous players retain separate names and charts. Unreadable identities remain `Unknown player` when names are shown; one recognized account keeps the original compact output, including when its discriminator is unreadable in some plays. Two different recognized discriminators remain distinct accounts.
+When a recording contains different recognized player accounts (including players taking turns), the default format adds `[Name]` to each play, omitting the account discriminator from presentation. Analysis retains the full account identity. Rival comparison accounts are excluded from participants. Simultaneous players retain separate names and charts. Unreadable identities remain `Unknown player` when names are shown; one recognized account uses compact output, including when its discriminator is unreadable in some plays. Two different recognized discriminators remain distinct accounts.
 
 Copy [formats/default/index.ts](formats/default/index.ts) to start a new format. Shared types and helpers are in [formats/lib/timeline.ts](formats/lib/timeline.ts). See [custom formats](docs/formats.md) for examples.
 

@@ -39,7 +39,7 @@ Convert coordinates using each image's actual dimensions. Rounding the resized h
 
 A head is fully visible only when its relevant outline is inside the visible field and not clipped by the receptor mask, screen edge or overlay. A partial contour's bounding-box center can move even when the original head does not. Such centers must not be treated as equivalent to intact-head observations. The lower boundary must be checked as well as the receptor boundary.
 
-White outlines, lane color, shape, size and trajectory jointly support a head. Color alone also occurs in backgrounds and effects. Multiple nested outlines in one head are not multiple notes. A detector should preserve its observed bounds and registration convention when it acquires them, so later stages can examine this distinction without decoding the video again. Legacy traces that save centers alone have less evidence; absent bounds must not be invented.
+White outlines, lane color, shape, size and trajectory jointly support a head. Color alone also occurs in backgrounds and effects. Multiple nested outlines in one head are not multiple notes. A detector should preserve its observed bounds and registration convention when it acquires them, so later stages can examine this distinction without decoding the video again. Saved traces with centers but no head bounds cannot support bounds-based checks; absent bounds must not be invented.
 
 ## Motion and time
 
@@ -79,7 +79,7 @@ head_center ≈ body_top + h/2
 tail_center ≈ body_bottom − h/2
 ```
 
-The exact offsets depend on which colored component or outline defines the body bounds. They require measured cap geometry or an explicit approximation with uncertainty. These are position relationships, not a minimum hold duration. The reviewed short holds have caps separated by about 84 ms; rejecting all holds below 120 ms would split real holds into taps. Once a cap trajectory identifies the endpoint directly, use that trajectory's crossing uncertainty. The positional tolerance used to decide which cap belongs to the body is not an additional error on an already measured crossing.
+The exact offsets depend on which colored component or outline defines the body bounds. They require measured cap geometry or an explicit approximation with uncertainty. These are position relationships, not a minimum hold duration. A short hold can have closely spaced caps; a minimum-duration cutoff cannot replace evidence of a connected body. Once a cap trajectory identifies the endpoint directly, use that trajectory's crossing uncertainty. The positional tolerance used to decide which cap belongs to the body is not an additional error on an already measured crossing.
 
 Only compare an extended body's edges while they are visible. A screen-clipped lower edge is not a tail. A top clamped at the receptor is not an approaching head. As the body shrinks, both caps can enter the same tolerance; these samples cannot independently distinguish the endpoints.
 
@@ -113,7 +113,7 @@ Separate these quantities in reports:
 
 The chart target range is not a PERFECT/GREAT judgment window. A result-panel grade cannot calibrate the receptor row or shrink a target range unless an independently validated model relates them. Stage totals are consistency checks: compare compatible judgment units, account for hold ticks and aggregations, and preserve conflicts. Never fill missing links to satisfy a result quota.
 
-## Review procedure and regression examples
+## Review procedure
 
 1. Verify the game crop, stationary receptor centers, lane ownership and scale against several source times. Include quiet outlines and flashes.
 2. Inspect a complete head away from the boundaries. Identify the outer bounds and the registration point. Record its size separately from lane spacing.
@@ -123,17 +123,7 @@ The chart target range is not a PERFECT/GREAT judgment window. A result-panel gr
 6. Check other lanes, real nearby taps, short holds, clipped tails, HUD occlusions and speed changes as negative/control cases. A fix should explain why the control cases remain different.
 7. Compare coverage and result counts in compatible units. Review new suppressions as well as recovered notes. Preserve original observations and report unresolved evidence.
 
-Reviewed examples use original recording positions in `jpz-NuyQuBk`, segment 12:
-
-| Recording position | Observation | Required interpretation |
-| --- | --- | --- |
-| 68:34.6 | Blue short hold; a tracked lower cap follows its body's lower edge; head and tail target centers are about 84 ms apart | One hold, with the lower cap represented as its tail |
-| 68:37.8 and the following two short holds | Body candidates and paired caps are visible; local box fitting can fail, and red-body color support is weaker than neighboring bodies | Evaluate the observed head/body/tail relationship before rejecting the candidate; weaker color evidence needs both edges |
-| 69:31.7 | A yellow hold's upper box edge becomes distorted near the receptor; its extrapolated start is closer to the trailing cap than to the leading cap | Identify the head from its multi-frame alignment with the upper edge, ahead of timestamp proximity; the lower cap remains the tail |
-| About 70:05 | Heads can be visible before disappearing behind the central HUD | Retain the source trajectory and use corroborated motion or expose an unresolved exclusion; do not call disappearance a gimmick by default |
-
-These examples diagnose particular failure modes. They do not establish complete corpus accuracy. Source images, measurements and before/after reports belong under ignored local review output; the visual rules and reusable tests belong in the project.
 
 ## Relationship to implementation
 
-[Play analysis](play-analysis.md) describes commands, current thresholds, artifacts and compatibility rules. The model above is the review criterion for those choices. Current limitations include using lane spacing as an approximate cap scale, legacy observations without head bounds, and body endpoints extrapolated from small color masks. Those approximations must be named and carry uncertainty; they are not facts about the game. Improvements should replace them with measured evidence where available, while retaining a traceable fallback for older observations.
+[Play analysis](play-analysis.md) describes commands, current thresholds, artifacts and compatibility rules. The model above is the review criterion for those choices. Current limitations include using lane spacing as an approximate cap scale, saved observations without head bounds, and body endpoints extrapolated from small color masks. Those approximations must be named and carry uncertainty; they are not facts about the game. Improvements should replace them with measured evidence where available, while retaining a traceable fallback for older observations.

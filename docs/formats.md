@@ -70,5 +70,3 @@ const segmentLabel = createSegmentLabeler(timeline, {
 ```
 
 With simultaneous players, hiding names retains each slot's chart, for example `Song [P1: S18 / P2: D20]`. For a simple song/chart string independent of participants, use `songLabel(segment)`. To print only names, use `playerNames(segment)`.
-
-Earlier custom formats used `label`, `hasDifferentPlayers` and `playerLabel`. Replace `label(segment)` with `songLabel(segment)`, or replace the `hasDifferentPlayers`/`playerLabel` pair with one `createSegmentLabeler(timeline)` call before the loop and `segmentLabel(segment)` inside it. The old positional boolean arguments are replaced by the named options above. `onlyPlayer` is now `onlyResultPlayer` to make its result-slot scope explicit; the shared identity/result evidence type is named `PlayerEvidence` instead of `ResultPlayer`.

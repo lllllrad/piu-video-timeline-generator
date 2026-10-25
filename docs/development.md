@@ -10,7 +10,7 @@ mise exec -- just check
 mise exec -- just auto SOURCE
 ```
 
-Mise provisions uv and creates and activates `.venv`. The explicit `_.python.venv` setting supports this requirements-based project without a `uv.lock`; `python.uv_venv_auto` is also enabled for future uv project discovery. Recipes create `.venv` when necessary and install the project dependencies with `uv pip install --python .venv/bin/python`. No pip installation inside the virtualenv is required. `requirements.txt` includes ONNX Runtime, PyYAML and polygon-processing dependencies on Linux using platform markers. Installation is serialized across concurrent recipes and cached under `.venv`; changes to dependency declarations trigger an update. Failed installations are retried on the next run. If the required tools are already on PATH, `just` can be used directly.
+Mise provisions uv and creates and activates `.venv`. The explicit `_.python.venv` setting supports this requirements-based project without a `uv.lock`; `python.uv_venv_auto` is also enabled. Recipes create `.venv` when necessary and install the project dependencies with `uv pip install --python .venv/bin/python`. No pip installation inside the virtualenv is required. `requirements.txt` includes ONNX Runtime, PyYAML and polygon-processing dependencies on Linux using platform markers. Installation is serialized across concurrent recipes and cached under `.venv`; changes to dependency declarations trigger an update. Failed installations are retried on the next run. If the required tools are already on PATH, `just` can be used directly.
 
 No shell activation is required; recipes use `scripts/run.sh` to apply project-local cache paths and invoke `.venv` explicitly.
 
@@ -34,13 +34,13 @@ The package is organized by responsibility. `workflow.py`, `media.py` and
 
 Tests mirror these packages under `tests/`. Workflow/presentation tests live in
 `tests/workflow/`; synthetic native-video integration and the optional Vision
-integration run live in `tests/integration/`. See [test scope and audit](testing.md)
-for what the suite establishes and which redundant checks were removed.
+integration run live in `tests/integration/`. See [testing](testing.md)
+for test commands, coverage and validation limits.
 
-The public `just` commands stay the same. Internal Python invocations use the
-package paths, for example `python -m piu_timeline.play.analysis` and
-`python -m piu_timeline.charts.data`. Modules import the shared checkout root from
-`piu_timeline.ROOT`, so moving a module deeper does not relocate caches or models.
+The `justfile` defines public commands. Internal Python invocations use package
+paths, for example `python -m piu_timeline.play.analysis` and
+`python -m piu_timeline.charts.data`. Modules import `piu_timeline.ROOT` for the
+checkout root; cache and model paths are independent of module depth.
 
 - `workflow.py` owns the public `just auto` flow, stable source IDs and `.local/data/` layout.
 - `media.py` prepares YouTube media with yt-dlp or inspects local input.
@@ -74,7 +74,7 @@ Progress reports include segment elapsed time, inferred/cached OCR image counts 
 
 Source-verified acquisition is reusable independently of the analyzer release or OCR engine: original media identity and game ROI must match and the saved profile/candidate artifacts must exist. An OCR identity change invalidates text, screen decisions and parsed statistics while preserving captured images, original PTS, decoded boundaries and transition plans. Existing image crops are reused. Only the new complete analysis is promoted.
 
-Frame decoding, visual change detection and OCR have separate responsibilities. Gameplay interval detection uses visual HUD matching. Future note-position tracking should consume decoded gameplay frames and their original timestamps directly; it must not call metadata OCR for every frame. OCR belongs to selected metadata observations around gameplay, with separate language and region-specific recovery. The opt-in `just play` path consumes native frames independently of metadata sampling; see [play analysis](play-analysis.md).
+Frame decoding, visual change detection and OCR have separate responsibilities. Gameplay interval detection uses visual HUD matching. Note-position tracking consumes decoded gameplay frames and their original timestamps directly, without metadata OCR on each frame. OCR belongs to selected metadata observations around gameplay, with separate language and region-specific recovery. The opt-in `just play` path consumes native frames independently of metadata sampling; see [play analysis](play-analysis.md).
 
 ## Commands
 
@@ -121,7 +121,7 @@ Design observations are in [scene-and-ocr-notes.md](scene-and-ocr-notes.md) and 
 
 Recipes install the Linux inference dependencies automatically from `requirements.txt`. The default backend runs the official `PP-OCRv5_mobile_det`, `korean_PP-OCRv5_mobile_rec` and `en_PP-OCRv5_mobile_rec` ONNX exports. Model downloads use pinned Hugging Face revisions and verified SHA-256 checksums under `.local/cache/paddleocr/`. No PaddlePaddle framework, GUI OpenCV or PyTorch is required for the default OCR path. macOS metadata OCR uses native Vision; visual play analysis also uses NumPy and OpenCV.
 
-The Korean model includes all modern Hangul syllables, including syllables absent from EasyOCR’s Korean vocabulary. BGR normalization, line-height resizing, padding, polygon expansion and CTC decoding follow the model export definitions. Text lines are batched by width; input images and their timestamps are unchanged. No song-name dictionary or spelling correction is applied. Chart agreement requires at least two source frames with OCR confidence of .7 or higher; repeated weak digits remain unresolved. References: [Korean recognizer](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx), [English recognizer](https://huggingface.co/PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx), [text detector](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx).
+The Korean model includes all modern Hangul syllables. BGR normalization, line-height resizing, padding, polygon expansion and CTC decoding follow the model export definitions. Text lines are batched by width; input images and their timestamps are unchanged. No song-name dictionary or spelling correction is applied. Chart agreement requires at least two source frames with OCR confidence of .7 or higher; repeated weak digits remain unresolved. References: [Korean recognizer](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx), [English recognizer](https://huggingface.co/PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx), [text detector](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx).
 
 - `PIU_OCR_BACKEND=auto` selects Vision on macOS and PaddleOCR elsewhere.
 - `PIU_OCR_BACKEND=vision|paddleocr|easyocr` explicitly chooses a backend. EasyOCR is an optional legacy backend (`pip install easyocr==1.7.2`), not a default dependency.
@@ -137,4 +137,4 @@ Install a compatible GPU-enabled ONNX Runtime for CUDA inference; the default pa
 sh scripts/run.sh .venv/bin/python scripts/regenerate.py --jobs 3
 ```
 
-This runs the existing `just auto` interface over cached source IDs, without downloading media when each `raw/` directory contains one completed recording. Per-source logs and a report with exit status, elapsed time and before/after source metadata are saved in `.local/runs/regeneration-*/`. Failed sources do not prevent the remaining sources from running. The command exits non-zero if any source failed or changed. Keep concurrency low on GPU hosts to avoid loading multiple model copies into limited VRAM.
+This runs `just auto` over cached source IDs, without downloading media when each `raw/` directory contains one completed recording. Per-source logs and a report with exit status, elapsed time and before/after source metadata are saved in `.local/runs/regeneration-*/`. Failed sources do not prevent the remaining sources from running. The command exits non-zero if any source failed or changed. Keep concurrency low on GPU hosts to avoid loading multiple model copies into limited VRAM.
