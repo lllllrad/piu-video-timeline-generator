@@ -19,6 +19,41 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_two_taps_before_a_hold_are_not_absorbed_by_gap_repair(self):
+        targets = (1., 1.1, 1.2, 1.8)
+        times = [i/60 for i in range(20, 125)]
+        receptor, speed, x = .15*183, 200, round(.5*325)
+        notes = [{'lane': 2, 'status': 'estimated', 'target_seconds': target,
+                  'prediction_uncertainty_seconds': .01,
+                  'points': [(t, receptor+speed*(target-t)) for t in times
+                             if receptor+11 < receptor+speed*(target-t) < 173]}
+                 for target in targets]
+        frames = []
+        for t in times:
+            image = np.zeros((183, 325, 3), dtype='uint8')
+            top = max(receptor+6, receptor+speed*(1.2-t)+7)
+            bottom = min(172, receptor+speed*(1.8-t)-7)
+            if bottom > top:
+                cv2.rectangle(image, (x-5, round(top)), (x+5, round(bottom)), (0, 130, 255), -1)
+            for target in targets:
+                y = receptor+speed*(target-t)
+                if receptor+6 < y < 180:
+                    cv2.rectangle(image, (x-7, round(y)-7), (x+7, round(y)+7), (0, 130, 255), -1)
+            bodies, lit = detect_bodies(image, LAYOUT)
+            frames.append({'playback_seconds': t, 'source_pts_seconds': t+100,
+                           'bodies': bodies, 'receptor_lit': lit})
+        data = {'layout': LAYOUT, 'game_roi': [0, 0, 325, 183], 'analysis_width': 325,
+                'start_seconds': times[0], 'end_seconds': times[-1], 'notes': notes,
+                'matches': [], 'combo_events': []}
+        holds = reconstruct(data, frames)
+        self.assertEqual(len(holds), 1)
+        self.assertEqual(holds[0]['head_note'], 2)
+        self.assertEqual(holds[0]['tail_note'], 3)
+        self.assertEqual(holds[0]['covered_notes'], [2, 3])
+        view = presentation({**data, 'hold_analysis': {'holds': holds}})
+        self.assertTrue(all(view['notes'][i]['status'] == 'estimated' for i in (0, 1)))
+        self.assertEqual(holds[0]['start_range'], [1.19, 1.21])
+
     def test_normalized_vertical_positions_agree_across_rounded_image_heights(self):
         data = {'layout': LAYOUT, 'game_roi': [0, 0, 1300, 730],
                 'analysis_width': 650, 'analysis_height': 365}
@@ -165,6 +200,10 @@ class HoldTest(unittest.TestCase):
                            'prediction_uncertainty_seconds': .01},
                           {'status': 'estimated', 'lane': 2, 'target_seconds': 1.58,
                            'prediction_uncertainty_seconds': .01}]}
+        times = [frame['playback_seconds'] for frame in frames]
+        for note in data['notes']:
+            note['points'] = [(t, receptor+200*(note['target_seconds']-t)) for t in times
+                              if receptor+.55*spacing < receptor+200*(note['target_seconds']-t) < .95*height]
         holds = reconstruct(data, frames)
         self.assertEqual(len(holds), 1, holds)
         hold = holds[0]

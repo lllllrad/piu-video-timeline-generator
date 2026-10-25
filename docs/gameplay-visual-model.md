@@ -81,6 +81,13 @@ tail_center ≈ body_bottom − h/2
 
 The exact offsets depend on which colored component or outline defines the body bounds. They require measured cap geometry or an explicit approximation with uncertainty. These are position relationships, not a minimum hold duration. A short hold can have closely spaced caps; a minimum-duration cutoff cannot replace evidence of a connected body. Once a cap trajectory identifies the endpoint directly, use that trajectory's crossing uncertainty. The positional tolerance used to decide which cap belongs to the body is not an additional error on an already measured crossing.
 
+A connected interior stripe can begin below the head center and end above the
+tail center. Its bounds use a different registration convention from the outer
+cap silhouette. Corroborate stripe boundaries with independently tracked cap
+centers at the same source timestamps. A cut at a judgment word or counter is an
+occlusion boundary, not a cap. Do not close ordinary gaps between adjacent tap
+heads merely to obtain a continuous colored component.
+
 Only compare an extended body's edges while they are visible. A screen-clipped lower edge is not a tail. A top clamped at the receptor is not an approaching head. As the body shrinks, both caps can enter the same tolerance; these samples cannot independently distinguish the endpoints.
 
 Closing small holes in a color mask can repair compression or HUD damage, but can also join two taps. A repaired bounding box is therefore a candidate, not independent proof of a continuous hold. Preserve support from the original pixels. Weaker continuity requires additional endpoint corroboration; neither relaxing a color threshold nor fitting two arrows to the repaired box proves the intervening pixels are a body. Cases where the gap and body remain indistinguishable need review, not forced classification.

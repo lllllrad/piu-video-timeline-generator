@@ -8,7 +8,38 @@ import numpy as np
 
 from piu_timeline.play.frames import decode_frames
 
-FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
+FEATURE_FORMAT = {'schema': 1, 'detector_revision': 5, 'width': 325}
+
+
+def ui_regions(layout):
+    """Regions where the HUD can interrupt an independently visible stripe."""
+    if 'combo_roi' not in layout:
+        return []
+    from piu_timeline.play.judgments import judgment_region
+    x, y, w, h = layout['combo_roi']
+    return [judgment_region(layout), [x, y-.06, w, h+.06]]
+
+
+def bridge_ui_stripes(mask, top, left, layout, width, height, spacing):
+    """Join two extended stripes across a HUD gap, never adjacent tap caps."""
+    original = mask.copy()
+    _, _, stats, _ = cv2.connectedComponentsWithStats(original, 8)
+    parts = [s for s in stats[1:] if s[3] > 1.6*spacing and s[2] > .16*spacing]
+    regions = ui_regions(layout)
+    for i, first in enumerate(parts):
+        for second in parts[i+1:]:
+            a, b = sorted((first, second), key=lambda s: s[1])
+            gap = b[1]-(a[1]+a[3])
+            if not 0 < gap <= .9*spacing:
+                continue
+            end, start = a[1]+a[3]-1, b[1]
+            for col in range(max(a[0], b[0]), min(a[0]+a[2], b[0]+b[2])):
+                if (original[end, col] and original[start, col]
+                        and any(x*width <= col+left <= (x+w)*width
+                                and y*height <= end+top and start+top <= (y+h)*height
+                                for x, y, w, h in regions)):
+                    mask[end:start+1, col] = 1
+    return mask
 
 
 def feature_contract(data):
@@ -34,10 +65,8 @@ def detect_bodies(rgb, layout):
         rx1, rx2 = max(0, int(cx - .28 * spacing)), min(width, int(cx + .28 * spacing))
         lit.append(float(white[ry1:ry2, rx1:rx2].mean()) > .55)
         mask = (colors[lane['color']] & (saturation > 105) & (value > 170))[top:bottom, left:right].astype('uint8')
-        # Small holes from judgment text can split an otherwise continuous body.
         original_mask = mask.copy()
-        kernel = np.ones((max(3, round(.6 * spacing)) | 1, 1), dtype='uint8')
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        mask = bridge_ui_stripes(mask, top, left, layout, width, height, spacing)
         count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
         for component, (x, y, w, h, area) in enumerate(stats[1:count], 1):
             if h < .8 * spacing or w < .16 * spacing or area < .35 * w * h:
@@ -45,9 +74,15 @@ def detect_bodies(rgb, layout):
             stripe = (labels[y:y+h, x:x+w] == component).mean(axis=0).max()
             if stripe < .72:
                 continue
+            def in_hud(edge):
+                return any(rx*width <= cx <= (rx+rw)*width and ry*height <= edge <= (ry+rh)*height
+                           for rx, ry, rw, rh in ui_regions(layout))
             bodies.append({'lane': index, 'top': float(y + top), 'bottom': float(y + top + h),
+                           'edge_convention': 'connected_color',
+                           'top_visible': bool(not in_hud(y+top) and y+top > receptor+.3*spacing),
                            'long': bool(h > 1.6 * spacing),
-                           'stripe_support': float(original_mask[y:y+h, x:x+w].mean(axis=0).max()), 'tail_visible': bool(y + top + h < bottom - .65 * spacing)})
+                           'stripe_support': float(original_mask[y:y+h, x:x+w].mean(axis=0).max()),
+                           'tail_visible': bool(y+top+h < bottom-.65*spacing and not in_hud(y+top+h))})
     return bodies, lit
 
 

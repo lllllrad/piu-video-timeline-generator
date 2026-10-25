@@ -44,6 +44,9 @@ class PlayIntegrationTest(unittest.TestCase):
             data = {'media':record,'layout':layout,'game_roi':[0,0,325,183], 'start_seconds':0,'end_seconds':2.2,
                     'analysis_width':325, 'notes':[{'lane':2,'status':'estimated','target_seconds':target,
                     'prediction_uncertainty_seconds':.01} for target in (.6,1.6)], 'matches':[{'note':0},{'note':1}]}
+            for note in data['notes']:
+                note['points'] = [(f['playback_seconds'], .15*183+200*(note['target_seconds']-f['playback_seconds']))
+                                  for f in frames if .15*183+.55*19.5 < .15*183+200*(note['target_seconds']-f['playback_seconds']) < .95*183]
             result = augment_holds(data,root)
             holds = result['hold_analysis']['holds']
             self.assertEqual(len(holds),1,holds)

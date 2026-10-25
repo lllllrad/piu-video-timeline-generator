@@ -4,6 +4,7 @@ See docs/gameplay-visual-model.md. Lane spacing is a scale proxy, not a
 measurement of cap height; the edge offsets below retain that approximation.
 """
 from dataclasses import dataclass
+from collections import Counter, defaultdict
 
 import numpy as np
 
@@ -44,6 +45,40 @@ def hold_start(hold):
     return start[1] if hold['start_censored'] else sum(start)/2
 
 
+def register_caps(data, frames, geometry):
+    """Corroborate color-stripe boundaries with independent native arrow tracks.
+
+    Connected fill can start below an arrow's center, whereas an enclosing
+    outline starts above it. Register actual centers rather than interchanging
+    these two edge conventions. HUD cuts cannot nominate an endpoint.
+    """
+    positions = defaultdict(list)
+    for index, note in enumerate(data['notes']):
+        if note['status'] != 'estimated':
+            continue
+        for time, y in note.get('points', []):
+            positions[(round(time, 6), note['lane'])].append((y*geometry.note_scale, index))
+    result = []
+    for frame in frames:
+        bodies = []
+        for original in frame['bodies']:
+            body = dict(original)
+            if body.get('edge_convention') == 'connected_color':
+                nearby = positions[(round(frame['playback_seconds'], 6), body['lane'])]
+                for edge, visible in (('top', body['top_visible']), ('bottom', body['tail_visible'])):
+                    if not visible:
+                        continue
+                    options = sorted((abs(y-body[edge]), index, y) for y, index in nearby
+                                     if abs(y-body[edge]) <= .8*geometry.spacing)
+                    if options and (len(options) == 1 or options[1][0]-options[0][0] >= 1):
+                        _, index, y = options[0]
+                        body[edge+'_cap_note'] = index
+                        body[edge+'_cap_y'] = y
+            bodies.append(body)
+        result.append({**frame, 'bodies': bodies})
+    return result
+
+
 def body_tracks(frames, spacing):
     active, finished = [], []
     for frame in frames:
@@ -60,8 +95,20 @@ def body_tracks(frames, spacing):
             for j, body in enumerate(frame['bodies']):
                 if body['lane'] != last['lane']:
                     continue
-                cost = min(abs(body['bottom'] - (last['bottom'] + velocity * dt)),
-                           abs(body['top'] - (last['top'] + velocity * dt)))
+                costs = []
+                if body['tail_visible'] and last['tail_visible']:
+                    costs.append(abs(body['bottom']-(last['bottom']+velocity*dt)))
+                if body.get('top_visible', True) and last.get('top_visible', True):
+                    costs.append(abs(body['top']-(last['top']+velocity*dt)))
+                # An extended body clipped at both boundaries can remain
+                # stationary while held; prefer its overlapping lower stripe
+                # over a shorter HUD fragment sharing the same clipped top.
+                if not costs:
+                    overlap = max(0, min(last['bottom'], body['bottom'])-max(last['top'], body['top']))
+                    union = max(last['bottom'], body['bottom'])-min(last['top'], body['top'])
+                    cost = spacing*(1-overlap/max(union, 1))*2
+                else:
+                    cost = min(costs)
                 if cost < spacing * .9:
                     pairs.append((cost, i, j))
         used_tracks, used_bodies = set(), set()
@@ -80,6 +127,15 @@ def body_tracks(frames, spacing):
 
 
 def fit_endpoint(track, receptor, spacing, endpoint):
+    if track[0].get('edge_convention') == 'connected_color':
+        # A stripe cut by the HUD, screen or receptor is not a cap. Native
+        # registered cap centers supply endpoints; absent caps remain unknown.
+        points = [(p['time'], p[endpoint+'_cap_y']) for p in track if endpoint+'_cap_y' in p]
+        fitted = fit_track(Track(track[0]['lane'], points), receptor, spacing)
+        if fitted['status'] != 'estimated':
+            return None
+        uncertainty = fitted['prediction_uncertainty_seconds']
+        return [fitted['target_seconds']-uncertainty, fitted['target_seconds']+uncertainty]
     points = [(p['time'], p[endpoint] + (CAP_HALF_HEIGHT if endpoint == 'top' else -CAP_HALF_HEIGHT) * spacing)
               for p in track if (endpoint != 'bottom' or p['tail_visible'])
               and (endpoint != 'top' or p['top'] > receptor + 1.2 * spacing)]
@@ -94,6 +150,11 @@ def edge_errors(note, track, spacing, scale, endpoint, receptor=None):
     """Compare registered centers at the same original source-frame times."""
     # Compare while the body is extended: a shrinking body near the receptor
     # can put its head and tail within the same positional tolerance.
+    if track[0].get('edge_convention') == 'connected_color':
+        visible = {round(p['time'], 6): p[endpoint+'_cap_y'] for p in track
+                   if p['long'] and endpoint+'_cap_y' in p}
+        return [abs(y*scale-visible[round(time, 6)]) for time, y in note.get('points', [])
+                if round(time, 6) in visible]
     visible = {round(point['time'], 6): point for point in track
                if point['long'] and (point['tail_visible'] if endpoint == 'bottom'
                                     else point['top'] > receptor + 1.2*spacing)}
@@ -117,6 +178,13 @@ def head_from_body_track(data, track, geometry, target):
     A clipped colored box can move its predicted start towards the tail. Native
     positions distinguish those caps even when both times fit the search window.
     """
+    if track[0].get('edge_convention') == 'connected_color':
+        counts = Counter(p['top_cap_note'] for p in track if 'top_cap_note' in p)
+        winners = counts.most_common()
+        if winners and winners[0][1] >= MIN_EDGE_OBSERVATIONS and winners[0][1] >= .8*sum(counts.values()):
+            index = winners[0][0]
+            return index, data['notes'][index]
+        return None
     candidates = [(index, note) for index, note in enumerate(data['notes'])
                   if note['status'] == 'estimated' and note['lane'] == track[0]['lane']
                   and abs(note['target_seconds']-target) <= .15]
@@ -144,6 +212,16 @@ def head_from_body_track(data, track, geometry, target):
 def tail_from_head_track(data, track, geometry, start):
     """Corroborate a tail-shaped arrow with the connected body's lower edge."""
     spacing, scale = geometry.spacing, geometry.note_scale
+    if track[0].get('edge_convention') == 'connected_color':
+        counts = Counter(p['bottom_cap_note'] for p in track if 'bottom_cap_note' in p)
+        winners = counts.most_common()
+        if winners and winners[0][1] >= MIN_EDGE_OBSERVATIONS and winners[0][1] >= .8*sum(counts.values()):
+            index = winners[0][0]
+            note = data['notes'][index]
+            if note['target_seconds'] > start:
+                t, u = note['target_seconds'], note['prediction_uncertainty_seconds']
+                return [t-u, t+u], index
+        return None, None
     options = []
     for index, note in enumerate(data['notes']):
         velocity = note.get('velocity_pixels_per_second', 0) * scale
@@ -183,6 +261,10 @@ def resolve_geometry(data, track, geometry):
     start = fit_endpoint(track, receptor, spacing, 'top')
     end = fit_endpoint(track, receptor, spacing, 'bottom')
     contact = [point for point in track if point['top'] <= receptor + .8 * spacing]
+    head = head_from_body_track(data, track, geometry, sum(start)/2 if start else contact[0]['time'] if contact else None) if track[0].get('edge_convention') == 'connected_color' else None
+    if head:
+        t, u = head[1]['target_seconds'], head[1]['prediction_uncertainty_seconds']
+        start = [t-u, t+u]
     if not start and not contact:
         return None
     censored = start is None
@@ -190,7 +272,7 @@ def resolve_geometry(data, track, geometry):
         start = [data['start_seconds'], contact[0]['time']]
     short_body_fit = end is not None and end[1] - (start[1] if censored else start[0]) < .12
     middle = contact[0]['time'] if censored else sum(start) / 2
-    head = head_from_body_track(data, track, geometry, middle)
+    head = head or head_from_body_track(data, track, geometry, middle)
     if head and (not censored or track[0]['time'] < head[1]['target_seconds'] - .065):
         censored = False
         start = [head[1]['target_seconds']-head[1]['prediction_uncertainty_seconds'],
@@ -214,12 +296,30 @@ def resolve_geometry(data, track, geometry):
         return None
     covered = [i for i, note in enumerate(data['notes']) if note['status'] == 'estimated'
                and note['lane'] == lane and (start[1] if censored else start[0])-.025 <= note['target_seconds'] <= last_time+.025]
+    ownership, uncertain = {}, []
+    if track[0].get('edge_convention') == 'connected_color':
+        for index in covered:
+            if index in (head[0] if head else None, tail_note):
+                edge = 'top' if head and index == head[0] else 'bottom'
+                support = [p['pts'] for p in track if p.get(edge+'_cap_note') == index]
+                ownership[str(index)] = {'kind': 'registered_cap', 'source_pts_seconds': support}
+                continue
+            observed = {round(p['time'], 6): p for p in track if p['long']}
+            overlaps = [(y*geometry.note_scale, observed[round(t, 6)])
+                        for t, y in data['notes'][index].get('points', []) if round(t, 6) in observed]
+            inside = [p['pts'] for y, p in overlaps if p['top'] <= y <= p['bottom']]
+            if len(inside) >= MIN_EDGE_OBSERVATIONS and len(inside) >= .8*len(overlaps):
+                ownership[str(index)] = {'kind': 'inside_connected_body', 'source_pts_seconds': inside}
+            else:
+                uncertain.append(index)
+        covered = [index for index in covered if str(index) in ownership]
     return {'lane': lane, 'start_range': start, 'end_range': end,
             'start_censored': censored, 'end_censored': end is None,
             'last_body_seconds': track[-1]['time'], 'head_note': head[0] if head else None, 'tail_note': tail_note,
             'covered_notes': covered, 'body_frames': len(track), 'long_body_frames': len(longs),
             'body_evidence': 'stripe_and_tracked_edges' if needs_edges else 'strong_stripe',
-            'source_pts_range': [track[0]['pts'], track[-1]['pts']]}
+            'source_pts_range': [track[0]['pts'], track[-1]['pts']],
+            'component_evidence': ownership, 'uncertain_components': uncertain}
 
 
 def retain_hold(holds, hold):

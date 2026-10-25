@@ -4,24 +4,30 @@ from hashlib import sha256
 import json
 
 from piu_timeline.play.holds.features import FEATURE_FORMAT, acquire_features, feature_contract
-from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_start, resolve_geometry, retain_hold
+from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_start, register_caps, resolve_geometry, retain_hold
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 21}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 22}
 
 
 def fingerprint(value):
     return sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
-def reconstruct(data, frames):
+def reconstruct(data, frames, diagnostics=None):
     """Resolve chart geometry first, then attach independent recognition spans."""
     geometry = HoldGeometry.from_analysis(data, FEATURE_FORMAT['width'])
+    frames = register_caps(data, frames, geometry)
     frame_times = [frame['playback_seconds'] for frame in frames]
     holds = []
     for track in body_tracks(frames, geometry.spacing):
         hold = resolve_geometry(data, track, geometry)
         if hold is None:
+            extended = [p for p in track if p['long'] and p.get('stripe_support', 1) >= .72]
+            if diagnostics is not None and len(extended) >= 5 and extended[-1]['time']-extended[0]['time'] >= .08:
+                diagnostics.append({'lane': track[0]['lane'], 'reason': 'unresolved_hold_geometry',
+                                    'visible_start_seconds': track[0]['time'], 'visible_end_seconds': track[-1]['time'],
+                                    'source_pts_range': [track[0]['pts'], track[-1]['pts']], 'observed_points': len(track)})
             continue
         hold['id'] = len(holds)
         retain_hold(holds, hold)
@@ -50,8 +56,10 @@ def augment_holds(data, output):
         frames = [json.loads(line) for line in stream]
     from piu_timeline.play.receptors import observations, reject_common_flashes
     frames = reject_common_flashes(frames, observations(data, output, frames))
-    holds = reconstruct(data, frames)
-    result = {'feature_contract': contract, 'association_contract': association, 'holds': holds, 'receptor_runs': receptor_runs(frames),
+    unresolved = []
+    holds = reconstruct(data, frames, unresolved)
+    result = {'feature_contract': contract, 'association_contract': association, 'holds': holds,
+              'unresolved_tracks': unresolved, 'receptor_runs': receptor_runs(frames),
               'semantics': 'Long notes are sustained states. Hold ticks are not independent presses; release is not measured.'}
     pending = path.with_suffix('.build-json')
     pending.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
