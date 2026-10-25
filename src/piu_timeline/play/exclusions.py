@@ -118,6 +118,19 @@ def recognition_diagnostics(data, ranges):
             add({**base, 'reason': 'timing_evidence_unresolved'})
         elif record['status'] == 'matched' and not matches.get(index, {}).get('judgment_label'):
             add({**base, 'reason': 'judgment_label_unresolved'})
+    from piu_timeline.play.channels import processing_evidence
+    for event in processing_evidence(data):
+        index = event['note']
+        note = data['notes'][index]
+        if note['status'] != 'estimated' or note.get('note_type') == 'hold':
+            continue
+        conflict = matches.get(index, {}).get('processing_conflict')
+        if event['status'] == 'unresolved' or conflict:
+            target = note['target_seconds']
+            add({'note': index, 'lane': note['lane'], 'visible_start_seconds': target,
+                 'visible_end_seconds': target, 'observed_points': len(event.get('samples', [])),
+                 'reason': 'processing_refresh_conflict' if conflict else 'note_processing_unresolved',
+                 'processing_reason': event['reason'], 'channel_evidence': event['id']})
     warnings.sort(key=lambda r: (r['visible_start_seconds'], r['lane'], r['reason']))
     return {'warnings': warnings, 'chart_exceptions': exceptions, 'accounted_hold_fragments': accounted,
             'counts': dict(Counter(r['reason'] for r in warnings))}

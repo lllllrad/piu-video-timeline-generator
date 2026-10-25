@@ -52,6 +52,12 @@ def current(path):
     contract = holds.get('association_contract', {})
     if data.get('play_analysis_version') != VERSION or contract.get('format') != ASSOCIATION_FORMAT:
         return False
+    if data.get('media', {}).get('video_streams'):
+        from piu_timeline.play.channels import CHANNEL_FORMAT
+        if (data.get('visual_channels', {}).get('format') != CHANNEL_FORMAT
+                or not all(path.with_name(name).is_file() for name in
+                           ('visual-channels.json', 'processing-features.npz'))):
+            return False
     media = data['media']; stat = Path(media['path']).stat()
     return ((stat.st_size, stat.st_mtime_ns) == (media['size_bytes'], media['mtime_ns'])
             and holds.get('feature_contract') == feature_contract(data)

@@ -3,6 +3,8 @@ from collections import defaultdict
 from statistics import median
 
 from piu_timeline.play.receptors import onset_overlaps
+from piu_timeline.play.channels import receptor_evidence
+from piu_timeline.play.processing import processing_support, processing_conflicts
 
 
 EARLY_SECONDS = .25
@@ -27,7 +29,7 @@ def candidates(data, events):
     lit = defaultdict(list)
     unknown = defaultdict(list)
     sensor = defaultdict(lambda: [0, 0])
-    for run in data.get('hold_analysis', {}).get('receptor_runs', []):
+    for run in receptor_evidence(data):
         if run['lit'] is None:
             unknown[run['lane']].append(run)
             continue
@@ -91,6 +93,8 @@ def candidates(data, events):
                 rejected[index].add('outside_association_window')
                 continue
             support_lo, support_hi = overlap
+            if processing_conflicts(data, index, support_lo, support_hi, frame*2):
+                rejected[index].add('contradicts_observed_note_disappearance');continue
             lane = note.get('lane')
             if owned and any(abs(owner['target']-target) > .025 or notes[owner['note']].get('lane') == lane for owner in owned):
                 rejected[index].add('refresh_already_assigned_to_another_row');continue
@@ -102,11 +106,12 @@ def candidates(data, events):
                          or onset_overlaps(run, support_lo, support_hi, frame*2))]
             obscured = any(run['start_seconds'] <= support_hi and run['end_seconds'] >= support_lo
                            for run in unknown[lane])
-            if reliable and not supported and not obscured:
+            processing = processing_support(data, index, support_lo, support_hi, frame*2)
+            if reliable and not supported and not obscured and not processing:
                 rejected[index].add('receptor_lane_not_active');continue
             supports[index] = supported
             hold_tick = any(event.get('reason') == 'ongoing_hold_tick_not_new_press' for event in family['events']) or any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2)+.04 and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds']) for hold in data.get('hold_analysis', {}).get('holds', []))
-            if hold_tick and not any(onset_overlaps(run, support_lo, support_hi, frame*2) for run in supported):
+            if hold_tick and not processing and not any(onset_overlaps(run, support_lo, support_hi, frame*2) for run in supported):
                 rejected[index].add('hold_tick_without_independent_lane_onset');continue
             distance = max(0, abs(target+offset-(lo+hi)/2)-(hi-lo)/2-uncertainty)
             if rows and abs(target-rows[-1]['target']) < .025:
@@ -145,6 +150,7 @@ def candidates(data, events):
                         continue
                     result[index].append({**event, 'candidate_range': candidate_range, 'association_window': window,
                                           'constraints': ['hard_timing_window', 'event_ownership', 'processed_row_order', 'closest_row'],
+                                          'processing_evidence': processing_support(data, index, candidate_range[0], candidate_range[1], frame*2),
                                           'lane_receptor_support': bool(supports[index]), 'lane_support_runs': supports[index],
                                           'lane_receptor_status': ('supported' if supports[index] else
                                               'unknown' if any(run['start_seconds'] <= candidate_range[1]

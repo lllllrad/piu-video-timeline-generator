@@ -414,3 +414,12 @@ gameplay frames; a changed single/double layout requires compatible lane geometr
 inserts a play and renumbers later reports, immutable retained snapshots are matched by original
 media, playback interval, ROI, width, player and layout. Copied evidence paths are relocated into
 the new report directory.
+
+## Shared visual evidence
+
+[Visual channels](visual-channels.md) describes independently retained popup,
+receptor-effect, moving-note and processing observations. `visual-channels.json`
+provides counts, unassigned events, unresolved samples and source-timestamped
+references for reuse outside the HTML report. Native spatial processing masks
+are cached in `processing-features.npz`; compatible association changes do not
+require decoding or OCR.

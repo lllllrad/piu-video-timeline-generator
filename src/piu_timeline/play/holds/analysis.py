@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 26}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 27}
 
 
 def fingerprint(value):
@@ -56,14 +56,17 @@ def augment_holds(data, output):
     # pixels; keep it explicit rather than invoking a decoder with invented data.
     if not data.get('media', {}).get('video_streams') or any('color' not in lane for lane in data.get('layout', {}).get('lanes', [])):
         return data
+    from piu_timeline.play.channels import augment_channels
     contract = feature_contract(data)
     association = {'format': ASSOCIATION_FORMAT, 'notes': fingerprint(data['notes']),
                    'hud_events': fingerprint({key: data.get(key, []) for key in ('combo_events', 'judgment_events')})}
     path = output / 'holds.json'
     if path.is_file():
         saved = json.loads(path.read_text())
-        if saved.get('feature_contract') == contract and saved.get('association_contract') == association:
-            return {**data, 'hold_analysis': saved}
+        if (saved.get('feature_contract') == contract and saved.get('association_contract') == association
+                and all((output/name).is_file() for name in
+                        ('hold-features.json','hold-frames.jsonl','processing-features.npz'))):
+            return augment_channels({**data, 'hold_analysis': saved}, output)
     acquire_features(data, output)
     with (output / 'hold-frames.jsonl').open() as stream:
         frames = [json.loads(line) for line in stream]
@@ -77,7 +80,7 @@ def augment_holds(data, output):
     pending = path.with_suffix('.build-json')
     pending.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     pending.replace(path)
-    return {**data, 'hold_analysis': result}
+    return augment_channels({**data, 'hold_analysis': result}, output, frames)
 
 
 def presentation(data):
@@ -131,13 +134,15 @@ def presentation(data):
                 conflict = True
                 break
         if not conflict:
-            deferred.append({**match, 'evidence_source': 'combo+lane_onset',
+            deferred.append({**match, 'evidence_source': 'combo+lane_evidence',
                              'observation_lower_seconds': lo, 'observation_upper_seconds': hi,
-                             'recovery_method': 'strict_row_alignment_with_independent_lane_onset'})
+                             'recovery_method': 'strict_row_alignment_with_independent_lane_evidence'})
     input_matches.extend(deferred)
     from piu_timeline.play.receptors import onset_overlaps
     guard = 2*(data.get('median_frame_interval_seconds') or .017)
-    runs = data['hold_analysis'].get('receptor_runs', [])
+    from piu_timeline.play.channels import receptor_evidence
+    from piu_timeline.play.processing import processing_support
+    runs = receptor_evidence(data)
     owners, note_runs = {}, {}
     for match in input_matches:
         index = match['note']
@@ -153,30 +158,38 @@ def presentation(data):
                 note_runs.setdefault(index, []).append(ri)
     def independent_onset(note_index):
         return any(owners[ri] == {note_index} for ri in note_runs.get(note_index, []))
-    matches, ambiguous = [], []
+    matches, ambiguous, processing_confirmed = [], [], set()
     recovered = []
     for match in input_matches:
         if match['note'] in suppressed:
             continue
         lo = match.get('observation_lower_seconds', match.get('combo_lower_seconds'))
         hi = match.get('observation_upper_seconds', match.get('combo_upper_seconds'))
-        needs_onset = match.get('recovery_method') == 'strict_row_alignment_with_independent_lane_onset'
-        if (needs_onset or lo is not None and hi is not None and during_hold(lo, hi)) and not independent_onset(match['note']):
+        if lo is not None and hi is not None and processing_support(data, match['note'], lo, hi, guard):
+            processing_confirmed.add(match['note'])
+        needs_lane_evidence = match.get('recovery_method') == 'strict_row_alignment_with_independent_lane_evidence'
+        if (needs_lane_evidence or lo is not None and hi is not None and during_hold(lo, hi)) and not (independent_onset(match['note']) or processing_support(data, match['note'], lo, hi, guard)):
             ambiguous.append(match['note'])
         else:
+            if needs_lane_evidence:
+                match = {**match, 'evidence_source': 'combo+'+('lane_onset' if independent_onset(match['note']) else 'note_disappearance')}
             matches.append(match)
-            if needs_onset:
+            if needs_lane_evidence:
                 recovered.append(match['note'])
+    def lane_reason(event_index, key, suffix):
+        source = 'combo_event' if key == 'combo_events' else 'judgment_event'
+        uses_processing = any(m.get(source) == event_index and m['note'] in processing_confirmed for m in matches)
+        return 'tap_with_'+('note_disappearance' if uses_processing else 'independent_lane_onset')+'_during_'+suffix
     def events(key):
         result = []
         owned = {match.get('combo_event' if key == 'combo_events' else 'judgment_event') for match in matches}
         for event_index, event in enumerate(data.get(key, [])):
             event = dict(event)
             if key == 'combo_events' and event_index in owned and event.get('reason') == 'possible_hold_or_dense_stack':
-                event.update(status='matched', reason='tap_with_independent_lane_onset_during_dense_interval')
+                event.update(status='matched', reason=lane_reason(event_index, key, 'dense_interval'))
             if event.get('label') != 'MISS' and event.get('delta', 1) > 0 and during_hold(event['lower_seconds'], event['upper_seconds']):
                 if event_index in owned:
-                    event.update(status='matched', reason='tap_with_independent_lane_onset_during_hold')
+                    event.update(status='matched', reason=lane_reason(event_index, key, 'hold'))
                 else:
                     event.update(status='hold_state_or_tap', reason='ongoing_hold_tick_not_new_press')
             result.append(event)
@@ -208,10 +221,11 @@ def presentation(data):
                     sustained_recognition_spans=sum(len(hold['input']['segments']) for hold in holds))
     limitations = [item.replace('Holds, rolls', 'Rolls') for item in data.get('limitations', [])]
     limitations.append('Long-note recognition is a sustained visual state; neither a separate press per tick nor physical release is measured.')
-    return {**data, 'notes': notes, 'matches': matches, 'limitations': limitations,
+    from piu_timeline.play.channels import annotate_matches
+    return annotate_matches({**data, 'notes': notes, 'matches': matches, 'limitations': limitations,
             'excluded_notes': dict(Counter(note.get('reason') for note in notes if note['status'] == 'excluded')),
             'miss_candidates': [candidate for candidate in data.get('miss_candidates', []) if candidate['note'] not in suppressed],
             'combo_events': events('combo_events'), 'judgment_events': events('judgment_events'),
             'hold_tick_ambiguous_notes': [index for index in ambiguous if index not in lane_recovered],
             'recovered_dense_notes': recovered, 'recovered_lane_supported_notes': lane_recovered,
-            'hold_analysis': {**data['hold_analysis'], 'holds': projected}, 'coverage': coverage}
+            'hold_analysis': {**data['hold_analysis'], 'holds': projected}, 'coverage': coverage})

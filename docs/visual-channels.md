@@ -1,0 +1,100 @@
+# Visual evidence channels
+
+The analyzer retains four channels on the original recording timeline. The
+`visual_channels` object in `analysis.json` and the standalone
+`visual-channels.json` expose every retained event, including unassigned and
+unresolved observations. Association does not erase or change raw observations.
+Stage-result counts remain an additional consistency reference, not an event
+source or a quota used to manufacture matches.
+
+| Channel | Native observations | Derived events / units |
+| --- | --- | --- |
+| `popup` | Combo values/confidence in `frames.jsonl`; word label, confidence, box and blank/unknown state in `judgments.jsonl` | Separate combo changes and word refreshes, with their original display brackets and source PTS |
+| `receptors` | Per-lane white fraction and known/unknown light state in `hold-frames.jsonl` | State runs and confirmed off-to-on transitions; persistent light is not repeated input |
+| `motion` | Every detected lane/position in `frames.jsonl`; fitted and excluded trajectories in `analysis.json` | Tracks, target estimates and exclusions, including unassigned tracks |
+| `processing` | Spatial lane-color, white and visibility masks around receptors in `processing-features.npz` | Per-head persistence samples, bounded disappearance, passage beyond the target, or explicit unresolved state; hold endpoints remain separate |
+
+Each channel has its own counts. These units are not interchangeable. Chords
+can share one popup; holds generate repeated HUD updates without repeated
+presses. Receptor onset counts require corroboration, rather than counting
+every bright frame or candidate transition. Unknown lane frames and processing
+failures remain visible in counts and review warnings.
+
+## Observing note processing
+
+Tracking expiry is not a processing event. During native hold/receptor pixel
+acquisition, retain a small spatial band from 1.6 lane spacings above to 3.6
+below the receptor. Store packed binary masks at width 325 with original PTS
+and playback time; no FPS conversion or per-frame OCR is performed. Spatial
+color support is distinct from the scalar receptor-brightness channel.
+
+For a supported moving head, build a silhouette from at least three actual
+approach observations between 1.4 and 2.8 lane spacings below the receptor.
+The majority silhouette contains repeatedly observed colored pixels. Follow
+its expected location using corroborated peer displacement when available,
+or the supported local velocity. This channel depends on motion identity;
+it does not consult combo values, judgment words or receptor-onset decisions.
+
+Compare the moving color silhouette with the observed pixels at each native
+frame. Dice overlap of at least 0.65 supports presence; at most 0.18 supports
+absence. Intermediate matches, white effects, HUD overlap, clipping, missing
+screen visibility and competing same-lane heads remain unknown. These are
+implementation thresholds, not measured engine judgment windows.
+
+A processing candidate requires at least three presence samples followed by
+two clear absence samples near the receptor. A short white-effect or partial
+shape interval may lie between the last presence and first absence; the
+whole interval remains the bracket. It is never narrowed to an assumed
+moment inside an occlusion. The bracket is at most 75 ms, confirmation is
+within 150 ms, and capture gaps over 50 ms break support. A head observed
+again invalidates the earlier disappearance. At least two clear observations
+more than 0.65 lane spacings above the receptor establish passage instead.
+Screen cuts, long flashes, competing heads and unsupported motion remain
+unresolved. The raw samples retain scores and unknown reasons for review.
+
+Hold heads, bodies and tails already assigned by connected geometry are not
+counted as separate tap consumptions. Their processing record references
+hold geometry, source-frame coverage, endpoint ranges and censored ends.
+Sustained acceptance still comes from receptor state and HUD corroboration;
+a body disappearing does not measure a release or establish its chart end.
+
+## Using the channels
+
+`play/channels.py` supplies common receptor access, frame alignment checks,
+channel collection and match provenance. `play/processing.py` supplies native
+spatial measurements and bounded disappearance support. Acquisition and
+association contracts are separate; compatible pixels can be reinterpreted
+without decoding or OCR. Legacy caches without spatial masks require one
+native pixel acquisition pass. All four timelines must agree with the saved
+native frame timestamps; a mismatch fails the build instead of silently
+joining unrelated samples.
+
+Tap recovery requires a unique note row, an eligible positive HUD refresh,
+and an independent lane onset or note-disappearance bracket. Disappearance
+can therefore support a tap whose receptor transition is hidden by a flash.
+It cannot create a successful input on its own, turn MISS into a press,
+consume an aggregate update as one arbitrary note, or assign one refresh to
+competing rows. Existing ownership, ordering and 250 ms early / 500 ms late
+limits still apply. Candidate generation uses the same channel evidence.
+
+Each projected match exposes `visual_evidence` references such as `motion:12`,
+`judgment:4`, `receptor:31` and `processing:12`. Receptor and processing records
+retain source PTS; popup endpoints map back to their native frame PTS. A
+missing endpoint remains null. A reliable disappearance inconsistent with an
+existing match produces a `processing_refresh_conflict` warning. Unresolved
+tap processing produces `note_processing_unresolved`, even if HUD evidence
+already supplies timing. Explicit chart-region exceptions retain their
+existing scope; uncertainty is not silently promoted to success.
+
+The HTML quality panel lists channel counts. Selecting a note shows its
+processing status, bracket and supporting event references. A four-row SVG
+timeline and scrollable native-frame table show popup values/confidence,
+receptor states and white fractions, moving-head positions, processing
+scores/unknown reasons, and hold-body candidate bounds in the selected lane.
+Choose a window of 0.3, 0.6 or 1.5 seconds on each side of the target. Click a
+mark or frame button to seek its recording time; source PTS is displayed
+separately. Playback moves a retained cursor without rebuilding observations.
+The embedded compact observation arrays share `timeline.frames`; each channel
+declares its column names. Legacy reports without these arrays hide this view. The sidecar
+retains the complete observations for other analyses and tools; presentation
+never reacquires pixels or mutates evidence.

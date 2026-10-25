@@ -23,7 +23,7 @@ from piu_timeline.play.layout import (validate_layout, receptor_centers, locate_
                                      combine_receptor_observations, recover_layout)
 from piu_timeline.play.fonts import previous_digit_reader, bootstrap_digits
 
-VERSION = 17
+VERSION = 18
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 
@@ -363,9 +363,10 @@ def run(source, segment_number=1, force=False, **options):
                 from piu_timeline.play.report import write_report
                 from piu_timeline.play.holds.analysis import augment_holds
                 previous_holds = cached.get('hold_analysis')
+                previous_channels = cached.get('visual_channels')
                 cached = augment_holds(cached, final)
                 write_report(cached, final / 'report.html', final)
-                if cached.get('hold_analysis') != previous_holds:
+                if cached.get('hold_analysis') != previous_holds or cached.get('visual_channels') != previous_channels:
                     updated = final / 'analysis.holds-build.json'
                     updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
                     updated.replace(previous)

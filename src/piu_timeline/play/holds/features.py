@@ -8,8 +8,9 @@ import numpy as np
 
 from piu_timeline.play.frames import decode_frames
 
-FEATURE_FORMAT = {'schema': 1, 'detector_revision': 8, 'width': 325,
-                  'continuity': 'three_row_strong_and_relaxed_color_columns'}
+FEATURE_FORMAT = {'schema': 1, 'detector_revision': 9, 'width': 325,
+                  'continuity': 'three_row_strong_and_relaxed_color_columns',
+                  'processing_pixels': 'lane_color_white_and_visibility_masks_v1'}
 
 
 def ui_regions(layout):
@@ -130,13 +131,13 @@ def detect_bodies(rgb, layout, connections=None):
 def acquire_features(data, output):
     contract = feature_contract(data)
     header, trace = output / 'hold-features.json', output / 'hold-frames.jsonl'
-    if header.is_file() and trace.is_file() and json.loads(header.read_text()).get('contract') == contract:
+    if header.is_file() and trace.is_file() and json.loads(header.read_text()).get('contract') == contract and (output/'processing-features.npz').is_file():
         return
     print('  Extracting long-note bodies and receptor states; no OCR...', flush=True)
     temporary = trace.with_suffix('.build-jsonl')
     width = FEATURE_FORMAT['width']
     original = output / 'frames.jsonl'
-    count = 0
+    count, pixels = 0, None
     source_before = Path(data['media']['path']).stat()
     try:
         with original.open() as saved, temporary.open('w') as target:
@@ -148,6 +149,10 @@ def acquire_features(data, output):
                 pts, time, image = decoded
                 if abs(pts - previous['source_pts_seconds']) > 1e-6 or abs(time - previous['playback_seconds']) > 1e-6:
                     raise ValueError('Hold acquisition PTS differs from saved native frames')
+                if pixels is None:
+                    from piu_timeline.play.processing import ReceptorPixels
+                    pixels = ReceptorPixels(data['layout'], image.shape[1], image.shape[0])
+                pixels.observe(image, pts, time)
                 connections = []
                 bodies, lit = detect_bodies(image, data['layout'], connections)
                 from piu_timeline.play.receptors import fractions
@@ -161,6 +166,8 @@ def acquire_features(data, output):
         source_after = Path(data['media']['path']).stat()
         if (source_before.st_size, source_before.st_mtime_ns) != (source_after.st_size, source_after.st_mtime_ns):
             raise ValueError('Source changed during long-note acquisition')
+        if pixels is not None:
+            pixels.save(output/'processing-features.npz', contract)
         temporary.replace(trace)
         pending = header.with_suffix('.build-json')
         pending.write_text(json.dumps({'contract': contract, 'frame_count': count}) + '\n')

@@ -59,7 +59,7 @@ Every observation retains its original source PTS and recording playback time. D
 Within a supported constant-speed interval:
 
 ```text
-y(t) = a - v/t,  v > 0
+y(t) = a - v*t,  v > 0
 T = (a - r) / v
 ```
 

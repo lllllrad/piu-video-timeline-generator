@@ -59,6 +59,11 @@ and browser code live in `play/report.html`, `play/report.css` and
 `play/report.js`; `play/report.py` embeds them in each standalone HTML result.
 These resources are included in built Python wheels.
 
+`play/channels.py` exposes the four retained visual evidence channels and match
+provenance; `play/processing.py` observes head persistence and disappearance at
+receptors independently of HUD values. See [visual channels](visual-channels.md)
+for artifacts, count units, uncertainty and association rules.
+
 - `workflow.py` owns the public `just auto` flow, stable source IDs and `.local/data/` layout.
 - `media.py` prepares YouTube media with yt-dlp or inspects local input.
 - `metadata/analysis.py` detects gameplay, refines boundaries and saves structured evidence.

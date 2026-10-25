@@ -372,11 +372,17 @@ class HoldTest(unittest.TestCase):
             source = root / 'source.mkv'; source.write_bytes(b'original recording')
             data = {'media': {'path': str(source), 'video_streams': [{'index': 0}]},
                     'layout': LAYOUT, 'game_roi': [0, 0, 325, 183], 'notes': [],
-                    'start_seconds': 0, 'end_seconds': 1}
+                    'start_seconds': 0, 'end_seconds': 1, 'analysis_width':325, 'analysis_height':183}
             (root / 'hold-features.json').write_text(json.dumps({'contract': feature_contract(data)}))
             frames = [{'playback_seconds': time, 'source_pts_seconds': time+10,
                        'bodies': [], 'receptor_lit': [False]*5, 'receptor_white_fraction':[0]*5} for time in (0, .02)]
             (root / 'hold-frames.jsonl').write_text(''.join(json.dumps(frame)+'\n' for frame in frames))
+            (root / 'frames.jsonl').write_text(''.join(json.dumps(frame)+'\n' for frame in frames))
+            from piu_timeline.play.processing import ReceptorPixels
+            pixels = ReceptorPixels(LAYOUT,325,183)
+            for frame in frames:
+                pixels.observe(np.zeros((183,325,3), dtype='uint8'),frame['source_pts_seconds'],frame['playback_seconds'])
+            pixels.save(root/'processing-features.npz',feature_contract(data))
             with patch('piu_timeline.play.holds.features.decode_frames', side_effect=AssertionError('cached pixels')):
                 result = augment_holds(data, root)
             self.assertEqual(result['hold_analysis']['holds'], [])

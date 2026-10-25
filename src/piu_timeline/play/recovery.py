@@ -3,6 +3,8 @@ from collections import defaultdict
 
 from piu_timeline.play.candidates import candidates
 from piu_timeline.play.receptors import onset_overlaps
+from piu_timeline.play.channels import receptor_evidence
+from piu_timeline.play.processing import processing_support
 
 
 def recover_rows(data):
@@ -13,7 +15,7 @@ def recover_rows(data):
             'prediction_uncertainty_seconds' not in note for note in notes if note['status'] == 'estimated'):
         return matches, []
     guard = 2*(data.get('median_frame_interval_seconds') or .017)
-    runs = data.get('hold_analysis', {}).get('receptor_runs', [])
+    runs = receptor_evidence(data)
     events = []
     for source, key in (('combo', 'combo_events'), ('judgment', 'judgment_events')):
         for index, event in enumerate(data.get(key, [])):
@@ -65,6 +67,8 @@ def recover_rows(data):
                          and onset_overlaps(run, option['lower_seconds'], option['upper_seconds'], guard)]
             if len(onset_ids) == 1:
                 supported.append((option, onset_ids[0]))
+            elif not onset_ids and processing_support(data, ni, lo, hi, guard):
+                supported.append((option, ('processing', ni)))
         if not supported or len({ri for _, ri in supported}) != 1:
             continue
         ri = supported[0][1]
@@ -81,12 +85,17 @@ def recover_rows(data):
         option, _ = min(supported, key=lambda pair: (pair[0]['upper_seconds']-pair[0]['lower_seconds'], pair[0]['source']))
         target = notes[ni]['target_seconds']
         match = {'note': ni, 'target_seconds': target, 'row_note_count': 1, 'aggregate_row_count': 1,
-                 'combo_event': None, 'judgment_event': None, 'evidence_source': option['source']+'+lane_onset',
+                 'combo_event': None, 'judgment_event': None, 'evidence_source': option['source']+('+note_disappearance' if isinstance(ri, tuple) else '+lane_onset'),
                  'observation_lower_seconds': option['lower_seconds'], 'observation_upper_seconds': option['upper_seconds'],
                  'raw_offset_lower_ms': (option['lower_seconds']-target)*1000,
                  'raw_offset_upper_ms': (option['upper_seconds']-target)*1000,
-                 'recovery_method': 'unique_row_with_independent_lane_onset',
-                 'lane_onset_range': runs[ri].get('onset_range'), 'lane_onset_source_pts_seconds': runs[ri].get('onset_source_pts_seconds')}
+                 'recovery_method': 'unique_row_with_note_disappearance' if isinstance(ri, tuple) else 'unique_row_with_independent_lane_onset'}
+        if isinstance(ri, tuple):
+            proof = processing_support(data, ni, option['lower_seconds'], option['upper_seconds'], guard)
+            match.update(processing_range=proof['range'], processing_source_pts_seconds=proof['source_pts_seconds'])
+        else:
+            match.update(lane_onset_range=runs[ri].get('onset_range'),
+                         lane_onset_source_pts_seconds=runs[ri].get('onset_source_pts_seconds'))
         for supported_option, _ in supported:
             source, ei = supported_option['source'], supported_option['event']
             match['combo_event' if source == 'combo' else 'judgment_event'] = ei
