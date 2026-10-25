@@ -5,7 +5,7 @@ from collections import defaultdict
 import numpy as np
 
 
-def stitch_tracks(tracks, receptor, spacing):
+def stitch_tracks(tracks, receptor, spacing, motion=None, layout=None):
     from .play_tracking import Track, fit_track
     by_lane = defaultdict(list)
     for index, track in enumerate(tracks):
@@ -16,7 +16,7 @@ def stitch_tracks(tracks, receptor, spacing):
         starts = [tracks[i].points[0][0] for i in ordered]
         for index in indices:
             track = tracks[index]
-            if len(track.points) < 3 or fit_track(track, receptor, spacing)['status'] == 'estimated':
+            if len(track.points) < 3 or fit_track(track, receptor, spacing, motion=motion, layout=layout)['status'] == 'estimated':
                 continue
             points = np.asarray(track.points[-12:])
             times = points[:, 0] - points[-1, 0]
@@ -34,11 +34,14 @@ def stitch_tracks(tracks, receptor, spacing):
                     continue
                 # Every initial reappearance must land on the same extrapolated
                 # path. A different arrow in the same lane is not a continuation.
-                if any(abs(y-(intercept+velocity*(time-points[-1, 0]))) > .12*spacing
+                def prediction(time):
+                    displacement = motion.distance(track.points[-1][0], time) if motion else None
+                    return track.points[-1][1]-displacement if displacement is not None else intercept+velocity*(time-points[-1, 0])
+                if any(abs(y-prediction(time)) > .12*spacing
                        for time, y in other.points[:3]):
                     continue
                 joined = Track(track.lane, track.points+other.points)
-                if fit_track(joined, receptor, spacing)['status'] != 'estimated':
+                if fit_track(joined, receptor, spacing, motion=motion, layout=layout)['status'] != 'estimated':
                     continue
                 candidates[index].append((successor, joined))
                 incoming[successor].append(index)

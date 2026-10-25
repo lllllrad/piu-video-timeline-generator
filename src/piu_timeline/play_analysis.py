@@ -19,7 +19,7 @@ from .recognition import capture_game
 from .workflow import LOCAL_DATA, source_id
 from .play_judgments import augment_judgments, cache_current as judgment_cache_current
 
-VERSION = 14
+VERSION = 16
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 COLORS = ('blue', 'red', 'yellow', 'red', 'blue')
@@ -326,7 +326,8 @@ def resolve_timing(tracker, combo, display_delay_ms):
             deferred.append({**match, 'deferred_reason': 'possible_hold_or_dense_stack'})
         else:
             matches.append(match)
-    return {'notes': notes, 'combo_events': combo.events, 'matches': matches, 'deferred_matches': deferred,
+    return {'notes': notes, **({'scroll_motion': tracker.motion.evidence()} if hasattr(tracker, 'motion') else {}),
+            'combo_events': combo.events, 'matches': matches, 'deferred_matches': deferred,
             'unsupported_intervals': tracker.unsupported_intervals,
             'coverage': {'visible_note_heads': sum(n['status'] == 'estimated' for n in notes),
                          'timed_note_heads': len(matches),
@@ -430,7 +431,7 @@ def refit_saved(cached, previous, output, segment, display_delay_ms):
             raise ValueError('Saved observation timestamps are not increasing')
         last = seconds; count += 1
         tracker.hold_candidate = frame.get('possible_hold_or_dense_stack', False)
-        tracker.update(seconds, frame['notes']); combo.update(seconds, frame['combo'])
+        tracker.update(seconds, frame['notes'], frame['source_pts_seconds']); combo.update(seconds, frame['combo'])
     if count != cached['frame_count']:
         raise ValueError('Saved native-frame observations are incomplete')
     result = {**cached, **refreshed, **resolve_timing(tracker, combo, display_delay_ms),
@@ -485,7 +486,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             if tracker is None:
                 tracker = NoteTracker(layout, image.shape[1], image.shape[0])
             notes = tracker.detect(image)
-            tracker.update(playback, notes)
+            tracker.update(playback, notes, pts)
             crop = crop_region(image, layout['combo_roi'])
             # Full-resolution examples are resized to the decoded crop before
             # template learning below; glyph normalization removes text scale.

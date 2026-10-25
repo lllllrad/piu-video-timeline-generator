@@ -19,6 +19,8 @@ class NoteTracker:
         self.spacing = float(np.median(np.diff([lane['x'] * width for lane in layout['lanes']])))
         self.active, self.finished = [], []
         self.hold_candidate, self.unsupported_intervals = False, []
+        from .play_motion import ScrollMotion
+        self.motion = ScrollMotion(height, self.spacing)
 
     def detect(self, rgb):
         hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
@@ -64,7 +66,8 @@ class NoteTracker:
                 self.hold_candidate = True
         return detections
 
-    def update(self, seconds, detections):
+    def update(self, seconds, detections, source_pts=None):
+        self.motion.update(seconds, detections, source_pts)
         if self.hold_candidate:
             if self.unsupported_intervals and seconds - self.unsupported_intervals[-1]['end_seconds'] < .1:
                 self.unsupported_intervals[-1]['end_seconds'] = seconds
@@ -84,6 +87,9 @@ class NoteTracker:
             else:
                 velocity = -self.spacing*8
             prediction = last_y + velocity * dt
+            displacement = self.motion.distance(last_t, seconds)
+            if displacement is not None:
+                prediction = last_y-displacement
             for j, note in enumerate(detections):
                 y = note['y'] * self.height
                 if note['lane'] == track.lane and -.25 * self.spacing <= last_y - y <= self.spacing * 30 * dt:
@@ -121,10 +127,13 @@ class NoteTracker:
     def finish(self):
         from .play_fragments import stitch_tracks
         notes = []
-        for track, fragments in stitch_tracks(self.finished + self.active, self.layout['receptor_y'] * self.height, self.spacing):
-            note = fit_track(track, self.layout['receptor_y'] * self.height, self.spacing)
+        for track, fragments in stitch_tracks(self.finished + self.active, self.layout['receptor_y'] * self.height, self.spacing,
+                                              motion=self.motion, layout=self.layout):
+            note = fit_track(track, self.layout['receptor_y'] * self.height, self.spacing, motion=self.motion, layout=self.layout)
             if len(fragments) > 1:
-                note['fit_method'] = 'corroborated_fragments'
+                note['tracking_method'] = 'corroborated_fragments'
+                if note.get('fit_method') not in ('shared_scroll_clock', 'shared_scroll_interpolation'):
+                    note['fit_method'] = 'corroborated_fragments'
                 note['source_track_fragments'] = fragments
             notes.append(note)
         # One arrow can yield multiple disconnected colored components. Keep the
@@ -144,9 +153,13 @@ class NoteTracker:
         return notes
 
 
-def fit_track(track, receptor_y, spacing):
+def fit_track(track, receptor_y, spacing, motion=None, layout=None):
     result = {'lane': track.lane, 'points': [[float(t), float(y)] for t, y in track.points],
               'status': 'excluded', 'reason': None, 'target_seconds': None}
+    if motion is not None:
+        shared = motion.fit(track, receptor_y, layout)
+        if shared is not None:
+            return {**result, **shared}
     # The detection crop clips a head as it approaches the receptor. Those
     # bounding-box centers flatten even during perfectly constant scrolling.
     visible = [p for p in track.points if p[1] > receptor_y + .85 * spacing]

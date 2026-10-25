@@ -384,6 +384,7 @@ for(const t of part)line(root,x(t),y-9,x(t),y+9,color,2);
 }}else label(root,'Unconfirmed — no press timestamp',p,y+4,color);
 }
 text('p','Note '+(selectedNote+1)+' / '+(data.layout.lanes[note.lane].name||String(note.lane+1))+' · Target: '+formatRange(target)+' · Input: '+(inputIntervals(match,selectedNote).map(formatRange).join(' ∪ ')||'Unconfirmed'),$('comparisonDetails'));
+if(note.fit_method==='shared_scroll_clock'||note.fit_method==='shared_scroll_interpolation')text('p','Target uses shared movement of visible notes and a fractional-frame estimate. Equal screen gaps share the same timing scale. The range retains source-frame and capture-cadence uncertainty.',$('comparisonDetails'));
 if(hold){text('p','Long note / sustained recognition. Start: '+(hold.start_censored?'before first body contact (censored)':formatRange(hold.start_range))+' · End: '+(hold.end_range?formatRange(hold.end_range):'Unconfirmed / body ends outside reliable tracking'),$('comparisonDetails'));text('p','Holding is sufficient. Recognition spans do not represent repeated presses. Physical press and release times remain unmeasured.',$('comparisonDetails'));return}
 const differences=inputIntervals(match,selectedNote).map(range=>difference(target,range));
 text('p','Input − target: '+(differences.map(formatDifference).join(' ∪ ')||'Unconfirmed')+' · '+(differences.length>1?'Alternative intervals':alignment(delta)),$('comparisonDetails'));

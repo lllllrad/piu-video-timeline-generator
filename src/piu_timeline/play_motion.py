@@ -1,0 +1,158 @@
+"""Corroborated screen displacement and subframe clocks from visible peer notes."""
+from bisect import bisect_left
+import math
+
+import numpy as np
+
+
+class ScrollMotion:
+    def __init__(self, height, spacing):
+        self.height, self.spacing = height, spacing
+        self.previous = None
+        self.samples, self.at_time, self.chunks = [], {}, []
+        self.clocks = {}
+
+    def update(self, time, notes, source_pts=None):
+        displacement, support, lanes, scatter = None, 0, 0, 0
+        if self.previous is not None:
+            before, old = self.previous
+            dt = time-before
+            if 0 < dt <= .075:
+                pairs = [(self.height*(a['y']-b['y']), a['lane'], ai, bi)
+                         for ai, a in enumerate(old) for bi, b in enumerate(notes)
+                         if a['lane'] == b['lane'] and -.75 <= self.height*(a['y']-b['y']) <= self.spacing*30*dt]
+                choices = []
+                for center in sorted({round(pair[0]) for pair in pairs}):
+                    group = sorted((pair for pair in pairs if abs(pair[0]-center) <= 1.25), key=lambda pair: abs(pair[0]-center))
+                    left, right, selected = set(), set(), []
+                    for pair in group:
+                        if pair[2] not in left and pair[3] not in right:
+                            selected.append(pair); left.add(pair[2]); right.add(pair[3])
+                    if len(selected) >= 3 and len({pair[1] for pair in selected}) >= 2:
+                        value = float(np.median([pair[0] for pair in selected]))
+                        choices.append((len(selected), len({pair[1] for pair in selected}), value, selected))
+                if choices:
+                    best = max(choices, key=lambda choice: (choice[0], choice[1]))
+                    rivals = [choice for choice in choices if abs(choice[2]-best[2]) > 2.5 and choice[0] >= best[0]]
+                    if not rivals:
+                        displacement, support, lanes = max(0, best[2]), best[0], best[1]
+                        scatter = max(.35, float(np.std([pair[0] for pair in best[3]])))
+        if displacement is None:
+            self.chunks.append([])
+            phase, variance = 0., 0.
+        else:
+            phase = self.samples[-1]['phase']+displacement
+            variance = self.samples[-1]['variance']+scatter**2
+        sample = {'time': time, 'source_pts': source_pts, 'phase': phase, 'variance': variance,
+                  'chunk': len(self.chunks)-1, 'support': support, 'lanes': lanes}
+        self.samples.append(sample); self.chunks[-1].append(sample); self.at_time[time] = sample
+        self.previous = time, notes
+
+    def distance(self, first, last):
+        before, after = self.at_time.get(first), self.at_time.get(last)
+        if before is None or after is None or before['chunk'] != after['chunk']:
+            return None
+        return after['phase']-before['phase']
+
+    def _clock(self, samples):
+        if len(samples) < 16 or samples[-1]['time']-samples[0]['time'] < .3:
+            return None
+        t = np.array([sample['time']-samples[0]['time'] for sample in samples])
+        phase = np.array([sample['phase'] for sample in samples])
+        velocity, intercept = np.polyfit(t, phase, 1)
+        residual = float(np.sqrt(np.mean((phase-velocity*t-intercept)**2)))
+        if velocity <= self.spacing or residual > .5*self.spacing:
+            return None
+        half = len(t)//2
+        slopes = [np.polyfit(x, y, 1)[0] for x, y in ((t[:half], phase[:half]), (t[half:], phase[half:]))]
+        uncertainty = 6*residual/max(velocity*(t[-1]-t[0]), 1)
+        if abs(slopes[0]-slopes[1])/velocity > .08+uncertainty:
+            return None
+        return {'origin': samples[0]['time'], 'velocity': float(velocity), 'intercept': float(intercept),
+                'residual': residual, 'window': [samples[0]['time'], samples[-1]['time']]}
+
+    def crossing(self, sample, phase, phase_error):
+        chunk = self.chunks[sample['chunk']]
+        phases = [item['phase'] for item in chunk]
+        index = bisect_left(phases, phase)
+        if not 0 < index < len(chunk):
+            return None
+        before, after = chunk[index-1], chunk[index]
+        if after['phase'] <= before['phase']:
+            return None
+        fraction = (phase-before['phase'])/(after['phase']-before['phase'])
+        interpolated = before['time']+fraction*(after['time']-before['time'])
+        phase_error += math.sqrt(max(0, after['variance']-sample['variance']))
+        # Stable runs share one fitted clock. Nearby notes therefore share a
+        # timing scale rather than each fitting noisy, duplicated render frames.
+        if sample['chunk'] not in self.clocks:
+            self.clocks[sample['chunk']] = self._clock(chunk)
+        clock = self.clocks[sample['chunk']]
+        if clock is None:
+            local = [item for item in chunk if abs(item['time']-interpolated) <= .5]
+            clock = self._clock(local)
+        cadence = float(np.median(np.diff([item['time'] for item in chunk[max(0,index-8):index+8]])))
+        if clock:
+            time = clock['origin']+(phase-clock['intercept'])/clock['velocity']
+            uncertainty = max(cadence/2, (phase_error+clock['residual'])/clock['velocity'])
+            method = 'shared_scroll_clock'
+        else:
+            time = interpolated
+            velocity = (after['phase']-before['phase'])/(after['time']-before['time'])
+            uncertainty = max(cadence/2, phase_error/max(velocity, 1))
+            method = 'shared_scroll_interpolation'
+        return {'target_seconds': float(time), 'prediction_uncertainty_seconds': float(uncertainty),
+                'fit_method': method, 'motion_clock': clock,
+                'crossing_source_pts_seconds': [before['source_pts'], after['source_pts']],
+                'crossing_frame_seconds': [before['time'], after['time']]}
+
+    def fit(self, track, receptor, layout=None):
+        bottom = (layout or {}).get('note_y_max', .95)*self.height-.55*self.spacing
+        visible = [(time, y, self.at_time.get(time)) for time, y in track.points
+                   if receptor+.85*self.spacing < y < bottom]
+        if not visible or visible[-1][2] is None:
+            return None
+        chunk = visible[-1][2]['chunk']
+        visible = [point for point in visible if point[2] is not None and point[2]['chunk'] == chunk]
+        if len(visible) < 4 or visible[-1][0]-visible[0][0] < .065:
+            return None
+        phase = np.array([point[2]['phase'] for point in visible])
+        y = np.array([point[1] for point in visible])
+        if phase[-1]-phase[0] < .8*self.spacing:
+            return None
+        measured_slope, _ = np.polyfit(phase-phase[-1], y, 1)
+        if not -1.12 <= measured_slope <= -.88:
+            return None
+        # Phase is measured in screen pixels. A corroborated head therefore
+        # moves one pixel per phase pixel; independently fitting that slope for
+        # every head would reintroduce unequal timings for equal screen gaps.
+        slope = -1.
+        intercept = float(np.median(y+phase-phase[-1]))
+        errors = y+phase-phase[-1]-intercept
+        inliers = abs(errors) <= .15*self.spacing
+        if sum(inliers) < max(4, math.ceil(.85*len(visible))):
+            return None
+        residual = float(np.sqrt(np.mean(errors[inliers]**2)))
+        hud = False
+        if layout and layout.get('combo_roi'):
+            x, top, width, height = layout['combo_roi']
+            lane_x = layout['lanes'][track.lane]['x']
+            hud = x-.12 <= lane_x <= x+width+.12 and top-.18 <= visible[-1][1]/self.height <= top+height+.1
+        if intercept-receptor > (6 if hud else 2.5)*self.spacing:
+            return None
+        target_phase = float(phase[-1]+(receptor-intercept)/slope)
+        error = max(.75, 2*residual/abs(slope))
+        result = self.crossing(visible[-1][2], target_phase, error)
+        if result is None or not 0 <= result['target_seconds']-visible[-1][0] <= (.65 if hud else .25):
+            return None
+        duration = visible[-1][0]-visible[0][0]
+        return {**result, 'status': 'estimated', 'reason': None,
+                'velocity_pixels_per_second': float(slope*(phase[-1]-phase[0])/duration),
+                'residual_pixels': residual, 'motion_support_points': len(visible),
+                'motion_target_phase': target_phase, 'motion_chunk': chunk,
+                'observed_phase_slope': float(measured_slope)}
+
+    def evidence(self):
+        return {'format': {'schema': 1, 'method': 'peer_note_displacement'},
+                'supported_steps': sum(sample['support'] > 0 for sample in self.samples),
+                'total_steps': max(0, len(self.samples)-1), 'samples': self.samples}
