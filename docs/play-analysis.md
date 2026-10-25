@@ -85,6 +85,20 @@ extended-body observations remain unresolved.
 Original-color and white-border candidates keep separate body tracks, so a
 short augmented cap cannot replace a long body's continuation at a HUD cut.
 
+Short white-border candidates are checked against the original per-lane color
+trace across the entire shared cap approach, including frames without a body
+candidate. Native cap identities must agree in at least two body samples; the
+gap test then needs at least eight clear source frames spanning 120 ms, stable
+cap separation within 1.5 feature pixels, and a missing vertical color column
+in at least 80% of the samples. Three adjacent image rows measure continuity.
+Strong support uses the body detector's color thresholds and a column width
+of at least 0.12 lane spacings (minimum two pixels); absence uses a relaxed
+saturation >60/value >90 mask so a dim or thin possible stem remains unknown.
+Samples at the receptor, clipped field boundary or HUD are excluded. This
+check can refute an apparent short hold; it does not by itself confirm a hold
+or an input. A refuted candidate is accounted for only when both original tap
+heads remain represented. The trace and its original PTS remain in JSON.
+
 Endpoint corroboration runs before rejecting a short body with unreadable local fits: independently tracked heads and tails can resolve it. Strong body stripes require geometric corroboration. A weaker stripe (at least 72% colored support in five extended-body observations spanning 80 ms) additionally requires both a tracked head following the upper edge and a tracked tail following the lower edge. Missing or displaced arrows cannot qualify through time proximity alone. `body_evidence` distinguishes `strong_stripe` from `stripe_and_tracked_edges` in the saved hold reconstruction.
 
 A directly linked tail retains its native crossing range. Body-to-cap positional tolerance establishes the association and does not widen that measured range; doing so could consume a real subsequent tap. A body-only endpoint still includes uncertainty from the approximate cap offset and local fit.

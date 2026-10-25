@@ -96,6 +96,15 @@ spacings high) with an observed colored connector across their middle. White
 borders touching without a colored connector do not establish a hold. Endpoint
 identity still requires the independent native cap trajectories.
 
+Inspect a suspected short connection throughout both caps' approach, including
+frames that did not produce a body candidate. Selecting only the frames where
+two animated cap corners touch biases the evidence toward a hold. The saved
+color trace distinguishes a strong vertical column, a weak or dim possible
+column, and absence of even a relaxed color column across three rows. Weak
+support is unknown, not an observed gap. HUD cuts and unstable cap separation
+cannot establish a gap. Repeated clear separation can refute a short hold while
+preserving both independently tracked taps and their timing warnings.
+
 Only compare an extended body's edges while they are visible. A screen-clipped lower edge is not a tail. A top clamped at the receptor is not an approaching head. As the body shrinks, both caps can enter the same tolerance; these samples cannot independently distinguish the endpoints.
 
 Closing small holes in a color mask can repair compression or HUD damage, but can also join two taps. A repaired bounding box is therefore a candidate, not independent proof of a continuous hold. Preserve support from the original pixels. Weaker continuity requires additional endpoint corroboration; neither relaxing a color threshold nor fitting two arrows to the repaired box proves the intervening pixels are a body. Cases where the gap and body remain indistinguishable need review, not forced classification.

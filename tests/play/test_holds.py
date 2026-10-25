@@ -12,6 +12,7 @@ from piu_timeline.play.holds.analysis import reconstruct, presentation, augment_
 from piu_timeline.play.holds.features import bridge_ui_stripes, detect_bodies, feature_contract, acquire_features
 from piu_timeline.play.holds.geometry import HoldGeometry, edge_alignment, head_from_body_track, body_tracks
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window
+from piu_timeline.play.holds.continuity import CapContinuity
 
 
 LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
@@ -19,6 +20,39 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_cap_gap_check_uses_frames_without_a_body_candidate(self):
+        times = [.4+i/60 for i in range(15)]
+        geometry = HoldGeometry.from_analysis({'layout': LAYOUT, 'game_roi': [0,0,325,183]}, 325)
+        notes = [{'lane': 2, 'status': 'estimated', 'target_seconds': target,
+                  'points': [(t, geometry.receptor+200*(target-t)) for t in times]}
+                 for target in (1., 1.1)]
+        data = {'notes': notes, 'layout': LAYOUT}
+        track = [{'lane': 2, 'long': True, 'white_cap_bridge': True,
+                  'top_cap_note': 0, 'bottom_cap_note': 1} for _ in range(3)]
+        def frames(connected):
+            result=[]
+            for i,t in enumerate(times):
+                image=np.zeros((183,325,3), dtype='uint8'); x=round(.5*325)
+                ys=[round(geometry.receptor+200*(target-t)) for target in (1.,1.1)]
+                for y in ys:image[y-7:y+8,x-5:x+6]=(0,130,255)
+                # A few apparent connections do not outweigh the persistent gap.
+                if connected is True or i in (3,7):image[ys[0]:ys[1],x-5:x+6]=(0,130,255)
+                if connected == 'dim':image[ys[0]+8:ys[1]-7,x]=(0,50,110)
+                connections=[];detect_bodies(image, LAYOUT, connections)
+                result.append({'playback_seconds':t,'source_pts_seconds':t+100,
+                               'color_connections':connections,'bodies':[]})
+            return result
+        gap_frames=frames(False)
+        proof=CapContinuity(data,gap_frames,geometry).check(track)
+        self.assertEqual(proof['decision'], 'disconnected_caps')
+        self.assertEqual(len(proof['gap_source_pts_seconds']),13)
+        self.assertEqual(proof['gap_source_pts_seconds'][0],100.4)
+        self.assertEqual(CapContinuity(data,frames(True),geometry).check(track)['decision'],'connected_caps')
+        self.assertEqual(CapContinuity(data,frames('dim'),geometry).check(track)['decision'],'unresolved')
+        # An overlay hiding the inter-cap gap cannot establish separate taps.
+        hidden={**data, 'layout':{**LAYOUT, 'combo_roi':[0,.1,1,.8]}}
+        self.assertIsNone(CapContinuity(hidden,gap_frames,geometry).check(track))
+
     def test_white_border_cap_cannot_steal_an_extended_color_body(self):
         body = {'lane': 2, 'top': 30., 'bottom': 150., 'top_visible': False,
                 'tail_visible': True, 'long': True, 'white_cap_bridge': False}

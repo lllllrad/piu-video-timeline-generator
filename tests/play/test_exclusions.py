@@ -81,3 +81,21 @@ class ExclusionWarningTest(unittest.TestCase):
         result = recognition_diagnostics(data, ranges)
         self.assertEqual(result['warnings'], [])
         self.assertEqual(len(result['chart_exceptions']), 2)
+
+    def test_persistent_pixel_gap_accounts_for_a_false_hold_candidate_only_when_both_caps_remain(self):
+        connection={'decision':'disconnected_caps','head_note':0,'tail_note':1,
+                    'visible_start_seconds':10.,'visible_end_seconds':10.2,
+                    'gap_source_pts_seconds':[10+i/60 for i in range(10)],
+                    'connected_source_pts_seconds':[10.18,10.2]}
+        record={'lane':0,'reason':'unresolved_hold_geometry','visible_start_seconds':10.,
+                'visible_end_seconds':10.2,'cap_continuity':connection}
+        data={'notes':[{'status':'estimated','lane':0} for _ in range(2)],
+              'hold_analysis':{'holds':[],'unresolved_tracks':[record]}}
+        result=recognition_diagnostics(data,{'notes':{}})
+        self.assertFalse(result['warnings'])
+        self.assertEqual(result['accounted_hold_fragments'][0]['interpretation'],'separate_caps_with_observed_gap')
+        data['notes'][1]['status']='excluded'
+        self.assertEqual(len(recognition_diagnostics(data,{'notes':{}})['warnings']),1)
+        data['notes'][1]['status']='estimated'
+        connection['gap_source_pts_seconds']=connection['gap_source_pts_seconds'][:7]
+        self.assertEqual(len(recognition_diagnostics(data,{'notes':{}})['warnings']),1)

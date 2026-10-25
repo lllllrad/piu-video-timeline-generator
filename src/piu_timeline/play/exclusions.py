@@ -87,6 +87,18 @@ def recognition_diagnostics(data, ranges):
         for index in hold.get('uncertain_components', []):
             add({**base, 'note': index, 'reason': 'hold_component_ownership_unresolved'})
     for record in data.get('hold_analysis', {}).get('unresolved_tracks', []):
+        connection = record.get('cap_continuity') or {}
+        gaps = connection.get('gap_source_pts_seconds', [])
+        seen = (len(set(gaps)) + len(set(connection.get('connected_source_pts_seconds', [])))
+                + len(set(connection.get('weak_source_pts_seconds', []))))
+        if (connection.get('decision') == 'disconnected_caps' and len(set(gaps)) >= 8
+                and len(set(gaps)) >= .8*seen
+                and connection['visible_end_seconds']-connection['visible_start_seconds'] >= .12
+                and all(data['notes'][connection[key]]['status'] == 'estimated'
+                        and data['notes'][connection[key]].get('note_type') != 'hold'
+                        for key in ('head_note', 'tail_note'))):
+            accounted.append({**record, 'interpretation': 'separate_caps_with_observed_gap'})
+            continue
         # Only a matching, repeatedly observed cap identity can account for a
         # partial body track. Time/lane overlap alone never suppresses it.
         owners = [h for h in holds if h['lane'] == record['lane'] and any(

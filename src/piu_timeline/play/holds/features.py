@@ -8,7 +8,8 @@ import numpy as np
 
 from piu_timeline.play.frames import decode_frames
 
-FEATURE_FORMAT = {'schema': 1, 'detector_revision': 7, 'width': 325}
+FEATURE_FORMAT = {'schema': 1, 'detector_revision': 8, 'width': 325,
+                  'continuity': 'three_row_strong_and_relaxed_color_columns'}
 
 
 def ui_regions(layout):
@@ -53,7 +54,19 @@ def feature_contract(data):
             ('media', 'start_seconds', 'end_seconds', 'game_roi', 'layout')}}
 
 
-def detect_bodies(rgb, layout):
+def connector_rows(mask, top, spacing, relaxed=None):
+    """Rows with a colored vertical connector, before any white/HUD repair."""
+    widths = (mask[:-2] & mask[1:-1] & mask[2:]).sum(axis=1)
+    relaxed = mask if relaxed is None else relaxed
+    possible = (relaxed[:-2] & relaxed[1:-1] & relaxed[2:]).sum(axis=1)
+    def ranges(values):
+        edges = np.flatnonzero(np.diff(np.r_[False, False, values, False, False]))
+        return [[int(a+top), int(b+top)] for a,b in zip(edges[::2], edges[1::2])]
+    return {'connected': ranges(widths >= max(2, .12*spacing)),
+            'disconnected': ranges(possible == 0)}
+
+
+def detect_bodies(rgb, layout, connections=None):
     """Observe colored vertical bodies and filled receptors without reading text."""
     height, width = rgb.shape[:2]
     spacing = float(np.median(np.diff([lane['x'] * width for lane in layout['lanes']])))
@@ -72,6 +85,9 @@ def detect_bodies(rgb, layout):
         lit.append(float(white[ry1:ry2, rx1:rx2].mean()) > .55)
         mask = (colors[lane['color']] & (saturation > 105) & (value > 170))[top:bottom, left:right].astype('uint8')
         original_mask = mask.copy()
+        if connections is not None:
+            relaxed = (colors[lane['color']] & (saturation > 60) & (value > 90))[top:bottom, left:right]
+            connections.append(connector_rows(original_mask, top, spacing, relaxed))
         mask = bridge_ui_stripes(mask, top, left, layout, width, height, spacing)
         # A cap's thin white border can disconnect its colored interior
         # from a genuine short body. Restore only observed nearby white pixels;
@@ -132,11 +148,13 @@ def acquire_features(data, output):
                 pts, time, image = decoded
                 if abs(pts - previous['source_pts_seconds']) > 1e-6 or abs(time - previous['playback_seconds']) > 1e-6:
                     raise ValueError('Hold acquisition PTS differs from saved native frames')
-                bodies, lit = detect_bodies(image, data['layout'])
+                connections = []
+                bodies, lit = detect_bodies(image, data['layout'], connections)
                 from piu_timeline.play.receptors import fractions
                 scores = fractions(image, data['layout'])
                 target.write(json.dumps({'source_pts_seconds': pts, 'playback_seconds': time,
-                                         'bodies': bodies, 'receptor_lit': lit, 'receptor_white_fraction': scores}) + '\n')
+                                         'bodies': bodies, 'receptor_lit': lit, 'receptor_white_fraction': scores,
+                                         'color_connections': connections}) + '\n')
                 count += 1
                 if count % 2400 == 0:
                     print(f'    Long notes: {time-data["start_seconds"]:.0f}/{data["end_seconds"]-data["start_seconds"]:.0f}s', flush=True)
