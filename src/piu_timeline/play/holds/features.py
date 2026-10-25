@@ -8,7 +8,7 @@ import numpy as np
 
 from piu_timeline.play.frames import decode_frames
 
-FEATURE_FORMAT = {'schema': 1, 'detector_revision': 6, 'width': 325}
+FEATURE_FORMAT = {'schema': 1, 'detector_revision': 7, 'width': 325}
 
 
 def ui_regions(layout):
@@ -73,22 +73,41 @@ def detect_bodies(rgb, layout):
         mask = (colors[lane['color']] & (saturation > 105) & (value > 170))[top:bottom, left:right].astype('uint8')
         original_mask = mask.copy()
         mask = bridge_ui_stripes(mask, top, left, layout, width, height, spacing)
-        count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
-        for component, (x, y, w, h, area) in enumerate(stats[1:count], 1):
-            if h < .8 * spacing or w < .16 * spacing or area < .35 * w * h:
-                continue
-            stripe = (labels[y:y+h, x:x+w] == component).mean(axis=0).max()
-            if stripe < .72:
-                continue
-            def in_hud(edge):
-                return any(rx*width <= cx <= (rx+rw)*width and ry*height <= edge <= (ry+rh)*height
-                           for rx, ry, rw, rh in ui_regions(layout))
-            bodies.append({'lane': index, 'top': float(y + top), 'bottom': float(y + top + h),
-                           'edge_convention': 'connected_color',
-                           'top_visible': bool(not in_hud(y+top) and y+top > receptor+.3*spacing),
-                           'long': bool(h > 1.6 * spacing),
-                           'stripe_support': float(original_mask[y:y+h, x:x+w].mean(axis=0).max()),
-                           'tail_visible': bool(y+top+h < bottom-.65*spacing and not in_hud(y+top+h))})
+        # A cap's thin white border can disconnect its colored interior
+        # from a genuine short body. Restore only observed nearby white pixels;
+        # never fill background between two arrows.
+        border = max(3, round(.16*spacing)) | 1
+        near_color = cv2.dilate(original_mask, np.ones((border, border), dtype='uint8')) > 0
+        white_mask = original_mask | (white[top:bottom, left:right] & near_color).astype('uint8')
+        for candidate_mask, white_bridge in ((mask, False), (white_mask, True)):
+            count, labels, stats, _ = cv2.connectedComponentsWithStats(candidate_mask, 8)
+            for component, (x, y, w, h, area) in enumerate(stats[1:count], 1):
+                if h < .8 * spacing or w < .16 * spacing or area < .35 * w * h:
+                    continue
+                if white_bridge:
+                    if not 1.6*spacing < h <= 3.5*spacing:
+                        continue
+                    middle = y+h//2
+                    connection = original_mask[middle-1:middle+2, x:x+w]
+                    # A real short body carries a colored connector between its
+                    # caps. White borders touching across a tap gap are insufficient.
+                    if np.all(connection, axis=0).sum() < max(2, .12*spacing):
+                        continue
+                    if any(b['lane'] == index and abs(b['top']-(y+top)) <= 2
+                           and abs(b['bottom']-(y+top+h)) <= 2 for b in bodies):
+                        continue
+                stripe = (labels[y:y+h, x:x+w] == component).mean(axis=0).max()
+                if stripe < .72:
+                    continue
+                def in_hud(edge):
+                    return any(rx*width <= cx <= (rx+rw)*width and ry*height <= edge <= (ry+rh)*height
+                               for rx, ry, rw, rh in ui_regions(layout))
+                bodies.append({'lane': index, 'top': float(y + top), 'bottom': float(y + top + h),
+                               'edge_convention': 'connected_color', 'white_cap_bridge': white_bridge,
+                               'top_visible': bool(not in_hud(y+top) and y+top > receptor+.3*spacing),
+                               'long': bool(h > 1.6 * spacing),
+                               'stripe_support': float(original_mask[y:y+h, x:x+w].mean(axis=0).max()),
+                               'tail_visible': bool(y+top+h < bottom-.65*spacing and not in_hud(y+top+h))})
     return bodies, lit
 
 

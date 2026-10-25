@@ -88,6 +88,14 @@ centers at the same source timestamps. A cut at a judgment word or counter is an
 occlusion boundary, not a cap. Do not close ordinary gaps between adjacent tap
 heads merely to obtain a continuous colored component.
 
+A thin white cap border can separate a short hold's colored cap from its
+colored stem. A second pixel channel may include actual white pixels within
+approximately 0.08 lane spacings of the original color, without filling any
+background pixels. This channel is limited to short components (1.6–3.5 lane
+spacings high) with an observed colored connector across their middle. White
+borders touching without a colored connector do not establish a hold. Endpoint
+identity still requires the independent native cap trajectories.
+
 Only compare an extended body's edges while they are visible. A screen-clipped lower edge is not a tail. A top clamped at the receptor is not an approaching head. As the body shrinks, both caps can enter the same tolerance; these samples cannot independently distinguish the endpoints.
 
 Closing small holes in a color mask can repair compression or HUD damage, but can also join two taps. A repaired bounding box is therefore a candidate, not independent proof of a continuous hold. Preserve support from the original pixels. Weaker continuity requires additional endpoint corroboration; neither relaxing a color threshold nor fitting two arrows to the repaired box proves the intervening pixels are a body. Cases where the gap and body remain indistinguishable need review, not forced classification.

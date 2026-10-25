@@ -19,6 +19,22 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_white_cap_borders_need_an_observed_colored_connector(self):
+        image = np.zeros((183, 325, 3), dtype='uint8')
+        x = round(.5*325)
+        # Two small caps, their thin white borders and the intervening body.
+        image[70:112, x-5:x+6] = (0, 130, 255)
+        image[82, x-5:x+6] = 255
+        image[99, x-5:x+6] = 255
+        bodies, _ = detect_bodies(image, LAYOUT)
+        connected = [b for b in bodies if b['lane'] == 2 and b['top'] <= 70 and b['bottom'] >= 112]
+        self.assertEqual(len(connected), 1)
+        self.assertTrue(connected[0]['white_cap_bridge'])
+        # White pixels alone between separate arrows are not a colored stem.
+        image[83:99, x-5:x+6] = 255
+        bodies, _ = detect_bodies(image, LAYOUT)
+        self.assertFalse(any(b['lane'] == 2 and b['top'] <= 70 and b['bottom'] >= 112 for b in bodies))
+
     def test_ragged_stripes_bridge_only_inside_the_declared_hud(self):
         mask = np.zeros((100, 10), dtype='uint8')
         mask[10:42, 2:5] = 1
