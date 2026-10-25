@@ -137,3 +137,19 @@ grade. Other rows receive the aggregate interval and an unknown grade; the
 last displayed word is not copied across the update. Reports identify this
 association as `aggregate_counter_with_exclusive_lane_onsets` and retain each
 onset's source PTS.
+
+## Judgment animation refreshes
+
+A repeated word can relaunch through several small growth steps. Compare a
+continuous run of native word boxes over at most 75 ms, requiring two width
+growth steps of at least 3%, total width growth over 10% and area growth over
+25%, with consistent horizontal/vertical scale. Unknown reads, capture gaps
+over 35 ms and substantial shrinkage break the run. Confirm the relaunched
+size with another readable frame; one-frame size glitches remain insufficient.
+Keep the entire interval from before the first growth step through detection,
+rather than claiming an exact animation onset inside it. Moving notes touching
+the word remain a required negative case for the word reader and tracker.
+
+Word recognition and refresh tracking have independent cache dependencies.
+A tracker upgrade replays the saved timestamped word observations and rebuilds
+associations. It does not require OCR, pixel recognition or video decoding.

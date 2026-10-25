@@ -312,6 +312,62 @@ class JudgmentTest(unittest.TestCase):
         tracker.update(.04,observation(width=120,height=24));tracker.update(.06,observation())
         self.assertEqual(len(tracker.events),1)
 
+    def test_gradual_word_growth_retains_the_whole_native_observation_bracket(self):
+        tracker=JudgmentTracker()
+        sizes=[(134,16),(134,16),(136,17),(142,17),(148,19),(162,20),(162,20)]
+        for i,(width,height) in enumerate(sizes):
+            tracker.update(i/60,observation(width=width,height=height))
+        self.assertEqual(len(tracker.events),2)
+        event=tracker.events[-1]
+        self.assertEqual(event['trigger'],'animation_restart')
+        self.assertAlmostEqual(event['lower_seconds'],2/60)
+        self.assertAlmostEqual(event['upper_seconds'],4/60)
+
+    def test_new_label_is_not_lost_when_it_interrupts_pending_growth(self):
+        tracker=JudgmentTracker()
+        sizes=[(134,16),(134,16),(142,16),(149,16),(162,20)]
+        for i,(width,height) in enumerate(sizes):
+            tracker.update(i/60,observation(width=width,height=height))
+        tracker.update(5/60,observation('MISS',width=87,height=20))
+        tracker.update(6/60,observation('MISS',width=83,height=19))
+        self.assertEqual([e['label'] for e in tracker.events],['PERFECT','MISS'])
+        self.assertAlmostEqual(tracker.events[-1]['lower_seconds'],4/60)
+        self.assertAlmostEqual(tracker.events[-1]['upper_seconds'],5/60)
+
+    def test_gradual_growth_does_not_bridge_unknown_frames_or_slow_drift(self):
+        for gap in (None,.08):
+            tracker=JudgmentTracker()
+            tracker.update(0,observation());tracker.update(.017,observation())
+            tracker.update(.034,observation(width=106,height=21))
+            if gap is None:
+                tracker.update(.05,observation(None))
+                start=.067
+            else:
+                start=gap+.034
+            tracker.update(start,observation(width=112,height=22))
+            tracker.update(start+.017,observation(width=118,height=23))
+            tracker.update(start+.034,observation(width=118,height=23))
+            self.assertEqual(len(tracker.events),1)
+
+    def test_event_tracker_upgrade_replays_word_reads_without_pixel_recognition(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output=Path(temporary)
+            data={'notes':[], 'matches':[], 'coverage':{}, 'media':{}, 'analysis_width':650,
+                  'judgment_events':[{'label':'MISS','lower_seconds':99,'upper_seconds':100}]}
+            data['judgment_cache']=cache_contracts(data,[])
+            data['judgment_cache']['association']['events']={'schema':1,'revision':1}
+            sizes=[(134,16),(134,16),(136,17),(142,17),(148,19),(162,20),(162,20)]
+            frames=[{'source_pts_seconds':42+i/60,'playback_seconds':i/60,
+                     **observation(width=w,height=h)} for i,(w,h) in enumerate(sizes)]
+            trace=output/'judgments.jsonl'
+            raw=''.join(json.dumps(frame)+'\n' for frame in frames);trace.write_text(raw)
+            with patch('piu_timeline.play.judgments.collect_features',side_effect=AssertionError('must reuse word reads')), \
+                    patch('piu_timeline.play.judgments.ocr_images',side_effect=AssertionError('must not OCR')):
+                result=augment_judgments(data,output)
+            self.assertEqual([e['label'] for e in result['judgment_events']],['PERFECT','PERFECT'])
+            self.assertEqual(result['judgment_events'][-1]['trigger'],'animation_restart')
+            self.assertEqual(trace.read_text(),raw)
+
     def test_first_three_and_bad_match_without_combo_and_miss_is_not_a_press(self):
         times=(1.,1.15,1.30,1.45,1.6)
         data={'notes':[{'lane':0,'status':'estimated','target_seconds':t} for t in times],

@@ -100,6 +100,30 @@ class JudgmentReader:
         return {'label':label,'confidence':confidence,'box':box,'blank':False,'read_mode':'component_template'}
 
 
+EVENT_FORMAT = {'schema': 1, 'revision': 2}
+
+
+def gradual_relaunch(history):
+    """Bracket the start of confirmed growth across adjacent native word reads."""
+    if len(history) < 3:
+        return None
+    end, latest = history[-1]
+    chain = [history[-1]]
+    for time, box in reversed(history[:-1]):
+        next_time, next_box = chain[0]
+        if end-time > .075 or next_time-time > .035 or box[2] > next_box[2]+2 or box[3] > next_box[3]+1:
+            break
+        chain.insert(0, (time, box))
+    if len(chain) < 3:
+        return None
+    old = chain[0][1]
+    sx, sy = latest[2]/old[2], latest[3]/old[3]
+    growing = [(a[0], b[0]) for a,b in zip(chain,chain[1:]) if b[1][2]/a[1][2] >= 1.03]
+    if len(growing) >= 2 and sx*sy > 1.25 and sx > 1.10 and abs(sx/sy-1) < .20:
+        return growing[0][0], end
+    return None
+
+
 class JudgmentTracker:
     def __init__(self):
         self.last = None
@@ -109,10 +133,12 @@ class JudgmentTracker:
         self.events = []
         self.blank_since = None
         self.last_clear = None
+        self.scale_history = []
 
     def update(self, seconds, observation):
         label = observation['label']
         if label is None:
+            self.scale_history = []
             if observation.get('blank'):
                 if self.blank_since is None:self.blank_since=seconds
                 self.last_clear=seconds
@@ -123,12 +149,18 @@ class JudgmentTracker:
         box = observation['box']
         changed = self.last is None or label!=self.last['label']
         gap = self.blank_since is not None and seconds-self.blank_since>=.10
-        relaunch = False
+        if changed or self.pending is not None:
+            self.scale_history = []
+        if box:
+            self.scale_history = [(t,b) for t,b in self.scale_history if seconds-t <= .075]+[(seconds,box)]
+        gradual = gradual_relaunch(self.scale_history)
+        relaunch = gradual is not None
         if self.last is not None and not changed and self.last.get('box') and box:
             old = self.last['box']
             sx,sy=box[2]/old[2],box[3]/old[3]
-            relaunch = (sx*sy>1.25 and sx>1.10 and abs(sx/sy-1)<.20
+            relaunch = relaunch or (sx*sy>1.25 and sx>1.10 and abs(sx/sy-1)<.20
                         and self.last_visible is not None and seconds-self.last_visible<=.035)
+        confirmed = False
         if self.pending is not None:
             same = label==self.pending['label']
             if self.pending['trigger']=='animation_restart' and box:
@@ -141,13 +173,15 @@ class JudgmentTracker:
                              detection_status='candidate' if valid else 'excluded',
                              detection_reason=None if valid else 'judgment_observation_gap',delta=1)
                 self.events.append(event)
+                confirmed = True
                 self.pending = None
                 self.last = observation
             else:
                 self.pending = None
-        elif changed or gap or relaunch:
+        if not confirmed and self.pending is None and (changed or gap or relaunch):
             evidence=[t for t in (self.last_visible,self.last_clear) if t is not None]
-            self.pending = {'label':label,'lower_seconds':max(evidence) if evidence else None,
+            lower = gradual[0] if gradual and not changed and not gap else max(evidence) if evidence else None
+            self.pending = {'label':label,'lower_seconds':lower,
                             'upper_seconds':seconds,'launch_width':box[2] if box else 0,'trigger':'label_change' if changed else 'reappearance' if gap else 'animation_restart'}
         self.blank_since = None
         self.last_visible = seconds

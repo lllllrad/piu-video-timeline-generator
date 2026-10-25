@@ -13,7 +13,7 @@ from piu_timeline.vision.ocr import ocr_images
 from piu_timeline.play.frames import crop_region, decode_frames
 from piu_timeline.play.tracking import associate
 
-from piu_timeline.play.words import LABELS, feature_map, color_mask, JudgmentReader, JudgmentTracker
+from piu_timeline.play.words import LABELS, feature_map, color_mask, JudgmentReader, JudgmentTracker, EVENT_FORMAT
 
 VERSION = 8
 OBSERVATION_VERSION = 3
@@ -42,7 +42,7 @@ def cache_contracts(data, models):
                   'templates':fingerprint(fonts)}
     combo_matches=[{key:match.get(key) for key in ('note','combo_event','combo_lower_seconds','combo_upper_seconds')}
                    for match in data.get('matches',[]) if match.get('combo_event') is not None]
-    association={'format':ASSOCIATION_FORMAT,'observations':fingerprint(observations),
+    association={'format':ASSOCIATION_FORMAT,'events':EVENT_FORMAT,'observations':fingerprint(observations),
                  'notes':fingerprint(data.get('notes',[])),
                  'combo_events':fingerprint(data.get('combo_events',[])),
                  'combo_matches':fingerprint(combo_matches),
@@ -422,14 +422,15 @@ def augment_judgments(data, output):
                                              'templates':fingerprint(models)})+'\n')
     trace=output/'judgments.jsonl'
     contract=cache_contracts(data,models)
-    if data.get('judgment_cache',{}).get('observations')==contract['observations']:
-        observations=[]
-        if trace.is_file():
-            with trace.open() as saved:
-                observations=[json.loads(line) for line in saved]
+    if trace.is_file() and data.get('judgment_cache',{}).get('observations')==contract['observations']:
+        with trace.open() as saved:
+            observations=[json.loads(line) for line in saved]
         data['judgment_analysis_version']=VERSION
         print('Reusing saved judgment observations; no decoding or OCR.',flush=True)
-        result=merge_judgments(data,data.get('judgment_events',[]),observations)
+        tracker=JudgmentTracker()
+        for observation in observations:
+            tracker.update(observation['playback_seconds'],observation)
+        result=merge_judgments(data,tracker.events,observations)
         result['judgment_cache']=cache_contracts(result,models)
         return result
     print('Reading native judgment words independently of combo visibility...',flush=True)

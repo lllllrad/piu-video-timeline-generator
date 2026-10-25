@@ -31,6 +31,8 @@ class PlayCacheTest(unittest.TestCase):
             (donor/'analysis.json').write_text(json.dumps(saved,indent=2))
             trace=''.join(json.dumps({'source_pts_seconds':t,'playback_seconds':t,'combo':None,'notes':[]})+'\n' for t in (1.,1.02))
             (donor/'frames.jsonl').write_text(trace)
+            (donor/'judgments.jsonl').write_text(''.join(json.dumps({'playback_seconds':t,'source_pts_seconds':t,
+                'label':None,'box':None,'blank':False})+'\n' for t in (1.,1.02)))
             with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
                     patch.object(play,'analyze_play',side_effect=AssertionError('must reuse original acquisition')):
                 report=play.run('id',2,width=320)
@@ -83,6 +85,8 @@ class PlayCacheTest(unittest.TestCase):
             (final/'analysis.json').write_text(json.dumps(saved))
             trace=''.join(json.dumps({'source_pts_seconds':t,'playback_seconds':t,'notes':[],'combo':None})+'\n' for t in (1.,1.02))
             (final/'frames.jsonl').write_text(trace)
+            (final/'judgments.jsonl').write_text(''.join(json.dumps({'playback_seconds':t,'source_pts_seconds':t,
+                'label':None,'box':None,'blank':False})+'\n' for t in (1.,1.02)))
             segment.update(song='Corrected title',chart='S2')
             (directory/'analysis/analysis.json').write_text(json.dumps({'media':media,'game_roi':[0,0,320,180],'segments':[segment]}))
             with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
