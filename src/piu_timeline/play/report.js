@@ -17,7 +17,7 @@ if(excludedTracks.length){
     for(;shownExclusions<end;shownExclusions++){
       const item=excludedTracks[shownExclusions],row=document.createElement('p'),jump=document.createElement('button');
       jump.textContent=fmt(item.visible_start_seconds)+' … '+fmt(item.visible_end_seconds)+' / lane '+(item.lane+1)+' / '+item.reason.replaceAll('_',' ')+(item.processing_reason?' / '+item.processing_reason.replaceAll('_',' '):'')+' / '+item.observed_points+' observations';
-      jump.onclick=()=>seek(item.visible_start_seconds);row.appendChild(jump);$('exclusionWarningRows').appendChild(row);
+      jump.onclick=()=>seek(item.visible_start_seconds,-1,item.note??null);row.appendChild(jump);$('exclusionWarningRows').appendChild(row);
     }
     $('moreExclusionWarnings').hidden=shownExclusions>=excludedTracks.length;
   };
@@ -225,8 +225,10 @@ const target=targetRange(note),hold=holdFor(note);
 if(t>=start&&t<=end){
 const palette=notePalette[data.layout.lanes[note.lane].color]||notePalette.yellow;
 const group=svgNode('g',{'data-note':index,'data-kind':'note',role:'button',tabindex:0,'aria-label':'Note '+(index+1)+' at '+fmt(t)},notes);
-svgNode('rect',{x:x-size/2,y:y(t)-size/2,width:size,height:size,fill:palette[0],stroke:palette[1],'stroke-width':2,'data-kind':'note-square'},group);
+svgNode('rect',{x:x-size/2,y:y(t)-size/2,width:size,height:size,fill:palette[0],stroke:palette[1],'stroke-width':2,'data-kind':'note-square','data-type-status':note.type_status||'unknown',
+  ...(note.type_status==='tap'||note.type_status==='hold'&&hold?{}:{'stroke-dasharray':'3 2'})},group);
 label(group,hold?.start_censored?'?':['↙','↖','●','↗','↘'][note.lane%5],x,y(t)+size*.32,'#ffffff',size,'middle');
+if(note.type_status!=='tap'&&!(note.type_status==='hold'&&hold))label(group,note.type_status==='conflict'?'!':'?',x+size*.34,y(t)-size*.25,'#ffffff',Math.max(10,size*.3),'middle');
 selectionRects.set(index,svgNode('rect',{x:x-size/2-3,y:y(t)-size/2-3,width:size+6,height:size+6,fill:'none',stroke:'#ffffff','stroke-width':2,visibility:'hidden'},group));
 group.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();seek(t,matchByNote.get(index)?.index??-1,index)}};
 }
@@ -290,6 +292,13 @@ for(const t of part)line(root,x(t),y-9,x(t),y+9,color,2);
 }}else label(root,'Unconfirmed — no press timestamp',p,y+4,color);
 }
 text('p','Note '+(selectedNote+1)+' / '+(data.layout.lanes[note.lane].name||String(note.lane+1))+' · Target: '+formatRange(target)+' · Input: '+(inputIntervals(match,selectedNote).map(formatRange).join(' ∪ ')||'Unconfirmed'),$('comparisonDetails'));
+text('p','Note type: '+(note.type_status||'unknown')+(note.type_status==='hold'&&!hold?' / hold geometry unresolved':''),$('comparisonDetails'));
+if(note.type_status==='unknown')text('p','Type remains unconfirmed: '+(Object.entries(note.type_unknown_reasons||{}).map(([reason,count])=>reason.replaceAll('_',' ')+': '+count).join('; ')||'No eligible clear type observation.'),$('comparisonDetails'));
+for(const observation of note.type_evidence||[]){
+if(observation.kind==='unknown')continue;
+const button=text('button',observation.kind+' / '+fmt(observation.playback_seconds)+' / PTS '+observation.source_pts_seconds.toFixed(6)+' / '+observation.reason.replaceAll('_',' '),$('comparisonDetails'));
+button.onclick=()=>seek(observation.playback_seconds,-1,selectedNote);
+}
 if(channels){const event=channels.processing.notes.find(e=>e.note===selectedNote);text('p','Visual evidence: '+(match?.visual_evidence||['motion:'+selectedNote]).join(', ')+' · Processing: '+(event?event.status+' / '+event.reason:'unavailable')+(event?.range?' / '+formatRange(event.range):'')+(event?.visibility_loss?' / Visibility loss: '+formatRange(event.visibility_loss.range):''),$('comparisonDetails'))}
 if(note.fit_method==='shared_scroll_clock'||note.fit_method==='shared_scroll_interpolation')text('p','Target uses shared movement of visible notes and a fractional-frame estimate. Equal screen gaps share the same timing scale. The range retains source-frame and capture-cadence uncertainty.',$('comparisonDetails'));
 if(hold){text('p','Long note / sustained recognition. Start: '+(hold.start_censored?'before first body contact (censored)':formatRange(hold.start_range))+' · End: '+(hold.end_range?formatRange(hold.end_range):'Unconfirmed / body ends outside reliable tracking'),$('comparisonDetails'));text('p','Holding is sufficient. Recognition spans do not represent repeated presses. Physical press and release times remain unmeasured.',$('comparisonDetails'));return}

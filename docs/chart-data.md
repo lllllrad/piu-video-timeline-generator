@@ -90,7 +90,10 @@ Supported processing methods:
 | `exclude_timing` | Keep visible notes and native observations, suppress automatic input connections for member notes. |
 | `hold_state_only` | Keep reconstructed hold-state evidence; suppress discrete tap connections for member notes. |
 
-`check_exceptions` is independent of processing. `timing_evidence` removes only member notes from the eligible timing-evidence check count; the unfiltered count and unresolved status remain available. `stage_grade_totals` declares a partial exemption for that region, not proof that whole-stage grade totals agree. It never fills labels to match result quotas. A recording-specific cut or freeze should not be encoded as a permanent chart gimmick shared by every performance.
+`check_exceptions` is independent of processing.
+`note_type_conflict` scopes exemptions for reviewed type transformations; `note_type_unresolved` separately scopes exemptions for unobservable types. Each requires a human-authored region containing the full evidence interval. Timing exclusions do not suppress these warnings. Source evidence and type status remain unchanged.
+`timing_evidence` removes only member notes from the eligible timing-evidence check count; the unfiltered count and unresolved status remain available.
+`stage_grade_totals` declares a partial exemption for that region, not proof that whole-stage grade totals agree. It never fills labels to match result quotas. A recording-specific cut or freeze should not be encoded as a permanent chart gimmick shared by every performance.
 
 Every region needs a unique ID, bounded interval and reason. Unknown fields, invalid methods and conflicting overlapping processing rules are rejected. Overlapping standard annotations and check exceptions may be combined. Run `just charts validate` to check both UCS text and region policies; `schema.json` also supports JSON editors. Explicit draft rebuilding preserves these human-authored regions.
 

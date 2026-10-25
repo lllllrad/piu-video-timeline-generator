@@ -47,6 +47,15 @@ class ReportTest(unittest.TestCase):
                                     check=True, capture_output=True, text=True)
         return json.loads(result.stdout)
 
+    def test_type_conflict_exposes_both_frame_links_without_changing_timing(self):
+        notes=[{'status':'estimated','lane':0,'target_seconds':10,'prediction_uncertainty_seconds':.01,
+                'type_status':'conflict','type_evidence':[
+                    {'kind':'hold','playback_seconds':9.8,'source_pts_seconds':49.8,'reason':'visible_body'},
+                    {'kind':'tap','playback_seconds':9.9,'source_pts_seconds':49.9,'reason':'isolated_cap'}]}]
+        result=self.report_runtime(notes,[])
+        self.assertEqual(result['typePreview'],{'status':'conflict','seek':9.8})
+        self.assertEqual(result['initialInputs'],[None])
+
     def test_region_policy_is_rendered_without_input_markers_or_erasing_notes(self):
         notes = [{'status':'estimated','lane':0,'target_seconds':10,'prediction_uncertainty_seconds':.01}]
         matches = [{'note':0,'target_seconds':10,'observation_lower_seconds':10.02,'observation_upper_seconds':10.04}]
@@ -102,7 +111,7 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(len(result['initialRows']), 2)
         self.assertEqual(result['initialInputs'], [[9.98, 10.04]] * 2)
         self.assertTrue(all('aggregate row bracket' in row[4] for row in result['initialRows']))
-        self.assertIn('Aggregate refresh bracket', result['details'][0][2])
+        self.assertIn('Aggregate refresh bracket', ' '.join(result['details'][0]))
 
     def test_comparison_legacy_combo_bracket_early_input_and_no_matches(self):
         note = {'status': 'estimated', 'lane': 0, 'target_seconds': 10,
@@ -145,7 +154,7 @@ class ReportTest(unittest.TestCase):
         self.assertIn(' ∪ ', result['initialRows'][0][2])
         self.assertIn(' ∪ ', result['initialRows'][0][3])
         self.assertIn('Possible refresh ranges', result['initialRows'][0][4])
-        self.assertIn('association is unresolved', result['details'][0][2])
+        self.assertIn('association is unresolved', ' '.join(result['details'][0]))
         self.assertEqual(result['defaultCandidateConnections'], 0)
         self.assertGreater(result['optionalCandidateConnections'], 0)
         self.assertAlmostEqual(result['correctedInputs'][0][0], 10.09)
@@ -178,7 +187,7 @@ class ReportTest(unittest.TestCase):
         self.assertIn('HOLD', result['initialRows'][0][0])
         self.assertEqual(result['initialRows'][0][3], 'Sustained state; no repeated presses')
         self.assertIn('physical release unknown', result['initialRows'][0][4])
-        self.assertIn('Holding is sufficient', result['details'][0][2])
+        self.assertIn('Holding is sufficient', ' '.join(result['details'][0]))
         hold.update(start_range=[8, 10.02], start_censored=True, head_note=None)
         result = self.report_runtime(notes, [], hold_analysis={'holds': [hold]})
         self.assertIn('already visible / uncertain', result['initialRows'][0][1])

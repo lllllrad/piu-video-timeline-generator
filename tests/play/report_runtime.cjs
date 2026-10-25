@@ -63,7 +63,7 @@ const markers=()=>{const shift=evaluate('(chartScene.origin-playhead)*chartScene
 const initialMarkers=markers();
 const defaultCandidateConnections=descendants(elements.get('lanes')).filter(node=>node.getAttribute('data-kind')==='candidate-connection').length;
 assert.equal(defaultCandidateConnections,0,'unconfirmed candidates must be hidden by default');
-assert.ok(!descendants(elements.get('lanes')).some(node=>node.getAttribute('stroke-dasharray')),'no unlinked hold envelope is drawn');
+assert.ok(!descendants(elements.get('lanes')).some(node=>node.getAttribute('data-kind')!=='note-square'&&node.getAttribute('stroke-dasharray')),'no unlinked hold envelope is drawn');
 elements.get('candidates').checked=true;elements.get('candidates').onchange();
 const optionalConnections=descendants(elements.get('lanes')).filter(node=>node.getAttribute('data-kind')==='candidate-connection');
 for(const group of optionalConnections){
@@ -215,5 +215,14 @@ if(data.visual_channels?.timeline){
   evidencePreview={rows,seekTime,secondNoteSummary:elements.get('evidenceSummary').textContent};
   assert.deepEqual(evaluate('data'),data,'observation UI changed embedded evidence');
 }
-console.log(JSON.stringify({initialRows, correctedRows, details, evidencePreview, targetRanges, initialInputs,
+let typePreview=null;
+if(data.notes[0]?.type_evidence?.length){
+  vm.runInContext('seek(data.notes[0].target_seconds,-1,0)',context);
+  const proof=data.notes[0].type_evidence.find(o=>o.kind!=='unknown');
+  const button=elements.get('comparisonDetails').children.find(node=>node.tag==='button'&&node.textContent.includes('PTS '+proof.source_pts_seconds.toFixed(6)));
+  assert.ok(button,'type evidence exposes original source PTS');button.onclick();
+  assert.equal(video.currentTime,proof.playback_seconds,'type evidence seeks original recording time');
+  typePreview={status:data.notes[0].type_status,seek:video.currentTime};
+}
+console.log(JSON.stringify({initialRows, correctedRows, details, evidencePreview, typePreview, targetRanges, initialInputs,
   initialDifferences, correctedInputs, correctedDifferences, verticalGeometry, verticalNotes, initialMarkers, correctedMarkers, defaultCandidateConnections, optionalCandidateConnections}));

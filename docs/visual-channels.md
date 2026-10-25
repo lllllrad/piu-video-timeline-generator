@@ -153,3 +153,39 @@ the word remain a required negative case for the word reader and tracker.
 Word recognition and refresh tracking have independent cache dependencies.
 A tracker upgrade replays the saved timestamped word observations and rebuilds
 associations. It does not require OCR, pixel recognition or video decoding.
+
+## Note type evidence and contradictions
+
+A failed hold reconstruction does not establish a tap. The `note_types`
+channel retains per-frame `tap`, `hold` or `unknown` observations, original
+source PTS, playback time, measured position and source trajectory identity.
+It reuses the retained spatial masks, independently of HUD/input decisions.
+Only actual tracked positions 1.3 to 2.5 lane spacings below the receptor are
+eligible; processing remnants, HUD intersections and clipped caps are excluded.
+A cap outline must match the native head size and contain the lane color.
+Registered native caps attached to a strong extended body also supply per-frame
+hold evidence throughout their clear approach, including candidates too brief
+for the multi-frame hold reconstruction threshold.
+A connected colored component over 1.6 spacings high with strong vertical
+support supplies hold evidence. A complete cap with visible, color-free and
+white-effect-free margins on both sides supplies tap evidence. Lack of a
+connector alone is insufficient. Other samples remain unknown.
+
+Projection combines evidence by the existing trajectory/hold identities, never
+by time proximity alone. A single valid observation of each kind produces
+`note_type_conflict`; repeated observations cannot vote away the contradiction.
+Reconstructed hold geometry also supplies hold evidence, with its source-frame
+range retained. An isolated cap after that hold has reached the receptor is a
+possible processing remnant, not tap evidence; retain its observed appearance
+but interpret its type as unknown. Unclassified heads and observed holds without resolved chart
+geometry produce `note_type_unresolved`. Complete geometry, physical input
+acceptance and note kind are separate conclusions.
+
+Reports mark uncertain types with `?` and conflicts with `!`, retain the chart
+geometry for review, and provide original-frame links for type observations.
+Only an explicit human-authored check exception matching the warning,
+`note_type_conflict` or `note_type_unresolved`, and containing the whole evidence
+interval suppresses it. A transformation exception does not hide unknown types. Timing exclusions and other check
+exceptions do not suppress type warnings. Suppressed evidence remains in
+`recognition-warnings.json` under `chart_exceptions`; no exception is generated
+automatically from a contradiction.

@@ -67,13 +67,16 @@ def recognition_diagnostics(data, ranges):
     """Expose uncertain geometry, ownership and input evidence as review items."""
     warnings, exceptions, accounted = [], [], []
     regions = data.get('chart_policy', {}).get('regions', [])
-    def add(record):
+    def add(record, check='timing_evidence'):
         record = {'observed_points': 0, **record}
         allowed = [r['id'] for r in regions
-                   if (r['processing'] in ('exclude_timing', 'hold_state_only') or 'timing_evidence' in r['check_exceptions'])
+                   if (check in r['check_exceptions'] or check == 'timing_evidence'
+                       and r['processing'] in ('exclude_timing', 'hold_state_only'))
                    and r['playback_start_seconds'] <= record['visible_start_seconds']
                    and record['visible_end_seconds'] < r['playback_end_seconds']]
         (exceptions if allowed else warnings).append({**record, **({'exception_regions': allowed} if allowed else {})})
+    for record in data.get('note_type_diagnostics', []):
+        add(record, record['reason'])
     holds = data.get('hold_analysis', {}).get('holds', [])
     for hold in holds:
         lo = hold['start_range'][1] if hold['start_censored'] else hold['start_range'][0]

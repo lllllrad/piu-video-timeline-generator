@@ -5,7 +5,9 @@ import json
 
 from piu_timeline.play.processing import PROCESSING_FORMAT, observe_processing, processing_support, processing_conflicts
 
-CHANNEL_FORMAT = {'schema': 1, 'revision': 4, 'processing': PROCESSING_FORMAT}
+from piu_timeline.play.note_types import TYPE_FORMAT, observe_types
+
+CHANNEL_FORMAT = {'schema': 1, 'revision': 5, 'processing': PROCESSING_FORMAT, 'note_types': TYPE_FORMAT}
 
 
 def receptor_evidence(data):
@@ -92,7 +94,7 @@ def collect(data, directory, frames):
                        'detections': sum(len(f.get('notes', [])) for f in native), 'tracks': motion,
                        'observation_fields': ['lane','normalized_x','normalized_y','quality'],
                        'observations': [[[n['lane'],n['x'],n['y'],n.get('quality')] for n in f.get('notes', [])] for f in native]},
-            'processing': processing}
+            'processing': processing, 'note_types': observe_types(data, pixel_path, frames)}
 
 
 def augment_channels(data, directory, frames=None):

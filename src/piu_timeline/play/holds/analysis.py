@@ -223,6 +223,8 @@ def presentation(data):
                     sustained_recognition_spans=sum(len(hold['input']['segments']) for hold in holds))
     limitations = [item.replace('Holds, rolls', 'Rolls') for item in data.get('limitations', [])]
     limitations.append('Long-note recognition is a sustained visual state; neither a separate press per tick nor physical release is measured.')
+    from piu_timeline.play.note_types import project_types
+    type_diagnostics = project_types(data, notes, projected)
     from piu_timeline.play.channels import annotate_matches
     return annotate_matches({**data, 'notes': notes, 'matches': matches, 'limitations': limitations,
             'excluded_notes': dict(Counter(note.get('reason') for note in notes if note['status'] == 'excluded')),
@@ -230,4 +232,5 @@ def presentation(data):
             'combo_events': events('combo_events'), 'judgment_events': events('judgment_events'),
             'hold_tick_ambiguous_notes': [index for index in ambiguous if index not in lane_recovered],
             'recovered_dense_notes': recovered, 'recovered_lane_supported_notes': lane_recovered,
-            'hold_analysis': {**data['hold_analysis'], 'holds': projected}, 'coverage': coverage})
+            'hold_analysis': {**data['hold_analysis'], 'holds': projected}, 'coverage': coverage,
+            'note_type_diagnostics': type_diagnostics})
