@@ -6,6 +6,7 @@ The project requires Python 3.12, uv, FFmpeg, Node.js 24 or newer and `just`.
 
 ```sh
 mise install
+npm ci
 mise exec -- just check
 mise exec -- just auto SOURCE
 ```
@@ -160,13 +161,12 @@ rule scan without tests. QG automatically installs its pre-commit hook on first
 use, preserving an existing custom hook. The hook checks staged files and runs
 the shared tests from `.qg.yaml` against the working tree.
 
-The npm package is currently unpublished. `scripts/quality_gate.py` builds the
-[official checkout](https://github.com/slop-lab/quality-gate) at commit
-`7093d0761a3c3ca5ae7070542271c8bcebfd1173`, using its frozen lockfile and pnpm
-11.10.0. Git, Node.js 24+ and npm are needed for this setup. The checkout, build,
-dependencies and caches stay under `.local/cache/`. First use needs network
-access; later checks reuse the completed build without installing or fetching.
-The revision constant in the bootstrap controls explicit tool upgrades.
+Quality Gate is a project-local npm development dependency, pinned to 0.1.0 in
+`package.json` with its transitive dependencies locked in `package-lock.json`.
+Run `npm ci` after cloning or updating the lockfile; its prepare script installs
+the QG hook. `just check` and `just qg` use the installed package without fetching
+or building the tool. `node_modules/` is ignored, and recipe-invoked npm commands
+keep their download cache under `.local/cache/npm/`.
 
 ## Data and recognition rules
 
