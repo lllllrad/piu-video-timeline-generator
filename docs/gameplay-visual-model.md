@@ -98,6 +98,15 @@ identifies the endpoint directly, use that trajectory's crossing uncertainty. Th
 tolerance used to decide which cap belongs to the body is not an additional error on an already
 measured crossing.
 
+A brief visible body can still be identified when both independent cap
+trajectories are already fitted. Four source observations with strong original
+stripe support, the same two cap identities, four distinct cap positions,
+no capture gaps above 50 ms and
+at least half a lane spacing of observed travel provide a bounded alternative
+to the usual five-frame/80 ms persistence check. Both edge alignments remain
+mandatory. This is not a shorter minimum chart duration, and weak stripes,
+stationary corners or missing endpoints remain unresolved.
+
 A connected interior stripe can begin below the head center and end above the
 tail center. Its bounds use a different registration convention from the outer
 cap silhouette. Corroborate stripe boundaries with independently tracked cap

@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 28}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 29}
 
 
 def fingerprint(value):
@@ -29,7 +29,7 @@ def reconstruct(data, frames, diagnostics=None):
             hold = None
         if hold is None:
             extended = [p for p in track if p['long'] and p.get('stripe_support', 1) >= .72]
-            if diagnostics is not None and len(extended) >= 5 and extended[-1]['time']-extended[0]['time'] >= .08:
+            if diagnostics is not None and len(extended) >= 4:
                 cap_evidence = []
                 for edge in ('top', 'bottom'):
                     for index in {p[edge+'_cap_note'] for p in track if edge+'_cap_note' in p}:

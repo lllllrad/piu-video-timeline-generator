@@ -255,6 +255,23 @@ def median_error(values):
     return float(np.median(values))
 
 
+def short_cap_pair(track, geometry):
+    """Four moving, strongly connected observations need not last 80 ms."""
+    samples = [p for p in track if p['long'] and p.get('stripe_support',0) >= STRONG_STRIPE_SUPPORT
+               and all(key in p for key in ('top_cap_note','bottom_cap_note','top_cap_y','bottom_cap_y'))
+               and p['top_cap_note'] != p['bottom_cap_note']]
+    if len(samples) < MIN_EDGE_OBSERVATIONS:
+        return []
+    pair = (samples[0]['top_cap_note'],samples[0]['bottom_cap_note'])
+    if any((p['top_cap_note'],p['bottom_cap_note']) != pair for p in samples):
+        return []
+    if any(not 0 < b['time']-a['time'] <= .05 for a,b in zip(samples,samples[1:])):
+        return []
+    positions = [p['top_cap_y'] for p in samples]
+    return samples if (len({round(y,1) for y in positions}) >= MIN_EDGE_OBSERVATIONS
+                       and max(positions)-min(positions) >= .5*geometry.spacing) else []
+
+
 def resolve_geometry(data, track, geometry):
     """Return supported chart geometry, independently of displayed input state."""
     spacing, receptor = geometry.spacing, geometry.receptor
@@ -266,7 +283,9 @@ def resolve_geometry(data, track, geometry):
         # time proximity or one plausible edge alone cannot create a hold.
         longs = [point for point in track if point['long'] and point.get('stripe_support', 1) >= WEAK_STRIPE_SUPPORT]
         if len(longs) < MIN_BODY_OBSERVATIONS or longs[-1]['time'] - longs[0]['time'] < MIN_BODY_SPAN_SECONDS:
-            return None
+            longs = short_cap_pair(track,geometry)
+            if not longs:
+                return None
     lane = track[0]['lane']
     start = fit_endpoint(track, receptor, spacing, 'top')
     end = fit_endpoint(track, receptor, spacing, 'bottom')
