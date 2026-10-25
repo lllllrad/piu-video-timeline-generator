@@ -68,7 +68,7 @@ class CandidateTest(unittest.TestCase):
         self.assertTrue(all(entries[0]['alternative_rows'] == 2 for entries in result.values()))
 
     def test_tap_refresh_during_flash_uses_bracket_before_lane_light_becomes_visible(self):
-        from piu_timeline.play_holds import receptor_runs
+        from piu_timeline.play_hold_state import receptor_runs
         frames=[{'playback_seconds':time,'source_pts_seconds':time+100,
                  'receptor_lit':[lit],'common_receptor_flash':lit is None}
                 for time,lit in [(10,False),(10.02,False),(10.04,None),(10.06,None),

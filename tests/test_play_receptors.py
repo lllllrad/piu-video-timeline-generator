@@ -7,7 +7,7 @@ from unittest.mock import patch
 import numpy as np
 
 from piu_timeline.play_receptors import fractions, observations, reject_common_flashes, onset_overlaps
-from piu_timeline.play_holds import receptor_runs
+from piu_timeline.play_hold_state import receptor_runs
 
 LAYOUT={'receptor_y':.15,'lanes':[{'x':.38+.06*i} for i in range(5)]}
 

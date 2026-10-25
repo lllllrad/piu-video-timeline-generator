@@ -1,19 +1,12 @@
-"""Lane-specific long-note geometry and sustained recognition, separate from taps."""
-from bisect import bisect_left, bisect_right
+"""Hold analysis orchestration and projection; pixels, geometry and state are separate."""
 from collections import Counter
 from hashlib import sha256
-from itertools import zip_longest
 import json
-import math
-from pathlib import Path
 
-import cv2
-import numpy as np
+from .play_hold_features import FEATURE_FORMAT, acquire_features, feature_contract
+from .play_hold_geometry import HoldGeometry, body_tracks, hold_start, resolve_geometry, retain_hold
+from .play_hold_state import contextual_hold_support, recognition_segments, receptor_runs
 
-from .play_frames import decode_frames
-from .play_tracking import Track, fit_track
-
-FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
 ASSOCIATION_FORMAT = {'schema': 1, 'revision': 17}
 
 
@@ -21,364 +14,20 @@ def fingerprint(value):
     return sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
-def feature_contract(data):
-    return {'format': FEATURE_FORMAT, **{key: data[key] for key in
-            ('media', 'start_seconds', 'end_seconds', 'game_roi', 'layout')}}
-
-
-def detect_bodies(rgb, layout):
-    """Observe colored vertical bodies and filled receptors without reading text."""
-    height, width = rgb.shape[:2]
-    spacing = float(np.median(np.diff([lane['x'] * width for lane in layout['lanes']])))
-    receptor = layout['receptor_y'] * height
-    hue, saturation, value = cv2.split(cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV))
-    colors = {'blue': (hue >= 85) & (hue <= 130), 'red': (hue <= 28) | (hue >= 150),
-              'yellow': (hue >= 15) & (hue <= 45)}
-    white = (rgb.min(axis=2) > 190) & (rgb.max(axis=2) - rgb.min(axis=2) < 65)
-    bodies, lit = [], []
-    top, bottom = max(0, int(receptor - .3 * spacing)), min(height, int(layout.get('note_y_max', .95) * height))
-    for index, lane in enumerate(layout['lanes']):
-        cx = lane['x'] * width
-        left, right = max(0, int(cx - .38 * spacing)), min(width, int(cx + .38 * spacing))
-        ry1, ry2 = max(0, int(receptor - .28 * spacing)), min(height, int(receptor + .28 * spacing))
-        rx1, rx2 = max(0, int(cx - .28 * spacing)), min(width, int(cx + .28 * spacing))
-        lit.append(float(white[ry1:ry2, rx1:rx2].mean()) > .55)
-        mask = (colors[lane['color']] & (saturation > 105) & (value > 170))[top:bottom, left:right].astype('uint8')
-        # Small holes from judgment text can split an otherwise continuous body.
-        original_mask = mask.copy()
-        kernel = np.ones((max(3, round(.6 * spacing)) | 1, 1), dtype='uint8')
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
-        for component, (x, y, w, h, area) in enumerate(stats[1:count], 1):
-            if h < .8 * spacing or w < .16 * spacing or area < .35 * w * h:
-                continue
-            stripe = (labels[y:y+h, x:x+w] == component).mean(axis=0).max()
-            if stripe < .72:
-                continue
-            bodies.append({'lane': index, 'top': float(y + top), 'bottom': float(y + top + h),
-                           'long': bool(h > 1.6 * spacing),
-                           'stripe_support': float(original_mask[y:y+h, x:x+w].mean(axis=0).max()), 'tail_visible': bool(y + top + h < bottom - .65 * spacing)})
-    return bodies, lit
-
-
-def acquire_features(data, output):
-    contract = feature_contract(data)
-    header, trace = output / 'hold-features.json', output / 'hold-frames.jsonl'
-    if header.is_file() and trace.is_file() and json.loads(header.read_text()).get('contract') == contract:
-        return
-    print('  Extracting long-note bodies and receptor states; no OCR...', flush=True)
-    temporary = trace.with_suffix('.build-jsonl')
-    width = FEATURE_FORMAT['width']
-    original = output / 'frames.jsonl'
-    count = 0
-    source_before = Path(data['media']['path']).stat()
-    try:
-        with original.open() as saved, temporary.open('w') as target:
-            frames = decode_frames(data['media'], data['start_seconds'], data['end_seconds'], data['game_roi'], width)
-            for raw, decoded in zip_longest(saved, frames):
-                if raw is None or decoded is None:
-                    raise ValueError('Hold acquisition frame count differs from saved native frames')
-                previous = json.loads(raw)
-                pts, time, image = decoded
-                if abs(pts - previous['source_pts_seconds']) > 1e-6 or abs(time - previous['playback_seconds']) > 1e-6:
-                    raise ValueError('Hold acquisition PTS differs from saved native frames')
-                bodies, lit = detect_bodies(image, data['layout'])
-                from .play_receptors import fractions
-                scores = fractions(image, data['layout'])
-                target.write(json.dumps({'source_pts_seconds': pts, 'playback_seconds': time,
-                                         'bodies': bodies, 'receptor_lit': lit, 'receptor_white_fraction': scores}) + '\n')
-                count += 1
-                if count % 2400 == 0:
-                    print(f'    Long notes: {time-data["start_seconds"]:.0f}/{data["end_seconds"]-data["start_seconds"]:.0f}s', flush=True)
-        source_after = Path(data['media']['path']).stat()
-        if (source_before.st_size, source_before.st_mtime_ns) != (source_after.st_size, source_after.st_mtime_ns):
-            raise ValueError('Source changed during long-note acquisition')
-        temporary.replace(trace)
-        pending = header.with_suffix('.build-json')
-        pending.write_text(json.dumps({'contract': contract, 'frame_count': count}) + '\n')
-        pending.replace(header)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def body_tracks(frames, spacing):
-    active, finished = [], []
-    for frame in frames:
-        time = frame['playback_seconds']
-        expired = [track for track in active if time - track[-1]['time'] > .25]
-        finished.extend(expired)
-        active = [track for track in active if time - track[-1]['time'] <= .25]
-        pairs = []
-        for i, track in enumerate(active):
-            last = track[-1]
-            velocity = (last['bottom'] - track[-2]['bottom']) / (last['time'] - track[-2]['time']) if len(track) > 1 else -spacing * 8
-            velocity = min(0, max(-spacing * 40, velocity))
-            dt = time - last['time']
-            for j, body in enumerate(frame['bodies']):
-                if body['lane'] != last['lane']:
-                    continue
-                cost = min(abs(body['bottom'] - (last['bottom'] + velocity * dt)),
-                           abs(body['top'] - (last['top'] + velocity * dt)))
-                if cost < spacing * .9:
-                    pairs.append((cost, i, j))
-        used_tracks, used_bodies = set(), set()
-        for _, i, j in sorted(pairs):
-            if i in used_tracks or j in used_bodies:
-                continue
-            body = frame['bodies'][j]
-            active[i].append({**body, 'time': time, 'pts': frame['source_pts_seconds'],
-                              'lit': frame['receptor_lit'][body['lane']]})
-            used_tracks.add(i); used_bodies.add(j)
-        for j, body in enumerate(frame['bodies']):
-            if j not in used_bodies:
-                active.append([{**body, 'time': time, 'pts': frame['source_pts_seconds'],
-                                'lit': frame['receptor_lit'][body['lane']]}])
-    return finished + active
-
-
-def fit_endpoint(track, receptor, spacing, endpoint):
-    points = [(p['time'], p[endpoint] + (.45 if endpoint == 'top' else -.45) * spacing)
-              for p in track if (endpoint != 'bottom' or p['tail_visible'])
-              and (endpoint != 'top' or p['top'] > receptor + 1.2 * spacing)]
-    fitted = fit_track(Track(track[0]['lane'], points), receptor, spacing)
-    if fitted['status'] != 'estimated':
-        return None
-    uncertainty = fitted['prediction_uncertainty_seconds'] + .55 * spacing / abs(fitted['velocity_pixels_per_second'])
-    return [fitted['target_seconds'] - uncertainty, fitted['target_seconds'] + uncertainty]
-
-
-def edge_alignment(note, track, spacing, scale, endpoint, receptor=None):
-    """Compare a native arrow trajectory with an extended body's visible edge."""
-    # Compare while the body is extended: a shrinking body near the receptor
-    # can put its head and tail within the same positional tolerance.
-    visible = {round(point['time'], 6): point for point in track
-               if point['long'] and (point['tail_visible'] if endpoint == 'bottom'
-                                    else point['top'] > receptor + 1.2*spacing)}
-    offset = -.45*spacing if endpoint == 'bottom' else .45*spacing
-    errors = [abs(y*scale-(visible[round(time, 6)][endpoint]+offset))
-              for time, y in note.get('points', []) if round(time, 6) in visible]
-    if (len(errors) < 4 or median_error(errors) > .55*spacing
-            or sum(error <= .55*spacing for error in errors) < max(4, .65*len(errors))):
-        return None
-    return median_error(errors)
-
-
-def tail_from_head_track(data, track, spacing, start):
-    """Corroborate a tail-shaped arrow with the connected body's lower edge."""
-    scale = FEATURE_FORMAT['width'] / data.get('analysis_width', FEATURE_FORMAT['width'])
-    options = []
-    for index, note in enumerate(data['notes']):
-        velocity = note.get('velocity_pixels_per_second', 0) * scale
-        if (note['status'] != 'estimated' or note['lane'] != track[0]['lane'] or velocity >= 0
-                or not start < note['target_seconds'] <= track[-1]['time'] + .25):
-            continue
-        error = edge_alignment(note, track, spacing, scale, 'bottom')
-        if error is None:
-            continue
-        uncertainty = note['prediction_uncertainty_seconds'] + .55*spacing/abs(velocity)
-        options.append((error, index,
-                        [note['target_seconds']-uncertainty, note['target_seconds']+uncertainty]))
-    selected = min(options, default=None)
-    return (selected[2], selected[1]) if selected else (None, None)
-
-
-def median_error(values):
-    return float(np.median(values))
-
-
-def contextual_hold_support(data, frames, receptor, spacing):
-    """Recover dim hold pulses using local change, body contact and a HUD update.
-
-    These observations support an already reconstructed hold only. They never
-    become tap onsets or a physical press/release measurement.
-    """
-    times = [frame['playback_seconds'] for frame in frames]
-    events = []
-    for kind in ('combo_events', 'judgment_events'):
-        for index, event in enumerate(data.get(kind, [])):
-            lo, hi = event['lower_seconds'], event['upper_seconds']
-            positive = (event.get('delta', 0) > 0 if kind == 'combo_events' else
-                        event.get('label') in ('PERFECT', 'GREAT', 'GOOD', 'BAD'))
-            if positive and 0 <= hi-lo <= .12:
-                events.append((hi, {'kind': kind, 'index': index, 'range': [lo, hi]}))
-    events.sort(key=lambda item: item[0])
-    event_times = [item[0] for item in events]
-    result = {}
-    for fi, frame in enumerate(frames):
-        values = frame.get('receptor_white_fraction')
-        if values is None or frame.get('common_receptor_flash'):
-            continue
-        time = frame['playback_seconds']
-        nearby = [item[1] for item in events[bisect_left(event_times, time-.04):bisect_right(event_times, time+.04)]]
-        if not nearby:
-            continue
-        previous = frames[bisect_left(times, time-.15):bisect_right(times, time-.025)]
-        if len(previous) < 3 or any('receptor_white_fraction' not in item for item in previous):
-            continue
-        for lane, value in enumerate(values):
-            if value < .4:
-                continue
-            baseline = float(np.quantile([item['receptor_white_fraction'][lane] for item in previous], .25))
-            others = [score for li, score in enumerate(values) if li != lane]
-            if value-baseline < .16 or value-float(np.median(others)) < .2:
-                continue
-            if not any(body['lane'] == lane and body['top'] <= receptor+.8*spacing
-                       and body['bottom'] >= receptor+.6*spacing for body in frame['bodies']):
-                continue
-            result[(fi, lane)] = nearby
-    return result
-
-
 def reconstruct(data, frames):
-    width = FEATURE_FORMAT['width']
-    height = round(width * data['game_roi'][3] / data['game_roi'][2])
-    spacing = float(np.median(np.diff([lane['x'] * width for lane in data['layout']['lanes']])))
-    receptor = data['layout']['receptor_y'] * height
-    holds = []
+    """Resolve chart geometry first, then attach independent recognition spans."""
+    geometry = HoldGeometry.from_analysis(data, FEATURE_FORMAT['width'])
     frame_times = [frame['playback_seconds'] for frame in frames]
-    contextual = contextual_hold_support(data, frames, receptor, spacing)
-    for track in body_tracks(frames, spacing):
-        longs = [point for point in track if point['long'] and point.get('stripe_support', 1) >= .8]
-        needs_edges = len(longs) < 5 or longs[-1]['time'] - longs[0]['time'] < .08
-        if needs_edges:
-            # Compression, diagonal caps and HUD overlays can reduce the colored
-            # stripe fraction. Weaker pixels require BOTH tracked endpoints;
-            # time proximity or one plausible edge alone cannot create a hold.
-            longs = [point for point in track if point['long'] and point.get('stripe_support', 1) >= .72]
-            if len(longs) < 5 or longs[-1]['time'] - longs[0]['time'] < .08:
-                continue
-        lane = track[0]['lane']
-        start = fit_endpoint(track, receptor, spacing, 'top')
-        end = fit_endpoint(track, receptor, spacing, 'bottom')
-        contact = [point for point in track if point['top'] <= receptor + .8 * spacing]
-        if not start and not contact:
+    contextual = contextual_hold_support(data, frames, geometry.receptor, geometry.spacing)
+    holds = []
+    for track in body_tracks(frames, geometry.spacing):
+        hold = resolve_geometry(data, track, geometry)
+        if hold is None:
             continue
-        censored = start is None
-        if start is None:
-            start = [data['start_seconds'], contact[0]['time']]
-        short_body_fit = end is not None and end[1] - (start[1] if censored else start[0]) < .12
-        middle = contact[0]['time'] if censored else sum(start) / 2
-        # Prefer a fitted arrow head corroborated by the approaching body.
-        heads = [(i, note) for i, note in enumerate(data['notes']) if note['status'] == 'estimated'
-                 and note['lane'] == lane and abs(note['target_seconds'] - middle) <= .15]
-        head = min(heads, key=lambda item: abs(item[1]['target_seconds']-middle), default=None)
-        if head and (not censored or track[0]['time'] < head[1]['target_seconds'] - .065):
-            censored = False
-            start = [head[1]['target_seconds']-head[1]['prediction_uncertainty_seconds'],
-                     head[1]['target_seconds']+head[1]['prediction_uncertainty_seconds']]
-        if needs_edges and (censored or head is None or edge_alignment(
-                head[1], track, spacing, width/data.get('analysis_width', width), 'top', receptor) is None):
-            continue
-        # A directly tracked tail shares the native heads' motion clock. Prefer
-        # it even when the noisier body-box endpoint could be extrapolated.
-        tail_end, tail_note = tail_from_head_track(data, track, spacing, start[1] if censored else sum(start)/2)
-        if needs_edges and tail_note is None:
-            continue
-        if tail_end is not None:
-            end = tail_end
-        if short_body_fit and tail_note is None:
-            continue
-        last_time = end[1] if end else track[-1]['time']
-        if censored and end is None and head is None:
-            continue
-        if last_time <= (start[1] if censored else start[0]):
-            continue
-        # A held state is lane-local visual support. Repeated accepted ticks do
-        # not create separate presses, and disappearance does not measure release.
-        segments = []
-        support_start = start[1] if censored else start[0]
-        # A flash can temporarily hide the body's colored pixels. Use the
-        # independently recorded receptor state in neighboring native frames,
-        # bounded by the reconstructed hold, not only frames with a body box.
-        first_support = bisect_left(frame_times, support_start)
-        support = frames[first_support:bisect_right(frame_times, last_time)]
-        for fi, frame in enumerate(support, first_support):
-            corroboration = contextual.get((fi, lane), [])
-            if frame['receptor_lit'][lane] is not True and not corroboration:
-                continue
-            time, pts = frame['playback_seconds'], frame['source_pts_seconds']
-            if segments and time - segments[-1]['upper_seconds'] <= .075:
-                segments[-1].update(upper_seconds=time, last_source_pts_seconds=pts,
-                                    frames=segments[-1]['frames']+1)
-            else:
-                segments.append({'lower_seconds': time, 'upper_seconds': time,
-                                 'first_source_pts_seconds': pts, 'last_source_pts_seconds': pts, 'frames': 1})
-            if corroboration:
-                segment = segments[-1]
-                segment['contextual_frames'] = segment.get('contextual_frames', 0)+1
-                updates = segment.setdefault('corroborating_updates', [])
-                for update in corroboration:
-                    if update not in updates:
-                        updates.append(update)
-        segments = [segment for segment in segments if segment['frames'] >= 2 or segment.get('contextual_frames')]
-        covered = [i for i, note in enumerate(data['notes']) if note['status'] == 'estimated'
-                   and note['lane'] == lane and (start[1] if censored else start[0])-.025 <= note['target_seconds'] <= last_time+.025]
-        hold = {'id': len(holds), 'lane': lane, 'start_range': start, 'end_range': end,
-                'start_censored': censored, 'end_censored': end is None,
-                'last_body_seconds': track[-1]['time'], 'head_note': head[0] if head else None, 'tail_note': tail_note,
-                'covered_notes': covered, 'body_frames': len(track), 'long_body_frames': len(longs),
-                'body_evidence': 'stripe_and_tracked_edges' if needs_edges else 'strong_stripe',
-                'source_pts_range': [track[0]['pts'], track[-1]['pts']],
-                'input': {'kind': 'sustained_recognition', 'segments': segments,
-                          'press_range': None, 'release_range': None,
-                          'recognition_envelope': [segments[0]['lower_seconds'], segments[-1]['upper_seconds']] if segments else None,
-                          'note': 'Filled receptor with a long body is hold-state evidence, not repeated presses or a measured switch release.'}}
-        duplicate = next((previous for previous in holds if previous['lane'] == lane
-                          and ((head is not None and previous['head_note'] == head[0])
-                               or abs((previous['start_range'][1] if previous['start_censored'] else sum(previous['start_range'])/2) - (start[1] if censored else sum(start)/2)) < .08
-                               or previous['end_range'] is not None and end is not None and abs(sum(previous['end_range'])/2-sum(end)/2) < .08)), None)
-        if duplicate:
-            if (not hold['start_censored'], hold['end_range'] is not None, hold['body_frames']) > (not duplicate['start_censored'], duplicate['end_range'] is not None, duplicate['body_frames']):
-                hold['id'] = duplicate['id']; holds[duplicate['id']] = hold
-        else:
-            holds.append(hold)
+        hold['id'] = len(holds)
+        hold['input'] = recognition_segments(frames, frame_times, hold, contextual)
+        retain_hold(holds, hold)
     return holds
-
-
-def receptor_runs(frames):
-    runs, current, known, bridge, hidden_light = [], {}, {}, {}, {}
-    previous_time = None
-    for frame in frames:
-        time = frame['playback_seconds']
-        continuous = previous_time is None or 0 < time-previous_time <= .075
-        for lane, lit in enumerate(frame['receptor_lit']):
-            if not continuous:
-                bridge[lane] = False
-                hidden_light[lane] = False
-            previous = current.get(lane)
-            if previous is not None and previous['lit'] == lit and continuous:
-                previous.update(end_seconds=frame['playback_seconds'], last_source_pts_seconds=frame['source_pts_seconds'], frames=previous['frames']+1)
-            else:
-                run = {'lane': lane, 'lit': lit, 'start_seconds': frame['playback_seconds'],
-                       'end_seconds': frame['playback_seconds'], 'frames': 1,
-                       'first_source_pts_seconds': frame['source_pts_seconds'], 'last_source_pts_seconds': frame['source_pts_seconds'],
-                       'previous_seconds': previous['end_seconds'] if previous else None,
-                       'previous_lit': previous['lit'] if previous else None}
-                runs.append(run); current[lane] = run
-                if lit is True:
-                    before = known.get(lane)
-                    run['onset_range'] = None
-                    if (bridge.get(lane) and before is not None and before['lit'] is False
-                            and time-before['end_seconds'] <= .15):
-                        run['onset_range'] = [before['end_seconds'], time]
-                        run['onset_source_pts_seconds'] = [before['last_source_pts_seconds'], frame['source_pts_seconds']]
-                    if (hidden_light.get(lane) and before is not None and before['lit'] is True
-                            and 0 < time-before['end_seconds'] <= .15):
-                        # Corroborate the earlier observed onset, without filling
-                        # unknown frames or inventing a second onset after flash.
-                        before['corroborating_lit_frames_after_flash'] = 1
-                        before['corroborating_source_pts_seconds'] = frame['source_pts_seconds']
-                        before['corroborating_playback_seconds'] = time
-            if lit is None:
-                bridge[lane] = bridge.get(lane, False) and frame.get('common_receptor_flash', False)
-                hidden_light[lane] = (continuous and frame.get('common_receptor_flash', False)
-                                      and (hidden_light.get(lane, False) or previous is not None and previous['lit'] is True))
-            else:
-                known[lane] = current[lane]
-                bridge[lane] = lit is False
-                hidden_light[lane] = False
-        previous_time = time
-    return runs
 
 
 def augment_holds(data, output):
@@ -420,7 +69,7 @@ def presentation(data):
     for original in holds:
         hold = dict(original)
         start = hold['start_range']
-        target = start[1] if hold['start_censored'] else sum(start)/2
+        target = hold_start(hold)
         head = hold['head_note']
         if head is None or head not in suppressed:
             head = len(notes)

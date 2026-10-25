@@ -8,7 +8,9 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from piu_timeline.play_holds import detect_bodies, reconstruct, presentation, feature_contract, augment_holds, acquire_features, contextual_hold_support
+from piu_timeline.play_holds import reconstruct, presentation, augment_holds
+from piu_timeline.play_hold_features import detect_bodies, feature_contract, acquire_features
+from piu_timeline.play_hold_state import contextual_hold_support
 
 
 LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
@@ -42,7 +44,7 @@ class HoldTest(unittest.TestCase):
         for body_start, body_end in (([.99, 1.01], None), ([.99, 1.01], [1.02, 1.04]),
                                      (None, None)):
             with self.subTest(body_start=body_start, body_end=body_end), patch(
-                    'piu_timeline.play_holds.fit_endpoint',
+                    'piu_timeline.play_hold_geometry.fit_endpoint',
                     side_effect=lambda track, receptor, spacing, endpoint:
                     body_start if endpoint == 'top' else body_end):
                 holds = reconstruct(data, frames)
@@ -194,11 +196,11 @@ class HoldTest(unittest.TestCase):
             frames = [{'playback_seconds': time, 'source_pts_seconds': time+10,
                        'bodies': [], 'receptor_lit': [False]*5, 'receptor_white_fraction':[0]*5} for time in (0, .02)]
             (root / 'hold-frames.jsonl').write_text(''.join(json.dumps(frame)+'\n' for frame in frames))
-            with patch('piu_timeline.play_holds.decode_frames', side_effect=AssertionError('cached pixels')):
+            with patch('piu_timeline.play_hold_features.decode_frames', side_effect=AssertionError('cached pixels')):
                 result = augment_holds(data, root)
             self.assertEqual(result['hold_analysis']['holds'], [])
             self.assertTrue(result['hold_analysis']['receptor_runs'])
-            with patch('piu_timeline.play_holds.decode_frames', side_effect=AssertionError('cached pixels')), \
+            with patch('piu_timeline.play_hold_features.decode_frames', side_effect=AssertionError('cached pixels')), \
                     patch('piu_timeline.play_holds.reconstruct', side_effect=AssertionError('cached associations')):
                 replay = augment_holds(data, root)
             self.assertEqual(replay['hold_analysis'], result['hold_analysis'])
@@ -213,7 +215,7 @@ class HoldTest(unittest.TestCase):
             (root / 'frames.jsonl').write_text(json.dumps({'source_pts_seconds': 10, 'playback_seconds': 0})+'\n')
             old = root / 'hold-frames.jsonl';old.write_text('previous pixels')
             decoded = [(10.1, .1, np.zeros((183, 325, 3), dtype='uint8'))]
-            with patch('piu_timeline.play_holds.decode_frames', return_value=iter(decoded)):
+            with patch('piu_timeline.play_hold_features.decode_frames', return_value=iter(decoded)):
                 with self.assertRaisesRegex(ValueError, 'PTS differs'):
                     acquire_features(data, root)
             self.assertEqual(old.read_text(), 'previous pixels')

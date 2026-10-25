@@ -54,7 +54,7 @@ class PlayIntegrationTest(unittest.TestCase):
             self.assertEqual(presentation(result)['matches'],[])
             observed = [json.loads(line) for line in (root/'hold-frames.jsonl').read_text().splitlines()]
             self.assertEqual([item['source_pts_seconds'] for item in observed], [item['source_pts_seconds'] for item in frames])
-            with patch('piu_timeline.play_holds.decode_frames',side_effect=AssertionError('must use cached hold pixels')):
+            with patch('piu_timeline.play_hold_features.decode_frames',side_effect=AssertionError('must use cached hold pixels')):
                 self.assertEqual(augment_holds(data,root)['hold_analysis'],result['hold_analysis'])
             self.assertEqual((video.read_bytes(),video.stat().st_mtime_ns),before)
 
