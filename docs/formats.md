@@ -58,7 +58,12 @@ Formatting does not receive the video and must not modify analysis or evidence f
 
 A play's `results.status` may be `not_displayed` with `reason: stage_break_screen` when repeated life-loss screens replace the score table. Such a result has no numeric players and is not an OCR failure. Missing visible fields retain their `unknown` or `conflict` evidence states.
 
-Both bundled formats use `createSegmentLabeler(timeline)` with the same defaults: song and chart always appear, one account's name stays hidden, and multiple players use nicknames without the trailing `#dddd` discriminator. Full identities remain in analysis for account distinction. Identity and result slots are considered together; uncertain identities do not establish another participant. Rival comparison slots are excluded from `players` and `results.players`, with header evidence retained under `excluded_slots`.
+Both bundled formats use `createSegmentLabeler(timeline)` with the same defaults: song and chart
+always appear, one account's name stays hidden, and multiple players use nicknames without the
+trailing `#dddd` discriminator. Full identities remain in analysis for account distinction. Identity
+and result slots are considered together; uncertain identities do not establish another participant.
+Rival comparison slots are excluded from `players` and `results.players`, with header evidence
+retained under `excluded_slots`.
 
 Control name presentation separately from song information:
 

@@ -20,9 +20,13 @@ fetch +args:
 import-studio +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.workflow import-studio "$@"
 
-# Run the offline test suite.
+# Run the full recommended QG rules and the test suite.
 check:
-    sh scripts/run.sh .venv/bin/python -m unittest discover -s tests -t . -v
+    sh scripts/run.sh python3 scripts/quality_gate.py check --full
+
+# Run Quality Gate; defaults to staged rules plus the test suite.
+qg *args:
+    sh scripts/run.sh python3 scripts/quality_gate.py "$@"
 
 # Exercise the native macOS Vision OCR engine.
 check-ocr:

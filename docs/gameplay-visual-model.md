@@ -8,12 +8,18 @@ Use the cropped game image, with the origin at its top-left corner, x increasing
 
 The receptors are the stationary gray arrow/center outlines near the top of gameplay. The useful registration row passes through their centers. It is not the top or bottom of their outline, the life bar, the bottom of a flash, or a line inferred from where a played note disappears. A bright receptor may have an enlarged or asymmetric bounding box.
 
-For a standard full, unmirrored game image, receptor positions may instead come from a declared fixed game-layout profile. This is the default policy: Single-left, Single-right and Double have separate profiles. The chart mode and Single player side must be known; an explicit layout overrides the profile. Record this as a geometric prior, not as directly detected receptor evidence. Existing observations retain their original reviewed geometry. For image-derived fallback geometry, prefer unlit outlines corroborated at different source times; missing receptors cannot be supplied solely by extrapolating a convenient equally spaced grid.
+For a standard full, unmirrored game image, receptor positions may instead come from a declared
+fixed game-layout profile. This is the default policy: Single-left, Single-right and Double have
+separate profiles. The chart mode and Single player side must be known; an explicit layout overrides
+the profile. Record this as a geometric prior, not as directly detected receptor evidence. Existing
+observations retain their original reviewed geometry. For image-derived fallback geometry, prefer
+unlit outlines corroborated at different source times; missing receptors cannot be supplied solely
+by extrapolating a convenient equally spaced grid.
 
-Call the receptor registration height **r**, the horizontal lane centers **xᵢ**, and the median distance between neighboring lane centers **s**. For a moving head, call its registration height **yᵢ(t)**. The visual target time solves:
+Call the receptor registration height **r**, the horizontal lane centers **x_i**, and the median distance between neighboring lane centers **s**. For a moving head, call its registration height **y_i(t)**. The visual target time solves:
 
 ```text
-yᵢ(T) = r
+y_i(T) = r
 ```
 
 This is a visual alignment estimate. The exact game-engine anchor, its judgment windows and the physical switch timestamp are not established by a screenshot. Bounding-box centers of different nested outlines may differ by pixels. An absolute timing claim needs a verified registration convention and independent latency calibration.
@@ -22,8 +28,8 @@ This is a visual alignment estimate. The exact game-engine anchor, its judgment 
 flowchart LR
     A[Stationary receptors<br/>centers define the target row r]
     B[Tap<br/>one moving head]
-    C[Hold<br/>head — connected body — tail]
-    D[Two taps<br/>head — background gap — head]
+    C[Hold<br/>head -- connected body -- tail]
+    D[Two taps<br/>head -- background gap -- head]
     B -->|head center approaches r| A
     C -->|leading head first, trailing tail later| A
     D -->|two independent trajectories| A
@@ -33,9 +39,14 @@ flowchart LR
 
 **Lane spacing is not note size.** Measure horizontal spacing from receptor centers, and head width/height from complete moving outlines. Both change under image resizing, but their ratio need not be exactly one. Arrow direction, nested borders and skin design affect the bounds. Use a consistent outline or template registration point for each shape; do not mix the center of an inner ring with that of an outer silhouette without accounting for the offset.
 
-At the inspected 1300 × 730 game crop, neighboring receptors are about 77 pixels apart and their center row is about y = 104. Complete moving-head contours include roughly 71 × 71-pixel inner outlines and approximately 75–80-pixel outer bounds. These are observations of this crop, not constants for another video. At 650-pixel analysis width, the same geometry is approximately half as large. A one-pixel position error contributes roughly `1 / scroll_speed_pixels_per_second` seconds to a crossing estimate.
+At the inspected 1300 x 730 game crop, neighboring receptors are about 77 pixels apart and their
+center row is about y = 104. Complete moving-head contours include roughly 71 x 71-pixel inner
+outlines and approximately 75-80-pixel outer bounds. These are observations of this crop, not
+constants for another video. At 650-pixel analysis width, the same geometry is approximately half as
+large. A one-pixel position error contributes roughly `1 / scroll_speed_pixels_per_second` seconds
+to a crossing estimate.
 
-Convert coordinates using each image's actual dimensions. Rounding the resized height can make the vertical scale differ from the horizontal scale: a 650 × 365 analysis image becomes 325 × 182, so vertical coordinates scale by 182/365, not 325/650. Positions and velocities on the same axis must use the same transform.
+Convert coordinates using each image's actual dimensions. Rounding the resized height can make the vertical scale differ from the horizontal scale: a 650 x 365 analysis image becomes 325 x 182, so vertical coordinates scale by 182/365, not 325/650. Positions and velocities on the same axis must use the same transform.
 
 A head is fully visible only when its relevant outline is inside the visible field and not clipped by the receptor mask, screen edge or overlay. A partial contour's bounding-box center can move even when the original head does not. Such centers must not be treated as equivalent to intact-head observations. The lower boundary must be checked as well as the receptor boundary.
 
@@ -48,11 +59,11 @@ Every observation retains its original source PTS and recording playback time. D
 Within a supported constant-speed interval:
 
 ```text
-y(t) = a − v·t,  v > 0
-T = (a − r) / v
+y(t) = a - v/t,  v > 0
+T = (a - r) / v
 ```
 
-With a shared forward displacement **d(t)**, notes moving together instead satisfy `yᵢ(t) + d(t) = cᵢ`. Their relative vertical spacing is preserved. This permits a hidden head to be located using independently visible peers, as long as the correspondence is unique and support continues across the relevant interval. Repeated evenly spaced patterns can produce more than one plausible displacement; that ambiguity must break support.
+With a shared forward displacement **d(t)**, notes moving together instead satisfy `y_i(t) + d(t) = c_i`. Their relative vertical spacing is preserved. This permits a hidden head to be located using independently visible peers, as long as the correspondence is unique and support continues across the relevant interval. Repeated evenly spaced patterns can produce more than one plausible displacement; that ambiguity must break support.
 
 Equal pixel gaps imply equal time gaps only where the displacement-to-time mapping is linear. Under speed changes, equal pixel gaps need not mean equal musical or recording-time gaps. Do not snap targets to integer frames or assume a song-wide scroll speed. Continuous interpolation can improve relative timing while capture cadence, fit residual, position error and unknown capture phase still limit absolute accuracy.
 
@@ -75,11 +86,17 @@ To distinguish a hold from two taps, inspect several nearby frames:
 The head's center lies inside the body's upper outer bound, and the tail's center lies inside its lower outer bound. For an approximately square cap of height **h**, an initial geometric approximation is:
 
 ```text
-head_center ≈ body_top + h/2
-tail_center ≈ body_bottom − h/2
+head_center ~= body_top + h/2
+tail_center ~= body_bottom - h/2
 ```
 
-The exact offsets depend on which colored component or outline defines the body bounds. They require measured cap geometry or an explicit approximation with uncertainty. These are position relationships, not a minimum hold duration. A short hold can have closely spaced caps; a minimum-duration cutoff cannot replace evidence of a connected body. Once a cap trajectory identifies the endpoint directly, use that trajectory's crossing uncertainty. The positional tolerance used to decide which cap belongs to the body is not an additional error on an already measured crossing.
+The exact offsets depend on which colored component or outline defines the body bounds. They require
+measured cap geometry or an explicit approximation with uncertainty. These are position
+relationships, not a minimum hold duration. A short hold can have closely spaced caps; a
+minimum-duration cutoff cannot replace evidence of a connected body. Once a cap trajectory
+identifies the endpoint directly, use that trajectory's crossing uncertainty. The positional
+tolerance used to decide which cap belongs to the body is not an additional error on an already
+measured crossing.
 
 A connected interior stripe can begin below the head center and end above the
 tail center. Its bounds use a different registration convention from the outer
@@ -91,7 +108,7 @@ heads merely to obtain a continuous colored component.
 A thin white cap border can separate a short hold's colored cap from its
 colored stem. A second pixel channel may include actual white pixels within
 approximately 0.08 lane spacings of the original color, without filling any
-background pixels. This channel is limited to short components (1.6–3.5 lane
+background pixels. This channel is limited to short components (1.6-3.5 lane
 spacings high) with an observed colored connector across their middle. White
 borders touching without a colored connector do not establish a hold. Endpoint
 identity still requires the independent native cap trajectories.
@@ -107,7 +124,12 @@ preserving both independently tracked taps and their timing warnings.
 
 Only compare an extended body's edges while they are visible. A screen-clipped lower edge is not a tail. A top clamped at the receptor is not an approaching head. As the body shrinks, both caps can enter the same tolerance; these samples cannot independently distinguish the endpoints.
 
-Closing small holes in a color mask can repair compression or HUD damage, but can also join two taps. A repaired bounding box is therefore a candidate, not independent proof of a continuous hold. Preserve support from the original pixels. Weaker continuity requires additional endpoint corroboration; neither relaxing a color threshold nor fitting two arrows to the repaired box proves the intervening pixels are a body. Cases where the gap and body remain indistinguishable need review, not forced classification.
+Closing small holes in a color mask can repair compression or HUD damage, but can also join two
+taps. A repaired bounding box is therefore a candidate, not independent proof of a continuous hold.
+Preserve support from the original pixels. Weaker continuity requires additional endpoint
+corroboration; neither relaxing a color threshold nor fitting two arrows to the repaired box proves
+the intervening pixels are a body. Cases where the gap and body remain indistinguishable need
+review, not forced classification.
 
 For each retained hold, record its observed body interval, linked head/tail identities, supported endpoint ranges and unresolved clipping. Do not suppress a separate tap merely because it falls within an uncertain endpoint range. A cap directly linked to the connected edge is stronger evidence than membership in an expanded time envelope.
 
@@ -119,7 +141,12 @@ A tap's evidence may include a lane-local receptor transition and a correspondin
 
 A weak hold response can be corroborated by a lane-local brightness pulse and a positive HUD refresh while independent neighboring frames establish that hold. Requiring the body to be detected again in the pulse frame would discard valid occlusion evidence. Use the certain interior of the established hold for this additional support; a pulse, HUD refresh or guessed body alone cannot create a hold.
 
-Keep a response-association search window separate from chart endpoint uncertainty. A rendered response can still be visible near the trailing cap as it overlaps the receptor. A bounded cap-sized positional neighborhood can be converted to a time search using the observed scroll velocity, with the assumption made explicit. This does not move the measured target, assert a physical release, or justify absorbing a separately observed next tap. Only actual receptor observations inside that search become recognition evidence; the window itself is not an input range.
+Keep a response-association search window separate from chart endpoint uncertainty. A rendered
+response can still be visible near the trailing cap as it overlaps the receptor. A bounded cap-sized
+positional neighborhood can be converted to a time search using the observed scroll velocity, with
+the assumption made explicit. This does not move the measured target, assert a physical release, or
+justify absorbing a separately observed next tap. Only actual receptor observations inside that
+search become recognition evidence; the window itself is not an input range.
 
 The interval from the last old display to the first new display brackets a visible refresh, not a physical switch closure. Confirming the new display in later frames must not move the bracket to the later confirmation. PERFECT/GREAT/GOOD/BAD can provide refresh evidence where combo digits are absent. MISS is failure evidence and must not receive a fabricated press time. A persistent word is not a fresh judgment for every nearby note.
 
@@ -150,4 +177,9 @@ The chart target range is not a PERFECT/GREAT judgment window. A result-panel gr
 
 ## Relationship to implementation
 
-[Play analysis](play-analysis.md) describes commands, current thresholds, artifacts and compatibility rules. The model above is the review criterion for those choices. Current limitations include using lane spacing as an approximate cap scale, saved observations without head bounds, and body endpoints extrapolated from small color masks. Those approximations must be named and carry uncertainty; they are not facts about the game. Improvements should replace them with measured evidence where available, while retaining a traceable fallback for older observations.
+[Play analysis](play-analysis.md) describes commands, current thresholds, artifacts and
+compatibility rules. The model above is the review criterion for those choices. Current limitations
+include using lane spacing as an approximate cap scale, saved observations without head bounds, and
+body endpoints extrapolated from small color masks. Those approximations must be named and carry
+uncertainty; they are not facts about the game. Improvements should replace them with measured
+evidence where available, while retaining a traceable fallback for older observations.

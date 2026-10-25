@@ -1,0 +1,14 @@
+# The CLI loads the language-independent recommended rules by default.
+artifacts:
+  generated:
+    include: [".venv/**"]
+
+hooks:
+  preCommit:
+    installation: auto
+
+checks:
+  - name: tests
+    command: sh
+    args: [scripts/run.sh, .venv/bin/python, -m, unittest, discover, -s, tests, -t, ., -v]
+    message: "Fix the failing tests before committing."

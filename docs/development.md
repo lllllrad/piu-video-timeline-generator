@@ -10,7 +10,14 @@ mise exec -- just check
 mise exec -- just auto SOURCE
 ```
 
-Mise provisions uv and creates and activates `.venv`. The explicit `_.python.venv` setting supports this requirements-based project without a `uv.lock`; `python.uv_venv_auto` is also enabled. Recipes create `.venv` when necessary and install the project dependencies with `uv pip install --python .venv/bin/python`. No pip installation inside the virtualenv is required. `requirements.txt` includes ONNX Runtime, PyYAML and polygon-processing dependencies on Linux using platform markers. Installation is serialized across concurrent recipes and cached under `.venv`; changes to dependency declarations trigger an update. Failed installations are retried on the next run. If the required tools are already on PATH, `just` can be used directly.
+Mise provisions uv and creates and activates `.venv`. The explicit `_.python.venv` setting supports
+this requirements-based project without a `uv.lock`; `python.uv_venv_auto` is also enabled. Recipes
+create `.venv` when necessary and install the project dependencies with `uv pip install --python
+.venv/bin/python`. No pip installation inside the virtualenv is required. `requirements.txt`
+includes ONNX Runtime, PyYAML and polygon-processing dependencies on Linux using platform markers.
+Installation is serialized across concurrent recipes and cached under `.venv`; changes to dependency
+declarations trigger an update. Failed installations are retried on the next run. If the required
+tools are already on PATH, `just` can be used directly.
 
 No shell activation is required; recipes use `scripts/run.sh` to apply project-local cache paths and invoke `.venv` explicitly.
 
@@ -51,7 +58,12 @@ checkout root; cache and model paths are independent of module depth.
 - `metadata/evidence.py` resolves labels, player identity and stage-row associations across a credit.
 - `metadata/credits.py` samples screen transitions inside gameplay gaps and groups plays using observed credit boundaries.
 - `metadata/results.py` extracts per-player result fields only from per-song results.
-- `play/holds/analysis.py` orchestrates hold analysis and projects a hold-aware chart without converting ticks into presses. `play/holds/features.py` acquires and caches native-frame pixels; `play/holds/geometry.py` resolves head/body/tail geometry in explicit pixel coordinates; `play/holds/state.py` attaches independent sustained recognition and receptor-light transitions. Geometry does not depend on a successful input match. `play/candidates.py` constrains review alternatives using refresh ownership, processed-row order and per-lane receptor evidence.
+- `play/holds/analysis.py` orchestrates hold analysis and projects a hold-aware chart without
+converting ticks into presses. `play/holds/features.py` acquires and caches native-frame pixels;
+`play/holds/geometry.py` resolves head/body/tail geometry in explicit pixel coordinates;
+`play/holds/state.py` attaches independent sustained recognition and receptor-light transitions.
+Geometry does not depend on a successful input match. `play/candidates.py` constrains review
+alternatives using refresh ownership, processed-row order and per-lane receptor evidence.
 - `play/analysis.py` orchestrates opt-in visual analysis and caches evidence; `play/report.py` renders a self-contained local HTML view with retained SVG geometry and browser-driven CSS transform playback. Bounded time pages limit DOM size; video time anchors animations without per-frame note rebuilding. `play/ranges.py` derives review-only alternative refresh intervals and conditional neighboring-row bounds from saved evidence without changing confirmed associations or reacquiring frames.
 - `play/judgments.py` learns a bounded set of judgment-word templates, detects native-frame label/animation refreshes independently of combo visibility, and merges evidence without duplicate note assignments. MISS never becomes a physical input timestamp.
 - `play/recovery.py` recovers uniquely constrained tap rows using independent lane onsets, preserving display brackets and source PTS while rejecting shared onsets and competing refreshes.
@@ -64,17 +76,49 @@ checkout root; cache and model paths are independent of module depth.
 - `tools/timeline.py`, `tools/evaluate.py` and `tools/relabel.py` are internal review and diagnostic tools.
 
 Analysis is authoritative and presentation is disposable. A format reads `analysis.json`; it does not trigger recognition or mutate evidence.
-Analyzer changes that affect saved results increment `ANALYSIS_VERSION`. `just auto` rebuilds an older cache into a unique temporary directory and replaces it only after the new analysis succeeds. Source size/mtime, explicit game ROI and OCR backend/device changes invalidate the cache too. A per-source advisory lock prevents concurrent writers on macOS/Linux. Existing results are retained in `analysis.previous-*`; interrupted builds remain in `analysis.build-*` for diagnosis. Promotion rewrites nested evidence paths to their final location. Original media is never rewritten.
+Analyzer changes that affect saved results increment `ANALYSIS_VERSION`. `just auto` rebuilds an
+older cache into a unique temporary directory and replaces it only after the new analysis succeeds.
+Source size/mtime, explicit game ROI and OCR backend/device changes invalidate the cache too. A
+per-source advisory lock prevents concurrent writers on macOS/Linux. Existing results are retained
+in `analysis.previous-*`; interrupted builds remain in `analysis.build-*` for diagnosis. Promotion
+rewrites nested evidence paths to their final location. Original media is never rewritten.
 
-The metadata planner schedules OCR from screen transitions before acquiring text. Two small grayscale frames per second locate changes only in the bounded gaps around gameplay; OCR reads transition representatives plus sparse guard samples. When no changes are found, song/chart labels remain unresolved, or no result screen is observed, fixed-offset sampling provides coverage. Retained OCR and source timestamps are preserved. Dedicated result-number OCR reads at most six source frames distributed across the observed result duration, preferring frames with directly observed numeric rows over entrance animations, independent of the number of decoded frames. Existing contextual and contrast recovery channels remain bounded to six source frames each.
+The metadata planner schedules OCR from screen transitions before acquiring text. Two small
+grayscale frames per second locate changes only in the bounded gaps around gameplay; OCR reads
+transition representatives plus sparse guard samples. When no changes are found, song/chart labels
+remain unresolved, or no result screen is observed, fixed-offset sampling provides coverage.
+Retained OCR and source timestamps are preserved. Dedicated result-number OCR reads at most six
+source frames distributed across the observed result duration, preferring frames with directly
+observed numeric rows over entrance animations, independent of the number of decoded frames.
+Existing contextual and contrast recovery channels remain bounded to six source frames each.
 
-Screen routing reads fixed UI regions in English rather than unconditionally recognizing the full game image in Korean and English. A carousel of available levels is classified as `browse`, which can supply identity/boundary evidence but never a selected chart. Aligned judgment captions and numeric rows can establish a result without the animated SCORE heading. Frames without the fixed account header or judgment UI read only a small control-text crop, retaining start/mode/failure detection without scanning names/chart bands over song art. Unknown screens receive at most two new full-image OCR attempts per pre/post-game window. Song/chart recovery reads at most six new source frames per eligible scene and window, stopping per-song title/chart reads when distinct frames agree; frames after an observed return to browsing/selection cannot supply result metadata. Unreadable values remain unknown. Directly recognized result/browse screens seed small visual UI templates. Matching fixed judgment-caption color masks or the carousel band can route subsequent or earlier representatives without OCR. This reuses only the screen kind, never title/account/numeric text. Later representatives are examined first so settled UI can route entrance animations. Selected title/identity/statistics frames still read their own UI/account/rival evidence. Templates are local to one play, and unknown layouts remain unknown. Unfamiliar layouts can still exceed these routing assumptions and need representative-video validation.
+Screen routing reads fixed UI regions in English rather than unconditionally recognizing the full
+game image in Korean and English. A carousel of available levels is classified as `browse`, which
+can supply identity/boundary evidence but never a selected chart. Aligned judgment captions and
+numeric rows can establish a result without the animated SCORE heading. Frames without the fixed
+account header or judgment UI read only a small control-text crop, retaining start/mode/failure
+detection without scanning names/chart bands over song art. Unknown screens receive at most two new
+full-image OCR attempts per pre/post-game window. Song/chart recovery reads at most six new source
+frames per eligible scene and window, stopping per-song title/chart reads when distinct frames
+agree; frames after an observed return to browsing/selection cannot supply result metadata.
+Unreadable values remain unknown. Directly recognized result/browse screens seed small visual UI
+templates. Matching fixed judgment-caption color masks or the carousel band can route subsequent or
+earlier representatives without OCR. This reuses only the screen kind, never title/account/numeric
+text. Later representatives are examined first so settled UI can route entrance animations. Selected
+title/identity/statistics frames still read their own UI/account/rival evidence. Templates are local
+to one play, and unknown layouts remain unknown. Unfamiliar layouts can still exceed these routing
+assumptions and need representative-video validation.
 
 Progress reports include segment elapsed time, inferred/cached OCR image counts and time inside OCR. These counts include individual UI/title/name/numeric crops, not just full source frames. Exact-content cache hits reuse inference only: their observations keep distinct actual source timestamps and are never presented as additional decoded frames.
 
 Source-verified acquisition is reusable independently of the analyzer release or OCR engine: original media identity and game ROI must match and the saved profile/candidate artifacts must exist. An OCR identity change invalidates text, screen decisions and parsed statistics while preserving captured images, original PTS, decoded boundaries and transition plans. Existing image crops are reused. Only the new complete analysis is promoted.
 
-Frame decoding, visual change detection and OCR have separate responsibilities. Gameplay interval detection uses visual HUD matching. Note-position tracking consumes decoded gameplay frames and their original timestamps directly, without metadata OCR on each frame. OCR belongs to selected metadata observations around gameplay, with separate language and region-specific recovery. The opt-in `just play` path consumes native frames independently of metadata sampling; see [play analysis](play-analysis.md).
+Frame decoding, visual change detection and OCR have separate responsibilities. Gameplay interval
+detection uses visual HUD matching. Note-position tracking consumes decoded gameplay frames and
+their original timestamps directly, without metadata OCR on each frame. OCR belongs to selected
+metadata observations around gameplay, with separate language and region-specific recovery. The
+opt-in `just play` path consumes native frames independently of metadata sampling; see [play
+analysis](play-analysis.md).
 
 ## Commands
 
@@ -90,6 +134,8 @@ just charts sync
 just fetch URL_OR_ID
 just import-studio URL_OR_ID VIDEO_PATH
 just check
+just qg check --staged
+just qg check --full --rules-only
 just check-ocr
 ```
 
@@ -102,11 +148,34 @@ just check
 node formats/default/index.ts PATH/TO/analysis.json
 ```
 
-`just check` is offline after the initial dependency setup and includes unit tests plus synthetic FFmpeg integration. `just check-ocr` separately exercises the host Vision implementation.
+`just check` runs the full repository scan with Quality Gate's recommended Git
+and file rules, followed by unit tests and synthetic FFmpeg integration. The
+root `.qg.yaml` retains the default rule thresholds and registers `.venv/` as
+generated output. Files above 500 lines retain the default warning; errors
+block the check. `just check-ocr` separately exercises the host Vision implementation.
+
+`just qg` forwards arguments to the upstream CLI. Its default checks staged
+contents and runs the same tests; use `check --full --rules-only` for a full
+rule scan without tests. QG automatically installs its pre-commit hook on first
+use, preserving an existing custom hook. The hook checks staged files and runs
+the shared tests from `.qg.yaml` against the working tree.
+
+The npm package is currently unpublished. `scripts/quality_gate.py` builds the
+[official checkout](https://github.com/slop-lab/quality-gate) at commit
+`7093d0761a3c3ca5ae7070542271c8bcebfd1173`, using its frozen lockfile and pnpm
+11.10.0. Git, Node.js 24+ and npm are needed for this setup. The checkout, build,
+dependencies and caches stay under `.local/cache/`. First use needs network
+access; later checks reuse the completed build without installing or fetching.
+The revision constant in the bootstrap controls explicit tool upgrades.
 
 ## Data and recognition rules
 
-Keep the `.local/` root organized by purpose. `data/`, `formats/`, `cache/`, `bin/`, `mise_home/` and `tmp/` are runtime locations. Put batch logs and execution manifests under `runs/`, standalone review reports under `reports/`, local helper scripts under `tools/`, and superseded experiments under `archive/`. Disposable test files belong in `tmp/`. Do not move a live job's directories until all producers and consumers have finished; open log files can be renamed without interrupting their writers. Update relative media links when relocating HTML reports.
+Keep the `.local/` root organized by purpose. `data/`, `formats/`, `cache/`, `bin/`, `mise_home/`
+and `tmp/` are runtime locations. Put batch logs and execution manifests under `runs/`, standalone
+review reports under `reports/`, local helper scripts under `tools/`, and superseded experiments
+under `archive/`. Disposable test files belong in `tmp/`. Do not move a live job's directories until
+all producers and consumers have finished; open log files can be renamed without interrupting their
+writers. Update relative media links when relocating HTML reports.
 
 - Keep downloaded media, analysis output, caches and personal formats under `.local/`.
 - Never overwrite or retime source media.
@@ -119,9 +188,21 @@ Design observations are in [scene-and-ocr-notes.md](scene-and-ocr-notes.md) and 
 
 ## Linux and accelerator setup
 
-Recipes install the Linux inference dependencies automatically from `requirements.txt`. The default backend runs the official `PP-OCRv5_mobile_det`, `korean_PP-OCRv5_mobile_rec` and `en_PP-OCRv5_mobile_rec` ONNX exports. Model downloads use pinned Hugging Face revisions and verified SHA-256 checksums under `.local/cache/paddleocr/`. No PaddlePaddle framework, GUI OpenCV or PyTorch is required for the default OCR path. macOS metadata OCR uses native Vision; visual play analysis also uses NumPy and OpenCV.
+Recipes install the Linux inference dependencies automatically from `requirements.txt`. The default
+backend runs the official `PP-OCRv5_mobile_det`, `korean_PP-OCRv5_mobile_rec` and
+`en_PP-OCRv5_mobile_rec` ONNX exports. Model downloads use pinned Hugging Face revisions and
+verified SHA-256 checksums under `.local/cache/paddleocr/`. No PaddlePaddle framework, GUI OpenCV or
+PyTorch is required for the default OCR path. macOS metadata OCR uses native Vision; visual play
+analysis also uses NumPy and OpenCV.
 
-The Korean model includes all modern Hangul syllables. BGR normalization, line-height resizing, padding, polygon expansion and CTC decoding follow the model export definitions. Text lines are batched by width; input images and their timestamps are unchanged. No song-name dictionary or spelling correction is applied. Chart agreement requires at least two source frames with OCR confidence of .7 or higher; repeated weak digits remain unresolved. References: [Korean recognizer](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx), [English recognizer](https://huggingface.co/PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx), [text detector](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx).
+The Korean model includes all modern Hangul syllables. BGR normalization, line-height resizing,
+padding, polygon expansion and CTC decoding follow the model export definitions. Text lines are
+batched by width; input images and their timestamps are unchanged. No song-name dictionary or
+spelling correction is applied. Chart agreement requires at least two source frames with OCR
+confidence of .7 or higher; repeated weak digits remain unresolved. References: [Korean
+recognizer](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx), [English
+recognizer](https://huggingface.co/PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx), [text
+detector](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx).
 
 - `PIU_OCR_BACKEND=auto` selects Vision on macOS and PaddleOCR elsewhere.
 - `PIU_OCR_BACKEND=vision|paddleocr|easyocr` explicitly chooses a backend. EasyOCR is an optional legacy backend (`pip install easyocr==1.7.2`), not a default dependency.
@@ -129,7 +210,14 @@ The Korean model includes all modern Hangul syllables. BGR normalization, line-h
 - `PIU_OCR_DEVICE=cpu` explicitly forces CPU inference.
 - `PIU_OCR_DEVICE=cuda` or `cuda:0` requires a compatible GPU-enabled ONNX Runtime. An unavailable explicitly requested device is an error. `mps` is supported only by the optional EasyOCR backend; native macOS Vision needs no device selection.
 
-Install a compatible GPU-enabled ONNX Runtime for CUDA inference; the default package is CPU-only. OCR identity changes refresh saved text recognition while retaining verified acquisition. Linux and macOS use different models, so host accuracy is validated with representative recordings rather than assumed equivalent. Provision `.local/cache/paddleocr/` before offline operation. The [official model exports](https://huggingface.co/PaddlePaddle) define preprocessing and character dictionaries; [PaddleOCR DB postprocessing](https://github.com/PaddlePaddle/PaddleOCR/blob/main/ppocr/postprocess/db_postprocess.py) describes polygon extraction and expansion.
+Install a compatible GPU-enabled ONNX Runtime for CUDA inference; the default package is CPU-only.
+OCR identity changes refresh saved text recognition while retaining verified acquisition. Linux and
+macOS use different models, so host accuracy is validated with representative recordings rather than
+assumed equivalent. Provision `.local/cache/paddleocr/` before offline operation. The [official
+model exports](https://huggingface.co/PaddlePaddle) define preprocessing and character dictionaries;
+[PaddleOCR DB
+postprocessing](https://github.com/PaddlePaddle/PaddleOCR/blob/main/ppocr/postprocess/db_postprocess.py)
+describes polygon extraction and expansion.
 
 ## Full local regeneration
 

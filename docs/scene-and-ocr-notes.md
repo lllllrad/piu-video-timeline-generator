@@ -4,7 +4,12 @@ This document describes Phoenix scene recognition, OCR regions and evidence rule
 
 ## Scene progression
 
-The useful working sequence is song/chart selection, loading or song introduction, gameplay, transition, and a per-song result. The recording may then return to selection or show a multi-song `PLAY RESULT` summary. A failed play can instead lead through a failure message and a summary without a usable per-song result. Menus, pauses, attract/demo footage and stream-only content can occur between sessions. This is an observed working model, not an implemented full scene classifier or an exhaustive transition graph.
+The useful working sequence is song/chart selection, loading or song introduction, gameplay,
+transition, and a per-song result. The recording may then return to selection or show a multi-song
+`PLAY RESULT` summary. A failed play can instead lead through a failure message and a summary
+without a usable per-song result. Menus, pauses, attract/demo footage and stream-only content can
+occur between sessions. This is an observed working model, not an implemented full scene classifier
+or an exhaustive transition graph.
 
 | Scene | Useful evidence | Important trap |
 | --- | --- | --- |
@@ -16,7 +21,13 @@ The useful working sequence is song/chart selection, loading or song introductio
 | Failure screen | Failure message, e.g. `HEY!` | Do not accept message text as a song title. No usable score result is guaranteed. |
 | Multi-song summary | `PLAY RESULT`, multiple song rows and chart badges | It contains previous plays too. Do not attach the first readable row to the latest play. |
 
-The analyzer first scans bounded pre/post-game gaps at two downscaled grayscale frames per second without OCR. Detected changes nominate two source-time representatives per transition, up to 24 per gap, retaining pairs spread across the entire gap when changes exceed that budget. Selection guards at start minus 5 and 3 seconds and result guards at end plus 3, 7, 16, 32 and 60 seconds supplement those representatives. Early result samples at end plus 0.5, 1.25 and 2 seconds remain mandatory. A singleton result/summary receives nearby corroborating frames. This is visual sampling for metadata, independent of native-frame gameplay/note analysis.
+The analyzer first scans bounded pre/post-game gaps at two downscaled grayscale frames per second
+without OCR. Detected changes nominate two source-time representatives per transition, up to 24 per
+gap, retaining pairs spread across the entire gap when changes exceed that budget. Selection guards
+at start minus 5 and 3 seconds and result guards at end plus 3, 7, 16, 32 and 60 seconds supplement
+those representatives. Early result samples at end plus 0.5, 1.25 and 2 seconds remain mandatory. A
+singleton result/summary receives nearby corroborating frames. This is visual sampling for metadata,
+independent of native-frame gameplay/note analysis.
 
 When no transitions are found, labels remain unresolved, or no result is observed, the analyzer falls back to the following windows and classifies each acquired screen:
 
@@ -26,9 +37,26 @@ When no transitions are found, labels remain unresolved, or no result is observe
 
 These are sampling windows, not assumed scene identities. Samples are constrained by neighboring candidate intervals, with an eight-second guard before the next coarse gameplay start. Transitions outside these bounded windows or below the scene-change threshold remain a coverage limitation.
 
-Scene routing first reads English UI regions: the central panel, bottom chart/menu band and account header. Song titles and account strips retain their separate language-specific OCR. Directly recognized result/browse layouts can route visually matching frames using fixed UI masks. This reuses only the scene kind; metadata and values are read directly from selected source frames. Stable later representatives are processed first, and a per-song title/chart stops receiving new focused reads after distinct frames agree. Whole-screen OCR is a bounded fallback for at most two unresolved samples per window. Exact encoded-image matches reuse OCR within a run, separately for each backend/device/language. Source frames and timestamps remain distinct. Focused title/chart OCR is limited to six new frames per eligible scene/window.
+Scene routing first reads English UI regions: the central panel, bottom chart/menu band and account
+header. Song titles and account strips retain their separate language-specific OCR. Directly
+recognized result/browse layouts can route visually matching frames using fixed UI masks. This
+reuses only the scene kind; metadata and values are read directly from selected source frames.
+Stable later representatives are processed first, and a per-song title/chart stops receiving new
+focused reads after distinct frames agree. Whole-screen OCR is a bounded fallback for at most two
+unresolved samples per window. Exact encoded-image matches reuse OCR within a run, separately for
+each backend/device/language. Source frames and timestamps remain distinct. Focused title/chart OCR
+is limited to six new frames per eligible scene/window.
 
-`scene_kind()` excludes explicit bottom-of-screen `DEMO PLAY` markers, then checks multi-song summaries first, then per-song results, Basic/Premium mode choices, failure/start screens, gameplay and supported selection anchors. `PLAY RESULT` or multiple stage ordinals establish a summary. `SCORE` plus `PERFECT`, `MAX COMBO` or `KCAL` can establish a per-song result only when the summary gate is absent. Selection requires a chart badge or `MY BEST`; a horizontally distributed row of at least five two-digit levels in the bottom chart band establishes `browse` instead. Browsing can delimit a new selection and supply account evidence, but available levels never supply a selected chart. A result may also be established by a caption in the judgment band plus three aligned numeric rows, even when the SCORE heading is still animating. Unclassified frames remain evidence without supplying labels or triggering unlimited whole-screen retries.
+`scene_kind()` excludes explicit bottom-of-screen `DEMO PLAY` markers, then checks multi-song
+summaries first, then per-song results, Basic/Premium mode choices, failure/start screens, gameplay
+and supported selection anchors. `PLAY RESULT` or multiple stage ordinals establish a summary.
+`SCORE` plus `PERFECT`, `MAX COMBO` or `KCAL` can establish a per-song result only when the summary
+gate is absent. Selection requires a chart badge or `MY BEST`; a horizontally distributed row of at
+least five two-digit levels in the bottom chart band establishes `browse` instead. Browsing can
+delimit a new selection and supply account evidence, but available levels never supply a selected
+chart. A result may also be established by a caption in the judgment band plus three aligned numeric
+rows, even when the SCORE heading is still animating. Unclassified frames remain evidence without
+supplying labels or triggering unlimited whole-screen retries.
 
 All summary rows are read independently of the initially guessed title/chart. Their explicit stage numbers allow later summaries to repair earlier plays in the same credit. Titles and charts are resolved with matching title evidence rather than independent phase winners. Exact timestamp duplicates and single-frame guesses cannot establish agreement.
 
@@ -60,9 +88,14 @@ The following are current implementation crops, not a calibrated layout schema. 
 | Summary charts, right / left | `(0.70, 0.14, 0.09, 0.80)` / `(0.21, 0.14, 0.09, 0.80)` |
 | Summary ordinals (English OCR) | `(0.46, 0.15, 0.08, 0.80)` |
 
-The parser also has positional constraints separate from these crops: result-title centers at y=0.13–0.23, selection-title centers at y=0.48–0.54, and mode/level proximity checks. Moving only the crop constants would not make the layout configurable. Both acquisition regions and parsing constraints must migrate together.
+The parser also has positional constraints separate from these crops: result-title centers at y=0.13-0.23, selection-title centers at y=0.48-0.54, and mode/level proximity checks. Moving only the crop constants would not make the layout configurable. Both acquisition regions and parsing constraints must migrate together.
 
-The STAGE HUD can occupy different positions within the game crop, independently of the moving-note lanes. The automatic path discovers an initial patch in the first ten minutes, then samples uncovered portions every 30 seconds for additional positions. It can find additional HUD positions but does **not** automatically locate an arbitrary game panel or infer a complete result layout. Short appearances between samples and new appearances at an already known position with a different skin remain limitations.
+The STAGE HUD can occupy different positions within the game crop, independently of the moving-note
+lanes. The automatic path discovers an initial patch in the first ten minutes, then samples
+uncovered portions every 30 seconds for additional positions. It can find additional HUD positions
+but does **not** automatically locate an arbitrary game panel or infer a complete result layout.
+Short appearances between samples and new appearances at an already known position with a different
+skin remain limitations.
 
 ## Recognition rules
 
@@ -78,7 +111,12 @@ The STAGE HUD can occupy different positions within the game crop, independently
 
 ## Judgment counts
 
-Result extraction limits new dedicated numeric OCR to at most six distinct source timestamps spread across the observed result duration, even if a caller supplies every decoded frame. Retained numeric evidence remains available. Result extraction reads `PERFECT`, `GREAT`, `GOOD`, `BAD`, `MISS`, `MAX COMBO` and `SCORE` into separate player slots. Each value needs corroborating stable frames; unreadable, conflicting or weak evidence remains unknown. Calories and grades are not implemented output fields.
+Result extraction limits new dedicated numeric OCR to at most six distinct source timestamps spread
+across the observed result duration, even if a caller supplies every decoded frame. Retained numeric
+evidence remains available. Result extraction reads `PERFECT`, `GREAT`, `GOOD`, `BAD`, `MISS`, `MAX
+COMBO` and `SCORE` into separate player slots. Each value needs corroborating stable frames;
+unreadable, conflicting or weak evidence remains unknown. Calories and grades are not implemented
+output fields.
 
 Leading zeros, partially obscured digits, unstable animations, missing rows and genuine simultaneous-player results need continued validation. `MAX COMBO` is not a total-judgment count, and a judgment total is not automatically a chart note count.
 
@@ -86,7 +124,7 @@ Leading zeros, partially obscured digits, unstable animations, missing rows and 
 
 Use the original media plus `frames.json` and OCR metadata to reproduce a check; a contact-sheet cell is not an exact timestamp. Keyframe proposals can be seconds away from a decoded boundary. Preserve source PTS, distinguish local playback from YouTube time, and never derive an offset from duration metadata alone. Keep prior output directories when comparing regressions, and record the host OS/Vision version when comparing OCR measurements.
 
-Phoenix's “HEY” taunts (“WHY DON'T YOU / JUST GET UP AND / DANCE MAN” or “IS THIS / REALLY / YOUR BEST”) establish a stage break when corroborated across source frames. They replace the per-song numeric table. These results use `status: not_displayed`, `reason: stage_break_screen`, and retain the source-frame references; `GAME OVER` alone does not establish a failed song. No hidden score or judgment counts are synthesized.
+Phoenix's "HEY" taunts ("WHY DON'T YOU / JUST GET UP AND / DANCE MAN" or "IS THIS / REALLY / YOUR BEST") establish a stage break when corroborated across source frames. They replace the per-song numeric table. These results use `status: not_displayed`, `reason: stage_break_screen`, and retain the source-frame references; `GAME OVER` alone does not establish a failed song. No hidden score or judgment counts are synthesized.
 
 Numeric recovery keeps upright captions beside counts and score digits. This prevents OCR from interpreting the Phoenix font upside down (for example, `09` as `60`). Resolve conflicting chart reads using independent full-screen and caption-preserving badge evidence. Enlarged stage crops are anchored to the observed STAGE caption because single and double gameplay place the HUD differently.
 

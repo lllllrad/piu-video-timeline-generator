@@ -63,7 +63,12 @@ def write_index(document, root):
         rows.append('<tr><td>'+str(number)+'</td>'+''.join('<td>'+cell+'</td>' for cell in cells)+'</tr>')
     path = root / 'index.html'
     path.write_text('''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Play timing reports</title><style>body{font:16px/1.6 system-ui;max-width:1200px;margin:40px auto;padding:20px;background:#101719;color:#e5efeb}a{color:#9cddbe}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #314448}.scroll{overflow:auto}
+<title>Play timing reports</title><style>body{font:16px/1.6 system-ui;max-width:1200px;margin:40px auto;padding:20px;background:#101719;color:#e5efeb}
+a{color:#9cddbe}
+table{border-collapse:collapse;width:100%}
+td,th{padding:10px;text-align:left;border-bottom:1px solid #314448}
+.scroll{overflow:auto}
+
 </style>
 <h1>Play timing reports</h1><p>Each report compares visible note trajectories with observed combo and judgment refreshes. A chord is one judged row and may contain several heads. Counts are partial reconstruction, not a complete chart or physical switch measurement. Open a report for excluded motion and unassigned counter evidence.</p>
 <div class="scroll"><table><thead><tr><th>Segment</th><th>Play</th><th>Reconstructed heads</th><th>Long notes</th><th>Heads with tap timing</th><th>Matched combo refreshes</th><th>Judgment-only timed heads</th><th>Readable counter frames</th><th>Analyzer version</th></tr></thead><tbody>'''
@@ -76,8 +81,63 @@ TEMPLATE = r'''<!doctype html>
 <title>__TITLE__ · Play timing</title>
 <style>
 :root{color-scheme:dark;--bg:#101719;--panel:#182326;--edge:#314448;--ink:#e5efeb;--muted:#9cb1b1;--green:#9cddbe;--blue:#75bdea;--amber:#f1c478}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,sans-serif}main{margin:auto;padding:12px}h1{font-size:clamp(24px,4vw,40px);font-weight:600;letter-spacing:-.04em;margin:8px 0}h2{font-size:18px;font-weight:600;margin:0 0 14px}.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--green);text-transform:uppercase}.muted,small{color:var(--muted)}a{color:var(--green)}.panel{background:var(--panel);border:1px solid var(--edge);padding:22px;border-radius:12px;margin:18px 0}.grid{display:grid;grid-template-columns:1.15fr 1fr;gap:20px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat{padding:16px;background:var(--panel);border:1px solid var(--edge);border-radius:10px}.stat strong{display:block;font-size:27px;color:var(--green)}label{display:block;margin:12px 0}input,button,select,textarea{background:#102023;color:var(--ink);border:1px solid #486267;border-radius:5px;padding:8px;font:inherit}button{cursor:pointer}input[type=range]{width:min(360px,80%);vertical-align:middle}video{width:100%;max-height:430px;background:#080d0e}svg{display:block;width:100%;height:290px;touch-action:none;overflow:hidden;font-family:system-ui,sans-serif}svg text{pointer-events:none}svg [data-note]{cursor:pointer}.chart{position:relative}.chart small{display:block;margin-top:8px}.warning{border-left:3px solid var(--amber);padding:10px 15px;background:#2a2920}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:9px;text-align:left;border-bottom:1px solid var(--edge)}tbody tr{cursor:pointer}tbody tr:hover{background:#21373b}.scroll{max-height:360px;overflow:auto}.preview{position:relative}.preview img{width:100%;display:block}.preview svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}textarea{width:100%;min-height:180px;font:12px/1.5 monospace}.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.pill{display:inline-block;border:1px solid var(--edge);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--muted)}@media(max-width:850px){main{padding:8px}.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.panel{padding:15px}}
-.playback-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}.playback-grid>.panel{min-width:0;padding:12px}.playback-grid>.chart{padding:8px}.chart-controls{gap:8px}.chart-controls label{display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:100%;min-width:0;margin:4px 0}.chart-viewport{width:100%;min-width:0}.video-panel input[type=file]{max-width:100%}.video-panel{position:sticky;top:18px}.playback-grid video{max-height:70vh}.chart-controls input[type=range]{width:150px}.chart-controls input[type=number]{width:90px}@media(max-width:1000px){.playback-grid{grid-template-columns:1fr}.video-panel{position:static}}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,sans-serif}
+main{margin:auto;padding:12px}
+h1{font-size:clamp(24px,4vw,40px);font-weight:600;letter-spacing:-.04em;margin:8px 0}
+h2{font-size:18px;font-weight:600;margin:0 0 14px}
+.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--green);text-transform:uppercase}
+.muted,small{color:var(--muted)}
+a{color:var(--green)}
+.panel{background:var(--panel);border:1px solid var(--edge);padding:22px;border-radius:12px;margin:18px 0}
+.grid{display:grid;grid-template-columns:1.15fr 1fr;gap:20px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat{padding:16px;background:var(--panel);border:1px solid var(--edge);border-radius:10px}
+.stat strong{display:block;font-size:27px;color:var(--green)}
+label{display:block;margin:12px 0}
+input,button,select,textarea{background:#102023;color:var(--ink);border:1px solid #486267;border-radius:5px;padding:8px;font:inherit}
+button{cursor:pointer}
+input[type=range]{width:min(360px,80%);vertical-align:middle}
+video{width:100%;max-height:430px;background:#080d0e}
+svg{display:block;width:100%;height:290px;touch-action:none;overflow:hidden;font-family:system-ui,sans-serif}
+svg text{pointer-events:none}
+svg [data-note]{cursor:pointer}
+.chart{position:relative}
+.chart small{display:block;margin-top:8px}
+.warning{border-left:3px solid var(--amber);padding:10px 15px;background:#2a2920}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:9px;text-align:left;border-bottom:1px solid var(--edge)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:#21373b}
+.scroll{max-height:360px;overflow:auto}
+.preview{position:relative}
+.preview img{width:100%;display:block}
+.preview svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+textarea{width:100%;min-height:180px;font:12px/1.5 monospace}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.pill{display:inline-block;border:1px solid var(--edge);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--muted)}
+@media(max-width:850px){main{padding:8px}
+.grid{grid-template-columns:1fr}
+.stats{grid-template-columns:1fr 1fr}
+.panel{padding:15px}
+}
+
+.playback-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+.playback-grid>.panel{min-width:0;padding:12px}
+.playback-grid>.chart{padding:8px}
+.chart-controls{gap:8px}
+.chart-controls label{display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:100%;min-width:0;margin:4px 0}
+.chart-viewport{width:100%;min-width:0}
+.video-panel input[type=file]{max-width:100%}
+.video-panel{position:sticky;top:18px}
+.playback-grid video{max-height:70vh}
+.chart-controls input[type=range]{width:150px}
+.chart-controls input[type=number]{width:90px}
+@media(max-width:1000px){.playback-grid{grid-template-columns:1fr}
+.video-panel{position:static}
+}
+
 </style>
 <main>
 <div class="eyebrow">Video evidence / experimental play analysis</div><h1>__TITLE__</h1>
@@ -88,23 +148,103 @@ TEMPLATE = r'''<!doctype html>
 <div class="playback-grid"><section class="panel video-panel"><h2>Original recording</h2><video id="video" controls preload="metadata" src="__MEDIA__"></video>
 <label>Choose the original file if this browser cannot open its relative path <input id="file" type="file" accept="video/*,.mkv"></label><small>The file stays in this browser. Unsupported codecs may require another browser. Nothing is uploaded or re-encoded.</small>
 <div class="row"><button id="begin">Go to play start</button><button id="previous">Previous match</button><button id="next">Next match</button><span id="clock" class="pill"></span></div></section>
-<section class="panel chart"><div class="row chart-controls"><h2>Vertical note chart</h2><label>Spacing <input id="spacingScale" type="range" min="0.05" max="16" step="0.01" value="1"> <input id="spacingInput" type="number" min="0.05" max="16" step="0.01" value="1" aria-label="Exact note spacing multiplier"> <output id="spacingValue">1.00×</output></label><label>Note size <input id="noteSize" type="range" min="8" max="64" step="1" value="24"> <output id="noteSizeValue">24 px</output></label><label><input id="excluded" type="checkbox"> Include excluded track endpoints</label><label><input id="candidates" type="checkbox"> Show candidate connections</label></div>
+<section class="panel chart">
+<div class="row chart-controls">
+<h2>Vertical note chart</h2>
+<label>Spacing <input id="spacingScale" type="range" min="0.05" max="16" step="0.01" value="1"> <input id="spacingInput" type="number" min="0.05" max="16" step="0.01" value="1" aria-label="Exact note spacing multiplier"> <output id="spacingValue">1.00×</output>
+</label>
+<label>Note size <input id="noteSize" type="range" min="8" max="64" step="1" value="24"> <output id="noteSizeValue">24 px</output>
+</label>
+<label>
+<input id="excluded" type="checkbox"> Include excluded track endpoints</label>
+<label>
+<input id="candidates" type="checkbox"> Show candidate connections</label>
+</div>
 <p class="muted">Earlier ↑ · later ↓. Fixed colored squares: notes. Lime left: chart target range. Magenta right: input range. Matched inputs are shown by default; candidate connections are optional (early ≤250 ms, late ≤500 ms). Long bodies: holds; magenta strips: sustained recognition. Conditional neighbor bounds appear only in the table. The green line follows video playback.</p>
 <div class="row"><button id="previousNote">Previous note</button><button id="nextNote">Next note</button><span id="chartPosition" class="pill"></span></div>
 <label>Recording position <input id="position" type="range" step="0.001" style="width:100%"></label>
-<div class="chart-viewport"><svg id="lanes" viewBox="0 0 1000 680" role="img" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right"></svg></div><small><span style="color:#b6ff59">● Left: chart target range</span> · <span style="color:#ff70dd">● Right: input range (optional dashed connections = candidates)</span><br>Click a note or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Long bodies are holds; magenta spans show recognized held states, not repeated presses. Rolls and unreliable motion remain unresolved.</small></section>
+<div class="chart-viewport">
+<svg id="lanes" viewBox="0 0 1000 680" role="img" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right">
+</svg>
 </div>
-<details class="panel"><summary>How to read the vertical chart</summary><p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Note size and spacing are independent. Notes fit the available width automatically so all lanes and both timing ranges remain visible; the size label indicates when fitting reduces your chosen size. Play the video on the left to follow the same recording position in this chart. Colored squares retain a fixed size as spacing changes. Lime points and capped lines on the left show chart target ranges. Magenta points and capped lines on the right show input ranges. Enable Show candidate connections to see dashed links from notes to alternative input ranges, limited to 250 ms early and 500 ms late. Unlinked candidate windows and hold envelopes are hidden. Both ranges remain visible when their times overlap. Points at interval centers are visual guides, not subframe measurements. A magenta mark above its note is early; below is late. The green line follows the recording.</p></details>
+<small>
+<span style="color:#b6ff59">● Left: chart target range</span> · <span style="color:#ff70dd">● Right: input range (optional dashed connections = candidates)</span>
+<br>Click a note or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Long bodies are holds; magenta spans show recognized held states, not repeated presses. Rolls and unreliable motion remain
+unresolved.</small>
+</section>
+</div>
+<details class="panel">
+<summary>How to read the vertical chart</summary>
+<p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Note size and spacing are independent. Notes fit the available width automatically so all lanes and both timing ranges remain visible; the size label indicates when fitting reduces your chosen size. Play the video on the left to follow the same recording position in this chart.
+Colored squares retain a fixed size as spacing changes. Lime points and capped lines on the left show chart target ranges. Magenta points and capped lines on the right show input ranges. Enable Show candidate connections to see dashed links from notes to alternative input ranges, limited to 250 ms early and 500 ms late. Unlinked candidate windows and hold envelopes are hidden. Both ranges remain
+visible when their times overlap. Points at interval centers are visual guides, not subframe measurements. A magenta mark above its note is early; below is late. The green line follows the recording.</p>
+</details>
 <section class="panel"><h2>Timing evidence</h2><label>Display latency correction: <output id="delayValue"></output> ms<br><input id="delay" type="range" min="-500" max="500" step="1"></label>
 <button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
 <div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="timing-ranges.json">Per-note timing ranges</a> · <a href="holds.json">Long-note geometry and held-state evidence</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section>
 <section class="panel chart"><h2>Observed timing offsets</h2><svg id="timing" viewBox="0 0 1200 290" role="img"></svg><small>Each bar compares the input estimate with the note target range, including both frame-bracket and fitted-target uncertainty. Blue: earlier; amber: later; green: overlapping ranges. Click to select a note and seek the recording. This is display-based evidence, not a judgment-window score.</small></section>
-<section class="panel chart"><h2>Selected note: target vs input</h2><p class="muted">Select a note in the table or chart. Lime is the video-estimated target range; magenta is the input estimate from a display refresh, after the latency correction above. Both use the same time axis, centered on the fitted target. These are uncertainty ranges, not game judgment windows or authoritative chart timestamps.</p><svg id="comparison" viewBox="0 0 1200 180" role="img" style="height:180px"></svg><div id="comparisonDetails" aria-live="polite"></div></section>
-<section class="panel"><h2>Note timing comparison</h2><p class="muted">Times are absolute recording positions. Input − target includes uncertainty in both ranges: negative is early, positive is late. Overlapping ranges do not establish an early/late result. Unmatched notes show alternative observed refresh ranges or conditional bounds from neighboring processed rows; these do not establish an input assignment. When evidence is absent, the input stays unconfirmed; a possible MISS never supplies one. Chord heads share a refresh bracket; aggregate brackets can span several rows.</p><div class="scroll"><table><thead><tr><th>Note / lane</th><th>Target range (video estimate)</th><th>Input range (display estimate)</th><th>Input − target</th><th>Evidence / judgment</th></tr></thead><tbody id="events"></tbody></table></div></section>
+<section class="panel chart">
+<h2>Selected note: target vs input</h2>
+<p class="muted">Select a note in the table or chart. Lime is the video-estimated target range; magenta is the input estimate from a display refresh, after the latency correction above. Both use the same time axis, centered on the fitted target. These are uncertainty ranges, not game judgment windows or authoritative chart timestamps.</p>
+<svg id="comparison" viewBox="0 0 1200 180" role="img" style="height:180px">
+</svg>
+<div id="comparisonDetails" aria-live="polite">
+</div>
+</section>
+<section class="panel">
+<h2>Note timing comparison</h2>
+<p class="muted">Times are absolute recording positions. Input − target includes uncertainty in both ranges: negative is early, positive is late. Overlapping ranges do not establish an early/late result. Unmatched notes show alternative observed refresh ranges or conditional bounds from neighboring processed rows; these do not establish an input assignment. When evidence is absent, the input stays
+unconfirmed; a possible MISS never supplies one. Chord heads share a refresh bracket; aggregate brackets can span several rows.</p>
+<div class="scroll">
+<table>
+<thead>
+<tr>
+<th>Note / lane</th>
+<th>Target range (video estimate)</th>
+<th>Input range (display estimate)</th>
+<th>Input − target</th>
+<th>Evidence / judgment</th>
+</tr>
+</thead>
+<tbody id="events">
+</tbody>
+</table>
+</div>
+</section>
 <section class="panel"><h2>Coverage and exclusions</h2><div id="exclusions"></div><ul id="limitations"></ul></section>
 <section class="panel"><h2>Observed combo updates, including unassigned evidence</h2><p class="muted">One increment represents a judged row. Chords share that row; counter jumps can contain several rows or hold ticks. An unassigned update is still observed evidence. Resets do not identify missed presses.</p><div class="scroll"><table><thead><tr><th>Observed bracket</th><th>Counter</th><th>Rows advanced</th><th>Association</th></tr></thead><tbody id="comboEvents"></tbody></table></div></section>
-<section class="panel"><h2>Observed judgments, including counter-free evidence</h2><p class="muted">Word changes, reappearance after a confirmed blank, and animation restarts can establish display refreshes before combo 4 or after a break. A persistent word is not counted repeatedly. MISS is failure evidence, never a press timestamp.</p><div class="scroll"><table><thead><tr><th>Observed bracket</th><th>Judgment</th><th>Refresh evidence</th><th>Association</th></tr></thead><tbody id="judgmentEvents"></tbody></table></div></section>
-<details class="panel"><summary>Inspect or correct calibration</summary><p>Check receptor centers and combo crop against the original game panel. Download an edited layout and rerun with <code>--layout layout.json</code>. Geometry changes require reanalysis.</p><div class="preview"><img id="preview" src="preview.png" alt="Original gameplay calibration frame"><svg id="overlay" viewBox="0 0 1300 730" role="img"></svg></div><textarea id="layout" spellcheck="false"></textarea><button id="download">Download layout.json</button><span id="layoutError"></span></details>
+<section class="panel">
+<h2>Observed judgments, including counter-free evidence</h2>
+<p class="muted">Word changes, reappearance after a confirmed blank, and animation restarts can establish display refreshes before combo 4 or after a break. A persistent word is not counted repeatedly. MISS is failure evidence, never a press timestamp.</p>
+<div class="scroll">
+<table>
+<thead>
+<tr>
+<th>Observed bracket</th>
+<th>Judgment</th>
+<th>Refresh evidence</th>
+<th>Association</th>
+</tr>
+</thead>
+<tbody id="judgmentEvents">
+</tbody>
+</table>
+</div>
+</section>
+<details class="panel">
+<summary>Inspect or correct calibration</summary>
+<p>Check receptor centers and combo crop against the original game panel. Download an edited layout and rerun with <code>--layout layout.json</code>. Geometry changes require reanalysis.</p>
+<div class="preview">
+<img id="preview" src="preview.png" alt="Original gameplay calibration frame">
+<svg id="overlay" viewBox="0 0 1300 730" role="img">
+</svg>
+</div>
+<textarea id="layout" spellcheck="false">
+</textarea>
+<button id="download">Download layout.json</button>
+<span id="layoutError">
+</span>
+</details>
 </main><script id="data" type="application/json">__DATA__</script>
 <details class="panel" id="chartPolicyPanel" hidden><summary>Chart region handling</summary><div id="chartPolicyDetails"></div></details>
 <script>
@@ -185,7 +325,13 @@ for(const [reason,count] of Object.entries(data.excluded_notes))text('p',reason.
 const comboReasons={};for(const e of data.combo_events)if(e.status==='excluded')comboReasons[e.reason]=(comboReasons[e.reason]||0)+1;
 for(const [reason,count] of Object.entries(comboReasons))text('p',reason.replaceAll('_',' ')+': '+count,$('exclusions'));
 for(const e of data.combo_events){const row=text('tr','',$('comboEvents'));text('td',fmt(e.lower_seconds)+' … '+fmt(e.upper_seconds),row);text('td',e.before+' → '+e.after,row);text('td',e.delta>0?e.delta:'Reset',row);text('td',(e.reason||e.status).replaceAll('_',' '),row);row.onclick=()=>seek(e.upper_seconds)}
-for(const e of data.judgment_events||[]){const row=text('tr','',$('judgmentEvents'));text('td',fmt(e.lower_seconds)+' … '+fmt(e.upper_seconds),row);text('td',e.label,row);text('td',e.trigger.replaceAll('_',' '),row);const missed=(data.miss_candidates||[]).filter(m=>data.judgment_events[m.judgment_event]===e);text('td',(e.reason||e.status).replaceAll('_',' ')+(missed.length?' / possible note lanes: '+missed.map(m=>data.layout.lanes[data.notes[m.note].lane].name||String(data.notes[m.note].lane+1)).join(', '):''),row);row.onclick=()=>seek(e.upper_seconds)}
+for(const e of data.judgment_events||[]){const row=text('tr','',$('judgmentEvents'));
+text('td',fmt(e.lower_seconds)+' … '+fmt(e.upper_seconds),row);
+text('td',e.label,row);
+text('td',e.trigger.replaceAll('_',' '),row);
+const missed=(data.miss_candidates||[]).filter(m=>data.judgment_events[m.judgment_event]===e);
+text('td',(e.reason||e.status).replaceAll('_',' ')+(missed.length?' / possible note lanes: '+missed.map(m=>data.layout.lanes[data.notes[m.note].lane].name||String(data.notes[m.note].lane+1)).join(', '):''),row);
+row.onclick=()=>seek(e.upper_seconds)}
 text('p','Labeled timing heads: '+(data.coverage?.judgment_labeled_note_heads??matches.filter(m=>m.judgment_label).length)+'. Judgment unknown: '+(data.coverage?.unlabeled_timed_note_heads??matches.filter(m=>!m.judgment_label).length)+'. Labels from post-combo word frames: '+(data.coverage?.combo_frame_labeled_note_heads||0)+'.',$('quality'));
 text('p','Judgment-only timed heads: '+(data.coverage?.judgment_only_note_heads||0)+'. Learned words: '+(data.judgment_template_labels||[]).join(', ')+'. Unlearned: '+((data.judgment_missing_labels||[]).join(', ')||'none')+'. New judgment OCR crops: '+(data.judgment_bootstrap_ocr_images||0)+'.',$('quality'));
 for(const limitation of data.limitations)text('li',limitation,$('limitations'));
@@ -415,7 +561,15 @@ text('td','#'+(index+1)+' / '+(data.layout.lanes[note.lane].name||String(note.la
 text('td',formatRange(target),row);text('td',inputIntervals(m,index).map(formatRange).join(' ∪ ')||'Unconfirmed',row);const differences=inputIntervals(m,index).map(range=>difference(target,range));text('td',(differences.map(formatDifference).join(' ∪ ')||'Unconfirmed')+' / '+(differences.length>1?'Alternative intervals':alignment(delta)),row);
 const e=m?.combo_event!=null?data.combo_events[m.combo_event]:null;
 const possibleMiss=possibleMissNotes.has(index);
-text('td',m?(e?e.before+' → '+e.after:'Judgment only')+(m.judgment_label?' / '+m.judgment_label+(m.judgment_label_source==='post_combo_frames'?' (word frames)':''):' / Judgment unknown')+(m.aggregate_row_count>1?' (aggregate row bracket)':m.row_note_count>1?' (shared chord bracket)':''):rangeByNote[index]?.status==='policy_excluded'?'Timing excluded by chart policy / '+(rangeByNote[index].chart_policy?.reasons||[]).join('; '):possibleMiss?'Possible MISS / no press timestamp':rangeByNote[index]?.status==='possible'?'Possible refresh ranges / association unresolved':rangeByNote[index]?.status==='bounded'?'Conditional bounds between processed rows / press unconfirmed':'Input unknown / '+(rangeByNote[index]?.reason||'no_nearby_positive_refresh').replaceAll('_',' '),row);
+text('td',m?
+  (e?e.before+' → '+e.after:'Judgment only')
+    +(m.judgment_label?' / '+m.judgment_label+(m.judgment_label_source==='post_combo_frames'?' (word frames)':''):' / Judgment unknown')
+    +(m.aggregate_row_count>1?' (aggregate row bracket)':m.row_note_count>1?' (shared chord bracket)':'')
+  :rangeByNote[index]?.status==='policy_excluded'?'Timing excluded by chart policy / '+(rangeByNote[index].chart_policy?.reasons||[]).join('; ')
+  :possibleMiss?'Possible MISS / no press timestamp'
+  :rangeByNote[index]?.status==='possible'?'Possible refresh ranges / association unresolved'
+  :rangeByNote[index]?.status==='bounded'?'Conditional bounds between processed rows / press unconfirmed'
+  :'Input unknown / '+(rangeByNote[index]?.reason||'no_nearby_positive_refresh').replaceAll('_',' '),row);
 row.onclick=()=>seek(note.target_seconds,linked?.index??-1,index);
 }}
 function drawPlayback(){$('position').value=playhead;$('chartPosition').textContent=fmt(playhead);$('clock').textContent=fmt(playhead);lanes();if(timingPlayhead){const x=60+1080*(playhead-data.start_seconds)/(data.end_seconds-data.start_seconds);timingPlayhead.setAttribute('x1',x);timingPlayhead.setAttribute('x2',x)}}

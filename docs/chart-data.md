@@ -22,7 +22,12 @@ charts/CS306/D22/phoenix/chart.ucs
 charts/CS306/D22/phoenix/metadata.json
 ```
 
-Once initialized, successful `just play` runs register missing charts automatically, including compatible cached analyses. Registration never overwrites an existing chart directory. Download, identity or alignment failures write a pending reason in the play's `chart-registration.json` without invalidating its native analysis. `sync` attempts registration for completed local plays; it does not invoke metadata OCR or acquire gameplay frames. It may download missing reference archives and decode audio for alignment.
+Once initialized, successful `just play` runs register missing charts automatically, including
+compatible cached analyses. Registration never overwrites an existing chart directory. Download,
+identity or alignment failures write a pending reason in the play's `chart-registration.json`
+without invalidating its native analysis. `sync` attempts registration for completed local plays; it
+does not invoke metadata OCR or acquire gameplay frames. It may download missing reference archives
+and decode audio for alignment.
 
 An exact normalized catalogue title or an explicit alias must identify one code. There is no guessed translation or fuzzy title correction. Assign a title with `just charts alias 'VIDEO TITLE' CS349`, or pass `--ucs-index` to `add`. Multiple arrangements use different mode/level directories; game updates require an explicit `--revision NAME`. A UCS code identifies a song, not a chart difficulty.
 
@@ -30,9 +35,20 @@ An exact normalized catalogue title or an explicit alias must identify one code.
 
 Audio alignment compares 24 frequency bands in three independent reference windows. At least two windows must have strong, unambiguous correlation and agree within 40 ms. Alignment is translation only; mismatched, repeated or missing music stays unresolved. `add --song-start SECONDS` permits an explicit reviewed origin in original local playback seconds. Source size and mtime must match saved observations before automatic audio alignment and remain unchanged afterward.
 
-UCS `Delay` is applied in milliseconds at each section boundary, while `BPM` and `Split` determine row duration. Subdivision expansion preserves every original row position and section duration, including BPM changes. The draft uses the least common multiple of each original Split and 48; this is a fine editable grid, not evidence of the intended musical subdivision. Metadata retains observed ranges and placement residuals. Unsupported directives and overlapping timing sections require manual handling.
+UCS `Delay` is applied in milliseconds at each section boundary, while `BPM` and `Split` determine
+row duration. Subdivision expansion preserves every original row position and section duration,
+including BPM changes. The draft uses the least common multiple of each original Split and 48; this
+is a fine editable grid, not evidence of the intended musical subdivision. Metadata retains observed
+ranges and placement residuals. Unsupported directives and overlapping timing sections require
+manual handling.
 
-Some official skeletons end before their music ends. When both the catalogue and every template section declare the same single constant BPM, registration appends timing rows through the last bounded observation. Original rows remain at their original times. Metadata records the extension and requires review; variable-tempo catalogue entries are never extrapolated. `add --rebuild-draft` explicitly regenerates an untouched, unreviewed UCS draft and preserves an ignored backup directory. Reviewed charts and UCS files with human edits are refused; ordinary automatic registration never rebuilds them.
+Some official skeletons end before their music ends. When both the catalogue and every template
+section declare the same single constant BPM, registration appends timing rows through the last
+bounded observation. Original rows remain at their original times. Metadata records the extension
+and requires review; variable-tempo catalogue entries are never extrapolated. `add --rebuild-draft`
+explicitly regenerates an untouched, unreviewed UCS draft and preserves an ignored backup directory.
+Reviewed charts and UCS files with human edits are refused; ordinary automatic registration never
+rebuilds them.
 
 Detected note geometry supplies chart notes independently of successful input/judgment association, so missed inputs do not remove notes from the draft. Hold-aware projection suppresses hold body/tail detections as separate taps and emits `M`/`H`/`W` cells. Single and Double use five and ten columns respectively. Conflicting same-lane placements, unbounded fits and censored hold endpoints are recorded as unresolved. The template cannot reveal notes absent from the observations.
 
@@ -78,8 +94,20 @@ Supported processing methods:
 
 Every region needs a unique ID, bounded interval and reason. Unknown fields, invalid methods and conflicting overlapping processing rules are rejected. Overlapping standard annotations and check exceptions may be combined. Run `just charts validate` to check both UCS text and region policies; `schema.json` also supports JSON editors. Explicit draft rebuilding preserves these human-authored regions.
 
-Every report build rereads the metadata. A verified per-recording reference-audio alignment maps regions to original playback time; another recording never reuses the seed recording's offset. Alignment is cached separately from frames. Invalid metadata or failed alignment is shown in the HTML and `chart-policy.json`, without silently applying exceptions. The report's **Chart region handling** panel lists mapped regions, reasons and seek links. `timing-ranges.json` includes per-note policy information, unfiltered `counts`, and `eligible_counts` after scoped timing exceptions. No automatic exception is created merely because a note failed recognition.
+Every report build rereads the metadata. A verified per-recording reference-audio alignment maps
+regions to original playback time; another recording never reuses the seed recording's offset.
+Alignment is cached separately from frames. Invalid metadata or failed alignment is shown in the
+HTML and `chart-policy.json`, without silently applying exceptions. The report's **Chart region
+handling** panel lists mapped regions, reasons and seek links. `timing-ranges.json` includes
+per-note policy information, unfiltered `counts`, and `eligible_counts` after scoped timing
+exceptions. No automatic exception is created merely because a note failed recognition.
 
 ## Downloads
 
-ZIPs, PDFs and music remain under `.local/cache/ucs/`; no archive member is extracted to an archive-controlled path. Size limits and expected UCS/music members are checked, and HTML login/error responses are rejected. HTTPS certificate and hostname verification remain enabled. Anonymous SSO cookies are kept in memory only; one retry of the original URL handles the site's malformed first callback. `PIU_UCS_CA_FILE` can supplement the trust chain when the server omits intermediate certificates; a locally provisioned `intermediates.pem` in the UCS cache is also recognized. No credentials or session cookies are stored with chart data.
+ZIPs, PDFs and music remain under `.local/cache/ucs/`; no archive member is extracted to an
+archive-controlled path. Size limits and expected UCS/music members are checked, and HTML
+login/error responses are rejected. HTTPS certificate and hostname verification remain enabled.
+Anonymous SSO cookies are kept in memory only; one retry of the original URL handles the site's
+malformed first callback. `PIU_UCS_CA_FILE` can supplement the trust chain when the server omits
+intermediate certificates; a locally provisioned `intermediates.pem` in the UCS cache is also
+recognized. No credentials or session cookies are stored with chart data.

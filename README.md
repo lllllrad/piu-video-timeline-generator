@@ -12,12 +12,12 @@ The command downloads or opens the source, detects plays, recognizes songs, char
 
 ```text
 .local/data/VIDEO_ID/
-├── raw/
-├── analysis/
-│   ├── analysis.json
-│   └── evidence/
-└── output/
-    └── default.txt
++-- raw/
++-- analysis/
+|   +-- analysis.json
+|   +-- evidence/
++-- output/
+    +-- default.txt
 ```
 
 Local files work the same way:
@@ -72,7 +72,26 @@ just play VIDEO --segment 1
 just play VIDEO --all
 ```
 
-Open `.local/data/SOURCE_ID/play/segment-001/report.html`. The local HTML report shows a vertical lane chart with notes ordered from top to bottom, target and input time ranges, source-video seek links and exclusions. Video on the left and a synchronized SVG chart on the right support simultaneous review. Browser animations move retained chart elements through CSS transforms; ordinary playback does not redraw notes or rebuild the table. Adjust note size separately and fine-tune spacing in 0.01 steps. Fixed-size colored square notes retain their shape at every spacing. Lime capped lines and points on the left show chart target ranges; magenta lines and points on the right show input ranges, with unresolved candidate connections hidden by default. Enable Show candidate connections to inspect dashed links, limited to 250 ms early and 500 ms late. Both ranges remain visible when their times overlap. Long bodies show holds and adjacent magenta strips show sustained recognition. A spacing multiplier changes time separation without resizing notes; a recording-position slider and note buttons navigate the chart. Select a note to compare both ranges on the same axis; target ranges come from visible motion and input ranges from display refreshes. PERFECT/GREAT/GOOD/BAD refreshes also supply timing evidence before combo 4 or after a break; MISS remains failure evidence without a press timestamp. Display refresh is a proxy for input timing; physical switch timing and display latency are not measured. Chords share one judged-row observation. Long notes appear as bodies with sustained recognition spans; their ticks are not counted as new presses. Unreadable endpoints, rolls and nonlinear motion remain unresolved. `--all` writes a linked overview at `.local/data/SOURCE_ID/play/index.html`. See [play analysis](docs/play-analysis.md) for calibration, latency correction and limited windows.
+Open `.local/data/SOURCE_ID/play/segment-001/report.html`. The local HTML report shows a vertical
+lane chart with notes ordered from top to bottom, target and input time ranges, source-video seek
+links and exclusions. Video on the left and a synchronized SVG chart on the right support
+simultaneous review. Browser animations move retained chart elements through CSS transforms;
+ordinary playback does not redraw notes or rebuild the table. Adjust note size separately and
+fine-tune spacing in 0.01 steps. Fixed-size colored square notes retain their shape at every
+spacing. Lime capped lines and points on the left show chart target ranges; magenta lines and points
+on the right show input ranges, with unresolved candidate connections hidden by default. Enable Show
+candidate connections to inspect dashed links, limited to 250 ms early and 500 ms late. Both ranges
+remain visible when their times overlap. Long bodies show holds and adjacent magenta strips show
+sustained recognition. A spacing multiplier changes time separation without resizing notes; a
+recording-position slider and note buttons navigate the chart. Select a note to compare both ranges
+on the same axis; target ranges come from visible motion and input ranges from display refreshes.
+PERFECT/GREAT/GOOD/BAD refreshes also supply timing evidence before combo 4 or after a break; MISS
+remains failure evidence without a press timestamp. Display refresh is a proxy for input timing;
+physical switch timing and display latency are not measured. Chords share one judged-row
+observation. Long notes appear as bodies with sustained recognition spans; their ticks are not
+counted as new presses. Unreadable endpoints, rolls and nonlinear motion remain unresolved. `--all`
+writes a linked overview at `.local/data/SOURCE_ID/play/index.html`. See [play
+analysis](docs/play-analysis.md) for calibration, latency correction and limited windows.
 
 ## Editable chart data
 
@@ -85,9 +104,21 @@ just charts add VIDEO --segment 19 --ucs-index CS349
 just charts sync
 ```
 
-The default repository is `../piu-chart-data`; override it with `PIU_CHART_DATA_DIR` or `just charts --repo PATH ...`. The official catalogue maps songs to `CS...` download codes. An explicit code also records the video's song title as an alias; later `just play` runs automatically register missing charts, including when native analysis is reused. Ambiguous or unknown titles remain pending in `chart-registration.json` until assigned a code. `sync` uses completed local play analyses without rerunning note detection or metadata OCR.
+The default repository is `../piu-chart-data`; override it with `PIU_CHART_DATA_DIR` or `just charts
+--repo PATH ...`. The official catalogue maps songs to `CS...` download codes. An explicit code also
+records the video's song title as an alias; later `just play` runs automatically register missing
+charts, including when native analysis is reused. Ambiguous or unknown titles remain pending in
+`chart-registration.json` until assigned a code. `sync` uses completed local play analyses without
+rerunning note detection or metadata OCR.
 
-Notes are stored as editable UCS text at `charts/CS349/S21/phoenix/chart.ucs`, with provenance, unresolved placements and `unreviewed_draft` status in `metadata.json`. Reference music aligns song time to original recording time using independent matching windows; it never changes playback speed. If audio is missing or ambiguous, provide a reviewed `--song-start SECONDS` recording position. Holds use UCS head/body/tail cells; censored endpoints and conflicting placements remain unresolved. Existing chart directories are never overwritten. For an updated game chart, register a distinct `--revision NAME`. Downloaded ZIPs and reference music stay in the ignored cache. See [chart data](docs/chart-data.md).
+Notes are stored as editable UCS text at `charts/CS349/S21/phoenix/chart.ucs`, with provenance,
+unresolved placements and `unreviewed_draft` status in `metadata.json`. Reference music aligns song
+time to original recording time using independent matching windows; it never changes playback speed.
+If audio is missing or ambiguous, provide a reviewed `--song-start SECONDS` recording position.
+Holds use UCS head/body/tail cells; censored endpoints and conflicting placements remain unresolved.
+Existing chart directories are never overwritten. For an updated game chart, register a distinct
+`--revision NAME`. Downloaded ZIPs and reference music stay in the ignored cache. See [chart
+data](docs/chart-data.md).
 
 The metadata also supports song-time `regions` with processing methods (`standard`, `exclude_timing`, `hold_state_only`), reasons/details, and scoped automatic-check exceptions. Reports show applied policies and retain unfiltered evidence alongside eligible check counts. `just charts validate` checks chart text and region settings; rebuilding a draft preserves human-authored regions. See [region configuration examples](docs/chart-data.md#region-processing-and-automatic-check-exceptions).
 
@@ -109,7 +140,13 @@ The default format produces:
 03:45 Song Name D20 end
 ```
 
-When a recording contains different recognized player accounts (including players taking turns), the default format adds `[Name]` to each play, omitting the account discriminator from presentation. Analysis retains the full account identity. Rival comparison accounts are excluded from participants. Simultaneous players retain separate names and charts. Unreadable identities remain `Unknown player` when names are shown; one recognized account uses compact output, including when its discriminator is unreadable in some plays. Two different recognized discriminators remain distinct accounts.
+When a recording contains different recognized player accounts (including players taking turns), the
+default format adds `[Name]` to each play, omitting the account discriminator from presentation.
+Analysis retains the full account identity. Rival comparison accounts are excluded from
+participants. Simultaneous players retain separate names and charts. Unreadable identities remain
+`Unknown player` when names are shown; one recognized account uses compact output, including when
+its discriminator is unreadable in some plays. Two different recognized discriminators remain
+distinct accounts.
 
 Copy [formats/default/index.ts](formats/default/index.ts) to start a new format. Shared types and helpers are in [formats/lib/timeline.ts](formats/lib/timeline.ts). See [custom formats](docs/formats.md) for examples.
 
