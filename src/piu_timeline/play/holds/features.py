@@ -8,7 +8,7 @@ import numpy as np
 
 from piu_timeline.play.frames import decode_frames
 
-FEATURE_FORMAT = {'schema': 1, 'detector_revision': 5, 'width': 325}
+FEATURE_FORMAT = {'schema': 1, 'detector_revision': 6, 'width': 325}
 
 
 def ui_regions(layout):
@@ -23,18 +23,24 @@ def ui_regions(layout):
 def bridge_ui_stripes(mask, top, left, layout, width, height, spacing):
     """Join two extended stripes across a HUD gap, never adjacent tap caps."""
     original = mask.copy()
-    _, _, stats, _ = cv2.connectedComponentsWithStats(original, 8)
-    parts = [s for s in stats[1:] if s[3] > 1.6*spacing and s[2] > .16*spacing]
+    _, labels, stats, _ = cv2.connectedComponentsWithStats(original, 8)
+    parts = [(i, s) for i, s in enumerate(stats[1:], 1) if s[3] > 1.6*spacing and s[2] > .16*spacing]
     regions = ui_regions(layout)
     for i, first in enumerate(parts):
         for second in parts[i+1:]:
-            a, b = sorted((first, second), key=lambda s: s[1])
+            (ai, a), (bi, b) = sorted((first, second), key=lambda part: part[1][1])
             gap = b[1]-(a[1]+a[3])
             if not 0 < gap <= .9*spacing:
                 continue
-            end, start = a[1]+a[3]-1, b[1]
             for col in range(max(a[0], b[0]), min(a[0]+a[2], b[0]+b[2])):
-                if (original[end, col] and original[start, col]
+                upper = np.flatnonzero(labels[:, col] == ai)
+                lower = np.flatnonzero(labels[:, col] == bi)
+                # Ragged colored edges need not end on the bounding box's
+                # final row in the same column. Follow actual stripe pixels.
+                if len(upper) < .8*spacing or len(lower) < .8*spacing:
+                    continue
+                end, start = int(upper[-1]), int(lower[0])
+                if (0 < start-end <= 1.6*spacing
                         and any(x*width <= col+left <= (x+w)*width
                                 and y*height <= end+top and start+top <= (y+h)*height
                                 for x, y, w, h in regions)):

@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 from piu_timeline.play.holds.analysis import reconstruct, presentation, augment_holds
-from piu_timeline.play.holds.features import detect_bodies, feature_contract, acquire_features
+from piu_timeline.play.holds.features import bridge_ui_stripes, detect_bodies, feature_contract, acquire_features
 from piu_timeline.play.holds.geometry import HoldGeometry, edge_alignment
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window
 
@@ -19,6 +19,20 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_ragged_stripes_bridge_only_inside_the_declared_hud(self):
+        mask = np.zeros((100, 10), dtype='uint8')
+        mask[10:42, 2:5] = 1
+        mask[38:42, 3:5] = 0
+        mask[52:90, 2:5] = 1
+        mask[52:56, 2] = 0
+        layout = {'combo_roi': [0, .6, 1, .1], 'judgment_roi': [0, .35, 1, .3]}
+        repaired = bridge_ui_stripes(mask.copy(), 0, 0, layout, 10, 100, 12)
+        self.assertEqual(cv2.connectedComponents(mask)[0], 3)
+        self.assertEqual(cv2.connectedComponents(repaired)[0], 2)
+        changed_rows = np.nonzero(repaired != mask)[0]
+        self.assertTrue(all(35 <= y <= 65 for y in changed_rows))
+        np.testing.assert_array_equal(bridge_ui_stripes(mask.copy(), 0, 0, {}, 10, 100, 12), mask)
+
     def test_two_taps_before_a_hold_are_not_absorbed_by_gap_repair(self):
         targets = (1., 1.1, 1.2, 1.8)
         times = [i/60 for i in range(20, 125)]
