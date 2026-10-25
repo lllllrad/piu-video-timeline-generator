@@ -14,10 +14,7 @@ an optional host Vision run invoked by `just check-ocr`; it is deliberately not
 part of offline discovery.
 
 QG's shared `tests` check runs this discovery command from both `just check`
-and the pre-commit hook. `tests/tools/test_quality_gate.py` exercises the
-installed CLI against an isolated Python suite: a failing assertion must block
-the gate, and a passing assertion must allow it. The fixture does not change
-the checkout's hooks or configuration.
+and the pre-commit hook.
 
 ## What the suite establishes
 
