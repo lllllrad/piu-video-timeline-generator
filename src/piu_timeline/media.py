@@ -68,5 +68,31 @@ def main():
         raise SystemExit(error.returncode) from error
 
 
+def resolve_source(source, raw_dir=None):
+    local = Path(source).expanduser()
+    if local.is_file():
+        return local.resolve(), {"kind": "local", "network_used": False}
+    url = resolve_url(source)
+    if raw_dir is None:
+        raise ValueError("YouTube sources require a local raw directory")
+    destination = Path(raw_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    existing = [path.resolve() for path in destination.iterdir()
+                if path.is_file() and path.suffix.lower() in {".mkv", ".mp4", ".webm", ".mov"}]
+    if len(existing) == 1:
+        return existing[0], {"kind": "cached_youtube", "url": url, "network_used": False}
+    if len(existing) > 1:
+        raise ValueError(f"Multiple videos found in {destination}")
+    command = fetch_command(source, destination)
+    command[-2:-2] = ["--print", "after_move:PIU_FILE:%(filepath)s"]
+    output = run_download(command)
+    paths = [Path(line.removeprefix("PIU_FILE:")).resolve() for line in output.splitlines()
+             if line.startswith("PIU_FILE:")]
+    if len(paths) != 1 or not paths[0].is_file() or not paths[0].is_relative_to(destination):
+        raise ValueError("Download did not return exactly one completed video")
+    return paths[0], {"kind": "youtube_download", "url": url, "network_used": True,
+                      "timing_policy": "full untrimmed download; no local offset inferred"}
+
+
 if __name__ == "__main__":
     main()

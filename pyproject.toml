@@ -14,3 +14,6 @@ dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"piu_timeline.play" = ["report.html", "report.css", "report.js"]

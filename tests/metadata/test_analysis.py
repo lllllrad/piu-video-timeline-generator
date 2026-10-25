@@ -7,7 +7,8 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-from piu_timeline.metadata import analysis as auto
+from piu_timeline.metadata import analysis as auto, profiles as hud_profiles
+from piu_timeline import media
 
 
 class AutoTest(unittest.TestCase):
@@ -50,8 +51,8 @@ class AutoTest(unittest.TestCase):
         def recognize(paths, english=False):
             return [{"lines": [{"text": "STAGE" if english else "STAG드",
                                 "box": [.14, .01, .05, .02]}]}]
-        with patch.object(auto, "capture_game", return_value=frame), \
-                patch.object(auto, "ocr_images", side_effect=recognize):
+        with patch.object(hud_profiles, "capture_game", return_value=frame), \
+                patch.object(hud_profiles, "ocr_images", side_effect=recognize):
             seconds, hud, evidence = auto.find_reference(
                 {"duration_seconds": 100}, (10, 20, 1300, 730), Path("unused"))
         self.assertEqual(seconds, 30.04)
@@ -383,10 +384,10 @@ class AutoTest(unittest.TestCase):
             return {"file": str(path), "playback_seconds": seconds}
         recognized = [{"lines": [{"text": "STAGE", "box": [.47, .01, .05, .2]}]}]
         additional = {"candidates": [{"start_seconds": 1000, "end_seconds": 1200}]}
-        with patch.object(auto, "capture_game", side_effect=capture) as frames, \
-             patch.object(auto, "ocr_images", return_value=recognized), \
-             patch.object(auto, "detect", return_value=additional) as detect, \
-             patch.object(auto, "write_json"):
+        with patch.object(hud_profiles, "capture_game", side_effect=capture) as frames, \
+             patch.object(hud_profiles, "ocr_images", return_value=recognized), \
+             patch.object(hud_profiles, "detect", return_value=additional) as detect, \
+             patch.object(hud_profiles, "write_json"):
             profiles = auto.discover_profiles(record, (0, 0, 1300, 730), Path("unused"), initial)
         self.assertEqual(len(profiles), 2)
         self.assertEqual(frames.call_args.args[2], 1020)
@@ -406,7 +407,7 @@ class AutoTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             video = Path(temporary) / "local.mp4"
             video.write_bytes(b"local")
-            with patch.object(auto, "run_download") as invoke:
+            with patch.object(media, "run_download") as invoke:
                 path, provenance = auto.resolve_source(str(video))
             invoke.assert_not_called()
             self.assertEqual(path, video.resolve())
@@ -414,7 +415,7 @@ class AutoTest(unittest.TestCase):
 
     def test_url_download_path_is_checked(self):
         with tempfile.TemporaryDirectory() as temporary, \
-             patch.object(auto, "run_download", return_value="PIU_FILE:/outside.mp4\n"):
+             patch.object(media, "run_download", return_value="PIU_FILE:/outside.mp4\n"):
             with self.assertRaises(ValueError):
                 auto.resolve_source("https://www.youtube.com/watch?v=_OE47GBOvB0", Path(temporary))
 
@@ -423,7 +424,7 @@ class AutoTest(unittest.TestCase):
             raw = Path(temporary)
             video = raw / "abc123XYZ00.mkv"
             video.write_bytes(b"video")
-            with patch.object(auto, "run_download") as invoke:
+            with patch.object(media, "run_download") as invoke:
                 path, provenance = auto.resolve_source("abc123XYZ00", raw)
             invoke.assert_not_called()
             self.assertEqual(path, video.resolve())

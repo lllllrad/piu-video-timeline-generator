@@ -3,10 +3,10 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch
 import numpy as np
-from piu_timeline.play.analysis import validate_layout, recover_layout
+from piu_timeline.play.layout import validate_layout, recover_layout
 import unittest
 
-from piu_timeline.play.analysis import combine_receptor_observations
+from piu_timeline.play.layout import combine_receptor_observations
 
 
 class CalibrationTest(unittest.TestCase):
@@ -48,7 +48,7 @@ class CalibrationTest(unittest.TestCase):
         from pathlib import Path
         from unittest.mock import patch
         import numpy as np
-        from piu_timeline.play.analysis import recover_layout
+        from piu_timeline.play.layout import recover_layout
         centers=[(40+12*i,14) for i in range(10)]
         ordinary=np.zeros((100,200,3),dtype='uint8')
         staggered=ordinary.copy();staggered[0,0,0]=1
@@ -60,10 +60,10 @@ class CalibrationTest(unittest.TestCase):
             preview=Path(temporary)/'segment/preview.png';preview.parent.mkdir()
             calibration={'source_pts_seconds':1}
             with patch('piu_timeline.play.layout.fixed_layout',return_value=None), \
-                    patch('piu_timeline.play.analysis.receptor_centers',side_effect=partial), \
-                    patch('piu_timeline.play.analysis.capture_game',side_effect=lambda record,path,t,roi:{'source_pts_seconds':t+200}), \
-                    patch('piu_timeline.play.analysis.cv2.imread',return_value=ordinary), \
-                    patch('piu_timeline.play.analysis.decode_frames',return_value=iter(decoded)):
+                    patch('piu_timeline.play.layout.receptor_centers',side_effect=partial), \
+                    patch('piu_timeline.play.layout.capture_game',side_effect=lambda record,path,t,roi:{'source_pts_seconds':t+200}), \
+                    patch('piu_timeline.play.layout.cv2.imread',return_value=ordinary), \
+                    patch('piu_timeline.play.layout.decode_frames',return_value=iter(decoded)):
                 layout=recover_layout({},(0,0,200,100),{'chart':'D20','start_seconds':0,'end_seconds':60},preview,ordinary,calibration)
         self.assertEqual(layout['method'],'corroborated_partial_receptor_outlines')
         self.assertEqual(len(layout['lanes']),10)
@@ -79,9 +79,9 @@ class CalibrationTest(unittest.TestCase):
             (old/'analysis.json').write_text(json.dumps({'media':record,'game_roi':roi,'layout':layout}))
             points=[(100*layout['lanes'][i]['x'],14) for i in (0,3,6,9)]
             with patch('piu_timeline.play.layout.fixed_layout',return_value=None), \
-                    patch('piu_timeline.play.analysis.receptor_centers',return_value=points), \
-                    patch('piu_timeline.play.analysis.locate_layout',side_effect=ValueError('masked')), \
-                    patch('piu_timeline.play.analysis.capture_game',side_effect=AssertionError('already verified')):
+                    patch('piu_timeline.play.layout.receptor_centers',return_value=points), \
+                    patch('piu_timeline.play.layout.locate_layout',side_effect=ValueError('masked')), \
+                    patch('piu_timeline.play.layout.capture_game',side_effect=AssertionError('already verified')):
                 result=recover_layout(record,roi,{'chart':'D20'},pending/'preview.png',
                                       np.zeros((100,100,3),dtype='uint8'),{'source_pts_seconds':100})
             self.assertEqual(result['method'],'corroborated_shared_geometry')

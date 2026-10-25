@@ -1,7 +1,7 @@
 # The CLI loads the language-independent recommended rules by default.
 artifacts:
   generated:
-    include: [".venv/**"]
+    include: [".venv/**", "build/**"]
 
 hooks:
   preCommit:

@@ -50,6 +50,15 @@ paths, for example `python -m piu_timeline.play.analysis` and
 `python -m piu_timeline.charts.data`. Modules import `piu_timeline.ROOT` for the
 checkout root; cache and model paths are independent of module depth.
 
+`metadata/profiles.py` owns HUD profile discovery and boundary refinement.
+`play/layout.py` owns fixed and observed receptor geometry; `play/fonts.py`
+owns counter-font acquisition and validation. `play/words.py` reads judgment
+word pixels and animation refreshes, while `play/judgments.py` owns their
+acquisition/cache orchestration and note association. Report markup, styles
+and browser code live in `play/report.html`, `play/report.css` and
+`play/report.js`; `play/report.py` embeds them in each standalone HTML result.
+These resources are included in built Python wheels.
+
 - `workflow.py` owns the public `just auto` flow, stable source IDs and `.local/data/` layout.
 - `media.py` prepares YouTube media with yt-dlp or inspects local input.
 - `metadata/analysis.py` detects gameplay, refines boundaries and saves structured evidence.
