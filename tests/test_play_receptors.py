@@ -13,6 +13,25 @@ LAYOUT={'receptor_y':.15,'lanes':[{'x':.38+.06*i} for i in range(5)]}
 
 
 class ReceptorTest(unittest.TestCase):
+    def test_flash_corroborates_single_observed_onset_without_filling_unknown_frames(self):
+        samples = [(10, False, False), (10.02, True, False), (10.04, None, True),
+                   (10.06, None, True), (10.08, True, False), (10.1, True, False)]
+        def build(items):
+            return [{'playback_seconds':time,'source_pts_seconds':time+100,
+                     'receptor_lit':[lit],'common_receptor_flash':flash} for time,lit,flash in items]
+        frames = build(samples); runs = receptor_runs(frames)
+        first = runs[1]
+        self.assertEqual(first['frames'], 1)
+        self.assertEqual(first['end_seconds'], 10.02)
+        self.assertTrue(onset_overlaps(first, 10.01, 10.03))
+        self.assertEqual(first['corroborating_source_pts_seconds'], 110.08)
+        self.assertIsNone(runs[-1]['onset_range'])
+        self.assertFalse(onset_overlaps(runs[-1], 10, 10.2))
+        self.assertEqual(frames[2]['receptor_lit'], [None])
+        for changed in (samples[:2]+[(10.04,None,False)]+samples[3:],
+                        samples[:4]+[(10.3,True,False),(10.32,True,False)]):
+            self.assertFalse(onset_overlaps(receptor_runs(build(changed))[1], 10, 10.04))
+
     def test_short_shared_flash_preserves_a_bounded_lane_transition(self):
         frames = [{'playback_seconds':time,'source_pts_seconds':time+100,
                    'receptor_lit':[lit],'common_receptor_flash':lit is None}

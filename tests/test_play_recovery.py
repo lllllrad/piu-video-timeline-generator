@@ -15,6 +15,13 @@ def evidence():
 
 
 class RowRecoveryTest(unittest.TestCase):
+    def test_flash_corroborated_onset_survives_candidate_lane_gate(self):
+        data = evidence()
+        run = data['hold_analysis']['receptor_runs'][1]
+        run.update(frames=1, end_seconds=1.02, corroborating_lit_frames_after_flash=1,
+                   corroborating_source_pts_seconds=11.1, corroborating_playback_seconds=1.1)
+        self.assertEqual(recover_rows(data)[1], [0])
+
     def test_unique_row_uses_own_lane_and_original_bracket(self):
         data = evidence(); original = deepcopy(data)
         matches, recovered = recover_rows(data)

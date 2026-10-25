@@ -95,8 +95,8 @@ def candidates(data, events):
             if previous and target < previous['target']-.025 or following and target > following['target']+.025:
                 rejected[index].add('violates_processed_row_order');continue
             reliable = min(sensor[lane]) >= 3
-            supported = [run for run in lit[lane] if run['frames'] >= 2 and (
-                         run['start_seconds'] <= support_hi+frame*2 and run['end_seconds'] >= support_lo-frame*2
+            supported = [run for run in lit[lane] if (
+                         run['frames'] >= 2 and run['start_seconds'] <= support_hi+frame*2 and run['end_seconds'] >= support_lo-frame*2
                          or onset_overlaps(run, support_lo, support_hi, frame*2))]
             if reliable and not supported:
                 rejected[index].add('receptor_lane_not_active');continue

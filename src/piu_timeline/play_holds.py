@@ -14,7 +14,7 @@ from .play_frames import decode_frames
 from .play_tracking import Track, fit_track
 
 FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 13}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 14}
 
 
 def fingerprint(value):
@@ -310,7 +310,7 @@ def reconstruct(data, frames):
 
 
 def receptor_runs(frames):
-    runs, current, known, bridge = [], {}, {}, {}
+    runs, current, known, bridge, hidden_light = [], {}, {}, {}, {}
     previous_time = None
     for frame in frames:
         time = frame['playback_seconds']
@@ -318,6 +318,7 @@ def receptor_runs(frames):
         for lane, lit in enumerate(frame['receptor_lit']):
             if not continuous:
                 bridge[lane] = False
+                hidden_light[lane] = False
             previous = current.get(lane)
             if previous is not None and previous['lit'] == lit and continuous:
                 previous.update(end_seconds=frame['playback_seconds'], last_source_pts_seconds=frame['source_pts_seconds'], frames=previous['frames']+1)
@@ -335,11 +336,21 @@ def receptor_runs(frames):
                             and time-before['end_seconds'] <= .15):
                         run['onset_range'] = [before['end_seconds'], time]
                         run['onset_source_pts_seconds'] = [before['last_source_pts_seconds'], frame['source_pts_seconds']]
+                    if (hidden_light.get(lane) and before is not None and before['lit'] is True
+                            and 0 < time-before['end_seconds'] <= .15):
+                        # Corroborate the earlier observed onset, without filling
+                        # unknown frames or inventing a second onset after flash.
+                        before['corroborating_lit_frames_after_flash'] = 1
+                        before['corroborating_source_pts_seconds'] = frame['source_pts_seconds']
+                        before['corroborating_playback_seconds'] = time
             if lit is None:
                 bridge[lane] = bridge.get(lane, False) and frame.get('common_receptor_flash', False)
+                hidden_light[lane] = (continuous and frame.get('common_receptor_flash', False)
+                                      and (hidden_light.get(lane, False) or previous is not None and previous['lit'] is True))
             else:
                 known[lane] = current[lane]
                 bridge[lane] = lit is False
+                hidden_light[lane] = False
         previous_time = time
     return runs
 

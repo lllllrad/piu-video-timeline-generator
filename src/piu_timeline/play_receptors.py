@@ -13,7 +13,7 @@ FORMAT = {'schema': 1, 'width': 325, 'measurement': 'white_fraction_190_65'}
 
 def onset_overlaps(run, lo, hi, guard=0):
     """Require a bounded, observed off-to-on transition, not persistent light."""
-    if run['lit'] is not True or run['frames'] < 2:
+    if run['lit'] is not True or run['frames'] + run.get('corroborating_lit_frames_after_flash', 0) < 2:
         return False
     if 'onset_range' in run:
         interval = run['onset_range']
