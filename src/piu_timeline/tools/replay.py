@@ -58,8 +58,18 @@ def current(path):
         if policy.get('gimmick_format') != GIMMICK_FORMAT:
             return False
         metadata = Path(policy.get('metadata_path',''))
-        if not metadata.is_file() or sha256(metadata.read_bytes()).hexdigest() != policy.get('metadata_sha256'):
+        if policy.get('status') == 'applied' and (not metadata.is_file()
+                or sha256(metadata.read_bytes()).hexdigest() != policy.get('metadata_sha256')):
             return False
+    else:
+        registration = path.with_name('chart-registration.json')
+        saved = json.loads(registration.read_text()) if registration.is_file() else {}
+        if saved.get('chart'):
+            metadata_path = Path(saved['chart']).with_name('metadata.json')
+            if metadata_path.is_file():
+                metadata = json.loads(metadata_path.read_text())
+                if metadata.get('regions') or metadata.get('gimmick_candidates'):
+                    return False
     holds = data.get('hold_analysis', {})
     contract = holds.get('association_contract', {})
     if (data.get('play_analysis_version') != VERSION or data.get('timing_format') != TIMING_FORMAT

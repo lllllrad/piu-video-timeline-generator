@@ -5,11 +5,10 @@ from piu_timeline.play.channels import processing_evidence, receptor_evidence, a
 from piu_timeline.play.frames import TIME_EPSILON
 from piu_timeline.play.receptors import onset_overlaps
 from piu_timeline.play.processing import processing_support
-from piu_timeline.play.aggregates import hold_overlap
 from piu_timeline.play.tracking import associate
 
 
-FORMAT = {'schema':1, 'revision':1}
+FORMAT = {'schema':1, 'revision':2}
 
 
 def active_effects(data, kind):
@@ -102,12 +101,17 @@ def simultaneous_increment(data):
                for e in data.get('judgment_events',[])):
             events[i].update(status='excluded',reason='competing_miss_evidence')
             continue
-        if hold_overlap(data,lo,hi,guard):
-            events[i].update(status='hold_state_or_tap',reason='configured_increment_during_hold')
-            continue
         allowed = []
         for ni,note in enumerate(data['notes']):
             if note['status'] != 'estimated' or note.get('note_type') == 'hold' or ni in missed or note.get('prediction_uncertainty_seconds',1) > .05:
+                continue
+            hold_data = data.get('hold_analysis',{})
+            if any(h.get('lane') == note['lane'] and h['start_range'][0]-guard <= hi
+                   and (h['end_range'][1] if h.get('end_range') else h['last_body_seconds']+.25)+guard >= lo
+                   for h in hold_data.get('holds',[])):
+                continue
+            if any(t['lane']==note['lane'] and t['visible_start_seconds']-guard <= hi
+                   and t['visible_end_seconds']+.25+guard >= lo for t in hold_data.get('unresolved_tracks',[])):
                 continue
             if ni in matched:
                 m=matched[ni]

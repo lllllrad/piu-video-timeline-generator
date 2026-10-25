@@ -38,13 +38,18 @@ class GimmickProcessingTest(unittest.TestCase):
                 if kind=='wrong_increment':data['combo_events'][0]['delta']=5
                 if kind=='gap':data['combo_events'][0]['lower_seconds']=.8
                 if kind=='missing_onset':data['hold_analysis']['receptor_runs']=[]
-                if kind=='hold':data['hold_analysis']['holds']=[{'start_range':[.9,.91],'end_range':[1.2,1.21]}]
+                if kind=='hold':data['hold_analysis']['holds']=[{'lane':0,'start_range':[.9,.91],'end_range':[1.2,1.21]}]
                 if kind=='miss':data['miss_candidates']=[{'note':0}]
                 if kind=='rejected':data['chart_policy']['gimmick_candidates'][0]['review_status']='rejected'
                 if kind=='conflicting':data['chart_policy']['gimmick_candidates'].append(
                     {**data['chart_policy']['gimmick_candidates'][0],'id':'other','combo_increment':5})
                 if kind=='outside':data['chart_policy']['gimmick_candidates'][0]['playback_end_seconds']=1.01
                 self.assertEqual(apply_gimmicks(data)['matches'],[])
+
+    def test_another_lane_hold_does_not_veto_exclusively_observed_tap(self):
+        data=fixture()
+        data['hold_analysis']['holds']=[{'lane':1,'start_range':[.9,.91],'end_range':[1.2,1.21]}]
+        self.assertEqual([m['note'] for m in apply_gimmicks(data)['matches']],[0])
 
     def test_incorrect_counter_row_allocation_is_removed_but_independent_word_survives(self):
         data=fixture();data['hold_analysis']['receptor_runs']=[]

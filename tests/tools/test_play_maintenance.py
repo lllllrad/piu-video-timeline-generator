@@ -50,6 +50,25 @@ class ReplayTest(unittest.TestCase):
             Path(data['media']['path']).write_bytes(b'changed recording')
             self.assertFalse(current(path))
 
+    def test_new_or_changed_chart_effects_refresh_reports_without_changing_native_data(self):
+        from hashlib import sha256
+        from piu_timeline.play.gimmicks import FORMAT
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);path,_=play(root)
+            chart=root/'chart.ucs';chart.write_text('unchanged chart')
+            metadata=chart.with_name('metadata.json')
+            metadata.write_text(json.dumps({'gimmick_candidates':[{'id':'ten'}]}))
+            native=path.with_name('frames.jsonl').read_bytes()
+            path.with_name('chart-registration.json').write_text(json.dumps({'chart':str(chart)}))
+            self.assertFalse(current(path))
+            policy={'status':'applied','gimmick_format':FORMAT,'metadata_path':str(metadata),
+                    'metadata_sha256':sha256(metadata.read_bytes()).hexdigest()}
+            path.with_name('chart-policy.json').write_text(json.dumps(policy))
+            self.assertTrue(current(path))
+            metadata.write_text(json.dumps({'gimmick_candidates':[{'id':'ten','review_status':'rejected'}]}))
+            self.assertFalse(current(path))
+            self.assertEqual(path.with_name('frames.jsonl').read_bytes(),native)
+
     def test_replay_uses_public_command_and_preserves_native_observations(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);path,data=play(root,stale=True)
