@@ -1,10 +1,12 @@
 """Acquire or refresh local play analyses through the public play command."""
 import argparse
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime, timezone
 import fcntl
 import html
 import json
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -93,17 +95,21 @@ def discover(root, sources=(), segments=(), acquire=False):
 
 
 class Replay:
-    def __init__(self, root, output, sources=(), segments=(), acquire=False):
+    def __init__(self, root, output, sources=(), segments=(), acquire=False, jobs=1):
         self.root, self.output = Path(root), Path(output)
         self.sources, self.segments, self.acquire = sources, segments, acquire
+        if jobs < 1:
+            raise ValueError("Replay jobs must be positive")
+        self.jobs = jobs
         self.records = {}
         self.output.mkdir(parents=True, exist_ok=True)
         self.started = datetime.now(timezone.utc).isoformat()
 
     def progress(self, state, active=None):
         records = list(self.records.values())
-        doc = {'started':self.started, 'updated':datetime.now(timezone.utc).isoformat(),
-               'state':state, 'active':active, 'counts':dict(Counter(r['status'] for r in records)),
+        active_plays = [f"{r['source']}/{r['segment']:03}" for r in records if r['status']=='running']
+        doc = {'jobs':self.jobs, 'active_plays':active_plays, 'started':self.started, 'updated':datetime.now(timezone.utc).isoformat(),
+               'state':state, 'active':active or next(iter(active_plays),None), 'counts':dict(Counter(r['status'] for r in records)),
                'play_analysis_version':VERSION, 'hold_association_format':ASSOCIATION_FORMAT,
                'plays':records}
         write_json(self.output/'progress.json', doc)
@@ -115,61 +121,84 @@ class Replay:
                 '<tr><th>Source</th><th>Segment</th><th>Status</th><th>Details</th></tr>'+rows+'</table>')
         pending = self.output/'index.build-html'; pending.write_text(page); pending.replace(self.output/'index.html')
 
+    def refresh(self, source, number, path, signature):
+        """Run one independent child; the coordinator alone writes progress."""
+        record = {}
+        log = self.output/f'{source}-{number:03}.log'; begin = time.monotonic()
+        try:
+            with log.open('w') as stream:
+                result = subprocess.run(['just', 'play', source, '--segment', str(number)],
+                                        cwd=self.root, stdout=stream, stderr=subprocess.STDOUT)
+            valid = result.returncode == 0 and current(path)
+            record.update(returncode=result.returncode,
+                          status='current' if valid else 'queued' if result.returncode == 0 else 'failed',
+                          detail='Completed through the public play command.' if valid else 'See '+log.name)
+            if result.returncode and 'already being analyzed' in log.read_text():
+                record.update(status='busy', detail='Another analyzer acquired the segment lock.')
+        except (OSError, ValueError, KeyError) as error:
+            record.update(status='failed', detail=str(error))
+        record.update(elapsed_seconds=round(time.monotonic()-begin, 2), log=log.name)
+        if record['status'] == 'failed':
+            record['failed_signature'] = signature
+        return record
+
+    def finish(self, pending):
+        done, _ = wait(pending, return_when=FIRST_COMPLETED)
+        for future in done:
+            self.records[pending.pop(future)].update(future.result())
+        self.progress('refreshing')
+
     def cycle(self):
-        for source, number in discover(self.root, self.sources, self.segments, self.acquire):
-            key = f'{source}/{number:03}'
-            directory = self.root/'.local/data'/source/'play'/f'segment-{number:03}'
-            path = directory/'analysis.json'
-            record = self.records.setdefault(key, {'source':source, 'segment':number})
-            # Public play also checks this lock, closing the race after this check.
-            if busy(directory.parent/f'.segment-{number:03}.lock'):
-                record.update(status='busy', detail='Deferred: another analyzer owns this segment.'); continue
-            signature = [file_signature(p)
-                         for p in (path, directory.parent.parent/'analysis/analysis.json')]
-            try:
-                if current(path):
-                    record.update(status='current', detail='Artifact contracts are current.'); continue
-            except (OSError, ValueError, KeyError) as error:
-                record['detail'] = str(error)
-            if record.get('status') == 'failed' and record.get('failed_signature') == signature:
-                continue
-            record.update(status='running'); self.progress('refreshing', key)
-            log = self.output/f'{source}-{number:03}.log'; begin = time.monotonic()
-            try:
-                with log.open('w') as stream:
-                    result = subprocess.run(['just', 'play', source, '--segment', str(number)],
-                                            cwd=self.root, stdout=stream, stderr=subprocess.STDOUT)
-                valid = result.returncode == 0 and current(path)
-                record.update(returncode=result.returncode,
-                              status='current' if valid else 'queued' if result.returncode == 0 else 'failed',
-                              detail='Completed through the public play command.' if valid else 'See '+log.name)
-                if result.returncode and 'already being analyzed' in log.read_text():
-                    record.update(status='busy', detail='Another analyzer acquired the segment lock.')
-            except (OSError, ValueError, KeyError) as error:
-                record.update(status='failed', detail=str(error))
-            record.update(elapsed_seconds=round(time.monotonic()-begin, 2), log=log.name)
-            if record['status'] == 'failed':
-                record['failed_signature'] = signature
-            self.progress('refreshing')
-        pending = any(r['status'] in ('queued', 'busy') for r in self.records.values())
-        self.progress('deferred' if pending else 'complete')
+        pending = {}
+        with ThreadPoolExecutor(max_workers=self.jobs) as pool:
+            for source, number in discover(self.root, self.sources, self.segments, self.acquire):
+                if len(pending) >= self.jobs:
+                    self.finish(pending)
+                key = f'{source}/{number:03}'
+                directory = self.root/'.local/data'/source/'play'/f'segment-{number:03}'
+                path = directory/'analysis.json'
+                record = self.records.setdefault(key, {'source':source, 'segment':number})
+                # Public play also checks this lock, closing the race after this check.
+                if busy(directory.parent/f'.segment-{number:03}.lock'):
+                    record.update(status='busy', detail='Deferred: another analyzer owns this segment.'); continue
+                signature = [file_signature(p)
+                             for p in (path, directory.parent.parent/'analysis/analysis.json')]
+                try:
+                    if current(path):
+                        record.update(status='current', detail='Artifact contracts are current.'); continue
+                except (OSError, ValueError, KeyError) as error:
+                    record['detail'] = str(error)
+                if record.get('status') == 'failed' and record.get('failed_signature') == signature:
+                    continue
+                record.update(status='running')
+                pending[pool.submit(self.refresh,source,number,path,signature)] = key
+                self.progress('refreshing')
+            while pending:
+                self.finish(pending)
+        deferred = any(r['status'] in ('queued', 'busy') for r in self.records.values())
+        self.progress('deferred' if deferred else 'complete')
         return any(r['status'] == 'failed' for r in self.records.values())
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    cores = len(os.sched_getaffinity(0)) if hasattr(os,'sched_getaffinity') else os.cpu_count() or 1
+    parser.add_argument('--jobs', type=int, default=min(8,max(1,cores//2)),
+                        help='Concurrent play processes (default: half the available CPUs, capped at 8)')
     parser.add_argument('--sources', nargs='+')
     parser.add_argument('--segments', nargs='+', type=int)
     parser.add_argument('--acquire', action='store_true', help='Include metadata plays without native observations')
     parser.add_argument('--watch', action='store_true', help='Discover newly completed/promoted plays every 30 seconds')
     parser.add_argument('--run-dir', type=Path)
     args = parser.parse_args()
+    if args.jobs < 1:
+        parser.error('--jobs must be positive')
     if args.segments and min(args.segments) < 1:
         parser.error('Segment numbers start at 1')
     destination = args.run_dir or ROOT/'.local/runs'/('play-replay-'+time.strftime('%Y%m%d-%H%M%S'))
     if not destination.resolve().is_relative_to(ROOT/'.local'):
         parser.error('--run-dir must stay under .local/')
-    runner = Replay(ROOT, destination, args.sources or (), args.segments or (), args.acquire)
+    runner = Replay(ROOT, destination, args.sources or (), args.segments or (), args.acquire, args.jobs)
     with (destination/'.runner.lock').open('a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

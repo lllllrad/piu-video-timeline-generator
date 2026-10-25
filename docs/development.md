@@ -161,7 +161,7 @@ Private recipes beginning with `_` support direct review and diagnostics without
 The tracked replay and audit tools support the repeated local maintenance work:
 
 ```sh
-just _replay --sources VIDEO_ID --segments 12 14
+just _replay --sources VIDEO_ID --segments 12 14 --jobs 8
 just _replay --acquire --watch
 just _audit --sources VIDEO_ID --segments 12 14
 ```
@@ -170,7 +170,10 @@ Replay defaults to completed canonical plays with saved native frames. It
 checks artifact contracts and source identity before calling the public play
 command for outdated results. `--acquire` also includes metadata plays without
 saved observations; `--watch` discovers later promotions every 30 seconds.
-Busy segment locks are deferred. Failures do not block other plays, and an
+Independent play commands run concurrently. `--jobs` defaults to half the
+available CPU affinity, capped at eight processes; `--jobs 1` requests serial
+execution. The coordinator writes progress, including all active plays; each
+child keeps its own log and segment lock. Busy segment locks are deferred. Failures do not block other plays, and an
 unchanged failed input is not retried until its analysis or metadata changes.
 `--sources` preserves explicit source priority. Progress, logs and a JSON/HTML
 summary go under `.local/runs/`; `--run-dir` selects a destination there.

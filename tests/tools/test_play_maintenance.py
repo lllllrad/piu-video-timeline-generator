@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -80,6 +81,57 @@ class ReplayTest(unittest.TestCase):
             other.with_name('frames.jsonl').unlink()
             self.assertEqual(discover(root),[('source',1)])
             self.assertEqual(discover(root,acquire=True),[('second',1),('source',1)])
+
+    def test_parallel_replay_fills_bounded_slots_and_isolates_failed_children(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            plays={source:play(root,source,stale=True) for source in ('a','b','c','d')}
+            barrier=threading.Barrier(2,timeout=5)
+            lock=threading.Lock();active=0;peak=0;seen=[]
+            def execute(argv,**kwargs):
+                nonlocal active,peak
+                source=argv[2]
+                with lock:
+                    active+=1;peak=max(peak,active);seen.append(source)
+                try:
+                    barrier.wait()
+                    if source=='b':
+                        return subprocess.CompletedProcess(argv,1)
+                    path,data=plays[source]
+                    data['play_analysis_version']=VERSION;path.write_text(json.dumps(data))
+                    return subprocess.CompletedProcess(argv,0)
+                finally:
+                    with lock:active-=1
+            runner=Replay(root,root/'.local/runs/replay',jobs=2)
+            with patch('piu_timeline.tools.replay.subprocess.run',side_effect=execute):
+                self.assertTrue(runner.cycle())
+            self.assertEqual(peak,2)
+            self.assertEqual(set(seen),set(plays))
+            self.assertEqual(runner.records['b/001']['status'],'failed')
+            progress=json.loads((runner.output/'progress.json').read_text())
+            self.assertEqual(progress['counts'],{'current':3,'failed':1})
+            self.assertEqual(progress['active_plays'],[])
+            self.assertEqual(progress['jobs'],2)
+            for path,_ in plays.values():
+                self.assertEqual(path.with_name('frames.jsonl').read_text(),'original native observations\n')
+            with patch('piu_timeline.tools.replay.subprocess.run',side_effect=AssertionError('unchanged failures must not retry')):
+                self.assertTrue(runner.cycle())
+
+    def test_child_losing_the_segment_lock_is_deferred_without_blocking_other_workers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);play(root,'a',stale=True);path,data=play(root,'b',stale=True)
+            def execute(argv,**kwargs):
+                if argv[2]=='a':
+                    kwargs['stdout'].write('This play is already being analyzed')
+                    return subprocess.CompletedProcess(argv,1)
+                data['play_analysis_version']=VERSION;path.write_text(json.dumps(data))
+                return subprocess.CompletedProcess(argv,0)
+            runner=Replay(root,root/'.local/runs/replay',jobs=2)
+            with patch('piu_timeline.tools.replay.subprocess.run',side_effect=execute):
+                self.assertFalse(runner.cycle())
+            self.assertEqual(runner.records['a/001']['status'],'busy')
+            self.assertEqual(runner.records['b/001']['status'],'current')
+            self.assertEqual(json.loads((runner.output/'progress.json').read_text())['state'],'deferred')
 
     def test_failure_does_not_block_other_plays_or_retry_unchanged_inputs(self):
         with tempfile.TemporaryDirectory() as temp:
