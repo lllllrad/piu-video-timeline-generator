@@ -42,6 +42,11 @@ def pixel_play(directory, kind='consumed'):
                 data['notes'][0]['points'].append([time,y])
         if kind in ('flash','long_flash') and 1 <= time <= (1.04 if kind == 'flash' else 1.25):
             image[35:90,110:150] = 255
+        if kind == 'partial_flash' and time >= 1:
+            # A narrow bright core plus desaturated bloom covers the head.
+            # Whole-patch white fraction stays below the old 45% cutoff.
+            image[y-14:y+15,x-14:x+15] = (160,210,240)
+            image[y-14:y+15,x-4:x+4] = 255
         if kind == 'cut' and time >= 1:
             image[:] = 0
         pixels.observe(image, time+42, time)
@@ -60,7 +65,7 @@ class VisualChannelTest(unittest.TestCase):
     def test_pixels_distinguish_consumption_passage_and_unknown_without_hud_or_light(self):
         for kind, expected in [('consumed','disappeared_near_receptor'), ('passed','passed_target'),
                                ('reappeared','passed_target'), ('flash','disappeared_near_receptor'),
-                               ('long_flash','unresolved'), ('cut','unresolved'),
+                               ('long_flash','unresolved'), ('partial_flash','unresolved'), ('cut','unresolved'),
                                ('gap','unresolved'), ('truncated','unresolved'), ('neighbor','unresolved'),
                                ('hold','hold_component')]:
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temp:
@@ -119,3 +124,15 @@ class VisualChannelTest(unittest.TestCase):
             (directory/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n' for f in frames[:-1]))
             with self.assertRaisesRegex(ValueError,'frame counts'):
                 collect(data,directory,frames)
+
+    def test_white_core_and_bloom_do_not_create_a_false_early_disappearance(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=Path(temp); data,_=pixel_play(directory,'partial_flash')
+            event=observe_processing(data,directory/'processing-features.npz')['notes'][0]
+            self.assertEqual(event['status'],'unresolved')
+            self.assertNotIn('range',event)
+            data['visual_channels']={'processing':{'notes':[event]}}
+            data['matches']=[{'note':0,'observation_lower_seconds':1.1,'observation_upper_seconds':1.12,'processing_conflict':True}]
+            self.assertNotIn('processing_conflict',annotate_matches(data)['matches'][0])
+            self.assertTrue(any(s['unknown_reason']=='white_effect' for s in event['samples'] if s['time']>=1))
+            self.assertFalse(any(s['state']=='absent' for s in event['samples'] if 1<=s['time']<1.08))

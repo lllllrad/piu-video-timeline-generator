@@ -35,6 +35,12 @@ its expected location using corroborated peer displacement when available,
 or the supported local velocity. This channel depends on motion identity;
 it does not consult combo values, judgment words or receptor-onset decisions.
 
+A loss of lane color near a bright effect is not clear absence. For otherwise
+absent samples, expand the observed white core by 0.1 lane spacings and measure
+its overlap with the approach silhouette. At least 30% possible coverage makes
+the sample unknown. This accounts for desaturated bloom beyond the strict
+white threshold; a clearly present colored silhouette is retained.
+
 Compare the moving color silhouette with the observed pixels at each native
 frame. Dice overlap of at least 0.65 supports presence; at most 0.18 supports
 absence. Intermediate matches, white effects, HUD overlap, clipping, missing

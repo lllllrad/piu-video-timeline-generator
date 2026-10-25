@@ -128,6 +128,7 @@ def annotate_matches(data):
     matches = []
     for original in data.get('matches', []):
         match = dict(original)
+        match.pop('processing_conflict', None)
         ni = match['note']
         refs = ['motion:'+str(ni)]
         for key, prefix in (('combo_event','combo:'), ('judgment_event','judgment:')):

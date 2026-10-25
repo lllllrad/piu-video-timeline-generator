@@ -8,7 +8,7 @@ import numpy as np
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
-PROCESSING_FORMAT = {'schema': 1, 'revision': 1}
+PROCESSING_FORMAT = {'schema': 1, 'revision': 2}
 
 
 class ReceptorPixels:
@@ -176,6 +176,13 @@ def observe_processing(data, path):
             else:
                 score = overlap(template, image)
                 state = 'present' if score>=.65 else 'absent' if score<=.18 else 'unknown'
+                if state == 'absent':
+                    # Bloom can desaturate the colored head outside the strict
+                    # white core. Its neighboring pixels are not clear absence.
+                    halo_radius = max(1, round(.1*spacing))
+                    halo = cv2.dilate(white.astype('uint8'), np.ones((2*halo_radius+1,2*halo_radius+1), dtype='uint8'))
+                    if template.any() and halo[template].mean() >= .3:
+                        state, reason = 'unknown', 'white_effect'
             record['samples'].append({'time': time, 'pts': source_pts, 'y': float(y), 'state': state, 'score': score,
                                       'unknown_reason': reason if state == 'unknown' else None})
         result.append({**record, **transition(record['samples'], receptor, spacing)})
