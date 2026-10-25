@@ -201,3 +201,11 @@ interval suppresses it. A transformation exception does not hide unknown types. 
 exceptions do not suppress type warnings. Suppressed evidence remains in
 `recognition-warnings.json` under `chart_exceptions`; no exception is generated
 automatically from a contradiction.
+
+Within a complete aggregate counter increment, another constituent row is not
+competing counter evidence against an independently recognized word refresh.
+A word may label its uniquely associated constituent row while all rows retain
+the original aggregate timing bracket. Each label still requires its own
+observed refresh; the final visible grade is never copied to the other rows.
+Words outside that counter group and incomplete/invalid bursts retain the
+normal conflict checks.

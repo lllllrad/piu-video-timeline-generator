@@ -22,7 +22,7 @@ TEMPLATE_FORMAT = {'schema': 1, 'encoding': FEATURE_FORMAT['encoding'], 'mask': 
 LEGACY_FEATURE_FORMAT = {'schema': 1, 'encoding': 'hue10-s90-v155-white-s70-v190'}
 LEGACY_TEMPLATE_FORMAT = {'schema': 1, 'encoding': 'hue10-s90-v155-white-s70-v190', 'mask': 'binary'}
 OBSERVATION_FORMAT = {'schema': 1, 'reader_revision': OBSERVATION_VERSION}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 3}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 4}
 
 
 def fingerprint(value):
@@ -357,11 +357,26 @@ def merge_judgments(data, events, observations=()):
     groups = {}
     for match in judge_matches:
         groups.setdefault(match['combo_event'],[]).append(match)
+    def constituent_refresh(ci, note_ids, event):
+        counter = data['combo_events'][ci]
+        members = counter_groups.get(ci,[])
+        if (counter.get('delta',1) <= 1 or not note_ids <= {m['note'] for m in members}
+                or not 0 < counter['upper_seconds']-counter['lower_seconds'] <= .1+TIME_EPSILON):
+            return False
+        times = sorted(m['target_seconds'] for m in members)
+        rows = []
+        for time in times:
+            if not rows or time-rows[-1] >= .025:
+                rows.append(time)
+        return (len(rows)==counter['delta']
+                and event['upper_seconds'] >= counter['lower_seconds']-TIME_EPSILON
+                and event['lower_seconds'] <= counter['upper_seconds']+TIME_EPSILON)
     for index,group in groups.items():
         event = events[index]
         note_ids = {match['note'] for match in group}
         conflicting = [match for match in combo_matches if match['note'] not in note_ids
                        and match['combo_event'] not in anchored_counters
+                       and not constituent_refresh(match['combo_event'],note_ids,event)
                        and event['lower_seconds']-.025<=match['combo_upper_seconds']
                        and event['upper_seconds']+.025>=match['combo_lower_seconds']]
         if conflicting:

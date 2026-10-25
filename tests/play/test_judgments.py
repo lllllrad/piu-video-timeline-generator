@@ -37,6 +37,32 @@ class JudgmentTest(unittest.TestCase):
         self.assertEqual(match['observation_upper_seconds'],1.083)
         self.assertEqual(len(result['matches']),1)
 
+    def test_each_observed_word_can_label_its_own_row_inside_an_aggregate_counter(self):
+        data=self.combo_data([1.,1.08],[(.99,1.09),(.99,1.09)])
+        data['combo_events']=[{'before':10,'after':12,'delta':2,'status':'matched',
+                               'lower_seconds':.99,'upper_seconds':1.09}]
+        for match in data['matches']:match['combo_event']=0
+        words=[{'label':'GREAT','lower_seconds':.99,'upper_seconds':1.01},
+               {'label':'PERFECT','lower_seconds':1.07,'upper_seconds':1.09}]
+        result=merge_judgments(data,words)
+        self.assertEqual([m['judgment_label'] for m in result['matches']],['GREAT','PERFECT'])
+        self.assertEqual([m['judgment_event'] for m in result['matches']],[0,1])
+        self.assertTrue(all(m['observation_lower_seconds']==.99 and m['observation_upper_seconds']==1.09
+                            for m in result['matches']))
+
+    def test_one_word_is_not_spread_over_aggregate_rows_or_given_to_foreign_rows(self):
+        data=self.combo_data([1.,1.08],[(.99,1.09),(.99,1.09)])
+        data['combo_events']=[{'before':10,'after':12,'delta':2,'status':'matched',
+                               'lower_seconds':.99,'upper_seconds':1.09}]
+        for match in data['matches']:match['combo_event']=0
+        result=merge_judgments(data,[{'label':'PERFECT','lower_seconds':1.07,'upper_seconds':1.09}])
+        self.assertNotIn('judgment_label',result['matches'][0])
+        self.assertEqual(result['matches'][1]['judgment_label'],'PERFECT')
+        data['notes'].append({'lane':2,'status':'estimated','target_seconds':1.04})
+        foreign=merge_judgments(data,[{'label':'GREAT','lower_seconds':1.035,'upper_seconds':1.045}])
+        self.assertEqual(len(foreign['matches']),2)
+        self.assertTrue(all(m['note']!=2 for m in foreign['matches']))
+
     def test_counter_anchor_removes_a_competing_neighbor_from_alignment(self):
         data=self.combo_data([1.00],[(.99,1.01)])
         data['notes'].append({'lane':0,'status':'estimated','target_seconds':1.045})
