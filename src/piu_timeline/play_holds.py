@@ -14,7 +14,7 @@ from .play_frames import decode_frames
 from .play_tracking import Track, fit_track
 
 FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 15}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 16}
 
 
 def fingerprint(value):
@@ -241,8 +241,6 @@ def reconstruct(data, frames):
         if start is None:
             start = [data['start_seconds'], contact[0]['time']]
         short_body_fit = end is not None and end[1] - (start[1] if censored else start[0]) < .12
-        if not end and censored and (not contact or contact[-1]['time']-contact[0]['time'] < .12):
-            continue
         middle = contact[0]['time'] if censored else sum(start) / 2
         # Prefer a fitted arrow head corroborated by the approaching body.
         heads = [(i, note) for i, note in enumerate(data['notes']) if note['status'] == 'estimated'

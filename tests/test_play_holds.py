@@ -39,11 +39,12 @@ class HoldTest(unittest.TestCase):
         original = deepcopy(data)
         # Both an unreadable endpoint and a misleading body-box extrapolation
         # must defer to the independently observed connected tail.
-        for body_end in (None, [1.02, 1.04]):
-            with self.subTest(body_end=body_end), patch(
+        for body_start, body_end in (([.99, 1.01], None), ([.99, 1.01], [1.02, 1.04]),
+                                     (None, None)):
+            with self.subTest(body_start=body_start, body_end=body_end), patch(
                     'piu_timeline.play_holds.fit_endpoint',
                     side_effect=lambda track, receptor, spacing, endpoint:
-                    [.99, 1.01] if endpoint == 'top' else body_end):
+                    body_start if endpoint == 'top' else body_end):
                 holds = reconstruct(data, frames)
             self.assertEqual(len(holds), 1)
             self.assertEqual(holds[0]['tail_note'], 1)
