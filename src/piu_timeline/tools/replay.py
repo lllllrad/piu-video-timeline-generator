@@ -1,6 +1,7 @@
 """Acquire or refresh local play analyses through the public play command."""
 import argparse
 from collections import Counter
+from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime, timezone
 import fcntl
@@ -50,6 +51,15 @@ def current(path):
                ('frames.jsonl', 'report.html', 'recognition-warnings.json', 'timing-ranges.json')):
         return False
     data = json.loads(path.read_text())
+    policy_path = path.with_name('chart-policy.json')
+    if policy_path.is_file():
+        policy = json.loads(policy_path.read_text())
+        from piu_timeline.play.gimmicks import FORMAT as GIMMICK_FORMAT
+        if policy.get('gimmick_format') != GIMMICK_FORMAT:
+            return False
+        metadata = Path(policy.get('metadata_path',''))
+        if not metadata.is_file() or sha256(metadata.read_bytes()).hexdigest() != policy.get('metadata_sha256'):
+            return False
     holds = data.get('hold_analysis', {})
     contract = holds.get('association_contract', {})
     if (data.get('play_analysis_version') != VERSION or data.get('timing_format') != TIMING_FORMAT

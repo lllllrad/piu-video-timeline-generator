@@ -44,11 +44,13 @@ def timing_ranges(data):
         for index, event in enumerate(data.get(key, [])):
             if source in ('combo', 'counter_frames') and event.get('delta', 0) <= 0:
                 continue
+            if source == 'combo' and event.get('judged_row_count', 1) is None:
+                continue
             if source == 'judgment' and event.get('label') == 'MISS':
                 continue
             lo, hi = event['lower_seconds'], event['upper_seconds']
             if math.isfinite(lo) and math.isfinite(hi) and lo <= hi:
-                events.append({'source': source, 'event': index, 'delta': event.get('delta', 1), 'lower_seconds': lo,
+                events.append({'source': source, 'event': index, 'delta': event.get('judged_row_count', event.get('delta', 1)) or 0, 'lower_seconds': lo,
                                'upper_seconds': hi, 'reason': event.get('reason'),
                                **({key: event[key] for key in ('before', 'after')} if 'before' in event and 'after' in event else {}),
                                **({'source_pts_seconds': event['source_pts_seconds']} if 'source_pts_seconds' in event else {})})

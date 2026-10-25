@@ -1,4 +1,4 @@
-"""Suspected effects retain source evidence and never create check exceptions."""
+"""Suspected effects apply provisionally while retaining source evidence."""
 import json
 from pathlib import Path
 import tempfile
@@ -46,6 +46,19 @@ class GimmickTest(unittest.TestCase):
             self.assertEqual({r['reason'] for r in recognition_diagnostics(view,{'notes':{}})['warnings']},
                              {'note_type_conflict','note_processing_unresolved'})
             self.assertEqual(saved['regions'],[])
+
+    def test_pending_visibility_does_not_grant_generic_exemptions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output,chart,data,registration=self.fixture(Path(temporary))
+            record_candidates(data,output,registration)
+            view=attach_regions(data,output,Path(registration['repository']))
+            self.assertEqual(view['chart_policy']['regions'],[])
+            view['note_type_diagnostics']=[{'note':0,'lane':0,'reason':'note_type_conflict',
+                                          'visible_start_seconds':12,'visible_end_seconds':13}]
+            diagnostics=recognition_diagnostics(view,{'notes':{}})
+            self.assertEqual({r['reason'] for r in diagnostics['warnings']},{'note_type_conflict','note_processing_unresolved'})
+            self.assertEqual(diagnostics['chart_exceptions'],[])
+            self.assertEqual(json.loads(chart.with_name('metadata.json').read_text())['regions'],[])
 
     def test_unknown_song_alignment_is_kept_local_instead_of_guessing_chart_times(self):
         with tempfile.TemporaryDirectory() as temporary:

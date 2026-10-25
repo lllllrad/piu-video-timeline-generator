@@ -192,3 +192,10 @@ include using lane spacing as an approximate cap scale, saved observations witho
 body endpoints extrapolated from small color masks. Those approximations must be named and carry
 uncertainty; they are not facts about the game. Improvements should replace them with measured
 evidence where available, while retaining a traceable fallback for older observations.
+
+A chart can stack scoring rows so that a single visible processing moment
+advances the counter by a configured amount, such as ten. The counter change
+alone cannot distinguish this from dropped intermediate reads or rapid normal
+rows. Verify the source sequence and scope the exact increment in chart
+metadata. This changes counting semantics, not the measured refresh bracket;
+independent lane evidence and unique visible-row ownership are still required.

@@ -130,6 +130,21 @@ local `gimmick-candidates.json` until alignment is available. Source PTS and
 playback times remain separate. No recording or extracted image is copied into
 the chart repository.
 
-Candidates, including confirmed candidates, do not suppress any warning. A
-human separately adds a scoped `regions` processing/check exception after
-review. Reports display candidates and provide links into the original video.
+Pending and confirmed recognized effects apply immediately; `rejected` disables
+application without deleting evidence. A visibility modifier classifies the corroborated pre-receptor losses as
+`visibility_modified`, not consumption, and retains the raw samples. Timing and
+type warnings remain active. No check exemption is generated. Unknown effect
+kinds display a missing-handler warning.
+A `suspected_multi_increment` effect records an integer `combo_increment` (2-10);
+it changes counter interpretation only in its song interval, never result quotas
+or independently recognized judgment grades. Reports show the provisional status
+and original-video review links.
+
+Effect processing lives in `play/gimmicks.py`, separate from generic region
+exceptions. A configured simultaneous increment of exactly N can represent one
+visible row only with independent lane-onset or consumption evidence and unique
+motion association. The actual counter delta stays N. It does not create N
+notes or spread a grade. Holds retain sustained-state semantics. Changes that
+are not exactly the configured increment remain unresolved; missing refreshes
+are not filled by division. All handlers operate on derived projections and
+preserve the original saved channels. Review rejection disables a handler.

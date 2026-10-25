@@ -69,7 +69,7 @@
     },
     "gimmick_candidates": {
       "type": "array",
-      "description": "Suspected effects awaiting human review. These annotations never grant check exemptions.",
+      "description": "Scoped effects apply provisionally while pending or confirmed; rejected effects are inactive.",
       "items": {
         "type": "object",
         "required": [
@@ -108,13 +108,37 @@
             "type": "string",
             "minLength": 1
           },
+          "combo_increment": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 10
+          },
           "evidence": {
             "type": "array",
             "items": {
               "type": "object"
             }
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "suspected_multi_increment"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "combo_increment"
+              ]
+            }
+          }
+        ]
       }
     }
   }

@@ -1,4 +1,4 @@
-"""Reviewable suspected chart effects, never automatic recognition exemptions."""
+"""Reviewable chart effects with scoped provisional processing rules."""
 import fcntl
 from hashlib import sha256
 import json
@@ -23,6 +23,9 @@ def validate_candidates(metadata):
         if (any(isinstance(t,bool) or not isinstance(t,(int,float)) or not math.isfinite(t) for t in (start,end))
                 or not 0 <= start < end or not isinstance(record.get('evidence',[]),list)):
             raise ValueError('Gimmick candidates require finite increasing song times and an evidence list')
+        increment = record.get('combo_increment')
+        if record['kind'] == 'suspected_multi_increment' and (type(increment) is not int or not 2 <= increment <= 10):
+            raise ValueError('Multi-increment effects require an integer combo_increment from 2 to 10')
         identifiers.add(record['id'])
     return candidates
 

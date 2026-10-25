@@ -30,10 +30,11 @@ if(data.chart_policy){
     const warning=document.createElement('p');warning.textContent='Chart region policies were not applied: '+data.chart_policy.reason;$('chartPolicyDetails').appendChild(warning);
   }
   for(const candidate of data.chart_policy.gimmick_candidates||[]){
-    const item=text('p','Suspected gimmick / '+candidate.review_status+' / '+candidate.reason+' / warnings remain active',$('chartPolicyDetails'));
+    const item=text('p','Suspected gimmick / '+candidate.review_status+(candidate.combo_increment?' / exactly +'+candidate.combo_increment+' per simultaneous refresh':'')+' / '+candidate.reason+(candidate.review_status==='rejected'?' / inactive':' / provisionally applied'),$('chartPolicyDetails'));
     const jump=text('button','Review '+fmt(candidate.playback_start_seconds)+' … '+fmt(candidate.playback_end_seconds),item);
     jump.onclick=()=>seek(candidate.playback_start_seconds);
   }
+  for(const id of data.chart_policy.unsupported_gimmicks||[])text('p','Warning: no processing handler for '+id,$('chartPolicyDetails'));
   for(const region of data.chart_policy.regions||[]){
     const item=document.createElement('p');item.textContent=region.id+' / song '+fmt(region.start_seconds)+' … '+fmt(region.end_seconds)+' / '+region.processing+' / '+region.reason+(region.check_exceptions.length?' / check exceptions: '+region.check_exceptions.join(', '):'')+(region.details?' / '+region.details:'');
     const jump=document.createElement('button');jump.textContent='Seek region';jump.onclick=()=>seek(region.playback_start_seconds);item.appendChild(jump);$('chartPolicyDetails').appendChild(item);
@@ -83,13 +84,13 @@ if(!matches.length){const p=text('p','No unambiguous matches. Check calibration 
 for(const [reason,count] of Object.entries(data.excluded_notes))text('p',reason.replaceAll('_',' ')+': '+count,$('exclusions'));
 const comboReasons={};for(const e of data.combo_events)if(e.status==='excluded')comboReasons[e.reason]=(comboReasons[e.reason]||0)+1;
 for(const [reason,count] of Object.entries(comboReasons))text('p',reason.replaceAll('_',' ')+': '+count,$('exclusions'));
-for(const e of data.combo_events){const row=text('tr','',$('comboEvents'));text('td',fmt(e.lower_seconds)+' … '+fmt(e.upper_seconds),row);text('td',e.before+' → '+e.after,row);text('td',e.delta>0?e.delta:'Reset',row);text('td',(e.reason||e.status).replaceAll('_',' '),row);row.onclick=()=>seek(e.upper_seconds)}
+for(const e of data.combo_events){const row=text('tr','',$('comboEvents'));text('td',fmt(e.lower_seconds)+' … '+fmt(e.upper_seconds),row);text('td',e.before+' → '+e.after,row);text('td',e.combo_increment?'+'+e.delta+' / '+(e.judged_row_count??'?')+' row / configured +'+e.combo_increment:e.delta>0?e.delta:'Reset',row);text('td',(e.gimmick_error||e.reason||e.status).replaceAll('_',' '),row);row.onclick=()=>seek(e.upper_seconds)}
 for(const e of data.judgment_events||[]){const row=text('tr','',$('judgmentEvents'));
 text('td',fmt(e.lower_seconds)+' … '+fmt(e.upper_seconds),row);
 text('td',e.label,row);
 text('td',e.trigger.replaceAll('_',' '),row);
 const missed=(data.miss_candidates||[]).filter(m=>data.judgment_events[m.judgment_event]===e);
-text('td',(e.reason||e.status).replaceAll('_',' ')+(missed.length?' / possible note lanes: '+missed.map(m=>data.layout.lanes[data.notes[m.note].lane].name||String(data.notes[m.note].lane+1)).join(', '):''),row);
+text('td',(e.gimmick_error||e.reason||e.status).replaceAll('_',' ')+(missed.length?' / possible note lanes: '+missed.map(m=>data.layout.lanes[data.notes[m.note].lane].name||String(data.notes[m.note].lane+1)).join(', '):''),row);
 row.onclick=()=>seek(e.upper_seconds)}
 text('p','Labeled timing heads: '+(data.coverage?.judgment_labeled_note_heads??matches.filter(m=>m.judgment_label).length)+'. Judgment unknown: '+(data.coverage?.unlabeled_timed_note_heads??matches.filter(m=>!m.judgment_label).length)+'. Labels from post-combo word frames: '+(data.coverage?.combo_frame_labeled_note_heads||0)+'.',$('quality'));
 text('p','Judgment-only timed heads: '+(data.coverage?.judgment_only_note_heads||0)+'. Learned words: '+(data.judgment_template_labels||[]).join(', ')+'. Unlearned: '+((data.judgment_missing_labels||[]).join(', ')||'none')+'. New judgment OCR crops: '+(data.judgment_bootstrap_ocr_images||0)+'.',$('quality'));

@@ -13,7 +13,8 @@ def write_report(data, path, final_directory=None):
     from piu_timeline.charts.policy import attach_regions, apply_projection
     data = attach_regions(data, path.parent)
     from piu_timeline.play.holds.analysis import presentation
-    data = apply_projection(presentation(data))
+    from piu_timeline.play.gimmicks import apply_gimmicks
+    data = apply_projection(apply_gimmicks(presentation(data)))
     from piu_timeline.play.exclusions import exclusion_diagnostics, recognition_diagnostics
     exclusions = exclusion_diagnostics(native, data)
     data = {**data, 'exclusion_diagnostics': exclusions}
@@ -25,6 +26,8 @@ def write_report(data, path, final_directory=None):
     data = {**data, 'timing_ranges': ranges}
     recognition = recognition_diagnostics(data, ranges)
     data['recognition_diagnostics'] = recognition
+    if data.get('chart_policy'):
+        path.with_name('chart-policy.json').write_text(json.dumps(data['chart_policy'],ensure_ascii=False,indent=2)+'\n')
     final_directory = Path(final_directory or path.parent)
     media = quote(os.path.relpath(data['media']['path'], final_directory), safe='/')
     encoded = json.dumps(data, ensure_ascii=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
@@ -53,7 +56,8 @@ def write_index(document, root):
         if analysis.is_file():
             from piu_timeline.play.holds.analysis import presentation
             from piu_timeline.charts.policy import attach_regions, apply_projection
-            data = apply_projection(presentation(attach_regions(json.loads(analysis.read_text()), analysis.parent)))
+            from piu_timeline.play.gimmicks import apply_gimmicks
+            data = apply_projection(apply_gimmicks(presentation(attach_regions(json.loads(analysis.read_text()), analysis.parent))))
             coverage = data['coverage']
             cells = (f'<a href="{relative}/report.html">{title}</a>', str(coverage['visible_note_heads']),
                      str(coverage.get('long_notes', 0)), str(coverage['timed_note_heads']), str(coverage['matched_combo_updates']),str(coverage.get('judgment_only_note_heads',0)),
