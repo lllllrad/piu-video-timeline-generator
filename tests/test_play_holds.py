@@ -34,7 +34,7 @@ class HoldTest(unittest.TestCase):
                   'prediction_uncertainty_seconds': .0085,
                   'velocity_pixels_per_second': -520,
                   'points': [(time, 2*(receptor+260*(target-time))) for time in times]}
-                 for target in (1, 1.084, 1.168)]
+                 for target in (1, 1.084, 1.168, 1.124)]
         data = {'layout': LAYOUT, 'game_roi': [0, 0, 325, 183],
                 'analysis_width': 650, 'start_seconds': .5, 'end_seconds': 1.2,
                 'notes': notes, 'matches': [], 'combo_events': []}
@@ -52,9 +52,11 @@ class HoldTest(unittest.TestCase):
             self.assertEqual(holds[0]['tail_note'], 1)
             self.assertEqual(holds[0]['covered_notes'], [0, 1])
             self.assertAlmostEqual(sum(holds[0]['end_range'])/2, 1.084)
+            self.assertEqual(holds[0]['end_range'], [1.084-.0085, 1.084+.0085])
             projected = presentation({**data, 'hold_analysis': {'holds': holds}})
             self.assertEqual(projected['notes'][1]['note_type'], 'hold_component')
             self.assertEqual(projected['notes'][2]['status'], 'estimated')
+            self.assertEqual(projected['notes'][3]['status'], 'estimated')
         self.assertEqual(data, original)
         weak = deepcopy(frames)
         for frame in weak:

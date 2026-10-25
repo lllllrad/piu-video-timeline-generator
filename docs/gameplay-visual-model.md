@@ -75,7 +75,7 @@ head_center ≈ body_top + h/2
 tail_center ≈ body_bottom − h/2
 ```
 
-The exact offsets depend on which colored component or outline defines the body bounds. They require measured cap geometry or an explicit approximation with uncertainty. These are position relationships, not a minimum hold duration. The reviewed short holds have caps separated by about 84 ms; rejecting all holds below 120 ms would split real holds into taps.
+The exact offsets depend on which colored component or outline defines the body bounds. They require measured cap geometry or an explicit approximation with uncertainty. These are position relationships, not a minimum hold duration. The reviewed short holds have caps separated by about 84 ms; rejecting all holds below 120 ms would split real holds into taps. Once a cap trajectory identifies the endpoint directly, use that trajectory's crossing uncertainty. The positional tolerance used to decide which cap belongs to the body is not an additional error on an already measured crossing.
 
 Only compare an extended body's edges while they are visible. A screen-clipped lower edge is not a tail. A top clamped at the receptor is not an approaching head. As the body shrinks, both caps can enter the same tolerance; these samples cannot independently distinguish the endpoints.
 

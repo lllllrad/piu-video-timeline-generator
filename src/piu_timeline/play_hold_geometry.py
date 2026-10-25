@@ -116,7 +116,10 @@ def tail_from_head_track(data, track, spacing, start, width):
         error = edge_alignment(note, track, spacing, scale, 'bottom')
         if error is None:
             continue
-        uncertainty = note['prediction_uncertainty_seconds'] + EDGE_POSITION_TOLERANCE*spacing/abs(velocity)
+        # Edge tolerance establishes identity; the native cap track already
+        # supplies the crossing uncertainty. Reusing the association tolerance
+        # as timing error would enlarge the hold into unrelated later taps.
+        uncertainty = note['prediction_uncertainty_seconds']
         options.append((error, index,
                         [note['target_seconds']-uncertainty, note['target_seconds']+uncertainty]))
     selected = min(options, default=None)
