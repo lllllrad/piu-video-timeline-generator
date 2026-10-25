@@ -21,7 +21,7 @@ TEMPLATE_FORMAT = {'schema': 1, 'encoding': FEATURE_FORMAT['encoding'], 'mask': 
 LEGACY_FEATURE_FORMAT = {'schema': 1, 'encoding': 'hue10-s90-v155-white-s70-v190'}
 LEGACY_TEMPLATE_FORMAT = {'schema': 1, 'encoding': 'hue10-s90-v155-white-s70-v190', 'mask': 'binary'}
 OBSERVATION_FORMAT = {'schema': 1, 'reader_revision': OBSERVATION_VERSION}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 1}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 2}
 
 
 def fingerprint(value):
@@ -419,17 +419,16 @@ def synchronized_refreshes(data, events):
 
 def label_counter_frames(data, observations):
     """Read labels after an already observed counter update; invent no refresh."""
+    data['counter_judgment_labels']={}
     if not observations:
         return
     times=[frame['playback_seconds'] for frame in observations]
-    groups={}
+    groups={i:[] for i in range(len(data.get('combo_events', [])))}
     for match in data['matches']:
         if match['combo_event'] is not None:
             groups.setdefault(match['combo_event'],[]).append(match)
     count=0
     for ci,group in groups.items():
-        if any(match.get('judgment_label') for match in group):
-            continue
         event=data['combo_events'][ci]
         if event['delta']!=1 or event['upper_seconds']-event['lower_seconds']>.1:
             continue
@@ -445,11 +444,15 @@ def label_counter_frames(data, observations):
                 or not any(b['playback_seconds']-a['playback_seconds']<=.035 for a,b in zip(known,known[1:]))
                 or len({frame['source_pts_seconds'] for frame in known})<2):
             continue
+        proof={'label':known[0]['label'], 'observations':[{key:frame[key] for key in
+               ('source_pts_seconds','playback_seconds','label','confidence')} for frame in known]}
+        data['counter_judgment_labels'][str(ci)]=proof
         for match in group:
+            if match.get('judgment_label'):
+                continue
             match.update(evidence_source='combo+judgment',judgment_label=known[0]['label'],
                          judgment_event=None,judgment_label_source='post_combo_frames',
-                         judgment_observations=[{key:frame[key] for key in
-                             ('source_pts_seconds','playback_seconds','label','confidence')} for frame in known])
+                         judgment_observations=deepcopy(proof['observations']))
             count+=1
     data['coverage']['combo_frame_labeled_note_heads']=count
 

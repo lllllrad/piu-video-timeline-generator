@@ -186,6 +186,16 @@ def presentation(data):
                                           'combo_events': events('combo_events'),
                                           'judgment_events': events('judgment_events'),
                                           'hold_analysis': {**data['hold_analysis'], 'holds': projected}})
+    matches = [dict(match) for match in matches]
+    for match in matches:
+        proof = data.get('counter_judgment_labels', {}).get(str(match.get('combo_event')))
+        if proof and not match.get('judgment_label'):
+            # The counter bracket is already owned by this recovered row.
+            # Reuse its word reads without inventing a word-refresh event.
+            match.update(judgment_label=proof['label'], judgment_event=None,
+                         judgment_label_source='post_combo_frames',
+                         judgment_observations=[dict(item) for item in proof['observations']],
+                         evidence_source=match.get('evidence_source', 'combo')+'+judgment')
     coverage = dict(data.get('coverage', {}))
     coverage.update(visible_note_heads=sum(note['status']=='estimated' for note in notes),
                     timed_note_heads=len(matches),

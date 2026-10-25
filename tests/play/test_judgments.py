@@ -61,6 +61,34 @@ class JudgmentTest(unittest.TestCase):
         again=merge_judgments(result,[],frames)
         self.assertEqual(again['matches'],expected)
 
+    def test_counter_label_proof_survives_until_a_deferred_row_is_recovered(self):
+        from piu_timeline.play.holds.analysis import presentation
+        data=self.combo_data([1.],[(.99,1.01)])
+        deferred=deepcopy(data['matches'][0]);data['matches']=[]
+        frames=[{'source_pts_seconds':t+5,'playback_seconds':t,**observation('GREAT')}
+                for t in (1.01,1.027,1.044)]
+        result=merge_judgments(data,[],frames)
+        self.assertFalse(result['matches'])
+        result.update(deferred_matches=[deferred],hold_analysis={'holds':[], 'receptor_runs':[
+            {'lane':0,'lit':True,'frames':3,'previous_seconds':.98,
+             'start_seconds':1.01,'end_seconds':1.05}]})
+        before=deepcopy(result)
+        view=presentation(result)
+        self.assertEqual(result,before)
+        self.assertEqual(len(view['matches']),1)
+        match=view['matches'][0]
+        self.assertEqual(match['judgment_label'],'GREAT')
+        self.assertEqual(match['evidence_source'],'combo+lane_onset+judgment')
+        self.assertEqual(match['judgment_label_source'],'post_combo_frames')
+        self.assertEqual(match['judgment_observations'],[{key:frame[key] for key in
+                         ('source_pts_seconds','playback_seconds','label','confidence')} for frame in frames])
+        self.assertIsNone(match['judgment_event'])
+        self.assertEqual(view['judgment_events'],[])
+        self.assertEqual(match['observation_upper_seconds'],1.01)
+        # No saved proof may survive a replay with no word observations.
+        replay=merge_judgments(result,[],[])
+        self.assertEqual(replay['counter_judgment_labels'],{})
+
     def test_equally_close_refreshes_do_not_force_a_counter_anchor(self):
         data=self.combo_data([1.02],[(1.,1.02)])
         events=[{'label':'GOOD','lower_seconds':.99,'upper_seconds':1.01},

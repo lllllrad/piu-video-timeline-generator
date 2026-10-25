@@ -68,6 +68,11 @@ Word-template matching includes the shrinking part of the judgment animation
 can corrupt the connected-component bounds at those sizes too. Shape coverage,
 agreement across word sections and the margin against competing labels remain
 required; a readable persistent label alone does not establish a new refresh.
+Corroborated label reads are retained for every eligible single-row counter
+update, including updates whose tap ownership is initially unresolved. If hold
+projection later recovers that row using independent lane evidence, it reuses
+the same label proof and original frame timestamps. Aggregate counter jumps and
+conflicting or insufficient reads remain unlabeled.
 
 An obscured receptor sample is unknown. It cannot veto a review candidate as an
 inactive lane, and it cannot establish a confirmed lane onset. Candidates that
