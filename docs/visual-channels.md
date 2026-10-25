@@ -58,6 +58,16 @@ more than 0.65 lane spacings above the receptor establish passage instead.
 Screen cuts, long flashes, competing heads and unsupported motion remain
 unresolved. The raw samples retain scores and unknown reasons for review.
 
+Repeated loss before the receptor can mark a visibility boundary rather than
+consumption. Require eight independent heads across at least three lanes,
+spanning at least one second, with no inter-event gap over three seconds.
+Their last visible centers must be at least 0.65 lane spacings below the
+receptor and span at most 0.25 spacings in height. Such losses remain
+unresolved with a warning. Retain the original loss bracket and source PTS
+separately from processing evidence, along with all contributing note IDs.
+This does not identify a gimmick, grant an exception, or relocate the receptor;
+the cause still requires review of the source and calibration.
+
 Hold heads, bodies and tails already assigned by connected geometry are not
 counted as separate tap consumptions. Their processing record references
 hold geometry, source-frame coverage, endpoint ranges and censored ends.

@@ -8,7 +8,7 @@ import numpy as np
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
-PROCESSING_FORMAT = {'schema': 1, 'revision': 2}
+PROCESSING_FORMAT = {'schema': 1, 'revision': 3}
 
 
 class ReceptorPixels:
@@ -186,12 +186,14 @@ def observe_processing(data, path):
             record['samples'].append({'time': time, 'pts': source_pts, 'y': float(y), 'state': state, 'score': score,
                                       'unknown_reason': reason if state == 'unknown' else None})
         result.append({**record, **transition(record['samples'], receptor, spacing)})
+    from piu_timeline.play.visibility import pre_receptor_losses
+    boundaries = pre_receptor_losses(result, receptor, spacing)
     holds = [{'hold': h['id'], 'lane': h['lane'], 'start_range': h['start_range'],
               'end_range': h['end_range'], 'source_pts_range': h.get('source_pts_range'),
               'status': 'end_unresolved' if h['end_censored'] or not h['end_range'] else 'tail_crossing_supported'}
              for h in data.get('hold_analysis', {}).get('holds', [])]
     return {'format': PROCESSING_FORMAT, 'available': True, 'trace': 'processing-features.npz',
-            'notes': result, 'holds': holds,
+            'notes': result, 'holds': holds, 'visibility_boundaries': boundaries,
             'pixel_coordinates': {'width': PIXEL_FORMAT['width'], 'height': height, 'origin': 'game_crop_top_left'},
             'counts': dict(Counter(record['status'] for record in result)),
             'semantics': 'Observed disappearance is not a successful judgment or physical press. Unknown is retained.'}

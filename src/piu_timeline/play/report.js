@@ -16,7 +16,7 @@ if(excludedTracks.length){
     const end=Math.min(shownExclusions+100,excludedTracks.length);
     for(;shownExclusions<end;shownExclusions++){
       const item=excludedTracks[shownExclusions],row=document.createElement('p'),jump=document.createElement('button');
-      jump.textContent=fmt(item.visible_start_seconds)+' … '+fmt(item.visible_end_seconds)+' / lane '+(item.lane+1)+' / '+item.reason.replaceAll('_',' ')+' / '+item.observed_points+' observations';
+      jump.textContent=fmt(item.visible_start_seconds)+' … '+fmt(item.visible_end_seconds)+' / lane '+(item.lane+1)+' / '+item.reason.replaceAll('_',' ')+(item.processing_reason?' / '+item.processing_reason.replaceAll('_',' '):'')+' / '+item.observed_points+' observations';
       jump.onclick=()=>seek(item.visible_start_seconds);row.appendChild(jump);$('exclusionWarningRows').appendChild(row);
     }
     $('moreExclusionWarnings').hidden=shownExclusions>=excludedTracks.length;
@@ -290,7 +290,7 @@ for(const t of part)line(root,x(t),y-9,x(t),y+9,color,2);
 }}else label(root,'Unconfirmed — no press timestamp',p,y+4,color);
 }
 text('p','Note '+(selectedNote+1)+' / '+(data.layout.lanes[note.lane].name||String(note.lane+1))+' · Target: '+formatRange(target)+' · Input: '+(inputIntervals(match,selectedNote).map(formatRange).join(' ∪ ')||'Unconfirmed'),$('comparisonDetails'));
-if(channels){const event=channels.processing.notes.find(e=>e.note===selectedNote);text('p','Visual evidence: '+(match?.visual_evidence||['motion:'+selectedNote]).join(', ')+' · Processing: '+(event?event.status+' / '+event.reason:'unavailable')+(event?.range?' / '+formatRange(event.range):''),$('comparisonDetails'))}
+if(channels){const event=channels.processing.notes.find(e=>e.note===selectedNote);text('p','Visual evidence: '+(match?.visual_evidence||['motion:'+selectedNote]).join(', ')+' · Processing: '+(event?event.status+' / '+event.reason:'unavailable')+(event?.range?' / '+formatRange(event.range):'')+(event?.visibility_loss?' / Visibility loss: '+formatRange(event.visibility_loss.range):''),$('comparisonDetails'))}
 if(note.fit_method==='shared_scroll_clock'||note.fit_method==='shared_scroll_interpolation')text('p','Target uses shared movement of visible notes and a fractional-frame estimate. Equal screen gaps share the same timing scale. The range retains source-frame and capture-cadence uncertainty.',$('comparisonDetails'));
 if(hold){text('p','Long note / sustained recognition. Start: '+(hold.start_censored?'before first body contact (censored)':formatRange(hold.start_range))+' · End: '+(hold.end_range?formatRange(hold.end_range):'Unconfirmed / body ends outside reliable tracking'),$('comparisonDetails'));text('p','Holding is sufficient. Recognition spans do not represent repeated presses. Physical press and release times remain unmeasured.',$('comparisonDetails'));return}
 const differences=inputIntervals(match,selectedNote).map(range=>difference(target,range));

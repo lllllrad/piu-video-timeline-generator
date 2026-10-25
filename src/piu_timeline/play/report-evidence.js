@@ -22,7 +22,8 @@ function renderEvidence(noteIndex){
   const confidence=value=>Number.isFinite(value)?Number(value).toFixed(2):'?';
   const height=data.analysis_height||1,receptor=(data.layout.receptor_y||0)*height;
   const bodyScale=height/(channel.processing.pixel_coordinates?.height||height);
-  $('evidenceSummary').textContent='Note '+(noteIndex+1)+' / lane '+(note.lane+1)+' · Processing: '+(processing?processing.status+' / '+processing.reason:'unavailable')+(processing?.range?' / '+formatRange(processing.range):'')+'. Positions use the '+(data.analysis_width||'?')+'×'+height+' game crop, with y increasing downward. Click a frame to inspect its original timestamp.';
+  $('evidenceSummary').textContent='Note '+(noteIndex+1)+' / lane '+(note.lane+1)+' · Processing: '+(processing?processing.status+' / '+processing.reason:'unavailable')+(processing?.range?' / '+formatRange(processing.range):'')+(processing?.visibility_loss?' / Visibility loss (processing unconfirmed): '+formatRange(processing.visibility_loss.range):'')
+    +'. Positions use the '+(data.analysis_width||'?')+'×'+height+' game crop, with y increasing downward. Click a frame to inspect its original timestamp.';
   for(const [name,y] of [['Popup',45],['Receptor effect',105],['Moving heads',165],['Note processing',225]]){
     label(root,name,4,y+4);line(root,180,y,1180,y,'#314448');
   }
