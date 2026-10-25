@@ -70,6 +70,8 @@ identity before isolated cap frames are considered. An isolated trailing cap
 can share the same body track before the connector is visible or after it
 shrinks; those frames alone cannot distinguish head from tail. Contradictory
 extended-body observations remain unresolved.
+Original-color and white-border candidates keep separate body tracks, so a
+short augmented cap cannot replace a long body's continuation at a HUD cut.
 
 Endpoint corroboration runs before rejecting a short body with unreadable local fits: independently tracked heads and tails can resolve it. Strong body stripes require geometric corroboration. A weaker stripe (at least 72% colored support in five extended-body observations spanning 80 ms) additionally requires both a tracked head following the upper edge and a tracked tail following the lower edge. Missing or displaced arrows cannot qualify through time proximity alone. `body_evidence` distinguishes `strong_stripe` from `stripe_and_tracked_edges` in the saved hold reconstruction.
 

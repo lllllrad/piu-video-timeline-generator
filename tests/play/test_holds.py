@@ -10,7 +10,7 @@ import numpy as np
 
 from piu_timeline.play.holds.analysis import reconstruct, presentation, augment_holds
 from piu_timeline.play.holds.features import bridge_ui_stripes, detect_bodies, feature_contract, acquire_features
-from piu_timeline.play.holds.geometry import HoldGeometry, edge_alignment, head_from_body_track
+from piu_timeline.play.holds.geometry import HoldGeometry, edge_alignment, head_from_body_track, body_tracks
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window
 
 
@@ -19,6 +19,20 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_white_border_cap_cannot_steal_an_extended_color_body(self):
+        body = {'lane': 2, 'top': 30., 'bottom': 150., 'top_visible': False,
+                'tail_visible': True, 'long': True, 'white_cap_bridge': False}
+        cap = {**body, 'top': 120., 'bottom': 147., 'white_cap_bridge': True, 'long': False}
+        frames = [{'playback_seconds': 0., 'source_pts_seconds': 10., 'receptor_lit': [False]*5,
+                   'bodies': [body]},
+                  {'playback_seconds': .02, 'source_pts_seconds': 10.02, 'receptor_lit': [False]*5,
+                   # The small cap is closer to the extrapolated bottom, but
+                   # its white-border topology cannot replace the color body.
+                   'bodies': [cap, {**body, 'bottom': 149.}]}]
+        tracks = body_tracks(frames, 20.)
+        continuation = next(track for track in tracks if track[0]['time'] == 0.)
+        self.assertEqual([p['bottom'] for p in continuation], [150., 149.])
+
     def test_extended_body_distinguishes_head_from_an_isolated_tail_cap(self):
         data = {'notes': [{'target_seconds': 1}, {'target_seconds': 1.084}]}
         track = [{'edge_convention': 'connected_color', 'long': False, 'top_cap_note': 1} for _ in range(6)]

@@ -7,7 +7,7 @@ from piu_timeline.play.holds.features import FEATURE_FORMAT, acquire_features, f
 from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_start, register_caps, resolve_geometry, retain_hold
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 24}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 25}
 
 
 def fingerprint(value):

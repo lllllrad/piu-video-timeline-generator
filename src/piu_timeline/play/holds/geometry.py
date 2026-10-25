@@ -95,6 +95,11 @@ def body_tracks(frames, spacing):
             for j, body in enumerate(frame['bodies']):
                 if body['lane'] != last['lane']:
                     continue
+                # Keep the original color topology independent from the
+                # short white-border channel. A small augmented cap must not
+                # steal a long body's continuation at a HUD boundary.
+                if body.get('white_cap_bridge', False) != last.get('white_cap_bridge', False):
+                    continue
                 costs = []
                 if body['tail_visible'] and last['tail_visible']:
                     costs.append(abs(body['bottom']-(last['bottom']+velocity*dt)))
