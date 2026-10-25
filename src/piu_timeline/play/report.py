@@ -14,7 +14,7 @@ def write_report(data, path, final_directory=None):
     data = attach_regions(data, path.parent)
     from piu_timeline.play.holds.analysis import presentation
     data = apply_projection(presentation(data))
-    from piu_timeline.play.exclusions import exclusion_diagnostics
+    from piu_timeline.play.exclusions import exclusion_diagnostics, recognition_diagnostics
     exclusions = exclusion_diagnostics(native, data)
     data = {**data, 'exclusion_diagnostics': exclusions}
     from piu_timeline.play.ranges import timing_ranges, counter_frame_ranges
@@ -23,6 +23,8 @@ def write_report(data, path, final_directory=None):
     if ranges['counts'].get('unknown') and frames.is_file():
         ranges = timing_ranges({**data, 'counter_frame_events': counter_frame_ranges(frames)})
     data = {**data, 'timing_ranges': ranges}
+    recognition = recognition_diagnostics(data, ranges)
+    data['recognition_diagnostics'] = recognition
     final_directory = Path(final_directory or path.parent)
     media = quote(os.path.relpath(data['media']['path'], final_directory), safe='/')
     encoded = json.dumps(data, ensure_ascii=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
@@ -32,10 +34,13 @@ def write_report(data, path, final_directory=None):
     path.write_text(content, encoding='utf-8')
     path.with_name('timing-ranges.json').write_text(json.dumps(data['timing_ranges'], ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     path.with_name('excluded-trajectories.json').write_text(json.dumps(exclusions, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    path.with_name('recognition-warnings.json').write_text(json.dumps(recognition, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     count = exclusions['counts']['unaccounted_excluded_tracks']
     if count:
         destination = final_directory / path.name
         print(f'Warning: {count} visible note tracks were excluded without an explicit chart exception. Review {destination} (excluded-trajectories.json).', file=sys.stderr)
+    if recognition['warnings']:
+        print(f"Warning: {len(recognition['warnings'])} unresolved recognition items. Review {final_directory / path.name} (recognition-warnings.json).", file=sys.stderr)
 
 
 def write_index(document, root):
@@ -112,10 +117,10 @@ const matchByNote=new Map(matches.map((m,i)=>[m.note,{match:m,index:i}]));
 const rangeByNote=data.timing_ranges?.notes||{};
 const targetColor='#b6ff59',inputColor='#ff70dd';
 const notePalette={blue:['#267bcc','#83caff'],red:['#c63c52','#ff9da9'],yellow:['#d8a600','#ffe476']};
-const excludedTracks=data.exclusion_diagnostics?.warnings||[];
+const excludedTracks=[...(data.exclusion_diagnostics?.warnings||[]),...(data.recognition_diagnostics?.warnings||[])];
 if(excludedTracks.length){
   $('exclusionWarnings').hidden=false;
-  $('exclusionWarningSummary').textContent='Warning: '+excludedTracks.length+' visible tracks excluded without a chart exception';
+  $('exclusionWarningSummary').textContent='Warning: '+excludedTracks.length+' unresolved recognition items / excluded tracks';
   let shownExclusions=0;
   const showExclusions=()=>{
     const end=Math.min(shownExclusions+100,excludedTracks.length);

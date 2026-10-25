@@ -30,6 +30,13 @@ This reconstructs visible supported-color note heads from the recording. It does
 
 Interrupted same-lane head fragments can be joined across at most 350 ms when the predecessor and successor are unique and their combined track passes the motion and receptor-proximity checks. Prediction uses corroborated shared screen displacement when available, otherwise a local linear path. Competing continuations, other lanes and inconsistent positions stay separate. Joined notes retain their source fragment indices and all original time/position observations.
 
+For a head entering the HUD, the intact approach below the overlay supplies the
+reappearance prediction. Shifted partial centers inside the HUD cannot override
+that path. At least four intact observations spanning 60 ms are required; the
+reappearance must be within 650 ms of the last intact point and agree at its
+first three observations. Unique predecessor/successor ownership and the combined
+motion checks still apply. Original partial observations remain in the trace.
+
 For each usable note track, observed motion predicts when its center crosses the receptor row. A confirmed combo change is bracketed between the last frame with the old counter and the first frame with the new counter. Two observations must confirm each counter value. Judgment words are observed independently of the counter, including before combo 4 and after a combo break. Input matching uses those observed intervals, never invented subframe press timestamps.
 
 Shared displacement requires at least three one-to-one head correspondences across at least two lanes. Ambiguous displacement and gaps in independent support break the motion history. This history lets a head reconnect through a HUD occlusion even when short per-head source-time velocity estimates disagree because captured game images repeat. A corroborated head uses one screen pixel per shared displacement pixel; a measured slope inconsistent with that model is refused. Full unclipped observations estimate its position robustly, preserving the relative spacing of simultaneously visible notes.
@@ -46,6 +53,16 @@ The report separates reconstructed note heads, heads with timing evidence, and m
 
 The report and command output warn when visible detections are excluded from the reconstructed chart without an explicit chart-region exception. `excluded-trajectories.json` lists their original visible time spans, lanes and reasons, including short uncertain/noise tracks. The warning panel appears above playback and provides source-video seek buttons. A duplicate owned by a retained note or a fragment represented by a reconstructed hold is accounted for separately. A general region annotation does not suppress warnings: an explicit timing-processing/check exception must contain the whole observed trajectory when no trustworthy target exists. Partly overlapping exceptions leave the warning visible.
 
+`recognition-warnings.json` additionally lists unresolved hold endpoints, rejected
+body geometry, uncertain component ownership, ambiguous or absent timing evidence,
+and matched refreshes whose judgment label remains unknown. These items appear in
+the same warning panel and command output. A hold component is accounted for only
+with repeated source-frame cap or connected-body evidence. Duplicate ownership
+requires matching same-lane positions at shared source times; a nearby target time
+alone is insufficient. Partial body tracks can be accounted for by a uniquely
+matching, repeatedly observed cap identity. All supporting observations remain in
+the evidence. An unresolved end stays unknown even when the body disappears.
+
 ## Long notes and sustained recognition
 
 Endpoint corroboration runs before rejecting a short body with unreadable local fits: independently tracked heads and tails can resolve it. Strong body stripes require geometric corroboration. A weaker stripe (at least 72% colored support in five extended-body observations spanning 80 ms) additionally requires both a tracked head following the upper edge and a tracked tail following the lower edge. Missing or displaced arrows cannot qualify through time proximity alone. `body_evidence` distinguishes `strong_stripe` from `stripe_and_tracked_edges` in the saved hold reconstruction.
@@ -53,6 +70,14 @@ Endpoint corroboration runs before rejecting a short body with unreadable local 
 A directly linked tail retains its native crossing range. Body-to-cap positional tolerance establishes the association and does not widen that measured range; doing so could consume a real subsequent tap. A body-only endpoint still includes uncertainty from the approximate cap offset and local fit.
 
 Head selection first compares native trajectories against the body's visible upper edge at matching source times. A clipped box's extrapolated start cannot override a corroborated upper cap merely because it lies closer to the tail's timestamp. Distinct candidates with residuals less than one body-analysis pixel apart remain unresolved. Time proximity is a fallback only when there are insufficient overlapping observations, not when observed positions contradict the proposed head.
+
+Connected-color features preserve gaps between tap caps. Only two extended
+stripes with shared pixel columns can bridge a gap inside a declared HUD region;
+ragged column endpoints use their actual colored pixels. HUD-cut boundaries are
+not caps. Native head trajectories register the stripe's cap centers at matching
+source times, requiring at least four agreeing observations and 80% ownership
+agreement. Other detections are suppressed as body fragments only with repeated
+geometric containment evidence; uncertain ownership remains visible and warned.
 
 Hold recognition has its own `input.association_window`. For a directly tracked tail, its trailing search margin is 0.55 lane spacings divided by the measured cap velocity, bounded before a separately observed next same-lane tap. This is a visual response association tolerance, not chart target uncertainty or a measured release. Within an independently established hold's certain interior, a lane-local dim pulse plus a positive HUD refresh can supply support even when that frame's body box is missing. The derived hold cache depends on both native note geometry and combo/judgment events, so changed HUD evidence recomputes recognition while reusing body/receptor pixels.
 
@@ -150,6 +175,7 @@ Outputs stay under the ignored `.local/` directory:
 - `report.html`: local interactive presentation;
 - `holds.json`, `hold-features.json`, `hold-frames.jsonl`: long-note reconstruction and reusable native pixel observations;
 - `timing-ranges.json`: disposable per-note target ranges, matched brackets, alternative refreshes, conditional bounds and unresolved reasons. It is derived from saved analysis without OCR or frame decoding.
+- `recognition-warnings.json`: unresolved recognition items, scoped chart exceptions and independently accounted hold fragments.
 
 Changing source metadata, play bounds, geometry, resolution, player or song/chart invalidates the observation cache. Compatible saved native observations can be refitted after a tracking/association change or latency-correction change without decoding or OCR. A counter-reader upgrade may decode only the small counter region and must match every saved source PTS; force a complete rebuild with `--force`. This feature is experimental: verify representative frames and report coverage before drawing conclusions about a player.
 

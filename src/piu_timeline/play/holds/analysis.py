@@ -7,7 +7,7 @@ from piu_timeline.play.holds.features import FEATURE_FORMAT, acquire_features, f
 from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_start, register_caps, resolve_geometry, retain_hold
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 22}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 23}
 
 
 def fingerprint(value):
@@ -25,9 +25,16 @@ def reconstruct(data, frames, diagnostics=None):
         if hold is None:
             extended = [p for p in track if p['long'] and p.get('stripe_support', 1) >= .72]
             if diagnostics is not None and len(extended) >= 5 and extended[-1]['time']-extended[0]['time'] >= .08:
+                cap_evidence = []
+                for edge in ('top', 'bottom'):
+                    for index in {p[edge+'_cap_note'] for p in track if edge+'_cap_note' in p}:
+                        pts = [p['pts'] for p in track if p.get(edge+'_cap_note') == index]
+                        if len(set(pts)) >= 4:
+                            cap_evidence.append({'edge': edge, 'note': index, 'source_pts_seconds': pts})
                 diagnostics.append({'lane': track[0]['lane'], 'reason': 'unresolved_hold_geometry',
                                     'visible_start_seconds': track[0]['time'], 'visible_end_seconds': track[-1]['time'],
-                                    'source_pts_range': [track[0]['pts'], track[-1]['pts']], 'observed_points': len(track)})
+                                    'source_pts_range': [track[0]['pts'], track[-1]['pts']],
+                                    'cap_evidence': cap_evidence, 'observed_points': len(track)})
             continue
         hold['id'] = len(holds)
         retain_hold(holds, hold)

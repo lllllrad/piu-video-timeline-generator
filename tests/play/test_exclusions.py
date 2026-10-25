@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from piu_timeline.play.exclusions import exclusion_diagnostics
+from piu_timeline.play.exclusions import exclusion_diagnostics, recognition_diagnostics
 
 
 class ExclusionWarningTest(unittest.TestCase):
@@ -53,8 +53,31 @@ class ExclusionWarningTest(unittest.TestCase):
         native['notes'].extend([{'lane':0,'status':'estimated','target_seconds':10.2,'points':[[10,200]]},
                                 {'lane':0,'status':'excluded','reason':'duplicate_head_component',
                                  'duplicate_of':1,'points':[[10,200]]}])
+        for note in native['notes'][1:]:
+            note['points'] = [[10+i*.02, 200-i*5] for i in range(4)]
         projected = deepcopy(native)
         projected['notes'][1].update(status='excluded',reason='long_note_body_or_tail')
+        unverified = exclusion_diagnostics(native, projected)
+        self.assertEqual(len(unverified['warnings']), 3)
+        projected['hold_analysis'] = {'holds': [{'covered_notes': [1], 'component_evidence': {
+            '1': {'kind': 'registered_cap', 'source_pts_seconds': [10, 10.02, 10.04, 10.06]}}}]}
         result = exclusion_diagnostics(native, projected)
         self.assertEqual(len(result['warnings']), 1)
         self.assertEqual(len(result['accounted_observations']), 2)
+
+    def test_unknown_hold_ends_and_ambiguous_input_remain_explicit_warnings(self):
+        data = {'notes': [{'lane': 0}], 'hold_analysis': {'holds': [{
+            'id': 0, 'lane': 0, 'start_range': [10, 10.02], 'end_range': None,
+            'start_censored': False, 'end_censored': True, 'last_body_seconds': 11}]}}
+        ranges = {'notes': {0: {'status': 'possible', 'target_range': [10, 10.02]}}}
+        result = recognition_diagnostics(data, ranges)
+        self.assertEqual({r['reason'] for r in result['warnings']},
+                         {'hold_end_unresolved', 'timing_evidence_unresolved'})
+        region = {'id': 'annotation', 'processing': 'standard', 'check_exceptions': [],
+                  'playback_start_seconds': 9, 'playback_end_seconds': 12}
+        data['chart_policy'] = {'regions': [region]}
+        self.assertEqual(len(recognition_diagnostics(data, ranges)['warnings']), 2)
+        region['check_exceptions'] = ['timing_evidence']
+        result = recognition_diagnostics(data, ranges)
+        self.assertEqual(result['warnings'], [])
+        self.assertEqual(len(result['chart_exceptions']), 2)
