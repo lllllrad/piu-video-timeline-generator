@@ -12,7 +12,7 @@ import subprocess
 import time
 
 from piu_timeline import ROOT
-from piu_timeline.play.analysis import VERSION
+from piu_timeline.play.analysis import VERSION, TIMING_FORMAT
 from piu_timeline.play.judgments import cache_current as judgment_current
 from piu_timeline.play.holds.analysis import ASSOCIATION_FORMAT, fingerprint
 from piu_timeline.play.holds.features import feature_contract
@@ -52,7 +52,8 @@ def current(path):
     data = json.loads(path.read_text())
     holds = data.get('hold_analysis', {})
     contract = holds.get('association_contract', {})
-    if data.get('play_analysis_version') != VERSION or contract.get('format') != ASSOCIATION_FORMAT:
+    if (data.get('play_analysis_version') != VERSION or data.get('timing_format') != TIMING_FORMAT
+            or contract.get('format') != ASSOCIATION_FORMAT):
         return False
     if data.get('media', {}).get('video_streams'):
         from piu_timeline.play.channels import CHANNEL_FORMAT

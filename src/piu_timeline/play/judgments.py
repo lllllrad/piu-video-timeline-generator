@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 from piu_timeline.vision.ocr import ocr_images
-from piu_timeline.play.frames import crop_region, decode_frames
+from piu_timeline.play.frames import crop_region, decode_frames, TIME_EPSILON
 from piu_timeline.play.tracking import associate
 
 from piu_timeline.play.words import LABELS, feature_map, color_mask, JudgmentReader, JudgmentTracker, EVENT_FORMAT
@@ -22,7 +22,7 @@ TEMPLATE_FORMAT = {'schema': 1, 'encoding': FEATURE_FORMAT['encoding'], 'mask': 
 LEGACY_FEATURE_FORMAT = {'schema': 1, 'encoding': 'hue10-s90-v155-white-s70-v190'}
 LEGACY_TEMPLATE_FORMAT = {'schema': 1, 'encoding': 'hue10-s90-v155-white-s70-v190', 'mask': 'binary'}
 OBSERVATION_FORMAT = {'schema': 1, 'reader_revision': OBSERVATION_VERSION}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 2}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 3}
 
 
 def fingerprint(value):
@@ -250,7 +250,7 @@ def synchronized_refreshes(data, events):
         if event['status']!='candidate' or event['upper_seconds']-event['lower_seconds']>.05:
             continue
         for ci,counter in enumerate(data.get('combo_events',[])):
-            if counter['delta']!=1 or counter['upper_seconds']-counter['lower_seconds']>.1:
+            if counter['delta']!=1 or counter['upper_seconds']-counter['lower_seconds']>.1+TIME_EPSILON:
                 continue
             if counter['status']!='matched' and counter.get('reason')!='ambiguous_note_or_combo_association':
                 continue
@@ -280,7 +280,7 @@ def label_counter_frames(data, observations):
     count=0
     for ci,group in groups.items():
         event=data['combo_events'][ci]
-        if event['delta']!=1 or event['upper_seconds']-event['lower_seconds']>.1:
+        if event['delta']!=1 or event['upper_seconds']-event['lower_seconds']>.1+TIME_EPSILON:
             continue
         start=event['upper_seconds']
         stop=start+.050001

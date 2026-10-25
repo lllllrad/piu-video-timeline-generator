@@ -8,6 +8,9 @@ import threading
 
 import numpy as np
 
+# Comparison tolerance only; stored native PTS and playback times are never rounded.
+TIME_EPSILON = 1e-6
+
 
 def decode_frames(record, start, end, roi, width=650, region=None):
     x, y, w, h = roi

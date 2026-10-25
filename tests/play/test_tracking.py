@@ -32,6 +32,16 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual(event['delta'], 1)
         self.assertEqual(jump['status'], 'candidate')
 
+    def test_exact_100ms_counter_gap_is_inclusive_at_large_source_timestamps(self):
+        for extra,expected in [(0,'candidate'),(.00001,'excluded')]:
+            tracker=ComboTracker()
+            for time,value in [(1000,20),(1000.017,20),(1000.117+extra,21),(1000.134+extra,21)]:
+                tracker.update(time,value)
+            event=tracker.events[0]
+            self.assertEqual(event['status'],expected)
+            self.assertEqual(event['lower_seconds'],1000.017)
+            self.assertEqual(event['upper_seconds'],1000.117+extra)
+
     def test_one_combo_increment_matches_a_chord_row(self):
         notes = [{'status': 'estimated', 'target_seconds': 1.0, 'lane': 0},
                  {'status': 'estimated', 'target_seconds': 1.0, 'lane': 1}]

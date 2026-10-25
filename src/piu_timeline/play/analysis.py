@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 
 from piu_timeline.vision.ocr import ocr_images
-from piu_timeline.play.frames import decode_frames, crop_region
+from piu_timeline.play.frames import decode_frames, crop_region, TIME_EPSILON
 from piu_timeline.play.tracking import NoteTracker, DigitReader, ComboTracker, associate
 from piu_timeline.metadata.recognition import capture_game
 from piu_timeline.workflow import LOCAL_DATA, source_id
@@ -24,6 +24,7 @@ from piu_timeline.play.layout import (validate_layout, receptor_centers, locate_
 from piu_timeline.play.fonts import previous_digit_reader, bootstrap_digits
 
 VERSION = 18
+TIMING_FORMAT = {'schema':1,'counter_revision':2,'time_epsilon_seconds':TIME_EPSILON}
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 
@@ -58,7 +59,7 @@ def resolve_timing(tracker, combo, display_delay_ms):
             deferred.append({**match, 'deferred_reason': 'possible_hold_or_dense_stack'})
         else:
             matches.append(match)
-    return {'notes': notes, **({'scroll_motion': tracker.motion.evidence()} if hasattr(tracker, 'motion') else {}),
+    return {'timing_format': TIMING_FORMAT, 'notes': notes, **({'scroll_motion': tracker.motion.evidence()} if hasattr(tracker, 'motion') else {}),
             'combo_events': combo.events, 'matches': matches, 'deferred_matches': deferred,
             'unsupported_intervals': tracker.unsupported_intervals,
             'coverage': {'visible_note_heads': sum(n['status'] == 'estimated' for n in notes),
@@ -353,6 +354,7 @@ def run(source, segment_number=1, force=False, **options):
                          and all(key in cached for key in ('layout','analysis_height','frame_count'))
                          and (final / 'frames.jsonl').is_file())
             if (same_source and same_settings and cached.get('play_analysis_version') == VERSION
+                    and cached.get('timing_format') == TIMING_FORMAT
                     and cached.get('song')==segments[segment_number-1].get('song')
                     and cached.get('chart')==segments[segment_number-1].get('chart')
                     and cached.get('chart_identity')==segments[segment_number-1].get('chart_identity')

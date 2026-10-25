@@ -42,6 +42,14 @@ class AggregateRecoveryTest(unittest.TestCase):
         self.assertEqual(result['combo_events'][0]['reason'],'aggregate_counter_with_exclusive_lane_onsets')
         self.assertEqual(result['coverage']['timed_note_heads'],2)
 
+    def test_exact_100ms_aggregate_window_is_inclusive_without_widening_it(self):
+        data=evidence();data['combo_events'][0]['upper_seconds']=1.1
+        matches,recovered=recover_aggregates(data)
+        self.assertEqual(recovered,[1])
+        self.assertEqual(matches[1]['observation_upper_seconds'],1.1)
+        data['combo_events'][0]['upper_seconds']+=.00001
+        self.assertEqual(recover_aggregates(data)[1],[])
+
     def test_static_unknown_shared_missing_and_foreign_owned_onsets_cannot_fill_counter(self):
         for kind in ('static','unknown','single_frame','missing','shared','owned'):
             with self.subTest(kind=kind):

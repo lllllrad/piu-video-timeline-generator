@@ -97,6 +97,17 @@ class JudgmentTest(unittest.TestCase):
         self.assertFalse(any('anchor_combo_event' in e for e in result['judgment_events']))
         self.assertNotIn('judgment_label',result['matches'][0])
 
+    def test_exact_100ms_counter_bracket_keeps_grade_and_original_source_times(self):
+        for extra,expected in [(0,True),(.00001,False)]:
+            data=self.combo_data([1000.1],[(1000,1000.1+extra)])
+            frames=[{'playback_seconds':time,'source_pts_seconds':time+42,**observation('GREAT')}
+                    for time in (1000.1+extra,1000.117+extra,1000.134+extra)]
+            result=merge_judgments(data,[],frames)
+            self.assertEqual(bool(result['matches'][0].get('judgment_label')),expected)
+            self.assertEqual(result['matches'][0]['observation_upper_seconds'],1000.1+extra)
+            if expected:
+                self.assertEqual(result['matches'][0]['judgment_observations'][0]['source_pts_seconds'],1042.1)
+
     def test_counter_frames_reject_conflicting_words_miss_and_aggregate_rows(self):
         for labels,delta in [(('PERFECT','GREAT','GREAT'),1),(('MISS',)*3,1),(('PERFECT',)*3,2)]:
             with self.subTest(labels=labels,delta=delta):

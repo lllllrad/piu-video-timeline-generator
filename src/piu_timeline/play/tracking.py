@@ -5,6 +5,8 @@ import math
 import cv2
 import numpy as np
 
+from piu_timeline.play.frames import TIME_EPSILON
+
 
 @dataclass
 class Track:
@@ -359,10 +361,11 @@ class ComboTracker:
         previous = self.pending['previous']
         if self.stable is not None and previous is not None:
             delta = value - self.stable
+            bounded = 1 <= delta <= 10 and self.pending['first']-previous <= .1+TIME_EPSILON
             self.events.append({'before': self.stable, 'after': value, 'delta': delta,
                                 'lower_seconds': previous, 'upper_seconds': self.pending['first'],
-                                'status': 'candidate' if 1 <= delta <= 10 and self.pending['first'] - previous <= .1 else 'excluded',
-                                'reason': None if 1 <= delta <= 10 and self.pending['first'] - previous <= .1
+                                'status': 'candidate' if bounded else 'excluded',
+                                'reason': None if bounded
                                 else 'combo_reset' if delta <= 0 else 'combo_jump_or_observation_gap'})
         self.stable, self.last_seen, self.pending = value, seconds, None
 

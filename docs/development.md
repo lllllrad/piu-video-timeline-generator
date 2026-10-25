@@ -269,3 +269,9 @@ sh scripts/run.sh .venv/bin/python scripts/regenerate.py --jobs 3
 ```
 
 This runs `just auto` over cached source IDs, without downloading media when each `raw/` directory contains one completed recording. Per-source logs and a report with exit status, elapsed time and before/after source metadata are saved in `.local/runs/regeneration-*/`. Failed sources do not prevent the remaining sources from running. The command exits non-zero if any source failed or changed. Keep concurrency low on GPU hosts to avoid loading multiple model copies into limited VRAM.
+
+Source-time boundary comparisons use a one-microsecond floating-point tolerance.
+Original PTS and playback values are retained without rounding or retiming.
+Counter/row derivation has a separate `timing_format` contract: a timing-rule
+change refits saved native observations and replays word reads without repeating
+OCR or invalidating native appearance pixels.

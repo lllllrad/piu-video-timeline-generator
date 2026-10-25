@@ -2,6 +2,7 @@
 from collections import defaultdict
 from statistics import median
 
+from piu_timeline.play.frames import TIME_EPSILON
 from piu_timeline.play.channels import receptor_evidence
 from piu_timeline.play.receptors import onset_overlaps
 
@@ -43,7 +44,7 @@ def recover_aggregates(data):
     note_claims = defaultdict(set)
     for ei, event in enumerate(data.get('combo_events', [])):
         lo, hi, count = event['lower_seconds'], event['upper_seconds'], event.get('delta', 0)
-        if not 2 <= count <= 10 or not 0 < hi-lo <= .1:
+        if not 2 <= count <= 10 or not 0 < hi-lo <= .1+TIME_EPSILON:
             continue
         if event.get('reason') in ('combo_reset', 'combo_jump_or_observation_gap') or hold_overlap(data, lo, hi, guard):
             continue

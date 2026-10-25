@@ -8,7 +8,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from piu_timeline.play.analysis import VERSION
+from piu_timeline.play.analysis import VERSION, TIMING_FORMAT
 from piu_timeline.play.holds.analysis import ASSOCIATION_FORMAT, fingerprint
 from piu_timeline.play.holds.features import feature_contract
 from piu_timeline.play.judgments import cache_contracts
@@ -22,7 +22,7 @@ def play(root, source='source', number=1, stale=False):
     (metadata/'analysis.json').write_text(json.dumps({'segments':[{}]*number}))
     media=directory.parent.parent/'recording.mp4';media.write_bytes(b'original recording')
     stat=media.stat()
-    data={'play_analysis_version':0 if stale else VERSION, 'notes':[], 'matches':[],
+    data={'timing_format':TIMING_FORMAT,'play_analysis_version':0 if stale else VERSION, 'notes':[], 'matches':[],
           'combo_events':[], 'judgment_events':[], 'analysis_width':650,
           'media':{'path':str(media),'size_bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns},
           'start_seconds':0, 'end_seconds':1, 'game_roi':[0,0,1300,730], 'layout':{'lanes':[]}}

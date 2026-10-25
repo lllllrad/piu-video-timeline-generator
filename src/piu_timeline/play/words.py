@@ -2,6 +2,8 @@
 import cv2
 import numpy as np
 
+from piu_timeline.play.frames import TIME_EPSILON
+
 LABELS = ('PERFECT', 'GREAT', 'GOOD', 'BAD', 'MISS')
 
 
@@ -100,7 +102,7 @@ class JudgmentReader:
         return {'label':label,'confidence':confidence,'box':box,'blank':False,'read_mode':'component_template'}
 
 
-EVENT_FORMAT = {'schema': 1, 'revision': 2}
+EVENT_FORMAT = {'schema': 1, 'revision': 3}
 
 
 def gradual_relaunch(history):
@@ -167,7 +169,7 @@ class JudgmentTracker:
                 same = same and box[2]>=self.pending['launch_width']*.88
             if same and seconds-self.pending['upper_seconds']<=.075:
                 event = {key:value for key,value in self.pending.items() if key!='launch_width'}
-                valid=event['lower_seconds'] is not None and event['upper_seconds']-event['lower_seconds']<=.1
+                valid=event['lower_seconds'] is not None and event['upper_seconds']-event['lower_seconds']<=.1+TIME_EPSILON
                 if event['lower_seconds'] is None:event['lower_seconds']=event['upper_seconds']
                 event.update(status='candidate' if valid else 'excluded',reason=None if valid else 'judgment_observation_gap',
                              detection_status='candidate' if valid else 'excluded',
