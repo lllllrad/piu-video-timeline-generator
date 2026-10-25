@@ -3,15 +3,20 @@ import html
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from urllib.parse import quote
 
 
 def write_report(data, path, final_directory=None):
+    native = data
     from .chart_policy import attach_regions, apply_projection
     data = attach_regions(data, path.parent)
     from .play_holds import presentation
     data = apply_projection(presentation(data))
+    from .play_exclusions import exclusion_diagnostics
+    exclusions = exclusion_diagnostics(native, data)
+    data = {**data, 'exclusion_diagnostics': exclusions}
     from .play_ranges import timing_ranges, counter_frame_ranges
     ranges = timing_ranges(data)
     frames = path.with_name('frames.jsonl')
@@ -26,6 +31,11 @@ def write_report(data, path, final_directory=None):
     content = re.sub(r'__(TITLE|MEDIA|DATA)__', lambda match: parts[match[1]], TEMPLATE)
     path.write_text(content, encoding='utf-8')
     path.with_name('timing-ranges.json').write_text(json.dumps(data['timing_ranges'], ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    path.with_name('excluded-trajectories.json').write_text(json.dumps(exclusions, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    count = exclusions['counts']['unaccounted_excluded_tracks']
+    if count:
+        destination = final_directory / path.name
+        print(f'Warning: {count} visible note tracks were excluded without an explicit chart exception. Review {destination} (excluded-trajectories.json).', file=sys.stderr)
 
 
 def write_index(document, root):
@@ -68,6 +78,7 @@ TEMPLATE = r'''<!doctype html>
 <div class="eyebrow">Video evidence / experimental play analysis</div><h1>__TITLE__</h1>
 <p class="muted">Visible note trajectories compared with confirmed combo and judgment display changes. Source media and original frame timestamps are preserved.</p>
 <p class="warning">Combo and judgment refreshes are input-time proxies. MISS is failure evidence and has no press timestamp. Physical switch timing and display latency are not measured. Offsets include display latency until you supply an external correction. No authoritative chart file is loaded. Long-note recognition is sustained-state evidence; hold ticks are not new presses.</p>
+<details class="panel" id="exclusionWarnings" hidden style="border-color:#ffbd59"><summary id="exclusionWarningSummary"></summary><p>These detections were visible but could not be retained as chart notes. They include uncertain short/noise candidates. No chart exception covers them. Select an entry to inspect its original recording frames.</p><div id="exclusionWarningRows"></div><button id="moreExclusionWarnings" hidden>Show more excluded tracks</button></details>
 <div class="stats" id="stats"></div>
 <div class="playback-grid"><section class="panel video-panel"><h2>Original recording</h2><video id="video" controls preload="metadata" src="__MEDIA__"></video>
 <label>Choose the original file if this browser cannot open its relative path <input id="file" type="file" accept="video/*,.mkv"></label><small>The file stays in this browser. Unsupported codecs may require another browser. Nothing is uploaded or re-encoded.</small>
@@ -101,6 +112,23 @@ const matchByNote=new Map(matches.map((m,i)=>[m.note,{match:m,index:i}]));
 const rangeByNote=data.timing_ranges?.notes||{};
 const targetColor='#b6ff59',inputColor='#ff70dd';
 const notePalette={blue:['#267bcc','#83caff'],red:['#c63c52','#ff9da9'],yellow:['#d8a600','#ffe476']};
+const excludedTracks=data.exclusion_diagnostics?.warnings||[];
+if(excludedTracks.length){
+  $('exclusionWarnings').hidden=false;
+  $('exclusionWarningSummary').textContent='Warning: '+excludedTracks.length+' visible tracks excluded without a chart exception';
+  let shownExclusions=0;
+  const showExclusions=()=>{
+    const end=Math.min(shownExclusions+100,excludedTracks.length);
+    for(;shownExclusions<end;shownExclusions++){
+      const item=excludedTracks[shownExclusions],row=document.createElement('p'),jump=document.createElement('button');
+      jump.textContent=fmt(item.visible_start_seconds)+' … '+fmt(item.visible_end_seconds)+' / lane '+(item.lane+1)+' / '+item.reason.replaceAll('_',' ')+' / '+item.observed_points+' observations';
+      jump.onclick=()=>seek(item.visible_start_seconds);row.appendChild(jump);$('exclusionWarningRows').appendChild(row);
+    }
+    $('moreExclusionWarnings').hidden=shownExclusions>=excludedTracks.length;
+  };
+  $('exclusionWarnings').addEventListener('toggle',()=>{if($('exclusionWarnings').open&&!shownExclusions)showExclusions()});
+  $('moreExclusionWarnings').onclick=showExclusions;
+}
 if(data.chart_policy){
   $('chartPolicyPanel').hidden=false;
   if(data.chart_policy.status==='invalid'){

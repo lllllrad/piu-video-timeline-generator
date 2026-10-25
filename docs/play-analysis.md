@@ -34,6 +34,10 @@ The default association tolerance is 45 ms around the observed update interval. 
 
 The report separates reconstructed note heads, heads with timing evidence, and matched counter refreshes. It also reuses confirmed result-panel judgments as a whole-song reference when available, without extra OCR. Judgments include hold ticks, so their total is not a note-head count or a coverage percentage. A short analysis window still shows the whole-song reference. Missing matches are analysis gaps, not evidence of absent inputs.
 
+## Excluded visible detections
+
+The report and command output warn when visible detections are excluded from the reconstructed chart without an explicit chart-region exception. `excluded-trajectories.json` lists their original visible time spans, lanes and reasons, including short uncertain/noise tracks. The warning panel appears above playback and provides source-video seek buttons. A duplicate owned by a retained note or a fragment represented by a reconstructed hold is accounted for separately. A general region annotation does not suppress warnings: an explicit timing-processing/check exception must contain the whole observed trajectory when no trustworthy target exists. Partly overlapping exceptions leave the warning visible.
+
 ## Long notes and sustained recognition
 
 Dim, brief receptor pulses can support an already reconstructed hold when all three observations agree: a rise of at least 0.16 above the lane's recent baseline, light above the other lanes, and a connected body at the receptor. A positive combo or PERFECT/GREAT/GOOD/BAD update must occur within 40 ms. Such context can retain a single native frame; shared flashes, static light, MISS and missing bodies cannot. Each recovered span records the corroborating update indices/ranges and original source PTS. This hold-only evidence does not relax tap onset detection or invent a press/release time.
