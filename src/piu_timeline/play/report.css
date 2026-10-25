@@ -55,3 +55,6 @@ textarea{width:100%;min-height:180px;font:12px/1.5 monospace}
 @media(max-width:1000px){.playback-grid{grid-template-columns:1fr}
 .video-panel{position:static}
 }
+
+.native-evidence-frames{max-height:340px}
+#evidenceTimeline{width:100%;min-width:0}

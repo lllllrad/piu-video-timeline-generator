@@ -5,7 +5,6 @@ import os
 import re
 import sys
 from pathlib import Path
-from pathlib import Path
 from urllib.parse import quote
 
 
@@ -80,4 +79,4 @@ td,th{padding:10px;text-align:left;border-bottom:1px solid #314448}
 _RESOURCES = Path(__file__).parent
 TEMPLATE = (_RESOURCES / 'report.html').read_text(encoding='utf-8')
 TEMPLATE = TEMPLATE.replace('__STYLE__', (_RESOURCES / 'report.css').read_text(encoding='utf-8'))
-TEMPLATE = TEMPLATE.replace('__SCRIPT__', (_RESOURCES / 'report.js').read_text(encoding='utf-8'))
+TEMPLATE = TEMPLATE.replace('__SCRIPT__', (_RESOURCES / 'report-evidence.js').read_text(encoding='utf-8')+'\n'+(_RESOURCES / 'report.js').read_text(encoding='utf-8'))

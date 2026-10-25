@@ -95,6 +95,8 @@ Choose a window of 0.3, 0.6 or 1.5 seconds on each side of the target. Click a
 mark or frame button to seek its recording time; source PTS is displayed
 separately. Playback moves a retained cursor without rebuilding observations.
 The embedded compact observation arrays share `timeline.frames`; each channel
-declares its column names. Legacy reports without these arrays hide this view. The sidecar
+declares its column names. Processing pixels declare their actual crop width
+and height. The UI scales body bounds into the note-analysis crop before
+comparing y coordinates, accounting for rounded resize heights. Legacy reports without these arrays hide this view. The sidecar
 retains the complete observations for other analyses and tools; presentation
 never reacquires pixels or mutates evidence.

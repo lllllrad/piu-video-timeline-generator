@@ -199,5 +199,21 @@ assert.equal(createdNodes,fallbackNodes);assert.ok(evaluate('chartScene.motion.s
 video.paused=true;dispatch('pause');
 assert.equal(elements.get('events').children[0],tableRowBeforePlayback,'playback must not rebuild the note table');
 assert.deepEqual(evaluate('data'), data, 'embedded evidence changed');
-console.log(JSON.stringify({initialRows, correctedRows, details, targetRanges, initialInputs,
+let evidencePreview=null;
+if(data.visual_channels?.timeline){
+  vm.runInContext('seek(10,-1,0)',context);
+  const body=elements.get('evidenceFrames'),first=body.children[0];
+  const rows=body.children.map(row=>row.children.map(cell=>cell.children[0]?.textContent||cell.textContent).join(' | '));
+  assert.equal(rows.length,3,'only frames around selected note appear');
+  body.children[1].children[0].children[0].onclick();
+  const seekTime=video.currentTime;assert.equal(seekTime,10,'frame seeks recording time, not source PTS');
+  vm.runInContext('updatePlayback(10.005)',context);
+  assert.equal(body.children[0],first,'ordinary playback retains observation rows');
+  assert.equal(elements.get('evidenceTimeline').children.at(-1).getAttribute('visibility'),'visible');
+  vm.runInContext('seek(11,-1,1)',context);
+  assert.equal(body.children.length,1,'note selection updates the observation window');
+  evidencePreview={rows,seekTime,secondNoteSummary:elements.get('evidenceSummary').textContent};
+  assert.deepEqual(evaluate('data'),data,'observation UI changed embedded evidence');
+}
+console.log(JSON.stringify({initialRows, correctedRows, details, evidencePreview, targetRanges, initialInputs,
   initialDifferences, correctedInputs, correctedDifferences, verticalGeometry, verticalNotes, initialMarkers, correctedMarkers, defaultCandidateConnections, optionalCandidateConnections}));

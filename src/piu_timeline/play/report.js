@@ -67,6 +67,10 @@ for(const [name,value] of [['Result judgments (whole song)',data.result_referenc
 text('p','Timing ranges: '+Object.entries(data.timing_ranges?.counts||{}).map(([status,count])=>status+': '+count).join(' / '),$('quality'));
 const coverage=text('p','Partial reconstruction: '+matches.length+' note heads have timing evidence. '+(data.result_reference?'The whole-song result contains '+data.result_reference.total+' judgments, including hold ticks; these are not the same unit as visible note heads.':'The complete chart/input count is unknown.')+' Missing matches are analysis gaps, not absent player inputs.',$('quality'));coverage.className='warning';
 text('p','Long notes: '+holds.length+'. Observed sustained-state spans: '+holds.reduce((total,hold)=>total+hold.input.segments.length,0)+'. Hold ticks are not independent presses; physical release is not measured.',$('quality'));
+const channels=data.visual_channels;
+if(channels){
+text('p','Visual channels — popup: '+channels.popup.combo_events.length+' combo / '+channels.popup.judgment_events.length+' judgment refreshes; receptor effects: '+channels.receptors.onsets+' onsets / '+channels.receptors.unknown_lane_frames+' unknown lane frames; motion: '+channels.motion.detections+' detections / '+channels.motion.tracks.length+' tracks; note processing: '+Object.entries(channels.processing.counts).map(([s,n])=>s+': '+n).join(', ')+'.',$('quality'));
+}
 text('p','Native frames: '+data.frame_count+'. Combo readable: '+Math.round(100*data.combo_readable_fraction)+'%. Matched heads can share a combo refresh for a chord.',$('quality'));
 text('p','Bootstrap OCR: '+data.bootstrap.ocr_images+' small images; all remaining combo reads use digit templates.',$('quality'));
 text('p','Unlearned digits: '+(data.bootstrap.missing_digits.join(', ')||'none')+'. Median source frame interval: '+(1000*(data.median_frame_interval_seconds||0)).toFixed(1)+' ms.',$('quality'));
@@ -271,6 +275,7 @@ $('previousNote').onclick=()=>stepNote(-1);$('nextNote').onclick=()=>stepNote(1)
 function comparison(){
 const w=1200,p=180,right=w-35,center=(p+right)/2,root=svgRoot('comparison',w,180);
 $('comparisonDetails').replaceChildren();
+renderEvidence(selectedNote);
 const note=data.notes[selectedNote];
 if(!note){label(root,'No supported target ranges to compare.',p,70);return}
 const match=matchByNote.get(selectedNote)?.match,hold=holdFor(note),target=hold?[hold.start_censored?hold.start_range[1]:hold.start_range[0],hold.end_range?.[1]??hold.last_body_seconds]:targetRange(note),input=hold||match||rangeByNote[selectedNote]?.status==='possible'&&$('candidates').checked?inputRange(match,selectedNote):null,delta=difference(target,input);
@@ -285,6 +290,7 @@ for(const t of part)line(root,x(t),y-9,x(t),y+9,color,2);
 }}else label(root,'Unconfirmed — no press timestamp',p,y+4,color);
 }
 text('p','Note '+(selectedNote+1)+' / '+(data.layout.lanes[note.lane].name||String(note.lane+1))+' · Target: '+formatRange(target)+' · Input: '+(inputIntervals(match,selectedNote).map(formatRange).join(' ∪ ')||'Unconfirmed'),$('comparisonDetails'));
+if(channels){const event=channels.processing.notes.find(e=>e.note===selectedNote);text('p','Visual evidence: '+(match?.visual_evidence||['motion:'+selectedNote]).join(', ')+' · Processing: '+(event?event.status+' / '+event.reason:'unavailable')+(event?.range?' / '+formatRange(event.range):''),$('comparisonDetails'))}
 if(note.fit_method==='shared_scroll_clock'||note.fit_method==='shared_scroll_interpolation')text('p','Target uses shared movement of visible notes and a fractional-frame estimate. Equal screen gaps share the same timing scale. The range retains source-frame and capture-cadence uncertainty.',$('comparisonDetails'));
 if(hold){text('p','Long note / sustained recognition. Start: '+(hold.start_censored?'before first body contact (censored)':formatRange(hold.start_range))+' · End: '+(hold.end_range?formatRange(hold.end_range):'Unconfirmed / body ends outside reliable tracking'),$('comparisonDetails'));text('p','Holding is sufficient. Recognition spans do not represent repeated presses. Physical press and release times remain unmeasured.',$('comparisonDetails'));return}
 const differences=inputIntervals(match,selectedNote).map(range=>difference(target,range));
@@ -322,7 +328,7 @@ text('td',m?
   :'Input unknown / '+(rangeByNote[index]?.reason||'no_nearby_positive_refresh').replaceAll('_',' '),row);
 row.onclick=()=>seek(note.target_seconds,linked?.index??-1,index);
 }}
-function drawPlayback(){$('position').value=playhead;$('chartPosition').textContent=fmt(playhead);$('clock').textContent=fmt(playhead);lanes();if(timingPlayhead){const x=60+1080*(playhead-data.start_seconds)/(data.end_seconds-data.start_seconds);timingPlayhead.setAttribute('x1',x);timingPlayhead.setAttribute('x2',x)}}
+function drawPlayback(){updateEvidenceCursor(playhead);$('position').value=playhead;$('chartPosition').textContent=fmt(playhead);$('clock').textContent=fmt(playhead);lanes();if(timingPlayhead){const x=60+1080*(playhead-data.start_seconds)/(data.end_seconds-data.start_seconds);timingPlayhead.setAttribute('x1',x);timingPlayhead.setAttribute('x2',x)}}
 function draw(){$('delayValue').textContent=delay.value;drawPlayback();timing();comparison()}
 delay.oninput=()=>{table();draw()};$('center').onclick=()=>{delay.value=Math.round(median(matches.map(mid)));table();draw()};$('excluded').onchange=draw;$('candidates').onchange=draw;
 $('layout').value=JSON.stringify(data.layout,null,2);$('download').onclick=()=>{try{const value=JSON.parse($('layout').value),url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='layout.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('layoutError').textContent=''}catch(e){$('layoutError').textContent=e.message}};

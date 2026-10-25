@@ -5,7 +5,7 @@ import json
 
 from piu_timeline.play.processing import PROCESSING_FORMAT, observe_processing, processing_support, processing_conflicts
 
-CHANNEL_FORMAT = {'schema': 1, 'revision': 3, 'processing': PROCESSING_FORMAT}
+CHANNEL_FORMAT = {'schema': 1, 'revision': 4, 'processing': PROCESSING_FORMAT}
 
 
 def receptor_evidence(data):

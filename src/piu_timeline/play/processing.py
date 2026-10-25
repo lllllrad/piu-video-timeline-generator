@@ -185,6 +185,7 @@ def observe_processing(data, path):
              for h in data.get('hold_analysis', {}).get('holds', [])]
     return {'format': PROCESSING_FORMAT, 'available': True, 'trace': 'processing-features.npz',
             'notes': result, 'holds': holds,
+            'pixel_coordinates': {'width': PIXEL_FORMAT['width'], 'height': height, 'origin': 'game_crop_top_left'},
             'counts': dict(Counter(record['status'] for record in result)),
             'semantics': 'Observed disappearance is not a successful judgment or physical press. Unknown is retained.'}
 

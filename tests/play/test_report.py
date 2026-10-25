@@ -28,7 +28,7 @@ class ReportTest(unittest.TestCase):
                 subprocess.run(['node', '--check', str(js)], check=True, capture_output=True)
 
 
-    def report_runtime(self, notes, matches, miss_candidates=(), lane_count=1, judgment_events=(), hold_analysis=None, chart_policy=None):
+    def report_runtime(self, notes, matches, miss_candidates=(), lane_count=1, judgment_events=(), hold_analysis=None, chart_policy=None, visual_channels=None):
         data = {'song': 'Song', 'chart': 'S20', 'media': {'path': '/tmp/source.mkv'},
                 'start_seconds': 8, 'end_seconds': 20, 'notes': notes, 'matches': matches,
                 'display_delay_correction_ms': 0, 'bootstrap': {'ocr_images': 0, 'missing_digits': []},
@@ -36,6 +36,8 @@ class ReportTest(unittest.TestCase):
                 'judgment_events': judgment_events, 'excluded_notes': {}, 'limitations': [],
                 'miss_candidates': miss_candidates, 'hold_analysis': hold_analysis or {'holds': []},
                 'layout': {'lanes': [{'name': str(i + 1), 'color': 'yellow'} for i in range(lane_count)]}}
+        if visual_channels:
+            data.update(visual_channels=visual_channels, analysis_height=200)
         if chart_policy:
             data['chart_policy'] = chart_policy
         with tempfile.TemporaryDirectory() as temporary:
@@ -180,3 +182,36 @@ class ReportTest(unittest.TestCase):
         hold.update(start_range=[8, 10.02], start_censored=True, head_note=None)
         result = self.report_runtime(notes, [], hold_analysis={'holds': [hold]})
         self.assertIn('already visible / uncertain', result['initialRows'][0][1])
+
+    def test_four_channel_view_shows_raw_values_seeks_source_frames_and_retains_dom(self):
+        notes = [{'status':'estimated','lane':0,'target_seconds':t,'prediction_uncertainty_seconds':.01}
+                 for t in (10,11)]
+        channels = {
+            'timeline': {'frames':[[9.98,99.98],[10,100],[10.02,100.02],[11,101]]},
+            'popup': {'combo_events':[], 'judgment_events':[],
+                      'observations':[[3,.9,None,0,True],[4,.95,'GREAT',.91,False],
+                                      [4,.95,'GREAT',.92,False],[5,.96,'PERFECT',.94,False]]},
+            'receptors': {'onsets':1, 'unknown_lane_frames':1, 'events':[],
+                          'observations':[[[False],[.1],False],[[None],[.65],True],
+                                          [[True],[.9],False],[[False],[.05],False]]},
+            'motion': {'detections':2, 'tracks':[{},{}],
+                       'observations':[[[0,.5,.4,.88]],[],[],[[0,.5,.3,.9]]]},
+            'processing': {'pixel_coordinates':{'width':325,'height':100},
+                           'body_observations':[[[0,25,40,True,False,True,.9]],[],[],[]],
+                           'counts':{'disappeared_near_receptor':1,'unresolved':1},
+                           'notes':[{'note':0,'id':'processing:0','status':'disappeared_near_receptor',
+                                     'reason':'verified_head_then_clear_absence','range':[9.98,10.02],
+                                     'samples':[{'time':9.98,'state':'present','score':.9},
+                                                {'time':10,'state':'unknown','score':None,'unknown_reason':'white_effect'},
+                                                {'time':10.02,'state':'absent','score':.01}]},
+                                    {'note':1,'id':'processing:1','status':'unresolved',
+                                     'reason':'insufficient_clear_approach','samples':[]}]}}
+        result = self.report_runtime(notes, [], visual_channels=channels)['evidencePreview']
+        self.assertIn('3 / 0.90',result['rows'][0])
+        self.assertIn('GREAT / 0.91',result['rows'][1])
+        self.assertIn('unknown (common flash) / 0.65',result['rows'][1])
+        self.assertIn('80.0',result['rows'][0])
+        self.assertIn('body 50.0…80.0 px / tail clipped',result['rows'][0])
+        self.assertIn('unknown / ? / white_effect',result['rows'][1])
+        self.assertEqual(result['seekTime'],10)
+        self.assertIn('insufficient_clear_approach',result['secondNoteSummary'])

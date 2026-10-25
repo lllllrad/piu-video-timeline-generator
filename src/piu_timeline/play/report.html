@@ -54,6 +54,15 @@ visible when their times overlap. Points at interval centers are visual guides, 
 <div id="comparisonDetails" aria-live="polite">
 </div>
 </section>
+<section class="panel" id="nativeEvidence">
+<h2>Selected note: four observation channels</h2>
+<p>Original recording time, before latency correction. Green means observed presence/light; red means clear absence/off; gray means unknown. Disappearance does not by itself establish a successful input. Click a mark or frame time to seek the recording.</p>
+<label>Time around target <select id="evidenceWindow"><option value="0.3">±0.3 s</option><option value="0.6" selected>±0.6 s</option><option value="1.5">±1.5 s</option></select></label>
+<p id="evidenceSummary"></p>
+<svg id="evidenceTimeline" viewBox="0 0 1200 280" role="img" aria-label="Popup, receptor effect, moving note and processing observations on one recording timeline" style="height:280px"></svg>
+<div class="scroll native-evidence-frames"><table><thead><tr><th>Recording / source PTS</th><th>Combo / confidence</th><th>Judgment / confidence</th><th>Receptor / white fraction</th><th>Moving heads in lane (y pixels)</th><th>Processing / score / reason</th></tr></thead><tbody id="evidenceFrames"></tbody></table></div>
+<p><a href="visual-channels.json">All channel observations (JSON)</a></p>
+</section>
 <section class="panel">
 <h2>Note timing comparison</h2>
 <p class="muted">Times are absolute recording positions. Input − target includes uncertainty in both ranges: negative is early, positive is late. Overlapping ranges do not establish an early/late result. Unmatched notes show alternative observed refresh ranges or conditional bounds from neighboring processed rows; these do not establish an input assignment. When evidence is absent, the input stays
