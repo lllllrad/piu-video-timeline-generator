@@ -14,7 +14,7 @@ from .play_frames import decode_frames
 from .play_tracking import Track, fit_track
 
 FEATURE_FORMAT = {'schema': 1, 'detector_revision': 4, 'width': 325}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 14}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 15}
 
 
 def fingerprint(value):
@@ -149,17 +149,21 @@ def fit_endpoint(track, receptor, spacing, endpoint):
 
 def tail_from_head_track(data, track, spacing, start):
     """Corroborate a tail-shaped arrow with the connected body's lower edge."""
-    visible = {round(point['time'], 6): point for point in track if point['tail_visible']}
+    # Compare while the body is extended: a shrinking body near the receptor
+    # can put its head and tail within the same positional tolerance.
+    visible = {round(point['time'], 6): point for point in track
+               if point['tail_visible'] and point['long']}
     scale = FEATURE_FORMAT['width'] / data.get('analysis_width', FEATURE_FORMAT['width'])
     options = []
     for index, note in enumerate(data['notes']):
         velocity = note.get('velocity_pixels_per_second', 0) * scale
         if (note['status'] != 'estimated' or note['lane'] != track[0]['lane'] or velocity >= 0
-                or not start + .12 <= note['target_seconds'] <= track[-1]['time'] + .25):
+                or not start < note['target_seconds'] <= track[-1]['time'] + .25):
             continue
         errors = [abs(y*scale-(visible[round(time, 6)]['bottom']-.45*spacing))
                   for time, y in note.get('points', []) if round(time, 6) in visible]
-        if len(errors) < 4 or median_error(errors) > .55*spacing:
+        if (len(errors) < 4 or median_error(errors) > .55*spacing
+                or sum(error <= .55*spacing for error in errors) < max(4, .65*len(errors))):
             continue
         uncertainty = note['prediction_uncertainty_seconds'] + .55*spacing/abs(velocity)
         options.append((median_error(errors), index,
@@ -236,8 +240,7 @@ def reconstruct(data, frames):
         censored = start is None
         if start is None:
             start = [data['start_seconds'], contact[0]['time']]
-        if end and end[1] - (start[1] if censored else start[0]) < .12:
-            continue
+        short_body_fit = end is not None and end[1] - (start[1] if censored else start[0]) < .12
         if not end and censored and (not contact or contact[-1]['time']-contact[0]['time'] < .12):
             continue
         middle = contact[0]['time'] if censored else sum(start) / 2
@@ -249,11 +252,14 @@ def reconstruct(data, frames):
             censored = False
             start = [head[1]['target_seconds']-head[1]['prediction_uncertainty_seconds'],
                      head[1]['target_seconds']+head[1]['prediction_uncertainty_seconds']]
+        # A directly tracked tail shares the native heads' motion clock. Prefer
+        # it even when the noisier body-box endpoint could be extrapolated.
+        tail_end, tail_note = tail_from_head_track(data, track, spacing, start[1] if censored else sum(start)/2)
+        if tail_end is not None:
+            end = tail_end
+        if short_body_fit and tail_note is None:
+            continue
         last_time = end[1] if end else track[-1]['time']
-        tail_note = None
-        if end is None:
-            end, tail_note = tail_from_head_track(data, track, spacing, start[1] if censored else sum(start)/2)
-            last_time = end[1] if end else track[-1]['time']
         if censored and end is None and head is None:
             continue
         if last_time <= (start[1] if censored else start[0]):

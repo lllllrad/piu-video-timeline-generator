@@ -16,6 +16,44 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_short_hold_tail_is_geometry_not_a_new_tap(self):
+        spacing, receptor = .06*325, .15*183
+        times = [i/60 for i in range(30, 64)]
+        frames = []
+        for time in times:
+            top = max(receptor, receptor+260*(1-time)-.45*spacing)
+            bottom = receptor+260*(1.084-time)+.45*spacing
+            frames.append({'playback_seconds': time, 'source_pts_seconds': time+10,
+                           'receptor_lit': [False]*5,
+                           'bodies': [{'lane': 2, 'top': top, 'bottom': bottom,
+                                       'long': bottom-top > 1.6*spacing,
+                                       'tail_visible': True, 'stripe_support': 1}]})
+        notes = [{'status': 'estimated', 'lane': 2, 'target_seconds': target,
+                  'prediction_uncertainty_seconds': .0085,
+                  'velocity_pixels_per_second': -520,
+                  'points': [(time, 2*(receptor+260*(target-time))) for time in times]}
+                 for target in (1, 1.084, 1.168)]
+        data = {'layout': LAYOUT, 'game_roi': [0, 0, 325, 183],
+                'analysis_width': 650, 'start_seconds': .5, 'end_seconds': 1.2,
+                'notes': notes, 'matches': [], 'combo_events': []}
+        original = deepcopy(data)
+        # Both an unreadable endpoint and a misleading body-box extrapolation
+        # must defer to the independently observed connected tail.
+        for body_end in (None, [1.02, 1.04]):
+            with self.subTest(body_end=body_end), patch(
+                    'piu_timeline.play_holds.fit_endpoint',
+                    side_effect=lambda track, receptor, spacing, endpoint:
+                    [.99, 1.01] if endpoint == 'top' else body_end):
+                holds = reconstruct(data, frames)
+            self.assertEqual(len(holds), 1)
+            self.assertEqual(holds[0]['tail_note'], 1)
+            self.assertEqual(holds[0]['covered_notes'], [0, 1])
+            self.assertAlmostEqual(sum(holds[0]['end_range'])/2, 1.084)
+            projected = presentation({**data, 'hold_analysis': {'holds': holds}})
+            self.assertEqual(projected['notes'][1]['note_type'], 'hold_component')
+            self.assertEqual(projected['notes'][2]['status'], 'estimated')
+        self.assertEqual(data, original)
+
     def test_dim_short_hold_pulse_requires_local_change_body_and_positive_update(self):
         frames = [{'playback_seconds': i*.017, 'source_pts_seconds': 10+i*.017,
                    'receptor_white_fraction': [.1, .26, .1, .1, .1],
