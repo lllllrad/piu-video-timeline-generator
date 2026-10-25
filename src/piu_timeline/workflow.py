@@ -10,11 +10,11 @@ import shutil
 import subprocess
 from urllib.parse import parse_qs, urlparse
 
-from .auto_timeline import ANALYSIS_VERSION, analyze, resolve_source
-from .detect import roi_value
-from .ocr import cache_identity as configuration
-from .storage import relocate_evidence
-ROOT = Path(__file__).resolve().parents[2]
+from piu_timeline.metadata.analysis import ANALYSIS_VERSION, analyze, resolve_source
+from piu_timeline.vision.detect import roi_value
+from piu_timeline.vision.ocr import cache_identity as configuration
+from piu_timeline.storage import relocate_evidence
+from piu_timeline import ROOT
 LOCAL_DATA = ROOT / ".local/data"
 LOCAL_FORMATS = ROOT / ".local/formats"
 BUILTIN_FORMATS = ROOT / "formats"
@@ -165,7 +165,7 @@ def _run(source, format_name="default", game_roi=None):
         document = json.loads(analysis_file.read_text(encoding="utf-8"))
     if document.get("method") != "automatic_hud_ocr":
         raise ValueError("Saved analysis is not an automatic HUD analysis")
-    from .chart_badge_recovery import refresh
+    from piu_timeline.metadata.badge_recovery import refresh
     if refresh(document, analysis_dir):
         pending = analysis_file.with_suffix('.badges-build.json')
         pending.write_text(json.dumps(document, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')

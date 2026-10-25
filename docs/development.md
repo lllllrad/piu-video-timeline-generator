@@ -20,26 +20,48 @@ Codex-only environment generation and optional mise installation are documented 
 
 Read the [gameplay visual model](gameplay-visual-model.md) before changing note geometry or recognition rules. Keep observed game behavior, measurement assumptions and implementation thresholds distinct; passing a test does not establish the visual model.
 
+The package is organized by responsibility. `workflow.py`, `media.py` and
+`storage.py` at the package root provide the public workflow and shared I/O.
+
+| Package | Responsibility | Main entry points |
+| --- | --- | --- |
+| `metadata/` | Scene planning, song/chart/player recognition, credit association and result fields | `analysis.py`, `recognition.py`, `results.py` |
+| `vision/` | OCR backends, screen crops and gameplay-region detection | `ocr.py`, `paddle.py`, `screen.py`, `detect.py` |
+| `play/` | Native frame observations, note tracking, input evidence and HTML reports | `analysis.py`, `tracking.py`, `judgments.py`, `report.py` |
+| `play/holds/` | Long-note pixel acquisition, geometry, sustained state and projection | `features.py`, `geometry.py`, `state.py`, `analysis.py` |
+| `charts/` | UCS timing, official downloads, audio alignment, registration and human-authored policies | `data.py`, `ucs.py`, `official.py`, `policy.py` |
+| `tools/` | Review-assisted timelines, evaluation and retained-evidence relabeling | `timeline.py`, `evaluate.py`, `relabel.py` |
+
+Tests mirror these packages under `tests/`. Workflow/presentation tests live in
+`tests/workflow/`; synthetic native-video integration and the optional Vision
+integration run live in `tests/integration/`. See [test scope and audit](testing.md)
+for what the suite establishes and which redundant checks were removed.
+
+The public `just` commands stay the same. Internal Python invocations use the
+package paths, for example `python -m piu_timeline.play.analysis` and
+`python -m piu_timeline.charts.data`. Modules import the shared checkout root from
+`piu_timeline.ROOT`, so moving a module deeper does not relocate caches or models.
+
 - `workflow.py` owns the public `just auto` flow, stable source IDs and `.local/data/` layout.
 - `media.py` prepares YouTube media with yt-dlp or inspects local input.
-- `auto_timeline.py` detects gameplay, refines boundaries and saves structured evidence.
-- `ocr.py` adapts Vision or PaddleOCR to normalized, top-left coordinates. Official PaddleOCR PP-OCRv5 detection and Korean/English recognition run through `paddle_ocr.py` on Linux. Sessions and a bounded cache of exact image-content results are reused within a process; models stay under `.local/cache/`. Cache entries distinguish language, backend, device and pinned model/preprocessing identity, return independent result objects, and retain each observation's original source timestamp.
-- `screen_ocr.py` reads English UI regions for scene routing. Linux OCR crops a decoded image with Pillow; Vision uses FFmpeg without adding a Python imaging dependency.
-- `recognition.py` classifies observed screens and parses layout-specific fields.
-- `evidence.py` resolves labels, player identity and stage-row associations across a credit.
-- `credits.py` samples screen transitions inside gameplay gaps and groups plays using observed credit boundaries.
-- `result_stats.py` extracts per-player result fields only from per-song results.
-- `play_holds.py` orchestrates hold analysis and projects a hold-aware chart without converting ticks into presses. `play_hold_features.py` acquires and caches native-frame pixels; `play_hold_geometry.py` resolves head/body/tail geometry in explicit pixel coordinates; `play_hold_state.py` attaches independent sustained recognition and receptor-light transitions. Geometry does not depend on a successful input match. `play_candidates.py` constrains review alternatives using refresh ownership, processed-row order and per-lane receptor evidence.
-- `play_analysis.py` orchestrates opt-in visual analysis and caches evidence; `play_report.py` renders a self-contained local HTML view with retained SVG geometry and browser-driven CSS transform playback. Bounded time pages limit DOM size; video time anchors animations without per-frame note rebuilding. `play_ranges.py` derives review-only alternative refresh intervals and conditional neighboring-row bounds from saved evidence without changing confirmed associations or reacquiring frames.
-- `play_judgments.py` learns a bounded set of judgment-word templates, detects native-frame label/animation refreshes independently of combo visibility, and merges evidence without duplicate note assignments. MISS never becomes a physical input timestamp.
-- `play_recovery.py` recovers uniquely constrained tap rows using independent lane onsets, preserving display brackets and source PTS while rejecting shared onsets and competing refreshes.
-- `play_frames.py` streams native decoded frames with original PTS and no FPS conversion.
-- `play_motion.py` measures corroborated peer-note displacement, bridges bounded HUD occlusion and maps shared pixel coordinates to continuous target-time estimates. It preserves the original frame timeline and capture uncertainty, with local fitting as a fallback when independent motion support is unavailable.
-- `official_ucs.py` downloads and validates the official song catalogue and blank timing archives. `ucs.py` preserves exact section timing; `chart_audio.py` aligns reference music without retiming; `chart_data.py` registers editable, unreviewed chart drafts in a separate repository without replacing existing files. See [chart data](chart-data.md).
-- `chart_policy.py` validates human-authored song regions, maps them through a recording-specific alignment, applies report processing methods, and scopes automatic-check exceptions without changing native evidence or result quotas. Invalid policies remain visible rather than silently taking effect.
-- `play_tracking.py` locates colored note-head outlines, bridges bounded UI occlusions, distinguishes repeated render frames from nonlinear motion, learns combo digit templates and aligns judged rows with confirmed combo updates. A chord occupies one judged row. Compatible native observations can be refitted without frame decoding or OCR; font examples are reusable across plays from unchanged source media. It does not equate display refresh with physical switch input.
+- `metadata/analysis.py` detects gameplay, refines boundaries and saves structured evidence.
+- `vision/ocr.py` adapts Vision or PaddleOCR to normalized, top-left coordinates. Official PaddleOCR PP-OCRv5 detection and Korean/English recognition run through `vision/paddle.py` on Linux. Sessions and a bounded cache of exact image-content results are reused within a process; models stay under `.local/cache/`. Cache entries distinguish language, backend, device and pinned model/preprocessing identity, return independent result objects, and retain each observation's original source timestamp.
+- `vision/screen.py` reads English UI regions for scene routing. Linux OCR crops a decoded image with Pillow; Vision uses FFmpeg without adding a Python imaging dependency.
+- `metadata/recognition.py` classifies observed screens and parses layout-specific fields.
+- `metadata/evidence.py` resolves labels, player identity and stage-row associations across a credit.
+- `metadata/credits.py` samples screen transitions inside gameplay gaps and groups plays using observed credit boundaries.
+- `metadata/results.py` extracts per-player result fields only from per-song results.
+- `play/holds/analysis.py` orchestrates hold analysis and projects a hold-aware chart without converting ticks into presses. `play/holds/features.py` acquires and caches native-frame pixels; `play/holds/geometry.py` resolves head/body/tail geometry in explicit pixel coordinates; `play/holds/state.py` attaches independent sustained recognition and receptor-light transitions. Geometry does not depend on a successful input match. `play/candidates.py` constrains review alternatives using refresh ownership, processed-row order and per-lane receptor evidence.
+- `play/analysis.py` orchestrates opt-in visual analysis and caches evidence; `play/report.py` renders a self-contained local HTML view with retained SVG geometry and browser-driven CSS transform playback. Bounded time pages limit DOM size; video time anchors animations without per-frame note rebuilding. `play/ranges.py` derives review-only alternative refresh intervals and conditional neighboring-row bounds from saved evidence without changing confirmed associations or reacquiring frames.
+- `play/judgments.py` learns a bounded set of judgment-word templates, detects native-frame label/animation refreshes independently of combo visibility, and merges evidence without duplicate note assignments. MISS never becomes a physical input timestamp.
+- `play/recovery.py` recovers uniquely constrained tap rows using independent lane onsets, preserving display brackets and source PTS while rejecting shared onsets and competing refreshes.
+- `play/frames.py` streams native decoded frames with original PTS and no FPS conversion.
+- `play/motion.py` measures corroborated peer-note displacement, bridges bounded HUD occlusion and maps shared pixel coordinates to continuous target-time estimates. It preserves the original frame timeline and capture uncertainty, with local fitting as a fallback when independent motion support is unavailable.
+- `charts/official.py` downloads and validates the official song catalogue and blank timing archives. `charts/ucs.py` preserves exact section timing; `charts/audio.py` aligns reference music without retiming; `charts/data.py` registers editable, unreviewed chart drafts in a separate repository without replacing existing files. See [chart data](chart-data.md).
+- `charts/policy.py` validates human-authored song regions, maps them through a recording-specific alignment, applies report processing methods, and scopes automatic-check exceptions without changing native evidence or result quotas. Invalid policies remain visible rather than silently taking effect.
+- `play/tracking.py` locates colored note-head outlines, bridges bounded UI occlusions, distinguishes repeated render frames from nonlinear motion, learns combo digit templates and aligns judged rows with confirmed combo updates. A chord occupies one judged row. Compatible native observations can be refitted without frame decoding or OCR; font examples are reusable across plays from unchanged source media. It does not equate display refresh with physical switch input.
 - `formats/` contains Node.js TypeScript presentation programs. `formats/lib/timeline.ts` separates song labels, player names and recording-aware segment labels; both bundled formats share the same automatic name-visibility policy. See [custom formats](formats.md).
-- `timeline.py`, `evaluate.py` and `relabel_analysis.py` are internal review and diagnostic tools.
+- `tools/timeline.py`, `tools/evaluate.py` and `tools/relabel.py` are internal review and diagnostic tools.
 
 Analysis is authoritative and presentation is disposable. A format reads `analysis.json`; it does not trigger recognition or mutate evidence.
 Analyzer changes that affect saved results increment `ANALYSIS_VERSION`. `just auto` rebuilds an older cache into a unique temporary directory and replaces it only after the new analysis succeeds. Source size/mtime, explicit game ROI and OCR backend/device changes invalidate the cache too. A per-source advisory lock prevents concurrent writers on macOS/Linux. Existing results are retained in `analysis.previous-*`; interrupted builds remain in `analysis.build-*` for diagnosis. Promotion rewrites nested evidence paths to their final location. Original media is never rewritten.

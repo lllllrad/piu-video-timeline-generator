@@ -6,11 +6,11 @@ auto +args:
 
 # Analyze visible notes and combo timing; save a local HTML report.
 play +args:
-    sh scripts/run.sh .venv/bin/python -m piu_timeline.play_analysis "$@"
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.play.analysis "$@"
 
 # Manage official UCS timing and editable chart drafts in a separate repository.
 charts +args:
-    sh scripts/run.sh .venv/bin/python -m piu_timeline.chart_data "$@"
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.charts.data "$@"
 
 # Download a YouTube video into the cache used by `auto`.
 fetch +args:
@@ -22,33 +22,33 @@ import-studio +args:
 
 # Run the offline test suite.
 check:
-    sh scripts/run.sh .venv/bin/python -m unittest discover -s tests -v
+    sh scripts/run.sh .venv/bin/python -m unittest discover -s tests -t . -v
 
 # Exercise the native macOS Vision OCR engine.
 check-ocr:
-    sh scripts/run.sh .venv/bin/python tests/ocr_integration.py
+    sh scripts/run.sh .venv/bin/python tests/integration/vision_ocr.py
 
 # Internal diagnostics and review tools. Leading underscores keep these out of `just --list`.
 _probe path:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.media "$1"
 
 _record path:
-    sh scripts/run.sh .venv/bin/python -m piu_timeline.timeline record "$1"
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.timeline record "$1"
 
 _review video output:
-    sh scripts/run.sh .venv/bin/python -m piu_timeline.timeline review "$1" "$2"
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.timeline review "$1" "$2"
 
 _timeline +args:
-    sh scripts/run.sh .venv/bin/python -m piu_timeline.timeline generate "$@"
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.timeline generate "$@"
 
 _frames +args:
-    sh scripts/run.sh .venv/bin/python -m piu_timeline.timeline frames "$@"
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.timeline frames "$@"
 
 _detect +args:
-    sh scripts/run.sh .venv/bin/python -m piu_timeline.detect "$@"
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.vision.detect "$@"
 
 _evaluate +args:
-    sh scripts/run.sh .venv/bin/python -m piu_timeline.evaluate "$@"
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.evaluate "$@"
 
 _relabel +args:
-    sh scripts/run.sh .venv/bin/python -m piu_timeline.relabel_analysis "$@"
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.relabel "$@"
