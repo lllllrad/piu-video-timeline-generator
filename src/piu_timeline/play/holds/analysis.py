@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 27}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 28}
 
 
 def fingerprint(value):
@@ -185,6 +185,8 @@ def presentation(data):
         owned = {match.get('combo_event' if key == 'combo_events' else 'judgment_event') for match in matches}
         for event_index, event in enumerate(data.get(key, [])):
             event = dict(event)
+            if key == 'combo_events' and any(m.get('combo_event') == event_index and m.get('aggregate_evidence_method') for m in matches):
+                event.update(status='matched', reason='aggregate_counter_with_exclusive_lane_onsets')
             if key == 'combo_events' and event_index in owned and event.get('reason') == 'possible_hold_or_dense_stack':
                 event.update(status='matched', reason=lane_reason(event_index, key, 'dense_interval'))
             if event.get('label') != 'MISS' and event.get('delta', 1) > 0 and during_hold(event['lower_seconds'], event['upper_seconds']):

@@ -106,3 +106,24 @@ and height. The UI scales body bounds into the note-analysis crop before
 comparing y coordinates, accounting for rounded resize heights. Legacy reports without these arrays hide this view. The sidecar
 retains the complete observations for other analyses and tools; presentation
 never reacquires pixels or mutates evidence.
+
+## Aggregate tap updates
+
+A separate conservative recovery pass handles a confirmed counter increase of
+2-10 within at most 100 ms. Chart-row separation need not fit inside that
+refresh bracket: two differently timed notes can be pressed in the same
+captured frame. The original aggregate bracket remains the input proxy;
+receptor animations do not manufacture per-note switch timestamps.
+
+Recovery requires exactly that many plausible single-tap rows and a separate,
+confirmed lane onset for every row. Each onset and note must belong to only
+one counter proposal and must not be owned by another matched note. Additional
+plausible rows, chords with unverified counting semantics, MISS evidence,
+known holds, unresolved body tracks and competing counter proposals prevent
+recovery. A counter quota alone never supplies missing observations.
+
+A word already associated with one row retains its own narrower bracket and
+grade. Other rows receive the aggregate interval and an unknown grade; the
+last displayed word is not copied across the update. Reports identify this
+association as `aggregate_counter_with_exclusive_lane_onsets` and retain each
+onset's source PTS.

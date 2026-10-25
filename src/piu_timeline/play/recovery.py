@@ -112,4 +112,6 @@ def recover_rows(data):
         match['row_note_count'] = sum(abs(other['target_seconds']-match['target_seconds']) < .025 and (
             match.get('combo_event') is not None and other.get('combo_event') == match['combo_event']
             or match.get('judgment_event') is not None and other.get('judgment_event') == match['judgment_event']) for other in matches)
-    return matches, recovered
+    from piu_timeline.play.aggregates import recover_aggregates
+    matches, aggregate_recovered = recover_aggregates({**data, 'matches': matches})
+    return matches, recovered+aggregate_recovered
