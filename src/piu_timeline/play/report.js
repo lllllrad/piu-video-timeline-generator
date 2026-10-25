@@ -29,6 +29,11 @@ if(data.chart_policy){
   if(data.chart_policy.status==='invalid'){
     const warning=document.createElement('p');warning.textContent='Chart region policies were not applied: '+data.chart_policy.reason;$('chartPolicyDetails').appendChild(warning);
   }
+  for(const candidate of data.chart_policy.gimmick_candidates||[]){
+    const item=text('p','Suspected gimmick / '+candidate.review_status+' / '+candidate.reason+' / warnings remain active',$('chartPolicyDetails'));
+    const jump=text('button','Review '+fmt(candidate.playback_start_seconds)+' … '+fmt(candidate.playback_end_seconds),item);
+    jump.onclick=()=>seek(candidate.playback_start_seconds);
+  }
   for(const region of data.chart_policy.regions||[]){
     const item=document.createElement('p');item.textContent=region.id+' / song '+fmt(region.start_seconds)+' … '+fmt(region.end_seconds)+' / '+region.processing+' / '+region.reason+(region.check_exceptions.length?' / check exceptions: '+region.check_exceptions.join(', '):'')+(region.details?' / '+region.details:'');
     const jump=document.createElement('button');jump.textContent='Seek region';jump.onclick=()=>seek(region.playback_start_seconds);item.appendChild(jump);$('chartPolicyDetails').appendChild(item);

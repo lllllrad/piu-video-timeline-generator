@@ -112,7 +112,9 @@ def attach_regions(data, directory, repository=None):
             return data
         metadata = json.loads(metadata_path.read_text())
         regions = validate_regions(metadata)
-        if not regions:
+        from piu_timeline.charts.gimmicks import validate_candidates
+        candidates = validate_candidates(metadata)
+        if not regions and not candidates:
             return data
         alignment = _alignment(data, directory, metadata, code)
         origin = alignment['song_start_seconds']
@@ -123,6 +125,8 @@ def attach_regions(data, directory, repository=None):
         policy = {'status': 'applied', 'metadata_path': str(metadata_path),
                   'metadata_sha256': sha256(metadata_path.read_bytes()).hexdigest(),
                   'alignment': alignment, 'regions': mapped,
+                  'gimmick_candidates':[{**c,'playback_start_seconds':origin+c['start_seconds'],
+                                          'playback_end_seconds':origin+c['end_seconds']} for c in candidates],
                   'stage_grade_totals': 'partial_exemption' if any('stage_grade_totals' in r['check_exceptions'] for r in regions) else 'no_exemption'}
     except (ValueError, OSError, KeyError, subprocess.SubprocessError) as error:
         policy = {'status': 'invalid', 'reason': str(error), 'regions': []}

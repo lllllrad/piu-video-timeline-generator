@@ -114,3 +114,22 @@ Anonymous SSO cookies are kept in memory only; one retry of the original URL han
 malformed first callback. `PIU_UCS_CA_FILE` can supplement the trust chain when the server omits
 intermediate certificates; a locally provisioned `intermediates.pem` in the UCS cache is also
 recognized. No credentials or session cookies are stored with chart data.
+
+## Suspected effects awaiting review
+
+`gimmick_candidates` records suspected chart effects with song-relative bounds,
+a `kind`, `reason`, `review_status` (`pending`, `confirmed`, or `rejected`) and
+source evidence. Repeated pre-receptor visibility losses across independent
+lanes can nominate a pending visibility modifier. Capture, overlays and layout
+errors remain possible explanations; nomination is not a verified game rule.
+
+Automatic recording preserves existing human fields, review decisions and UCS
+notes. Repeated observations are deduplicated. Song bounds require an existing
+verified recording-to-song translation; otherwise the candidate stays in the
+local `gimmick-candidates.json` until alignment is available. Source PTS and
+playback times remain separate. No recording or extracted image is copied into
+the chart repository.
+
+Candidates, including confirmed candidates, do not suppress any warning. A
+human separately adds a scoped `regions` processing/check exception after
+review. Reports display candidates and provide links into the original video.

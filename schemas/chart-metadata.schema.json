@@ -3,26 +3,117 @@
   "title": "Editable PIU chart metadata",
   "type": "object",
   "properties": {
-    "schema": {"const": 1},
-    "review_status": {"enum": ["unreviewed_draft", "reviewed"]},
+    "schema": {
+      "const": 1
+    },
+    "review_status": {
+      "enum": [
+        "unreviewed_draft",
+        "reviewed"
+      ]
+    },
     "regions": {
       "type": "array",
       "description": "Human-authored handling by half-open song-time intervals, independent of recording offsets.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "start_seconds", "end_seconds", "reason"],
+        "required": [
+          "id",
+          "start_seconds",
+          "end_seconds",
+          "reason"
+        ],
         "properties": {
-          "id": {"type": "string", "minLength": 1},
-          "start_seconds": {"type": "number", "minimum": 0},
-          "end_seconds": {"type": "number", "exclusiveMinimum": 0},
-          "processing": {"enum": ["standard", "exclude_timing", "hold_state_only"], "default": "standard"},
-          "check_exceptions": {
-            "type": "array", "uniqueItems": true,
-            "items": {"enum": ["timing_evidence", "stage_grade_totals"]}
+          "id": {
+            "type": "string",
+            "minLength": 1
           },
-          "reason": {"type": "string", "minLength": 1},
-          "details": {"type": "string"}
+          "start_seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "end_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "processing": {
+            "enum": [
+              "standard",
+              "exclude_timing",
+              "hold_state_only"
+            ],
+            "default": "standard"
+          },
+          "check_exceptions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "timing_evidence",
+                "stage_grade_totals",
+                "note_type_conflict",
+                "note_type_unresolved"
+              ]
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "details": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "gimmick_candidates": {
+      "type": "array",
+      "description": "Suspected effects awaiting human review. These annotations never grant check exemptions.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "start_seconds",
+          "end_seconds",
+          "review_status",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "start_seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "end_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "review_status": {
+            "enum": [
+              "pending",
+              "confirmed",
+              "rejected"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
         }
       }
     }

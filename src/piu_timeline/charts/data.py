@@ -299,6 +299,7 @@ def register(data, output, code=None, repository=None, song_start=None, revision
             # untouched unreviewed UCS draft. Automatic runs never rebuild.
             metadata = {**json.loads(previous[1]), **metadata}
             metadata['regions'] = json.loads(previous[1]).get('regions', [])
+            metadata['gimmick_candidates'] = json.loads(previous[1]).get('gimmick_candidates', [])
         elif previous is not None:
             raise ValueError('Chart was removed while rebuilding; retry explicitly')
         timing = repository / 'timing' / f'{resolved}.ucs'
@@ -353,6 +354,16 @@ def auto_register(data, output, **options):
                 and previous.get('alignment', {}).get('method') == 'explicit_song_start'):
             result.update(alignment=previous['alignment'], alignment_media=previous['alignment_media'])
     write_json(registration, result)
+    if result['status'] in ('existing','created','rebuilt'):
+        from piu_timeline.charts.gimmicks import record_candidates
+        try:
+            candidates = record_candidates(data,Path(output),result)
+            if candidates['changed'] and (Path(output)/'report.html').is_file():
+                from piu_timeline.play.report import write_report
+                write_report(data,Path(output)/'report.html')
+        except (OSError,ValueError,KeyError) as error:
+            candidates = {'status':'pending','reason':str(error)}
+        result['gimmick_candidates'] = candidates
     if result['status'] != 'disabled':
         print(f'Chart data: {result["status"]}; {result.get("chart", result.get("reason", ""))}', flush=True)
     return result
@@ -387,7 +398,10 @@ def main():
             for path in sorted((args.repo / 'charts').glob('*/*/*/metadata.json')):
                 if '.build-' in path.parent.name:
                     continue
-                validate_regions(json.loads(path.read_text()))
+                metadata = json.loads(path.read_text())
+                validate_regions(metadata)
+                from piu_timeline.charts.gimmicks import validate_candidates
+                validate_candidates(metadata)
                 ucs.parse(path.with_name('chart.ucs').read_text())
                 count += 1
             print(f'Validated {count} charts and their region policies'); return
