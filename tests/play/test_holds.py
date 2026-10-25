@@ -10,7 +10,7 @@ import numpy as np
 
 from piu_timeline.play.holds.analysis import reconstruct, presentation, augment_holds
 from piu_timeline.play.holds.features import bridge_ui_stripes, detect_bodies, feature_contract, acquire_features
-from piu_timeline.play.holds.geometry import HoldGeometry, edge_alignment
+from piu_timeline.play.holds.geometry import HoldGeometry, edge_alignment, head_from_body_track
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window
 
 
@@ -19,6 +19,16 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_extended_body_distinguishes_head_from_an_isolated_tail_cap(self):
+        data = {'notes': [{'target_seconds': 1}, {'target_seconds': 1.084}]}
+        track = [{'edge_convention': 'connected_color', 'long': False, 'top_cap_note': 1} for _ in range(6)]
+        track += [{'long': True, 'top_cap_note': 0} for _ in range(5)]
+        geometry = HoldGeometry.from_analysis({'layout': LAYOUT, 'game_roi': [0, 0, 325, 183]}, 325)
+        self.assertEqual(head_from_body_track(data, track, geometry, 1), (0, data['notes'][0]))
+        # Conflicting extended geometry cannot be outvoted by isolated caps.
+        track.extend({'long': True, 'top_cap_note': 1} for _ in range(4))
+        self.assertIsNone(head_from_body_track(data, track, geometry, 1))
+
     def test_white_cap_borders_need_an_observed_colored_connector(self):
         image = np.zeros((183, 325, 3), dtype='uint8')
         x = round(.5*325)

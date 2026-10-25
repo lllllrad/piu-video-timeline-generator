@@ -179,7 +179,12 @@ def head_from_body_track(data, track, geometry, target):
     positions distinguish those caps even when both times fit the search window.
     """
     if track[0].get('edge_convention') == 'connected_color':
-        counts = Counter(p['top_cap_note'] for p in track if 'top_cap_note' in p)
+        # A lone cap can precede the connected body or remain after it shrinks.
+        # Its upper edge cannot distinguish head from tail. Prefer samples
+        # where both caps are spatially separated by an extended body.
+        extended = [p for p in track if p['long'] and 'top_cap_note' in p]
+        samples = extended if len(extended) >= MIN_EDGE_OBSERVATIONS else track
+        counts = Counter(p['top_cap_note'] for p in samples if 'top_cap_note' in p)
         winners = counts.most_common()
         if winners and winners[0][1] >= MIN_EDGE_OBSERVATIONS and winners[0][1] >= .8*sum(counts.values()):
             index = winners[0][0]

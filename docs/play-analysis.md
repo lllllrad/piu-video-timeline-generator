@@ -65,6 +65,12 @@ the evidence. An unresolved end stays unknown even when the body disappears.
 
 ## Long notes and sustained recognition
 
+When enough extended-body frames identify the upper cap, they determine head
+identity before isolated cap frames are considered. An isolated trailing cap
+can share the same body track before the connector is visible or after it
+shrinks; those frames alone cannot distinguish head from tail. Contradictory
+extended-body observations remain unresolved.
+
 Endpoint corroboration runs before rejecting a short body with unreadable local fits: independently tracked heads and tails can resolve it. Strong body stripes require geometric corroboration. A weaker stripe (at least 72% colored support in five extended-body observations spanning 80 ms) additionally requires both a tracked head following the upper edge and a tracked tail following the lower edge. Missing or displaced arrows cannot qualify through time proximity alone. `body_evidence` distinguishes `strong_stripe` from `stripe_and_tracked_edges` in the saved hold reconstruction.
 
 A directly linked tail retains its native crossing range. Body-to-cap positional tolerance establishes the association and does not widen that measured range; doing so could consume a real subsequent tap. A body-only endpoint still includes uncertainty from the approximate cap offset and local fit.
