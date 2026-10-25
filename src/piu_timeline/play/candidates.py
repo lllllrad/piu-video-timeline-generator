@@ -25,9 +25,11 @@ def candidates(data, events):
     correction = data.get('display_delay_correction_ms', 0) / 1000
     frame = data.get('median_frame_interval_seconds') or .017
     lit = defaultdict(list)
+    unknown = defaultdict(list)
     sensor = defaultdict(lambda: [0, 0])
     for run in data.get('hold_analysis', {}).get('receptor_runs', []):
         if run['lit'] is None:
+            unknown[run['lane']].append(run)
             continue
         sensor[run['lane']][bool(run['lit'])] += run['frames']
         if run['lit']:
@@ -98,7 +100,9 @@ def candidates(data, events):
             supported = [run for run in lit[lane] if (
                          run['frames'] >= 2 and run['start_seconds'] <= support_hi+frame*2 and run['end_seconds'] >= support_lo-frame*2
                          or onset_overlaps(run, support_lo, support_hi, frame*2))]
-            if reliable and not supported:
+            obscured = any(run['start_seconds'] <= support_hi and run['end_seconds'] >= support_lo
+                           for run in unknown[lane])
+            if reliable and not supported and not obscured:
                 rejected[index].add('receptor_lane_not_active');continue
             supports[index] = supported
             hold_tick = any(event.get('reason') == 'ongoing_hold_tick_not_new_press' for event in family['events']) or any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2)+.04 and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds']) for hold in data.get('hold_analysis', {}).get('holds', []))
@@ -142,6 +146,10 @@ def candidates(data, events):
                     result[index].append({**event, 'candidate_range': candidate_range, 'association_window': window,
                                           'constraints': ['hard_timing_window', 'event_ownership', 'processed_row_order', 'closest_row'],
                                           'lane_receptor_support': bool(supports[index]), 'lane_support_runs': supports[index],
+                                          'lane_receptor_status': ('supported' if supports[index] else
+                                              'unknown' if any(run['start_seconds'] <= candidate_range[1]
+                                                               and run['end_seconds'] >= candidate_range[0]
+                                                               for run in unknown[notes[index].get('lane')]) else 'unmeasured'),
                                           'ranking_offset_seconds': offset,
                                           'alternative_rows': len(selected) if capacity == 1 else 1, 'aggregate_row_capacity': capacity})
     return result, {index: sorted(reasons) for index, reasons in rejected.items()}

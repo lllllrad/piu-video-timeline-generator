@@ -69,6 +69,12 @@ can corrupt the connected-component bounds at those sizes too. Shape coverage,
 agreement across word sections and the margin against competing labels remain
 required; a readable persistent label alone does not establish a new refresh.
 
+An obscured receptor sample is unknown. It cannot veto a review candidate as an
+inactive lane, and it cannot establish a confirmed lane onset. Candidates that
+overlap unknown samples retain that distinction in `lane_receptor_status` and
+remain unresolved without independent ownership evidence. Known inactive lanes
+still reject candidates; unknown intervals elsewhere do not excuse them.
+
 ## Long notes and sustained recognition
 
 When enough extended-body frames identify the upper cap, they determine head

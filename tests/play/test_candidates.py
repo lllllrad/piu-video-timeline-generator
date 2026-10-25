@@ -43,6 +43,24 @@ class CandidateTest(unittest.TestCase):
         self.assertNotIn(1, result)
         self.assertIn('receptor_lane_not_active', rejected[1])
 
+    def test_obscured_receptor_is_an_unknown_candidate_not_an_inactive_lane(self):
+        data = {'notes': [note(10)], 'hold_analysis': {'receptor_runs': [
+            run(0, True, 8, 8.2, 7.9), run(0, False, 9, 9.98),
+            run(0, None, 10, 10.04), run(0, False, 10.06, 11)]}}
+        result, rejected = candidates(data, [event()])
+        self.assertIn(0, result)
+        self.assertFalse(result[0][0]['lane_receptor_support'])
+        self.assertEqual(result[0][0]['lane_receptor_status'], 'unknown')
+        self.assertNotIn('receptor_lane_not_active', rejected.get(0, []))
+        from piu_timeline.play.recovery import recover_rows
+        recovered, indices = recover_rows({**data, 'combo_events': [event()]})
+        self.assertEqual((recovered, indices), ([], []))
+        # A gap later in the recording cannot excuse observed inactivity now.
+        data['hold_analysis']['receptor_runs'][2].update(start_seconds=10.1, end_seconds=10.2)
+        result, rejected = candidates(data, [event()])
+        self.assertNotIn(0, result)
+        self.assertIn('receptor_lane_not_active', rejected[0])
+
     def test_nearby_before_and_after_rows_do_not_all_share_one_candidate(self):
         data = {'notes': [note(9.9), note(10), note(10.1)]}
         result, rejected = candidates(data, [event()])
