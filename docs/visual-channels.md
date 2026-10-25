@@ -160,16 +160,28 @@ A failed hold reconstruction does not establish a tap. The `note_types`
 channel retains per-frame `tap`, `hold` or `unknown` observations, original
 source PTS, playback time, measured position and source trajectory identity.
 It reuses the retained spatial masks, independently of HUD/input decisions.
-Only actual tracked positions 1.3 to 2.5 lane spacings below the receptor are
-eligible; processing remnants, HUD intersections and clipped caps are excluded.
-A cap outline must match the native head size and contain the lane color.
-Registered native caps attached to a strong extended body also supply per-frame
-hold evidence throughout their clear approach, including candidates too brief
-for the multi-frame hold reconstruction threshold.
-A connected colored component over 1.6 spacings high with strong vertical
-support supplies hold evidence. A complete cap with visible, color-free and
-white-effect-free margins on both sides supplies tap evidence. Lack of a
-connector alone is insufficient. Other samples remain unknown.
+The native appearance cache (`appearance-features.npz`) retains packed color,
+relaxed-color, white, visibility and valid-pixel masks around each original
+head detection across its entire approach, at the original analysis resolution.
+The acquisition contract includes original detection positions and native PTS;
+refits and type-rule changes reuse these pixels. Older receptor-band caches
+cannot establish a cap hidden by the HUD there, so a first native appearance
+pass is required for those recordings. It performs no OCR and never modifies
+source media or the saved native detection timeline.
+
+Only actual tracked positions away from the receptor, HUD and screen edges are
+eligible. Match source observations by native time, lane and position, never
+by predicted proximity alone. The cap outline must match the native head size
+and contain lane color. The visible colored rim outside an inner white outline
+belongs to the same cap: measure its connected envelope before checking gaps.
+An envelope taller than a normal cap or multiple distinct cap centers cannot
+prove a tap. Both margins require valid, color-free and white-effect-free
+pixels; black background is valid separation when the foreground cap is visible.
+Padded image boundaries are not valid pixels. A connected colored component over
+1.6 spacings high with strong vertical support supplies hold evidence. Registered
+native caps attached to a strong extended body also supply per-frame hold proof,
+including candidates too brief for multi-frame reconstruction. Lack of a connector
+alone is insufficient. Other samples remain unknown.
 
 Projection combines evidence by the existing trajectory/hold identities, never
 by time proximity alone. A single valid observation of each kind produces

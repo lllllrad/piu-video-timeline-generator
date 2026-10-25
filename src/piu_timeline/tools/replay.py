@@ -60,6 +60,9 @@ def current(path):
                 or not all(path.with_name(name).is_file() for name in
                            ('visual-channels.json', 'processing-features.npz'))):
             return False
+        if ('appearance-features.npz' in data.get('visual_channels',{}).get('note_types',{}).get('traces',[])
+                and not path.with_name('appearance-features.npz').is_file()):
+            return False
     media = data['media']; stat = Path(media['path']).stat()
     return ((stat.st_size, stat.st_mtime_ns) == (media['size_bytes'], media['mtime_ns'])
             and holds.get('feature_contract') == feature_contract(data)

@@ -37,7 +37,18 @@ class NoteTypeTest(unittest.TestCase):
                 self.assertEqual(shape(*cap(kind),35,20)[0],expected)
         color,white,visible=cap()
         visible[:25]=False
-        self.assertEqual(shape(color,white,visible,35,20)[0],'unknown')
+        self.assertEqual(shape(color,white,visible,35,20)[0],'tap')
+        valid=np.ones_like(color);valid[:25]=False
+        self.assertEqual(shape(color,white,visible,35,20,valid=valid)[0],'unknown')
+
+    def test_colored_rim_is_part_of_the_cap_but_a_short_connector_is_not_a_tap(self):
+        color,white,visible=cap()
+        relaxed=color.copy();relaxed[47,7:16]=True
+        self.assertEqual(shape(color,white,visible,35,20,relaxed=relaxed)[0],'tap')
+        # Shorter than the long-stripe detector threshold, but visibly connected
+        # outside a complete cap envelope: retain unknown rather than infer tap.
+        short=color.copy();short[42:54,8:15]=True
+        self.assertEqual(shape(short,white,visible,35,20)[0],'unknown')
 
     def test_single_body_frame_is_retained_but_processing_remnant_or_hud_is_not(self):
         data={'game_roi':[0,0,325,200],'analysis_height':200,

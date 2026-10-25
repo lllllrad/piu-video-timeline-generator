@@ -5,18 +5,37 @@ from collections import Counter
 import cv2
 import numpy as np
 
-TYPE_FORMAT = {'schema': 1, 'revision': 2}
+from piu_timeline.play.appearance import APPEARANCE_FORMAT
+
+TYPE_FORMAT = {'schema': 1, 'revision': 3, 'appearance': APPEARANCE_FORMAT}
 
 
-def shape(color, white, visibility, center, spacing):
+def cap_envelope(relaxed, white, cap, spacing):
+    """Include the observed colored rim outside the inner white outline."""
+    x,y,w,h = cap
+    combined = (relaxed|white).astype('uint8')
+    halo = max(1,round(.1*spacing))
+    combined[:,:max(0,x-halo)] = 0;combined[:,min(combined.shape[1],x+w+halo):] = 0
+    _,labels,stats,_ = cv2.connectedComponentsWithStats(combined,8)
+    ids,counts = np.unique(labels[y:y+h,x:x+w][white[y:y+h,x:x+w]],return_counts=True)
+    choices = [(count,int(i)) for i,count in zip(ids,counts) if i]
+    if not choices:
+        return None
+    box = stats[max(choices)[1],:4]
+    return tuple(map(int,box)) if .65*spacing < box[2] < 1.25*spacing and .65*spacing < box[3] < 1.25*spacing else None
+
+
+def shape(color, white, visibility, center, spacing, relaxed=None, valid=None):
     """Require a complete cap plus either a connected stripe or clear margins."""
+    relaxed = color if relaxed is None else relaxed
+    valid = np.ones_like(color) if valid is None else valid
     contours, _ = cv2.findContours(white.astype('uint8'), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     caps = []
     for contour in contours:
         x,y,w,h = cv2.boundingRect(contour)
         if (.65*spacing < w < 1.25*spacing and .65*spacing < h < 1.25*spacing
-                and abs(y+h/2-center) < .2*spacing
-                and color[y:y+h,x:x+w].mean() >= .12):
+                and abs(y+h/2-center) < .2*spacing and abs(x+w/2-white.shape[1]/2) < .2*spacing
+                and valid[y:y+h,x:x+w].all() and color[y:y+h,x:x+w].mean() >= .12):
             caps.append((x,y,w,h))
     if not caps:
         return 'unknown', 'no_complete_cap_outline'
@@ -29,13 +48,19 @@ def shape(color, white, visibility, center, spacing):
             return 'hold', 'complete_cap_with_connected_color_stripe'
     # Beyond both ends of a complete outline, require visible background, not
     # an absence of colored pixels under a white/desaturated effect.
-    for _,y,_,h in caps:
+    for cap in caps:
+        envelope = cap_envelope(relaxed,white,cap,spacing)
+        if envelope is None:
+            continue
+        x,y,w,h = envelope
+        if any(abs((cy+ch/2)-(cap[1]+cap[3]/2)) > .12*spacing for _,cy,_,ch in caps):
+            continue
         pad = max(2, round(.15*spacing))
         if y-pad < 0 or y+h+pad > color.shape[0]:
             continue
         bands = [slice(y-pad,y), slice(y+h,y+h+pad)]
-        if all(visibility[band].mean() >= .8 and not color[band].any()
-               and white[band].mean() < .05 for band in bands):
+        if (valid[y-pad:y+h+pad,x:x+w].all() and all(not relaxed[band,x:x+w].any()
+                and white[band,x:x+w].mean() < .05 for band in bands)):
             return 'tap', 'complete_cap_with_visible_separation_on_both_sides'
     return 'unknown', 'cap_margins_obscured_or_connected_shape_unresolved'
 
@@ -110,6 +135,48 @@ def observe_types(data, path, frames=()):
             'counts':dict(Counter(r['status'] for r in result)),
             'traces':['processing-features.npz','hold-frames.jsonl'],
             'pixel_coordinates':{'width':width,'height':height,'origin':'game_crop_top_left'}}
+
+
+def observe_appearance(data, path, frames):
+    """Join original detection pixels to trajectories by frame, lane and position."""
+    from piu_timeline.play.holds.features import ui_regions
+    bodies = body_type_observations(data,frames)
+    with np.load(path,allow_pickle=False) as saved:
+        masks,times,pts,lanes,ys = (saved[key] for key in ('masks','times','pts','lanes','ys'))
+        spacing,columns = float(saved['spacing']),int(saved['columns'])
+    height = data.get('analysis_height',round(data['analysis_width']*data['game_roi'][3]/data['game_roi'][2]))
+    source_scale = round(height*325/data['analysis_width'])/height
+    by_frame = {}
+    for i,(time,lane) in enumerate(zip(times,lanes)):
+        by_frame.setdefault((round(float(time),6),int(lane)),[]).append(i)
+    records = []
+    for index,note in enumerate(data['notes']):
+        observations = []
+        x = data['layout']['lanes'][note['lane']]['x']
+        for time,y in note.get('points',[]):
+            if not data['layout']['receptor_y']*height+1.3*spacing < y < data['layout'].get('note_y_max',.95)*height-.8*spacing:
+                continue
+            if any(rx <= x <= rx+rw and ry*height-.8*spacing <= y <= (ry+rh)*height+.8*spacing
+                   for rx,ry,rw,rh in ui_regions(data['layout'])):
+                continue
+            options = sorted((abs(float(ys[i])-y),i) for i in by_frame.get((round(time,6),note['lane']),[]))
+            if not options or options[0][0]>2 or len(options)>1 and options[1][0]-options[0][0]<1:
+                continue
+            i = options[0][1]
+            color,white,visible,relaxed,valid = np.unpackbits(masks[i],axis=-1)[...,:columns].astype(bool)
+            kind,reason = shape(color,white,visible,(color.shape[0]-1)/2,spacing,relaxed,valid)
+            observations.append({'kind':kind,'reason':reason,'source_note':index,'y':y*source_scale,
+                                 'playback_seconds':float(times[i]),'source_pts_seconds':float(pts[i]),
+                                 'trace':'appearance-features.npz'})
+        observations.extend(bodies.get(index,[]))
+        observations.sort(key=lambda o:(o['playback_seconds'],o['kind']))
+        kinds = {o['kind'] for o in observations}-{'unknown'}
+        records.append({'note':index,'status':'conflict' if len(kinds)>1 else next(iter(kinds)) if kinds else 'unknown',
+                        'observations':observations})
+    return {'format':TYPE_FORMAT,'available':True,'notes':records,
+            'counts':dict(Counter(r['status'] for r in records)),
+            'traces':['appearance-features.npz','hold-frames.jsonl'],
+            'pixel_coordinates':{'width':325,'height':round(height*source_scale),'origin':'game_crop_top_left'}}
 
 
 def project_types(data, notes, holds):

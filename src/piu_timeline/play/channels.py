@@ -5,7 +5,7 @@ import json
 
 from piu_timeline.play.processing import PROCESSING_FORMAT, observe_processing, processing_support, processing_conflicts
 
-from piu_timeline.play.note_types import TYPE_FORMAT, observe_types
+from piu_timeline.play.note_types import TYPE_FORMAT, observe_types, observe_appearance
 
 CHANNEL_FORMAT = {'schema': 1, 'revision': 5, 'processing': PROCESSING_FORMAT, 'note_types': TYPE_FORMAT}
 
@@ -74,6 +74,9 @@ def collect(data, directory, frames):
         event['id'] = 'processing:'+str(event['note'])
     if not words:
         words = [{} for _ in native]
+    from piu_timeline.play.appearance import acquire
+    appearance = acquire(data,directory,native)
+    types = observe_appearance(data,appearance,frames) if appearance else observe_types(data,pixel_path,frames)
     return {'format': CHANNEL_FORMAT,
             'timeline': {'frames': [[f['playback_seconds'],f['source_pts_seconds']] for f in native]},
             'popup': {'available': bool(native), 'judgment_available': judgment_trace.is_file(), 'combo_trace': 'frames.jsonl',
@@ -94,13 +97,13 @@ def collect(data, directory, frames):
                        'detections': sum(len(f.get('notes', [])) for f in native), 'tracks': motion,
                        'observation_fields': ['lane','normalized_x','normalized_y','quality'],
                        'observations': [[[n['lane'],n['x'],n['y'],n.get('quality')] for n in f.get('notes', [])] for f in native]},
-            'processing': processing, 'note_types': observe_types(data, pixel_path, frames)}
+            'processing': processing, 'note_types': types}
 
 
 def augment_channels(data, directory, frames=None):
     """Rebuild associations from retained pixels; invalidate independently of OCR."""
     from piu_timeline.play.holds.analysis import fingerprint
-    inputs = ('frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz')
+    inputs = ('frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz')
     contract = {'format': CHANNEL_FORMAT,
                 'analysis': fingerprint({key:data.get(key) for key in
                                          ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion')}),
@@ -115,6 +118,7 @@ def augment_channels(data, directory, frames=None):
         frames = list(read_frames(directory/'hold-frames.jsonl'))
         frames = reject_common_flashes(frames, observations(data, directory, frames))
     channels = collect(data, directory, frames)
+    contract['traces'] = {name:[p.stat().st_size,p.stat().st_mtime_ns] if (p:=directory/name).is_file() else None for name in inputs}
     pending = path.with_suffix('.build-json')
     pending.write_text(json.dumps({'contract': contract, 'channels': channels}, ensure_ascii=False)+'\n')
     pending.replace(path)
