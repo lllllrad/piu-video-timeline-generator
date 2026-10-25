@@ -10,7 +10,8 @@ import numpy as np
 
 from piu_timeline.play_holds import reconstruct, presentation, augment_holds
 from piu_timeline.play_hold_features import detect_bodies, feature_contract, acquire_features
-from piu_timeline.play_hold_state import contextual_hold_support
+from piu_timeline.play_hold_geometry import HoldGeometry
+from piu_timeline.play_hold_state import contextual_hold_support, recognition_segments, recognition_window
 
 
 LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
@@ -18,6 +19,29 @@ LAYOUT = {'receptor_y': .15, 'note_y_max': .95,
 
 
 class HoldTest(unittest.TestCase):
+    def test_visible_response_window_does_not_widen_target_or_consume_next_tap(self):
+        data = {'layout': LAYOUT, 'game_roi': [0, 0, 325, 183], 'analysis_width': 650,
+                'notes': [{'status': 'estimated', 'lane': 2, 'target_seconds': target,
+                           'prediction_uncertainty_seconds': .0085, 'velocity_pixels_per_second': -520}
+                          for target in (1, 1.084, 1.124)]}
+        hold = {'lane': 2, 'start_range': [.99, 1.01], 'end_range': [1.0755, 1.0925],
+                'start_censored': False, 'tail_note': 1, 'covered_notes': [0, 1]}
+        original = deepcopy(hold)
+        geometry = HoldGeometry.from_analysis(data, 325)
+        window = recognition_window(data, hold, geometry)
+        self.assertGreater(window[1], hold['end_range'][1])
+        self.assertLess(window[1], data['notes'][2]['target_seconds'])
+        frames = [{'playback_seconds': time, 'source_pts_seconds': time+10,
+                   'receptor_lit': [False, False, True, False, False]}
+                  for time in (1.1, 1.11, 1.12, 1.13)]
+        result = recognition_segments(frames, [frame['playback_seconds'] for frame in frames], hold, {}, window)
+        self.assertEqual(result['segments'][0]['lower_seconds'], 1.1)
+        self.assertEqual(result['segments'][0]['upper_seconds'], 1.11)
+        self.assertEqual(result['segments'][0]['first_source_pts_seconds'], 11.1)
+        self.assertIsNone(result['press_range'])
+        self.assertIsNone(result['release_range'])
+        self.assertEqual(hold, original)
+
     def test_short_hold_tail_is_geometry_not_a_new_tap(self):
         spacing, receptor = .06*325, .15*183
         times = [i/60 for i in range(30, 64)]
@@ -150,6 +174,19 @@ class HoldTest(unittest.TestCase):
         self.assertEqual(recovered_dim[0]['input']['segments'][0]['contextual_frames'], 1)
         self.assertEqual(recovered_dim[0]['input']['segments'][0]['first_source_pts_seconds'], 10.9)
         self.assertFalse(reconstruct(data, dim)[0]['input']['segments'])
+        hidden_body = deepcopy(dim)
+        hidden_body[45]['bodies'] = []
+        supported_gap = reconstruct(contextual_data, hidden_body)
+        self.assertEqual(len(supported_gap), 1)
+        pulse = supported_gap[0]['input']['segments'][0]
+        self.assertEqual(pulse['contextual_frames'], 1)
+        self.assertEqual(pulse['first_source_pts_seconds'], 10.9)
+        self.assertIsNone(supported_gap[0]['input']['press_range'])
+        self.assertFalse(reconstruct(data, hidden_body)[0]['input']['segments'])
+        # A HUD refresh and a local pulse cannot invent a missing chart hold.
+        for frame in hidden_body:
+            frame['bodies'] = []
+        self.assertEqual(reconstruct(contextual_data, hidden_body), [])
         partial = reconstruct({**data, 'end_seconds': 1}, [frame for frame in frames if frame['playback_seconds'] < 1])
         self.assertTrue(partial)
         self.assertTrue(partial[0]['end_censored'])
@@ -206,6 +243,17 @@ class HoldTest(unittest.TestCase):
                     patch('piu_timeline.play_holds.reconstruct', side_effect=AssertionError('cached associations')):
                 replay = augment_holds(data, root)
             self.assertEqual(replay['hold_analysis'], result['hold_analysis'])
+            # Updated HUD evidence must invalidate derived recognition while
+            # the independently acquired body/receptor pixels remain reusable.
+            for key, event in (
+                    ('combo_events', {'delta': 1, 'lower_seconds': .1, 'upper_seconds': .12}),
+                    ('judgment_events', {'label': 'PERFECT', 'lower_seconds': .1, 'upper_seconds': .12})):
+                updated = {**data, key: [event]}
+                with patch('piu_timeline.play_hold_features.decode_frames', side_effect=AssertionError('cached pixels')), \
+                        patch('piu_timeline.play_holds.reconstruct', wraps=reconstruct) as rebuilt:
+                    refreshed = augment_holds(updated, root)
+                self.assertEqual(rebuilt.call_count, 1)
+                self.assertNotEqual(refreshed['hold_analysis']['association_contract'], result['hold_analysis']['association_contract'])
             self.assertEqual(source.read_bytes(), b'original recording')
 
     def test_pts_mismatch_does_not_overwrite_old_hold_features(self):

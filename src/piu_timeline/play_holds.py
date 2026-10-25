@@ -5,9 +5,9 @@ import json
 
 from .play_hold_features import FEATURE_FORMAT, acquire_features, feature_contract
 from .play_hold_geometry import HoldGeometry, body_tracks, hold_start, resolve_geometry, retain_hold
-from .play_hold_state import contextual_hold_support, recognition_segments, receptor_runs
+from .play_hold_state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 18}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 19}
 
 
 def fingerprint(value):
@@ -18,15 +18,17 @@ def reconstruct(data, frames):
     """Resolve chart geometry first, then attach independent recognition spans."""
     geometry = HoldGeometry.from_analysis(data, FEATURE_FORMAT['width'])
     frame_times = [frame['playback_seconds'] for frame in frames]
-    contextual = contextual_hold_support(data, frames, geometry.receptor, geometry.spacing)
     holds = []
     for track in body_tracks(frames, geometry.spacing):
         hold = resolve_geometry(data, track, geometry)
         if hold is None:
             continue
         hold['id'] = len(holds)
-        hold['input'] = recognition_segments(frames, frame_times, hold, contextual)
         retain_hold(holds, hold)
+    contextual = contextual_hold_support(data, frames, geometry.receptor, geometry.spacing, holds)
+    for hold in holds:
+        window = recognition_window(data, hold, geometry)
+        hold['input'] = recognition_segments(frames, frame_times, hold, contextual, window)
     return holds
 
 
@@ -36,7 +38,8 @@ def augment_holds(data, output):
     if not data.get('media', {}).get('video_streams') or any('color' not in lane for lane in data.get('layout', {}).get('lanes', [])):
         return data
     contract = feature_contract(data)
-    association = {'format': ASSOCIATION_FORMAT, 'notes': fingerprint(data['notes'])}
+    association = {'format': ASSOCIATION_FORMAT, 'notes': fingerprint(data['notes']),
+                   'hud_events': fingerprint({key: data.get(key, []) for key in ('combo_events', 'judgment_events')})}
     path = output / 'holds.json'
     if path.is_file():
         saved = json.loads(path.read_text())

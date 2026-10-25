@@ -3,8 +3,35 @@ from bisect import bisect_left, bisect_right
 
 import numpy as np
 
+from .play_hold_geometry import EDGE_POSITION_TOLERANCE
 
-def contextual_hold_support(data, frames, receptor, spacing):
+
+def recognition_window(data, hold, geometry):
+    """Search for a visible response independently of chart endpoint uncertainty.
+
+    A receptor response can remain visible as the trailing cap overlaps its row.
+    This bounded association margin is not extra uncertainty on the cap's
+    measured center crossing and cannot consume a separately detected next tap.
+    """
+    lower = hold['start_range'][1] if hold['start_censored'] else hold['start_range'][0]
+    upper = hold['end_range'][1] if hold['end_range'] else hold['last_body_seconds']
+    tail = hold['tail_note']
+    if tail is not None:
+        note = data['notes'][tail]
+        speed = abs(note.get('velocity_pixels_per_second', 0))*geometry.note_scale
+        if speed > 0:
+            upper += EDGE_POSITION_TOLERANCE*geometry.spacing/speed
+        following = [note['target_seconds']-note['prediction_uncertainty_seconds']
+                     for index, note in enumerate(data['notes'])
+                     if note['status'] == 'estimated' and note['lane'] == hold['lane']
+                     and index not in hold['covered_notes']
+                     and note['target_seconds'] > data['notes'][tail]['target_seconds']]
+        if following:
+            upper = min(upper, min(following))
+    return [lower, max(lower, upper)]
+
+
+def contextual_hold_support(data, frames, receptor, spacing, holds=()):
     """Recover dim hold pulses using local change, body contact and a HUD update.
 
     These observations support an already reconstructed hold only. They never
@@ -40,19 +67,28 @@ def contextual_hold_support(data, frames, receptor, spacing):
             others = [score for li, score in enumerate(values) if li != lane]
             if value-baseline < .16 or value-float(np.median(others)) < .2:
                 continue
-            if not any(body['lane'] == lane and body['top'] <= receptor+.8*spacing
-                       and body['bottom'] >= receptor+.6*spacing for body in frame['bodies']):
+            body_contact = any(body['lane'] == lane and body['top'] <= receptor+.8*spacing
+                               and body['bottom'] >= receptor+.6*spacing for body in frame['bodies'])
+            # Geometry was resolved from neighboring source frames, independently
+            # of this pulse. Require the certain interior, not an uncertain cap
+            # envelope; a temporary hidden body need not be visible again here.
+            established_hold = any(hold['lane'] == lane and hold['start_range'][1] <= time
+                                   <= (hold['end_range'][0] if hold['end_range'] else hold['last_body_seconds'])
+                                   for hold in holds)
+            if not body_contact and not established_hold:
                 continue
             result[(fi, lane)] = nearby
     return result
 
 
-def recognition_segments(frames, frame_times, hold, contextual):
+def recognition_segments(frames, frame_times, hold, contextual, window=None):
     """Bound lane-local sustained recognition by independently resolved geometry."""
     start, censored, lane = hold['start_range'], hold['start_censored'], hold['lane']
     last_time = hold['end_range'][1] if hold['end_range'] else hold['last_body_seconds']
     segments = []
     support_start = start[1] if censored else start[0]
+    if window is not None:
+        support_start, last_time = window
     # A flash can temporarily hide the body's colored pixels. Use the
     # independently recorded receptor state in neighboring native frames,
     # bounded by the reconstructed hold, not only frames with a body box.
@@ -78,6 +114,7 @@ def recognition_segments(frames, frame_times, hold, contextual):
                     updates.append(update)
     segments = [segment for segment in segments if segment['frames'] >= 2 or segment.get('contextual_frames')]
     return {'kind': 'sustained_recognition', 'segments': segments,
+            'association_window': [support_start, last_time],
             'press_range': None, 'release_range': None,
             'recognition_envelope': [segments[0]['lower_seconds'], segments[-1]['upper_seconds']] if segments else None,
             'note': 'Filled receptor with a long body is hold-state evidence, not repeated presses or a measured switch release.'}
