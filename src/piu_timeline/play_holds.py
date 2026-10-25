@@ -7,7 +7,7 @@ from .play_hold_features import FEATURE_FORMAT, acquire_features, feature_contra
 from .play_hold_geometry import HoldGeometry, body_tracks, hold_start, resolve_geometry, retain_hold
 from .play_hold_state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 20}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 21}
 
 
 def fingerprint(value):

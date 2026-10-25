@@ -90,20 +90,55 @@ def fit_endpoint(track, receptor, spacing, endpoint):
     return [fitted['target_seconds'] - uncertainty, fitted['target_seconds'] + uncertainty]
 
 
-def edge_alignment(note, track, spacing, scale, endpoint, receptor=None):
-    """Compare a native arrow trajectory with an extended body's visible edge."""
+def edge_errors(note, track, spacing, scale, endpoint, receptor=None):
+    """Compare registered centers at the same original source-frame times."""
     # Compare while the body is extended: a shrinking body near the receptor
     # can put its head and tail within the same positional tolerance.
     visible = {round(point['time'], 6): point for point in track
                if point['long'] and (point['tail_visible'] if endpoint == 'bottom'
                                     else point['top'] > receptor + 1.2*spacing)}
     offset = -CAP_HALF_HEIGHT*spacing if endpoint == 'bottom' else CAP_HALF_HEIGHT*spacing
-    errors = [abs(y*scale-(visible[round(time, 6)][endpoint]+offset))
-              for time, y in note.get('points', []) if round(time, 6) in visible]
+    return [abs(y*scale-(visible[round(time, 6)][endpoint]+offset))
+            for time, y in note.get('points', []) if round(time, 6) in visible]
+
+
+def edge_alignment(note, track, spacing, scale, endpoint, receptor=None):
+    """Compare a native arrow trajectory with an extended body's visible edge."""
+    errors = edge_errors(note, track, spacing, scale, endpoint, receptor)
     if (len(errors) < MIN_EDGE_OBSERVATIONS or median_error(errors) > EDGE_POSITION_TOLERANCE*spacing
             or sum(error <= EDGE_POSITION_TOLERANCE*spacing for error in errors) < max(MIN_EDGE_OBSERVATIONS, MIN_EDGE_AGREEMENT*len(errors))):
         return None
     return median_error(errors)
+
+
+def head_from_body_track(data, track, geometry, target):
+    """Prefer an observed upper cap over the nearest extrapolated timestamp.
+
+    A clipped colored box can move its predicted start towards the tail. Native
+    positions distinguish those caps even when both times fit the search window.
+    """
+    candidates = [(index, note) for index, note in enumerate(data['notes'])
+                  if note['status'] == 'estimated' and note['lane'] == track[0]['lane']
+                  and abs(note['target_seconds']-target) <= .15]
+    aligned = []
+    observed = False
+    for index, note in candidates:
+        errors = edge_errors(note, track, geometry.spacing, geometry.note_scale, 'top', geometry.receptor)
+        observed |= len(errors) >= MIN_EDGE_OBSERVATIONS
+        error = edge_alignment(note, track, geometry.spacing, geometry.note_scale, 'top', geometry.receptor)
+        if error is not None:
+            aligned.append((error, index, note))
+    if aligned:
+        aligned.sort(key=lambda option: (option[0], option[1]))
+        # Subpixel residual differences do not resolve two distinct cap owners.
+        if len(aligned) > 1 and aligned[1][0]-aligned[0][0] < 1:
+            return None
+        return aligned[0][1:]
+    if observed:
+        return None
+    # Legacy or obscured heads without enough overlapping position observations
+    # retain the temporal fallback; observed geometric contradictions do not.
+    return min(candidates, key=lambda item: abs(item[1]['target_seconds']-target), default=None)
 
 
 def tail_from_head_track(data, track, geometry, start):
@@ -155,10 +190,7 @@ def resolve_geometry(data, track, geometry):
         start = [data['start_seconds'], contact[0]['time']]
     short_body_fit = end is not None and end[1] - (start[1] if censored else start[0]) < .12
     middle = contact[0]['time'] if censored else sum(start) / 2
-    # Prefer a fitted arrow head corroborated by the approaching body.
-    heads = [(i, note) for i, note in enumerate(data['notes']) if note['status'] == 'estimated'
-             and note['lane'] == lane and abs(note['target_seconds'] - middle) <= .15]
-    head = min(heads, key=lambda item: abs(item[1]['target_seconds']-middle), default=None)
+    head = head_from_body_track(data, track, geometry, middle)
     if head and (not censored or track[0]['time'] < head[1]['target_seconds'] - .065):
         censored = False
         start = [head[1]['target_seconds']-head[1]['prediction_uncertainty_seconds'],

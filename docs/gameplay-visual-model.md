@@ -127,6 +127,7 @@ Reviewed examples use original recording positions in `jpz-NuyQuBk`, segment 12:
 | --- | --- | --- |
 | 68:34.6 | Blue short hold; a tracked lower cap follows its body's lower edge; head and tail target centers are about 84 ms apart | One hold, with the lower cap represented as its tail |
 | 68:37.8 and the following two short holds | Body candidates and paired caps are visible; local box fitting can fail, and red-body color support is weaker than neighboring bodies | Evaluate the observed head/body/tail relationship before rejecting the candidate; weaker color evidence needs both edges |
+| 69:31.7 | A yellow hold's upper box edge becomes distorted near the receptor; its extrapolated start is closer to the trailing cap than to the leading cap | Identify the head from its multi-frame alignment with the upper edge, ahead of timestamp proximity; the lower cap remains the tail |
 | About 70:05 | Heads can be visible before disappearing behind the central HUD | Retain the source trajectory and use corroborated motion or expose an unresolved exclusion; do not call disappearance a gimmick by default |
 
 These examples diagnose particular failure modes. They do not establish complete corpus accuracy. Source images, measurements and before/after reports belong under ignored local review output; the visual rules and reusable tests belong in the project.
