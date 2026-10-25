@@ -4,6 +4,22 @@ from piu_timeline.play_analysis import combine_receptor_observations
 
 
 class CalibrationTest(unittest.TestCase):
+    def test_fixed_positions_select_mode_and_side_without_observing_flashes(self):
+        from piu_timeline.play_layout import fixed_layout
+        left = fixed_layout({'chart': 'S23', 'players': {'p1': {}}})
+        right = fixed_layout({'chart': 'S15', 'players': {'p2': {}}})
+        double = fixed_layout({'chart': 'D24'})
+        self.assertEqual(len(left['lanes']), 5)
+        self.assertLess(max(lane['x'] for lane in left['lanes']), .5)
+        self.assertGreater(min(lane['x'] for lane in right['lanes']), .5)
+        self.assertEqual(len(double['lanes']), 10)
+        self.assertEqual(left['receptor_y'], right['receptor_y'])
+        self.assertEqual(left['method'], 'fixed_phoenix_game_layout')
+        self.assertIsNone(fixed_layout({'chart': 'S23'}))
+        self.assertIsNone(fixed_layout({'chart': None, 'players': {'p1': {}}}))
+        self.assertIsNone(fixed_layout({'chart': 'S23', 'players': {'p1': {}, 'p2': {}}}))
+        self.assertEqual(fixed_layout({'chart': 'S23'}, 'p2'), right)
+
     def test_complementary_partial_frames_recover_only_repeatedly_observed_lanes(self):
         centers=[(300+77*i,103) for i in range(10)]
         seen=[([p for i,p in enumerate(centers) if i not in missing],{'source_pts_seconds':time})
@@ -37,7 +53,8 @@ class CalibrationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             preview=Path(temporary)/'segment/preview.png';preview.parent.mkdir()
             calibration={'source_pts_seconds':1}
-            with patch('piu_timeline.play_analysis.receptor_centers',side_effect=partial), \
+            with patch('piu_timeline.play_layout.fixed_layout',return_value=None), \
+                    patch('piu_timeline.play_analysis.receptor_centers',side_effect=partial), \
                     patch('piu_timeline.play_analysis.capture_game',side_effect=lambda record,path,t,roi:{'source_pts_seconds':t+200}), \
                     patch('piu_timeline.play_analysis.cv2.imread',return_value=ordinary), \
                     patch('piu_timeline.play_analysis.decode_frames',return_value=iter(decoded)):

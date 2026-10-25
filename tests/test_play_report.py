@@ -21,7 +21,8 @@ class ReportTest(unittest.TestCase):
             record={'path':'source.mkv'};roi=[0,0,100,100]
             (old/'analysis.json').write_text(json.dumps({'media':record,'game_roi':roi,'layout':layout}))
             points=[(100*layout['lanes'][i]['x'],14) for i in (0,3,6,9)]
-            with patch('piu_timeline.play_analysis.receptor_centers',return_value=points), \
+            with patch('piu_timeline.play_layout.fixed_layout',return_value=None), \
+                    patch('piu_timeline.play_analysis.receptor_centers',return_value=points), \
                     patch('piu_timeline.play_analysis.locate_layout',side_effect=ValueError('masked')), \
                     patch('piu_timeline.play_analysis.capture_game',side_effect=AssertionError('already verified')):
                 result=recover_layout(record,roi,{'chart':'D20'},pending/'preview.png',

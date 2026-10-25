@@ -146,6 +146,12 @@ def combine_receptor_observations(seen, width, height, expected=None):
 
 def recover_layout(record, roi, segment, preview, rgb, calibration, player=None):
     """Require agreement across source frames; recover receivers hidden by flashes."""
+    from .play_layout import fixed_layout
+    fixed = fixed_layout(segment, player)
+    if fixed is not None:
+        calibration['geometry_basis'] = {'kind': 'declared_game_layout',
+                                         'profile': fixed['profile'], 'revision': fixed['profile_revision']}
+        return validate_layout(fixed)
     candidates, seen, images, observations = [], [], [rgb], [dict(calibration)]
     expected = (10 if str(segment['chart']).startswith(('D','HD')) else 5) if segment.get('chart') else None
     for saved_path in sorted(preview.parent.parent.glob('segment-*/analysis.json')):
