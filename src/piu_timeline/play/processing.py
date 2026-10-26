@@ -8,7 +8,7 @@ import numpy as np
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
-PROCESSING_FORMAT = {'schema': 1, 'revision': 3}
+PROCESSING_FORMAT = {'schema': 1, 'revision': 4}
 
 
 class ReceptorPixels:
@@ -23,16 +23,18 @@ class ReceptorPixels:
         self.samples, self.times, self.pts = [], [], []
 
     def observe(self, rgb, pts, time):
-        hue, saturation, value = cv2.split(cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV))
-        colors = {'blue': (hue >= 85) & (hue <= 130),
-                  'red': (hue <= 15) | (hue >= 150), 'yellow': (hue >= 15) & (hue <= 45)}
-        white = (rgb.min(axis=2)>190) & (rgb.max(axis=2)-rgb.min(axis=2)<65)
+        from piu_timeline.play.pixel_cache import measurements
+        self.observe_masks(measurements(rgb), pts, time)
+
+    def observe_masks(self, planes, pts, time):
+        """Acquire the receptor band from the independent feature layer."""
+        white = planes['white']
         masks = []
         for lane in self.layout['lanes']:
             x = round(lane['x']*self.width)
-            mask = colors[lane['color']] & (saturation>90) & (value>140)
+            mask = planes['processing_'+lane['color']]
             padded = [np.pad(channel[self.top:self.bottom], ((0,0),(self.half,self.half)))
-                      for channel in (mask, white, value>60)]
+                      for channel in (mask, white, planes['visible'])]
             masks.append(np.stack([p[:,x:x+2*self.half+1] for p in padded]))
         self.samples.append(np.packbits(np.stack(masks), axis=-1))
         self.times.append(time); self.pts.append(pts)
@@ -98,9 +100,9 @@ def observe_processing(data, path):
     """
     if not path.is_file():
         return {'format': PROCESSING_FORMAT, 'available': False, 'notes': [], 'counts': {}}
-    from piu_timeline.play.holds.features import feature_contract
+    from piu_timeline.play.pixel_cache import processing_contract_matches
     with np.load(path, allow_pickle=False) as saved:
-        if json.loads(str(saved['contract'])) != {'format': PIXEL_FORMAT, 'source': feature_contract(data)}:
+        if not processing_contract_matches(json.loads(str(saved['contract'])), data):
             raise ValueError('Processing pixels do not belong to this source/geometry contract')
         masks, columns = saved['masks'], 2*int(saved['half'])+1
         times, pts = saved['times'], saved['pts']
@@ -111,16 +113,17 @@ def observe_processing(data, path):
     radius = max(2, round(.45*spacing))
     # Cap identity is resolved before interpreting a disappearance as a tap.
     components = {n for h in data.get('hold_analysis', {}).get('holds', []) for n in h['covered_notes']}
+    from piu_timeline.play.processing_motion import observed_path
+    paths = [observed_path(note, data, receptor, spacing, scale) for note in data.get('notes', [])]
     result = []
     for index, note in enumerate(data.get('notes', [])):
         record = {'note': index, 'lane': note['lane'], 'samples': []}
         if index in components:
             result.append({**record, 'status': 'hold_component', 'reason': 'use_sustained_body_state'}); continue
-        if note['status'] != 'estimated':
-            result.append({**record, 'status': 'unresolved', 'reason': 'unfitted_track'}); continue
-        velocity = note.get('velocity_pixels_per_second', 0)*scale
-        target = note.get('target_seconds')
-        if velocity >= -spacing or target is None or note.get('prediction_uncertainty_seconds', 1) > .05:
+        path = paths[index]
+        record['motion_basis'] = path['basis']
+        velocity, target = path['velocity'], path['target']
+        if not path['supported']:
             result.append({**record, 'status': 'unresolved', 'reason': 'unsupported_motion'}); continue
         def lane_mask(fi):
             return np.unpackbits(masks[fi, note['lane']], axis=-1)[..., :columns].astype(bool)
@@ -143,19 +146,14 @@ def observe_processing(data, path):
         start, end = target-min(.25, 2.8*spacing/-velocity), target+min(.2, 1.2*spacing/-velocity)
         from piu_timeline.play.holds.features import ui_regions
         regions = ui_regions(data['layout'])
-        competing = any(other is not note and other['lane'] == note['lane'] and other.get('target_seconds') is not None
-                        and abs(other['target_seconds']-target)*-velocity < .9*spacing
-                        for other in data['notes'] if other['status'] == 'estimated')
-        peers = [s for s in data.get('scroll_motion', {}).get('samples', []) if s['chunk'] == note.get('motion_chunk')]
-        peer_times = [s['time'] for s in peers]
+        alternatives = [paths[i] for i,other in enumerate(data['notes'])
+                        if i != index and other['lane'] == note['lane']]
+        competing = any(p['supported'] and abs(p['target']-target)*-velocity < .9*spacing for p in alternatives)
         for fi in range(bisect_left(times, start), bisect_left(times, end)):
             time, source_pts = float(times[fi]), float(pts[fi])
-            y = receptor+velocity*(time-target)
-            if peers:
-                pi = bisect_left(peer_times, time)
-                if pi >= len(peers) or abs(peers[pi]['time']-time)>1e-6:
-                    continue
-                y = receptor+(note['motion_target_phase']-peers[pi]['phase'])*scale
+            y = path['position'](time)
+            if y is None:
+                continue
             state, score, reason = 'unknown', None, 'partial_shape'
             color, light, visibility = lane_mask(fi)
             image = patch_at(color, y-top, radius)

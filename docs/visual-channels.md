@@ -225,3 +225,47 @@ counter sequence. Unaffected counter events retain their original unique row
 identities; refined constituents still have to satisfy their tighter native
 brackets, ordering and ambiguity checks. Newly available events cannot steal
 an unrelated anchored row just because the dynamic-programming score changes.
+
+## Layer boundaries and replay
+
+The original recording is the source layer. PTS and recording playback time
+remain unchanged. Cached masks are measurements derived from that source;
+they are not lossless RGB frames and cannot establish features discarded by
+the acquisition thresholds.
+
+| Layer | Artifacts | May depend on |
+| --- | --- | --- |
+| Pixel features | `native-features/`, `processing-features.npz`, `appearance-features.npz`, judgment feature cache | Source identity, original timestamps, crop geometry and declared measurement thresholds |
+| Frame observations | `frames.base.jsonl`, `frames.jsonl`, `judgments.jsonl`, `hold-frames.jsonl` | Pixel features and recognition/detection rules |
+| Channel interpretations | Receptor state runs, trajectories, persistence events, note types and hold geometry | Frame observations and explicit geometric rules |
+| Associations | Chart targets, popup ownership, inferred input brackets, policies and warnings | Channel interpretations, timing reference and chart metadata |
+| Presentation | HTML, SVG and compact observation tables | Saved evidence and associations |
+
+`visual-channels.json` is an aggregate view spanning these layers, rather than
+an acquisition artifact. Its `layers` manifest identifies artifact ownership,
+channel dependencies and interpretation limits. Existing per-channel arrays
+remain available to reports and other consumers.
+
+The popup view exposes the baseline combo value/confidence, current read mode
+and contextual-recovery flag alongside the current recognition. The baseline
+is the original pre-refinement recognition, not a ground-truth counter or a
+context-free pixel read. Baseline and current traces must have identical PTS.
+Receptor fractions are measurements; common-flash filtering and onset runs
+are interpretations. Neither is a measured physical switch state.
+
+Persistence inspection uses a registered native displacement path or a bounded,
+locally verified native trajectory. The chosen `motion_basis` is retained.
+It does not require accepted UCS placement or successful shared chart timing.
+Consequently an excluded chart note may still have visible disappearance
+support. Such support does not restore its chart target, remove its timing
+warning, or by itself create a successful input association. Unsupported local
+motion remains explicitly unresolved; no rejected target is silently accepted.
+
+New body/receptor acquisition retains full-crop threshold planes in compressed
+128-frame chunks under `native-features/`, independently of the body detector.
+Body-rule changes replay these planes without decoding, while receptor-band
+masks carry their own pixel contract. Compatible legacy receptor-band masks
+remain usable despite an unrelated body-detector revision. Legacy body caches
+without full-crop planes require one acquisition pass when their detector
+changes. Changing source geometry or measurement thresholds can still require
+reading the original recording. All caches remain ignored generated data.

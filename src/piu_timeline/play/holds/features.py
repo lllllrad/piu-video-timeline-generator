@@ -66,13 +66,16 @@ def connector_rows(mask, top, spacing, relaxed=None):
 
 def detect_bodies(rgb, layout, connections=None):
     """Observe colored vertical bodies and filled receptors without reading text."""
-    height, width = rgb.shape[:2]
+    from piu_timeline.play.pixel_cache import measurements
+    return detect_body_masks(measurements(rgb), layout, connections)
+
+
+def detect_body_masks(planes, layout, connections=None):
+    """Interpret retained color masks without reacquiring source pixels."""
+    height, width = planes['white'].shape
     spacing = float(np.median(np.diff([lane['x'] * width for lane in layout['lanes']])))
     receptor = layout['receptor_y'] * height
-    hue, saturation, value = cv2.split(cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV))
-    colors = {'blue': (hue >= 85) & (hue <= 130), 'red': (hue <= 28) | (hue >= 150),
-              'yellow': (hue >= 15) & (hue <= 45)}
-    white = (rgb.min(axis=2) > 190) & (rgb.max(axis=2) - rgb.min(axis=2) < 65)
+    white = planes['white']
     bodies, lit = [], []
     top, bottom = max(0, int(receptor - .3 * spacing)), min(height, int(layout.get('note_y_max', .95) * height))
     for index, lane in enumerate(layout['lanes']):
@@ -81,10 +84,10 @@ def detect_bodies(rgb, layout, connections=None):
         ry1, ry2 = max(0, int(receptor - .28 * spacing)), min(height, int(receptor + .28 * spacing))
         rx1, rx2 = max(0, int(cx - .28 * spacing)), min(width, int(cx + .28 * spacing))
         lit.append(float(white[ry1:ry2, rx1:rx2].mean()) > .55)
-        mask = (colors[lane['color']] & (saturation > 105) & (value > 170))[top:bottom, left:right].astype('uint8')
+        mask = planes['body_'+lane['color']][top:bottom, left:right].astype('uint8')
         original_mask = mask.copy()
         if connections is not None:
-            relaxed = (colors[lane['color']] & (saturation > 60) & (value > 90))[top:bottom, left:right]
+            relaxed = planes['relaxed_'+lane['color']][top:bottom, left:right]
             connections.append(connector_rows(original_mask, top, spacing, relaxed))
         mask = bridge_ui_stripes(mask, top, left, layout, width, height, spacing)
         # A cap's thin white border can disconnect its colored interior
@@ -138,22 +141,21 @@ def acquire_features(data, output):
     source_before = Path(data['media']['path']).stat()
     try:
         with original.open() as saved, temporary.open('w') as target:
-            frames = decode_frames(data['media'], data['start_seconds'], data['end_seconds'], data['game_roi'], width)
+            from piu_timeline.play.pixel_cache import native_measurements
+            frames = native_measurements(data, output, decode_frames)
             for raw, decoded in zip_longest(saved, frames):
                 if raw is None or decoded is None:
                     raise ValueError('Hold acquisition frame count differs from saved native frames')
                 previous = json.loads(raw)
-                pts, time, image = decoded
+                pts, time, planes, scores = decoded
                 if abs(pts - previous['source_pts_seconds']) > 1e-6 or abs(time - previous['playback_seconds']) > 1e-6:
                     raise ValueError('Hold acquisition PTS differs from saved native frames')
                 if pixels is None:
                     from piu_timeline.play.processing import ReceptorPixels
-                    pixels = ReceptorPixels(data['layout'], image.shape[1], image.shape[0])
-                pixels.observe(image, pts, time)
+                    pixels = ReceptorPixels(data['layout'], width, planes['white'].shape[0])
+                pixels.observe_masks(planes, pts, time)
                 connections = []
-                bodies, lit = detect_bodies(image, data['layout'], connections)
-                from piu_timeline.play.receptors import fractions
-                scores = fractions(image, data['layout'])
+                bodies, lit = detect_body_masks(planes, data['layout'], connections)
                 target.write(json.dumps({'source_pts_seconds': pts, 'playback_seconds': time,
                                          'bodies': bodies, 'receptor_lit': lit, 'receptor_white_fraction': scores,
                                          'color_connections': connections}) + '\n')
@@ -164,7 +166,8 @@ def acquire_features(data, output):
         if (source_before.st_size, source_before.st_mtime_ns) != (source_after.st_size, source_after.st_mtime_ns):
             raise ValueError('Source changed during long-note acquisition')
         if pixels is not None:
-            pixels.save(output/'processing-features.npz', contract)
+            from piu_timeline.play.pixel_cache import source_contract
+            pixels.save(output/'processing-features.npz', source_contract(data))
         temporary.replace(trace)
         pending = header.with_suffix('.build-json')
         pending.write_text(json.dumps({'contract': contract, 'frame_count': count}) + '\n')

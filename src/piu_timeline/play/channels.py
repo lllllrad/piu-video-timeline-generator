@@ -7,7 +7,7 @@ from piu_timeline.play.processing import PROCESSING_FORMAT, observe_processing, 
 
 from piu_timeline.play.note_types import TYPE_FORMAT, observe_types, observe_appearance
 
-CHANNEL_FORMAT = {'schema': 1, 'revision': 5, 'processing': PROCESSING_FORMAT, 'note_types': TYPE_FORMAT}
+CHANNEL_FORMAT = {'schema': 1, 'revision': 6, 'processing': PROCESSING_FORMAT, 'note_types': TYPE_FORMAT}
 
 
 def receptor_evidence(data):
@@ -52,6 +52,12 @@ def collect(data, directory, frames):
                 raise ValueError('Judgment channel differs from native frame timeline')
             words.append(word)
             word_counts[word.get('label') or ('blank' if word.get('blank') else 'unknown')] += 1
+    baseline_path = directory/'frames.base.jsonl'
+    baseline = list(read_frames(baseline_path)) if baseline_path.is_file() else native
+    if len(baseline) != len(native) or any(
+            any(abs(a[k]-b[k]) > 1e-6 for k in ('source_pts_seconds', 'playback_seconds'))
+            for a,b in zip(native, baseline, strict=True)):
+        raise ValueError('Counter baseline differs from native frame timeline')
     pixel_path = directory/'processing-features.npz'
     if pixel_path.is_file():
         import numpy as np
@@ -78,14 +84,18 @@ def collect(data, directory, frames):
     appearance = acquire(data,directory,native)
     types = observe_appearance(data,appearance,frames) if appearance else observe_types(data,pixel_path,frames)
     return {'format': CHANNEL_FORMAT,
+            'layers': layer_manifest(directory),
             'timeline': {'frames': [[f['playback_seconds'],f['source_pts_seconds']] for f in native]},
             'popup': {'available': bool(native), 'judgment_available': judgment_trace.is_file(), 'combo_trace': 'frames.jsonl',
                       'judgment_trace': 'judgments.jsonl', 'frames': len(native),
                       'combo_readable_frames': sum(f.get('combo') is not None for f in native),
                       'judgment_frame_counts': dict(word_counts),
-                      'observation_fields': ['combo','combo_confidence','judgment','judgment_confidence','blank'],
-                      'observations': [[f.get('combo'),f.get('combo_confidence'),w.get('label'),w.get('confidence'),w.get('blank')]
-                                       for f,w in zip(native,words, strict=True)],
+                      'baseline_trace': 'frames.base.jsonl' if baseline_path.is_file() else 'frames.jsonl',
+                      'observation_fields': ['combo','combo_confidence','judgment','judgment_confidence','blank',
+                                             'combo_read_mode','combo_recovered','baseline_combo','baseline_combo_confidence'],
+                      'observations': [[f.get('combo'),f.get('combo_confidence'),w.get('label'),w.get('confidence'),w.get('blank'),
+                                        f.get('combo_read_mode'),f.get('combo_recovered',False),b.get('combo'),b.get('combo_confidence')]
+                                       for f,w,b in zip(native,words,baseline, strict=True)],
                       'combo_events': popup_events('combo_events', 'combo:'),
                       'judgment_events': popup_events('judgment_events', 'judgment:')},
             'receptors': {'available': bool(frames), 'trace': 'hold-frames.jsonl', 'frames': len(frames),
@@ -100,10 +110,31 @@ def collect(data, directory, frames):
             'processing': processing, 'note_types': types}
 
 
+def layer_manifest(directory):
+    """Explicit artifact ownership; feature masks are not original RGB frames."""
+    artifacts = {
+        'features': ['native-features/manifest.json', 'processing-features.npz',
+                     'appearance-features.npz', 'evidence/judgments/features-v3.npz'],
+        'frame_observations': ['frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
+        'interpretations': ['holds.json', 'visual-channels.json'],
+        'associations': ['analysis.json'],
+    }
+    return {'source': 'analysis.json#/media',
+            'artifacts': artifacts,
+            'available': {name: (directory/name).is_file() for names in artifacts.values() for name in names},
+            'dependencies': {'processing': ['native_head_trajectory', 'spatial_masks', 'hold_geometry'],
+                             'receptor_onsets': ['white_fractions', 'common_flash_filter'],
+                             'matches': ['chart_timing', 'popup_events', 'lane_evidence']},
+            'semantics': {'frames.jsonl': 'Counter recognition may include contextual recovery; baseline is separate.',
+                          'receptors': 'Visual light states and onsets; physical switch timing is unmeasured.',
+                          'processing': 'Visual persistence; independent of chart-time acceptance and HUD matches.',
+                          'features': 'Thresholded masks, not lossless source frames; acquisition changes may reread media.'}}
+
+
 def augment_channels(data, directory, frames=None):
     """Rebuild associations from retained pixels; invalidate independently of OCR."""
     from piu_timeline.play.holds.analysis import fingerprint
-    inputs = ('frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz')
+    inputs = ('frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz')
     contract = {'format': CHANNEL_FORMAT,
                 'analysis': fingerprint({key:data.get(key) for key in
                                          ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion')}),

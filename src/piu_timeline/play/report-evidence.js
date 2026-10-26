@@ -23,7 +23,7 @@ function renderEvidence(noteIndex){
   const height=data.analysis_height||1,receptor=(data.layout.receptor_y||0)*height;
   const bodyScale=height/(channel.processing.pixel_coordinates?.height||height);
   $('evidenceSummary').textContent='Note '+(noteIndex+1)+' / lane '+(note.lane+1)+' · Processing: '+(processing?processing.status+' / '+processing.reason:'unavailable')+(processing?.range?' / '+formatRange(processing.range):'')+(processing?.visibility_loss?' / Visibility loss (processing unconfirmed): '+formatRange(processing.visibility_loss.range):'')
-    +'. Positions use the '+(data.analysis_width||'?')+'×'+height+' game crop, with y increasing downward. Click a frame to inspect its original timestamp.';
+    +(processing?.motion_basis?' / Motion basis: '+processing.motion_basis:'')+'. Positions use the '+(data.analysis_width||'?')+'×'+height+' game crop, with y increasing downward. Click a frame to inspect its original timestamp.';
   for(const [name,y] of [['Popup',45],['Receptor effect',105],['Moving heads',165],['Note processing',225]]){
     label(root,name,4,y+4);line(root,180,y,1180,y,'#314448');
   }
@@ -51,7 +51,8 @@ function renderEvidence(noteIndex){
     marker(time,225,color(sample?.state),sample?sample.state+' / '+confidence(sample.score)+' / '+(sample.unknown_reason||'clear'):'unmeasured');
     const row=document.createElement('tr'),cell=document.createElement('td'),button=document.createElement('button');
     button.textContent=fmt(time)+' / PTS '+pts.toFixed(6);button.onclick=()=>seek(time,-1,noteIndex);cell.appendChild(button);row.appendChild(cell);
-    const values=[(popup[0]??'unknown')+' / '+confidence(popup[1]),word+' / '+confidence(popup[3]),stateText+' / '+confidence(fraction),heads.length?heads.map(h=>(h[2]*height).toFixed(1)).join(', '):'No detected head',(sample?sample.state+' / '+confidence(sample.score)+' / '+(sample.unknown_reason||'clear'):'unmeasured')+(bodyText?' / '+bodyText:'')];
+    const provenance=popup.length>5?' / '+(popup[5]||'unknown read mode')+(popup[6]?' / recovered':'')+' / baseline '+(popup[7]??'unknown'):'';
+    const values=[(popup[0]??'unknown')+' / '+confidence(popup[1])+provenance,word+' / '+confidence(popup[3]),stateText+' / '+confidence(fraction),heads.length?heads.map(h=>(h[2]*height).toFixed(1)).join(', '):'No detected head',(sample?sample.state+' / '+confidence(sample.score)+' / '+(sample.unknown_reason||'clear'):'unmeasured')+(bodyText?' / '+bodyText:'')];
     for(const value of values)text('td',value,row);rows.appendChild(row);observations.push({time,pts,values});
   }
   for(const [events,y,stroke] of [[channel.popup.combo_events,30,'#9cddbe'],[channel.popup.judgment_events,60,'#88dfff']]){
