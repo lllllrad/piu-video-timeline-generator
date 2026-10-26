@@ -7,15 +7,18 @@ import numpy as np
 
 from piu_timeline.play.appearance import APPEARANCE_FORMAT
 
-TYPE_FORMAT = {'schema': 1, 'revision': 3, 'appearance': APPEARANCE_FORMAT}
+TYPE_FORMAT = {'schema': 1, 'revision': 4, 'appearance': APPEARANCE_FORMAT}
 
 
 def cap_envelope(relaxed, white, cap, spacing):
     """Include the observed colored rim outside the inner white outline."""
     x,y,w,h = cap
     combined = (relaxed|white).astype('uint8')
-    halo = max(1,round(.1*spacing))
-    combined[:,:max(0,x-halo)] = 0;combined[:,min(combined.shape[1],x+w+halo):] = 0
+    # An inner white outline can omit the colored side rim and its stem.
+    # Inspect the owned lane, rather than clipping to that inner contour.
+    center=(combined.shape[1]-1)/2
+    left,right=max(0,int(np.floor(center-.5*spacing))),min(combined.shape[1],int(np.ceil(center+.5*spacing))+1)
+    combined[:,:left] = 0;combined[:,right:] = 0
     _,labels,stats,_ = cv2.connectedComponentsWithStats(combined,8)
     ids,counts = np.unique(labels[y:y+h,x:x+w][white[y:y+h,x:x+w]],return_counts=True)
     choices = [(count,int(i)) for i,count in zip(ids,counts) if i]

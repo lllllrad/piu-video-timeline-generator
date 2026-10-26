@@ -159,3 +159,16 @@ class NoteTypeTest(unittest.TestCase):
                 self.assertEqual(result['chart_exceptions'][0]['type_evidence'],observation['type_evidence'])
         plain={key:value for key,value in region.items() if not key.startswith('playback_')}
         self.assertEqual(validate_regions({'regions':[plain]})[0]['check_exceptions'],['note_type_conflict'])
+
+    def test_short_stem_outside_inner_outline_cannot_be_cropped_into_a_tap(self):
+        color=np.zeros((70,35),dtype=bool);white=np.zeros_like(color)
+        color[26:45,7:29]=True
+        cv2.rectangle(white.view('uint8'),(10,26),(24,44),1,1)
+        color[white]=False
+        self.assertEqual(shape(color,white,np.ones_like(color),35,20)[0],'tap')
+        # The colored outer rim connects to a short stem outside the narrower
+        # inner white outline. Cropping there would fabricate a clear margin.
+        color[40:57,27:29]=True
+        kind,reason=shape(color,white,np.ones_like(color),35,20)
+        self.assertEqual(kind,'unknown')
+        self.assertEqual(reason,'cap_margins_obscured_or_connected_shape_unresolved')

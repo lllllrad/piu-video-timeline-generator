@@ -313,3 +313,9 @@ forward model fail explicitly and cannot supply a shared clock or speed proposal
 Small forward adjustments are bounded by the positional noise floor and recorded.
 Known capture gaps still separate motion blocks. Shared targets use the jointly
 estimated offset, rather than independently rescaling each head's trajectory.
+
+An inner white contour may be narrower than the colored cap rim. A stem can
+connect along that outer rim, outside a crop derived from the inner contour.
+Tap separation must inspect the owned lane through the full cap, rather than
+cutting away the side connection and fabricating background margins. A visible
+short connector that does not yet prove a hold remains unknown; it is not a tap.
