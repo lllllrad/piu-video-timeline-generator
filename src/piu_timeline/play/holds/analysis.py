@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 29}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 30}
 
 
 def fingerprint(value):
@@ -32,10 +32,11 @@ def reconstruct(data, frames, diagnostics=None):
             if diagnostics is not None and len(extended) >= 4:
                 cap_evidence = []
                 for edge in ('top', 'bottom'):
-                    for index in {p[edge+'_cap_note'] for p in track if edge+'_cap_note' in p}:
-                        pts = [p['pts'] for p in track if p.get(edge+'_cap_note') == index]
+                    for index in {p[edge+'_observed_cap_note'] for p in track if edge+'_observed_cap_note' in p}:
+                        pts = [p['pts'] for p in track if p.get(edge+'_observed_cap_note') == index]
                         if len(set(pts)) >= 4:
-                            cap_evidence.append({'edge': edge, 'note': index, 'source_pts_seconds': pts})
+                            cap_evidence.append({'edge': edge, 'note': index, 'source_pts_seconds': pts,
+                                                 'timing_accepted':data['notes'][index]['status']=='estimated'})
                 diagnostics.append({'lane': track[0]['lane'], 'reason': 'unresolved_hold_geometry',
                                     'visible_start_seconds': track[0]['time'], 'visible_end_seconds': track[-1]['time'],
                                     'source_pts_range': [track[0]['pts'], track[-1]['pts']],
@@ -101,6 +102,11 @@ def presentation(data):
         if head is None or head not in suppressed:
             head = len(notes)
             notes.append({'lane': hold['lane'], 'points': [], 'target_seconds': target})
+            observed=hold.get('head_observation_note')
+            if observed is not None:
+                notes[head]['source_head_observation']=observed
+                for field in ('timing_reconstruction','beat_reconstruction'):
+                    if field in data['notes'][observed]:notes[head][field]=dict(data['notes'][observed][field])
         notes[head].update(status='estimated', reason=None, note_type='hold', hold_id=hold['id'],
                            target_seconds=target,
                            prediction_uncertainty_seconds=0 if hold['start_censored'] else (start[1]-start[0])/2)

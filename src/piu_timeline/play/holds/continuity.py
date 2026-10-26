@@ -19,18 +19,21 @@ class CapContinuity:
     def check(self, track):
         if not track[0].get('white_cap_bridge') or not self.frames:
             return None
+        def owner(point,edge):
+            return point.get(edge+'_observed_cap_note',point.get(edge+'_cap_note'))
         pair = []
         for edge in ('top', 'bottom'):
-            extended = [p for p in track if p['long'] and edge+'_cap_note' in p]
+            extended = [p for p in track if p['long'] and owner(p,edge) is not None]
             samples = extended if len(extended) >= 2 else track
-            counts = Counter(p[edge+'_cap_note'] for p in samples if edge+'_cap_note' in p)
+            counts = Counter(owner(p,edge) for p in samples if owner(p,edge) is not None)
             ranked = counts.most_common()
             if not ranked or ranked[0][1] < 2 or ranked[0][1] < .8*sum(counts.values()):
                 return None
             pair.append(ranked[0][0])
         head, tail = pair
-        if head == tail or self.data['notes'][head]['target_seconds'] >= self.data['notes'][tail]['target_seconds']:
-            return None
+        if head == tail:return None
+        start,end=(self.data['notes'][i].get('target_seconds') for i in (head,tail))
+        if start is not None and end is not None and start>=end:return None
         key = tuple(pair)
         if key not in self.cache:
             self.cache[key] = self.measure(head, tail, track[0]['lane'])

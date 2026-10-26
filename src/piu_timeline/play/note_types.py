@@ -7,7 +7,7 @@ import numpy as np
 
 from piu_timeline.play.appearance import APPEARANCE_FORMAT
 
-TYPE_FORMAT = {'schema': 1, 'revision': 4, 'appearance': APPEARANCE_FORMAT}
+TYPE_FORMAT = {'schema': 1, 'revision': 5, 'appearance': APPEARANCE_FORMAT}
 
 
 def cap_envelope(relaxed, white, cap, spacing):
@@ -81,7 +81,7 @@ def body_type_observations(data, frames):
                 continue
             x = data['layout']['lanes'][body['lane']]['x']
             for edge in ('top','bottom'):
-                index, y = body.get(edge+'_cap_note'), body.get(edge+'_cap_y')
+                index, y = body.get(edge+'_observed_cap_note'), body.get(edge+'_observed_cap_y')
                 if index is None or abs(y-body[edge]) > .55*geometry.spacing:
                     continue
                 if not geometry.receptor+1.3*geometry.spacing < y < data['layout'].get('note_y_max',.95)*geometry.height-.7*geometry.spacing:
@@ -188,7 +188,7 @@ def project_types(data, notes, holds):
     if records is None:
         return []
     by_note = {r['note']:r for r in records}
-    groups = {h['display_note']: set(h['covered_notes']) | ({h['head_note']} if h['head_note'] is not None else set())
+    groups = {h['display_note']: set(h['covered_notes']) | {h[key] for key in ('head_note','head_observation_note','tail_observation_note') if h.get(key) is not None}
               for h in holds}
     hold_by_note = {h['display_note']:h for h in holds}
     timeline = {pts:time for time,pts in data.get('visual_channels', {}).get('timeline', {}).get('frames', [])}

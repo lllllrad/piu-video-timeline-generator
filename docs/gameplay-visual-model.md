@@ -319,3 +319,14 @@ connect along that outer rim, outside a crop derived from the inner contour.
 Tap separation must inspect the owned lane through the full cap, rather than
 cutting away the side connection and fabricating background margins. A visible
 short connector that does not yet prove a hold remains unknown; it is not a tap.
+
+Observed cap ownership is independent of accepted chart time. A sufficiently
+observed forward-moving native cap can identify a body edge even when its beat
+or shared target failed. Keep that observed owner separate from an endpoint with
+an accepted timestamp. A closer untimed or uncertain candidate blocks a farther
+timed tap from taking the edge. Stationary or short unaccepted candidates remain
+unresolved; a chart-time failure is never repaired merely by assigning a cap.
+Body continuity can use observed caps without timestamps. A projected hold head
+retains its native owner's reconstruction failure instead of creating a clean
+synthetic head that bypasses it. Type evidence may use the independently observed
+head and tail identities while timing remains unresolved.

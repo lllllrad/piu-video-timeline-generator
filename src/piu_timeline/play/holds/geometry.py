@@ -52,12 +52,18 @@ def register_caps(data, frames, geometry):
     outline starts above it. Register actual centers rather than interchanging
     these two edge conventions. HUD cuts cannot nominate an endpoint.
     """
+    from piu_timeline.play.fragments import same_native_head
     positions = defaultdict(list)
     for index, note in enumerate(data['notes']):
-        if note['status'] != 'estimated':
+        duplicate=note.get('duplicate_of')
+        if (note.get('reason')=='duplicate_head_component' and type(duplicate) is int
+                and 0<=duplicate<len(data['notes']) and same_native_head(note,data['notes'][duplicate])):
             continue
-        for time, y in note.get('points', []):
-            positions[(round(time, 6), note['lane'])].append((y*geometry.note_scale, index))
+        points=note.get('points',[])
+        supported=(note['status']=='estimated' or len(points)>=4 and points[-1][0]-points[0][0]>=.065
+                   and (points[0][1]-points[-1][1])*geometry.note_scale>.8*geometry.spacing)
+        for time, y in points:
+            positions[(round(time, 6), note['lane'])].append((y*geometry.note_scale,index,supported))
     result = []
     for frame in frames:
         bodies = []
@@ -66,14 +72,19 @@ def register_caps(data, frames, geometry):
             if body.get('edge_convention') == 'connected_color':
                 nearby = positions[(round(frame['playback_seconds'], 6), body['lane'])]
                 for edge, visible in (('top', body['top_visible']), ('bottom', body['tail_visible'])):
+                    for suffix in ('_cap_note','_cap_y','_observed_cap_note','_observed_cap_y','_unresolved_cap_note','_unresolved_cap_y'):
+                        body.pop(edge+suffix,None)
                     if not visible:
                         continue
-                    options = sorted((abs(y-body[edge]), index, y) for y, index in nearby
+                    options = sorted((abs(y-body[edge]), index, y,supported) for y, index,supported in nearby
                                      if abs(y-body[edge]) <= .8*geometry.spacing)
                     if options and (len(options) == 1 or options[1][0]-options[0][0] >= 1):
-                        _, index, y = options[0]
-                        body[edge+'_cap_note'] = index
-                        body[edge+'_cap_y'] = y
+                        _, index, y,supported = options[0]
+                        role='_observed_cap_' if supported else '_unresolved_cap_'
+                        body[edge+role+'note'] = index;body[edge+role+'y'] = y
+                        target=data['notes'][index].get('target_seconds')
+                        if data['notes'][index]['status']=='estimated' and target is not None and np.isfinite(target):
+                            body[edge+'_cap_note'] = index;body[edge+'_cap_y'] = y
             bodies.append(body)
         result.append({**frame, 'bodies': bodies})
     return result
@@ -272,6 +283,18 @@ def short_cap_pair(track, geometry):
                        and max(positions)-min(positions) >= .5*geometry.spacing) else []
 
 
+
+def observed_cap_owner(track,edge):
+    key=edge+'_observed_cap_note'
+    extended=[point for point in track if point['long'] and key in point]
+    samples=extended if len(extended)>=MIN_EDGE_OBSERVATIONS else track
+    counts=Counter(point[key] for point in samples if key in point)
+    ranked=counts.most_common()
+    if ranked and ranked[0][1]>=MIN_EDGE_OBSERVATIONS and ranked[0][1]>=.8*sum(counts.values()):
+        return ranked[0][0]
+    return None
+
+
 def resolve_geometry(data, track, geometry):
     """Return supported chart geometry, independently of displayed input state."""
     spacing, receptor = geometry.spacing, geometry.receptor
@@ -345,6 +368,7 @@ def resolve_geometry(data, track, geometry):
     return {'lane': lane, 'start_range': start, 'end_range': end,
             'start_censored': censored, 'end_censored': end is None,
             'last_body_seconds': track[-1]['time'], 'head_note': head[0] if head else None, 'tail_note': tail_note,
+            'head_observation_note':observed_cap_owner(track,'top'),'tail_observation_note':observed_cap_owner(track,'bottom'),
             'covered_notes': covered, 'body_frames': len(track), 'long_body_frames': len(longs),
             'body_evidence': 'stripe_and_tracked_edges' if needs_edges else 'strong_stripe',
             'source_pts_range': [track[0]['pts'], track[-1]['pts']],

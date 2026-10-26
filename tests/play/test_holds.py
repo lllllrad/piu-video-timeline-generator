@@ -49,6 +49,12 @@ class HoldTest(unittest.TestCase):
         self.assertEqual(proof['gap_source_pts_seconds'][0],100.4)
         self.assertEqual(CapContinuity(data,frames(True),geometry).check(track)['decision'],'connected_caps')
         self.assertEqual(CapContinuity(data,frames('dim'),geometry).check(track)['decision'],'unresolved')
+        untimed=deepcopy(data)
+        for note in untimed['notes']:note.update(status='excluded',target_seconds=None)
+        observed=[{**p,'top_observed_cap_note':p['top_cap_note'],'bottom_observed_cap_note':p['bottom_cap_note']} for p in track]
+        for point in observed:
+            point.pop('top_cap_note');point.pop('bottom_cap_note')
+        self.assertEqual(CapContinuity(untimed,gap_frames,geometry).check(observed)['decision'],'disconnected_caps')
         # An overlay hiding the inter-cap gap cannot establish separate taps.
         hidden={**data, 'layout':{**LAYOUT, 'combo_roi':[0,.1,1,.8]}}
         self.assertIsNone(CapContinuity(hidden,gap_frames,geometry).check(track))
