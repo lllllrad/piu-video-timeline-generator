@@ -7,6 +7,8 @@ const matchByNote=new Map(matches.map((m,i)=>[m.note,{match:m,index:i}]));
 const rangeByNote=data.timing_ranges?.notes||{};
 const targetColor='#b6ff59',inputColor='#ff70dd';
 const notePalette={blue:['#267bcc','#83caff'],red:['#c63c52','#ff9da9'],yellow:['#d8a600','#ffe476']};
+const visibility=data.visibility_diagnostics;
+if(visibility)text('p','Visibility audit: '+visibility.warnings.length+' warnings / '+visibility.known_occlusions.length+' explained occlusion intervals / '+visibility.accounted_exits.length+' accounted detector exits or continued detections.',$('quality'));
 const excludedTracks=[...(data.exclusion_diagnostics?.warnings||[]),...(data.recognition_diagnostics?.warnings||[])];
 if(excludedTracks.length){
   $('exclusionWarnings').hidden=false;
@@ -16,7 +18,10 @@ if(excludedTracks.length){
     const end=Math.min(shownExclusions+100,excludedTracks.length);
     for(;shownExclusions<end;shownExclusions++){
       const item=excludedTracks[shownExclusions],row=document.createElement('p'),jump=document.createElement('button');
-      jump.textContent=fmt(item.visible_start_seconds)+' … '+fmt(item.visible_end_seconds)+' / lane '+(item.lane+1)+' / '+item.reason.replaceAll('_',' ')+(item.processing_reason?' / '+item.processing_reason.replaceAll('_',' '):'')+' / '+item.observed_points+' observations';
+      jump.textContent=fmt(item.visible_start_seconds)+' … '+fmt(item.visible_end_seconds)+' / lane '+(item.lane+1)+' / '+item.reason.replaceAll('_',' ')+(item.processing_reason?' / '+item.processing_reason.replaceAll('_',' '):'')+' / '+item.observed_points+' observations'
+        +(item.missing_frames!=null?' / '+item.missing_frames+' missing source frames':'')
+        +(item.velocity_before_pixels_per_second!=null?' / velocity '+item.velocity_before_pixels_per_second.toFixed(1)+' → '+item.velocity_after_pixels_per_second.toFixed(1)+' px/s':'')
+        +(item.stationary_duration_seconds!=null?' / stationary '+(1000*item.stationary_duration_seconds).toFixed(0)+' ms':'');
       jump.onclick=()=>seek(item.visible_start_seconds,-1,item.note??null);row.appendChild(jump);$('exclusionWarningRows').appendChild(row);
     }
     $('moreExclusionWarnings').hidden=shownExclusions>=excludedTracks.length;

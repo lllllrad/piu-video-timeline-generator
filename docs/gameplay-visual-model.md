@@ -199,3 +199,6 @@ alone cannot distinguish this from dropped intermediate reads or rapid normal
 rows. Verify the source sequence and scope the exact increment in chart
 metadata. This changes counting semantics, not the measured refresh bracket;
 independent lane evidence and unique visible-row ownership are still required.
+
+The [gameplay screen map](gameplay-screen-map.md) lists fixed geometry, named
+foreground occluders and the strict per-frame visibility/motion warning policy.

@@ -75,6 +75,8 @@ def recognition_diagnostics(data, ranges):
                    and r['playback_start_seconds'] <= record['visible_start_seconds']
                    and record['visible_end_seconds'] < r['playback_end_seconds']]
         (exceptions if allowed else warnings).append({**record, **({'exception_regions': allowed} if allowed else {})})
+    for record in data.get('visibility_diagnostics',{}).get('warnings',[]):
+        add(record,record['check'])
     for record in data.get('note_type_diagnostics', []):
         add(record, record['reason'])
     holds = data.get('hold_analysis', {}).get('holds', [])

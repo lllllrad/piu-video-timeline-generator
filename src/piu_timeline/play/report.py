@@ -23,7 +23,11 @@ def write_report(data, path, final_directory=None):
     frames = path.with_name('frames.jsonl')
     if ranges['counts'].get('unknown') and frames.is_file():
         ranges = timing_ranges({**data, 'counter_frame_events': counter_frame_ranges(frames)})
-    data = {**data, 'timing_ranges': ranges}
+    from piu_timeline.play.continuity import continuity_diagnostics
+    native_frames = [json.loads(line) for line in frames.open()] if frames.is_file() else []
+    continuity = continuity_diagnostics(data,native_frames)
+    data = {**data, 'timing_ranges': ranges, 'visibility_diagnostics':continuity}
+    path.with_name('visibility-diagnostics.json').write_text(json.dumps(continuity,ensure_ascii=False,indent=2)+'\n')
     recognition = recognition_diagnostics(data, ranges)
     data['recognition_diagnostics'] = recognition
     if data.get('chart_policy'):

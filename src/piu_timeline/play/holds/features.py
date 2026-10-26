@@ -15,11 +15,8 @@ FEATURE_FORMAT = {'schema': 1, 'detector_revision': 9, 'width': 325,
 
 def ui_regions(layout):
     """Regions where the HUD can interrupt an independently visible stripe."""
-    if 'combo_roi' not in layout:
-        return []
-    from piu_timeline.play.judgments import judgment_region
-    x, y, w, h = layout['combo_roi']
-    return [judgment_region(layout), [x, y-.06, w, h+.06]]
+    from piu_timeline.play.screen_regions import note_occluders
+    return [region['rect'] for region in note_occluders(layout)]
 
 
 def bridge_ui_stripes(mask, top, left, layout, width, height, spacing):

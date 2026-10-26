@@ -281,3 +281,11 @@ those reads without refitting note trajectories. Reader/template changes retain
 the isolated rebuild path; they must not rewrite the live observation trace
 through the association-only fast path. Refreshed association contracts are
 persisted even when no long-note or channel artifacts change.
+
+`play/screen_regions.py` names known foreground HUD footprints.
+`play/continuity.py` and `play/motion_warnings.py` audit native detection gaps,
+premature endings, speed changes and possible stops independently of fit or
+input success. See the [gameplay screen map](gameplay-screen-map.md). Their
+versioned `visibility-diagnostics.json` is derived from saved frames without
+decoding or OCR; replay refreshes an older diagnostic contract through report
+generation. Generic timing exclusions do not suppress these checks.

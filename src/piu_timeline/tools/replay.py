@@ -50,6 +50,10 @@ def current(path):
     if not all(path.with_name(name).is_file() for name in
                ('frames.jsonl', 'report.html', 'recognition-warnings.json', 'timing-ranges.json')):
         return False
+    from piu_timeline.play.continuity import FORMAT as VISIBILITY_FORMAT
+    visibility = path.with_name('visibility-diagnostics.json')
+    if not visibility.is_file() or json.loads(visibility.read_text()).get('format') != VISIBILITY_FORMAT:
+        return False
     data = json.loads(path.read_text())
     policy_path = path.with_name('chart-policy.json')
     if policy_path.is_file():

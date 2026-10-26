@@ -148,3 +148,9 @@ notes or spread a grade. Holds retain sustained-state semantics. Changes that
 are not exactly the configured increment remain unresolved; missing refreshes
 are not filled by division. All handlers operate on derived projections and
 preserve the original saved channels. Review rejection disables a handler.
+
+Native visibility and motion audits have separate scoped checks,
+`note_visibility` and `scroll_motion`. Generic `exclude_timing` handling does
+not suppress them. Use the concrete effect handler when observations establish
+the behavior, and retain an explicit reason for any manual check exception.
+See [screen positions and strict warnings](gameplay-screen-map.md).

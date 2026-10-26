@@ -53,7 +53,9 @@
                 "timing_evidence",
                 "stage_grade_totals",
                 "note_type_conflict",
-                "note_type_unresolved"
+                "note_type_unresolved",
+                "note_visibility",
+                "scroll_motion"
               ]
             }
           },

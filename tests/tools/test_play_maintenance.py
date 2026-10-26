@@ -36,6 +36,8 @@ def play(root, source='source', number=1, stale=False):
     (directory/'recognition-warnings.json').write_text('{"warnings":[]}')
     (directory/'excluded-trajectories.json').write_text('{"counts":{},"warnings":[]}')
     (directory/'timing-ranges.json').write_text('{"notes":{}}')
+    from piu_timeline.play.continuity import FORMAT
+    (directory/'visibility-diagnostics.json').write_text(json.dumps({'format':FORMAT,'warnings':[]}))
     return path, data
 
 
