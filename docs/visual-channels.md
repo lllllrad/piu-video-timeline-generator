@@ -269,3 +269,12 @@ remain usable despite an unrelated body-detector revision. Legacy body caches
 without full-crop planes require one acquisition pass when their detector
 changes. Changing source geometry or measurement thresholds can still require
 reading the original recording. All caches remain ignored generated data.
+
+Configured zero-speed intervals are a projection over retained native evidence.
+A `scroll_pause` model removes paused duration from the displacement clock,
+requires compatible stationary samples and both moving flanks, then rechecks
+the retained receptor-band masks using that path. The source PTS, failed chart
+targets and measured popup/input intervals are unchanged. This projection does
+not replace the acquisition sidecar. Explained stationary records remain
+inspectable alongside their original motion warnings; unsupported motion and
+unrelated recognition failures still warn.

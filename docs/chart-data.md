@@ -162,3 +162,25 @@ accepted groups. Ambiguous rows and spatial conflicts are explicit failures;
 accepted notes retain their video ranges. A `timing_reconstruction` exception
 is separate from generic timing-evidence exclusions. Song-specific timing facts
 belong here; general algorithm tests belong in the analyzer repository.
+
+### Explicit scroll pauses
+
+A `scroll_pause` candidate specifies `speed_multiplier: 0`,
+`pause_duration_seconds` equal to `end_seconds - start_seconds`, and
+`boundary_uncertainty_seconds` between 0 and 0.1. Bounds remain song-relative;
+source evidence should retain native onset/resumption brackets, stationary
+lanes and evidence that the recording continued (for example changing BGA
+pixels). An unchanging recording alone cannot establish a chart pause.
+Active pauses cannot overlap. Pending and confirmed entries use the same
+handler; rejected entries are inactive.
+
+The handler builds a clock whose displacement is stationary inside each
+configured pause. Pixel persistence can use this clock only when native
+positions on both moving flanks and within the pause fit it. Contradictory or
+insufficient observations remain unresolved. It never manufactures input,
+judgment, chart rows or accepted chart times. Stationary observations and
+zero-speed edges consistent with the configured interval appear under
+`known_motion_effects`; original records remain in `native_motion_warnings`.
+Other speed changes, missing notes, type conflicts and timing reconstruction
+failures retain their normal warnings. The report displays the zero multiplier
+and measured duration separately from generic region exceptions.

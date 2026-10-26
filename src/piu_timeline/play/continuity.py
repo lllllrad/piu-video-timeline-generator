@@ -106,6 +106,9 @@ def continuity_diagnostics(data, frames):
         for (destination,*_),record in groups:
             (warnings if destination=='warnings' else occlusions).append(record)
     from piu_timeline.play.motion_warnings import motion_warnings
-    warnings.extend(motion_warnings(data,frames))
-    return {'format':FORMAT,'warnings':warnings,'known_occlusions':occlusions,'accounted_exits':exits,
+    from piu_timeline.play.scroll_pauses import classify_warnings
+    native_motion = motion_warnings(data,frames)
+    remaining,expected_motion=classify_warnings(data,native_motion)
+    warnings.extend(remaining)
+    return {'format':FORMAT,'native_motion_warnings':native_motion,'known_motion_effects':expected_motion,'warnings':warnings,'known_occlusions':occlusions,'accounted_exits':exits,
             'regions':note_occluders(layout),'counts':dict(Counter(r['reason'] for r in warnings))}

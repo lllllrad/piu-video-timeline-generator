@@ -8,7 +8,7 @@ from piu_timeline.play.processing import processing_support
 from piu_timeline.play.tracking import associate
 
 
-FORMAT = {'schema':1, 'revision':2}
+FORMAT = {'schema':1, 'revision':3}
 
 
 def active_effects(data, kind):
@@ -151,13 +151,18 @@ def simultaneous_increment(data):
                              'coverage':coverage})
 
 
-HANDLERS = {'suspected_visibility_modifier':visibility_modifier,
+from piu_timeline.play.scroll_pauses import apply as scroll_pauses
+
+HANDLERS = {'scroll_pause':scroll_pauses, 'suspected_visibility_modifier':visibility_modifier,
             'suspected_multi_increment':simultaneous_increment}
 
 
-def apply_gimmicks(data):
-    for handler in HANDLERS.values():
+def apply_gimmicks(data, directory=None):
+    for kind,handler in HANDLERS.items():
         data = handler(data)
+        if kind=='scroll_pause' and directory is not None:
+            from piu_timeline.play.scroll_pauses import refresh_processing
+            data=refresh_processing(data,directory)
     policy = data.get('chart_policy')
     if policy:
         unsupported = [e['id'] for e in policy.get('gimmick_candidates',[])

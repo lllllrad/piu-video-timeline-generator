@@ -26,7 +26,17 @@ def validate_candidates(metadata):
         increment = record.get('combo_increment')
         if record['kind'] == 'suspected_multi_increment' and (type(increment) is not int or not 2 <= increment <= 10):
             raise ValueError('Multi-increment effects require an integer combo_increment from 2 to 10')
+        if record['kind']=='scroll_pause':
+            duration=record.get('pause_duration_seconds')
+            uncertainty=record.get('boundary_uncertainty_seconds')
+            if (record.get('speed_multiplier')!=0 or isinstance(record.get('speed_multiplier'),bool)
+                    or any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) for v in (duration,uncertainty))
+                    or abs(duration-(end-start))>1e-6 or not 0<=uncertainty<=.1):
+                raise ValueError('Scroll pauses require zero speed, matching duration and bounded boundary uncertainty')
         identifiers.add(record['id'])
+    pauses=sorted([r for r in candidates if r['kind']=='scroll_pause' and r['review_status']!='rejected'],key=lambda r:r['start_seconds'])
+    if any(a['end_seconds']>b['start_seconds'] for a,b in zip(pauses,pauses[1:])):
+        raise ValueError('Active scroll pauses cannot overlap')
     return candidates
 
 

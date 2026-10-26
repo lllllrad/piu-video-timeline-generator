@@ -14,7 +14,7 @@ def write_report(data, path, final_directory=None):
     data = attach_regions(data, path.parent)
     from piu_timeline.play.holds.analysis import presentation
     from piu_timeline.play.gimmicks import apply_gimmicks
-    data = apply_projection(apply_gimmicks(presentation(data)))
+    data = apply_projection(apply_gimmicks(presentation(data),path.parent))
     from piu_timeline.play.exclusions import exclusion_diagnostics, recognition_diagnostics
     exclusions = exclusion_diagnostics(native, data)
     data = {**data, 'exclusion_diagnostics': exclusions}

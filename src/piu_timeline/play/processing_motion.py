@@ -8,6 +8,10 @@ def observed_path(note, data, receptor, spacing, scale):
     Use a locally verified trajectory when chart/shared reconstruction failed.
     It can support pixel inspection, never restore chart timing or input matches.
     """
+    from piu_timeline.play.scroll_pauses import observed_path as paused_path
+    paused=paused_path(note,data,receptor,spacing,scale)
+    if paused is not None:
+        return paused
     from piu_timeline.play.tracking import Track, fit_track
     points = note.get('points', [])
     path = {'supported': False, 'basis': 'unsupported_native_trajectory', 'velocity': 0, 'target': None}
