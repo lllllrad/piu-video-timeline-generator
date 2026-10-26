@@ -264,3 +264,13 @@ Concrete metadata may authorize a piecewise displacement clock only where a
 head's own pixels agree with that model. Sparse support, ramps, reverse motion,
 multiple nearby changes and inconsistent positions remain explicit review cases.
 See [the measurement workflow](development.md#measuring-scroll-speed-changes).
+
+When simultaneous heads enter the receptor exclusion area together, independent
+peer detections may end shortly before receptor alignment. A stable shared clock
+can bound that final approach without claiming the head was observed at the
+receptor: extrapolation is limited to 1.1 lane spacings and 250 ms, carries
+positional/speed uncertainty and names its last supported frame. The original
+recording must continue across the predicted target without a native-frame gap.
+A new corroborated motion block, unstable clock, censored recording or longer
+unobserved approach prevents this inference. This is chart-target evidence,
+not physical input or an observed disappearance.

@@ -1,5 +1,6 @@
 """Song-independent geometry, clock support and explicit reconstruction failure."""
 import unittest
+import math
 from copy import deepcopy
 
 from piu_timeline.play.tracking import Track, fit_track
@@ -82,3 +83,26 @@ class SharedTimingTest(unittest.TestCase):
         first.points=[p for p in first.points if p[0]!=.6]
         broken=registered_motion([first,peer],timeline,400,40,40,380)
         self.assertIsNone(broken.distance(.5,.7))
+
+    def test_simultaneous_heads_leaving_detector_boundary_keep_a_bounded_shared_clock(self):
+        layout={'receptor_y':.1,'note_y_max':.95,'lanes':[{'x':.1+.1*i} for i in range(5)]}
+        timeline=[{'time':i/60,'source_pts':800+i/60} for i in range(73)]
+        tracks=[Track(lane,[(f['time'],280-240*f['time']) for f in timeline if f['time']<=.85]) for lane in (0,4)]
+        notes=[fit_track(track,40,40) for track in tracks]
+        _,result=restore(notes,tracks,timeline,layout,400,400)
+        self.assertEqual(result['status'],'restored')
+        for note in notes:
+            self.assertEqual(note['fit_method'],'shared_scroll_clock_extrapolation')
+            self.assertAlmostEqual(note['target_seconds'],1)
+            self.assertGreater(note['extrapolation_seconds'],0)
+            self.assertAlmostEqual(note['crossing_source_pts_seconds'][0]-note['crossing_frame_seconds'][0],800)
+        # A clipped source, a recording gap or a changed velocity is not an
+        # authorization to project the same chord through missing evidence.
+        for clipped in (timeline[:55],[f for f in timeline if not .87<f['time']<.99]):
+            rejected=[fit_track(track,40,40) for track in tracks]
+            restore(rejected,tracks,clipped,layout,400,400)
+            self.assertTrue(all(n['status']=='excluded' for n in rejected))
+        unstable=[Track(t.lane,[(time,y+12*math.sin(20*time)) for time,y in t.points]) for t in tracks]
+        rejected=[fit_track(track,40,40) for track in unstable]
+        restore(rejected,unstable,timeline,layout,400,400)
+        self.assertTrue(all(n['status']=='excluded' for n in rejected))

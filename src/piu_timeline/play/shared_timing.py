@@ -5,7 +5,7 @@ import numpy as np
 
 from piu_timeline.play.motion import ScrollMotion
 
-FORMAT = {'schema':1,'revision':4,'method':'registered_peer_displacement'}
+FORMAT = {'schema':1,'revision':5,'method':'registered_peer_displacement'}
 
 
 def registered_motion(tracks, timeline, height, spacing, receptor, bottom):

@@ -72,12 +72,41 @@ class ScrollMotion:
         return {'origin': samples[0]['time'], 'velocity': float(velocity), 'intercept': float(intercept),
                 'residual': residual, 'window': [samples[0]['time'], samples[-1]['time']]}
 
+    def extrapolated_crossing(self, sample, phase, phase_error):
+        """A chord can leave the shared detector field before its target arrives."""
+        chunk=self.chunks[sample['chunk']];last=chunk[-1]
+        if not 0<phase-last['phase']<=1.1*self.spacing:return None
+        clock=self._clock(chunk)
+        if clock is None:return None
+        time=clock['origin']+(phase-clock['intercept'])/clock['velocity']
+        if not 0<time-last['time']<=.25:return None
+        times=[s['time'] for s in self.samples];index=bisect_left(times,time)
+        if not 0<index<len(times):return None
+        tail=self.samples[bisect_left(times,last['time']):index+1]
+        if any(b['time']-a['time']>.05+1e-6 for a,b in zip(tail,tail[1:])):return None
+        # A new corroborated motion block is separate evidence; do not project
+        # an old clock through it or bridge an absent recording frame.
+        if any(s['support']>=2 for s in tail[1:]):return None
+        before,after=self.samples[index-1:index+1]
+        cadence=float(np.median(np.diff([s['time'] for s in chunk])))
+        span=clock['window'][1]-clock['window'][0]
+        speed_error=max(1.5,3*clock['residual'])/span
+        uncertainty=max(cadence/2,(phase_error+clock['residual']+
+                        speed_error*(time-last['time']))/clock['velocity'])
+        return {'target_seconds':float(time),'prediction_uncertainty_seconds':float(uncertainty),
+                'fit_method':'shared_scroll_clock_extrapolation','motion_clock':clock,
+                'motion_support_end_seconds':last['time'],'extrapolation_seconds':float(time-last['time']),
+                'crossing_source_pts_seconds':[before['source_pts'],after['source_pts']],
+                'crossing_frame_seconds':[before['time'],after['time']],
+                'crossing_capture_range':[before['time']-uncertainty,after['time']+uncertainty]}
+
     def crossing(self, sample, phase, phase_error):
         chunk = self.chunks[sample['chunk']]
         phases = [item['phase'] for item in chunk]
         index = bisect_left(phases, phase)
-        if not 0 < index < len(chunk):
-            return None
+        if index>=len(chunk):
+            return self.extrapolated_crossing(sample,phase,phase_error)
+        if index<=0:return None
         before, after = chunk[index-1], chunk[index]
         if after['phase'] <= before['phase']:
             return None
