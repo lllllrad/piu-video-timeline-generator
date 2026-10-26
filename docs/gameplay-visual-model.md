@@ -284,3 +284,10 @@ competing partners, different paths and unsupported motion stay separate.
 Joining sorts and retains every original point and source-fragment identity;
 it does not synthesize a detection in a missing frame. Final shared timing and
 visibility checks still apply to the joined trajectory.
+
+A successful target estimate does not make a trajectory complete. Its uniquely
+corroborated later reappearance can still be joined without discarding native
+points. Conversely, two targets within a few captured frames are not proof of
+a duplicate: collapsing head components requires matching same-lane positions
+in at least four shared native frames. Distinct co-observed heads stay distinct
+even when their target times are close.

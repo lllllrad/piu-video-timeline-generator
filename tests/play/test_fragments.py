@@ -77,3 +77,12 @@ class FragmentTest(unittest.TestCase):
         self.assertEqual(len(interleaved_tracks([first,simultaneous,*peers],40,motion)[0]),4)
         different=Track(0,[(t,y+40) for t,y in second.points])
         self.assertEqual(len(interleaved_tracks([first,different,*peers],40,motion)[0]),4)
+
+    def test_supported_first_fragment_can_rejoin_its_unique_later_appearance(self):
+        first=Track(0,[(i*.02,260-300*i*.02) for i in range(26)])
+        second=Track(0,[(t,260-300*t) for t in (.55,.57,.59,.61)])
+        self.assertEqual(fit_track(first,50,40)['status'],'estimated')
+        joined=stitch_tracks([first,second],50,40)
+        self.assertEqual(len(joined),1)
+        self.assertEqual(joined[0][0].points,first.points+second.points)
+        self.assertEqual(joined[0][1],[0,1])

@@ -80,3 +80,15 @@ class SharedMotionTest(unittest.TestCase):
             if i>55:points.append((time,200-.5*(phase-220)))
         self.assertIsNone(motion.distance(49/60,51/60))
         self.assertIsNone(motion.fit(Track(3,points),40,LAYOUT))
+
+    def test_close_target_times_do_not_delete_separately_observed_heads(self):
+        tracker=NoteTracker(LAYOUT,400,400)
+        for i in range(150):
+            time,phase,peers=observations(i)
+            for target in (1.263,1.293):
+                y=40+target*240-phase
+                if 80<y<320:peers.append({'lane':3,'x':LAYOUT['lanes'][3]['x'],'y':y/400})
+            tracker.update(time,peers,time+100)
+        notes=[n for n in tracker.finish() if n['lane']==3 and n['status']=='estimated']
+        self.assertEqual(len(notes),2)
+        self.assertAlmostEqual(abs(notes[0]['target_seconds']-notes[1]['target_seconds']),.03,delta=.001)

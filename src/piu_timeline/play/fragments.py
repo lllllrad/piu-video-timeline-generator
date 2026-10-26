@@ -6,6 +6,14 @@ import numpy as np
 
 
 
+def same_native_head(note, owner):
+    """Close target times alone cannot identify a duplicated head component."""
+    if note['lane']!=owner['lane']:return False
+    positions=dict(owner.get('points',[]))
+    errors=[abs(y-positions[t]) for t,y in note.get('points',[]) if t in positions]
+    return len(errors)>=4 and sum(error<=2 for error in errors)>=.8*len(errors)
+
+
 def interleaved_tracks(tracks, spacing, motion):
     """Join uniquely supported identities that alternate native frames briefly."""
     if motion is None or getattr(motion,'evidence_format',{}).get('method')!='registered_peer_displacement':
@@ -66,7 +74,7 @@ def stitch_tracks(tracks, receptor, spacing, motion=None, layout=None):
         starts = [tracks[i].points[0][0] for i in ordered]
         for index in indices:
             track = tracks[index]
-            if len(track.points) < 3 or fit_track(track, receptor, spacing, motion=motion, layout=layout)['status'] == 'estimated':
+            if len(track.points) < 3:
                 continue
             usable = track.points
             if layout and layout.get('combo_roi'):

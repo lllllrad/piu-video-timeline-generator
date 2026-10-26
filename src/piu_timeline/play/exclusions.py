@@ -13,12 +13,7 @@ def exclusion_diagnostics(native, projected):
                     and len(set(proof.get('source_pts_seconds', []))) >= 4):
                 return True
         return False
-    def corroborated_duplicate(note, owner):
-        if note['lane'] != owner['lane']:
-            return False
-        positions = {round(t, 6): y for t, y in owner.get('points', [])}
-        errors = [abs(y-positions[round(t, 6)]) for t, y in note.get('points', []) if round(t, 6) in positions]
-        return len(errors) >= 4 and sum(error <= 2 for error in errors) >= .8*len(errors)
+    from piu_timeline.play.fragments import same_native_head
     for index, note in enumerate(native.get('notes', [])):
         points = note.get('points', [])
         if not points:
@@ -32,7 +27,7 @@ def exclusion_diagnostics(native, projected):
         duplicate = note.get('duplicate_of')
         if (note.get('reason') == 'duplicate_head_component' and type(duplicate) is int
                 and 0 <= duplicate < len(projected['notes'])
-                and corroborated_duplicate(note, projected['notes'][duplicate])
+                and same_native_head(note, projected['notes'][duplicate])
                 and (projected['notes'][duplicate]['status'] == 'estimated'
                      or (projected['notes'][duplicate].get('reason') == 'long_note_body_or_tail'
                          and represented_by_hold(duplicate)))):

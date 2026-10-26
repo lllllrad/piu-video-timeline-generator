@@ -127,7 +127,7 @@ class NoteTracker:
                 self.active.append(Track(note['lane'], [(seconds, note['y'] * self.height)]))
 
     def finish(self):
-        from piu_timeline.play.fragments import stitch_tracks
+        from piu_timeline.play.fragments import stitch_tracks, same_native_head
         notes = []
         tracks = []
         from piu_timeline.play.shared_timing import registered_motion
@@ -155,7 +155,8 @@ class NoteTracker:
             if note['status'] != 'estimated':
                 continue
             duplicate = next((j for j in kept if notes[j]['lane'] == note['lane']
-                              and abs(notes[j]['target_seconds'] - note['target_seconds']) < .035), None)
+                              and abs(notes[j]['target_seconds'] - note['target_seconds']) < .035
+                              and same_native_head(note,notes[j])), None)
             if duplicate is not None:
                 note.update(status='excluded', reason='duplicate_head_component', duplicate_of=duplicate)
             else:

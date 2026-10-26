@@ -106,10 +106,10 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual(len(tracker.events), 1)
         self.assertEqual((tracker.events[0]['before'], tracker.events[0]['after']), (140, 141))
 
-    def test_same_lane_head_fragments_are_not_counted_as_chords(self):
+    def test_coincident_native_head_components_are_not_counted_as_chords(self):
         layout = {'lanes': [{'x': .1+.2*i} for i in range(5)], 'receptor_y': .2}
         tracker = NoteTracker(layout, 320, 180)
-        tracker.finished = [Track(0, [(i/60, y-500*i/60) for i in range(12)]) for y in (180, 184)]
+        tracker.finished = [Track(0, [(i/60, y-500*i/60) for i in range(12)]) for y in (180, 181)]
         notes = tracker.finish()
         self.assertEqual(sum(n['status'] == 'estimated' for n in notes), 1)
         self.assertEqual(sum(n['reason'] == 'duplicate_head_component' for n in notes), 1)
