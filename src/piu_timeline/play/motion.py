@@ -86,7 +86,7 @@ class ScrollMotion:
         if any(b['time']-a['time']>.05+1e-6 for a,b in zip(tail,tail[1:])):return None
         # A new corroborated motion block is separate evidence; do not project
         # an old clock through it or bridge an absent recording frame.
-        if any(s['support']>=2 for s in tail[1:]):return None
+        if any(s['support']>=2 and s['time']<=time for s in tail[1:]):return None
         before,after=self.samples[index-1:index+1]
         cadence=float(np.median(np.diff([s['time'] for s in chunk])))
         span=clock['window'][1]-clock['window'][0]

@@ -271,7 +271,7 @@ can bound that final approach without claiming the head was observed at the
 receptor: extrapolation is limited to 1.1 lane spacings and 250 ms, carries
 positional/speed uncertainty and names its last supported frame. The original
 recording must continue across the predicted target without a native-frame gap.
-A new corroborated motion block, unstable clock, censored recording or longer
+A new corroborated motion block before the predicted target, unstable clock, censored recording or longer
 unobserved approach prevents this inference. This is chart-target evidence,
 not physical input or an observed disappearance.
 

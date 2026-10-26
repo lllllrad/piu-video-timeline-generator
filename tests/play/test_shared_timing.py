@@ -106,3 +106,16 @@ class SharedTimingTest(unittest.TestCase):
         rejected=[fit_track(track,40,40) for track in unstable]
         restore(rejected,unstable,timeline,layout,400,400)
         self.assertTrue(all(n['status']=='excluded' for n in rejected))
+
+    def test_new_motion_after_the_target_does_not_invalidate_the_preceding_clock(self):
+        layout={'receptor_y':.1,'note_y_max':.95,'lanes':[{'x':.1+.1*i} for i in range(5)]}
+        timeline=[{'time':i/60,'source_pts':800+i/60} for i in range(73)]
+        heads=[Track(lane,[(f['time'],40+240*(1.008-f['time'])) for f in timeline if f['time']<=.85]) for lane in (0,4)]
+        for start,expected in ((1.,'estimated'),(.9,'excluded')):
+            following=[Track(lane,[(f['time'],300-240*(f['time']-start)) for f in timeline if f['time']>=start]) for lane in (1,2)]
+            tracks=heads+following;notes=[fit_track(t,40,40) for t in tracks]
+            restore(notes,tracks,timeline,layout,400,400)
+            self.assertEqual([n['status'] for n in notes[:2]],[expected,expected])
+            if expected=='estimated':
+                self.assertAlmostEqual(notes[0]['target_seconds'],1.008)
+                self.assertLess(notes[0]['target_seconds'],notes[0]['crossing_frame_seconds'][1])
