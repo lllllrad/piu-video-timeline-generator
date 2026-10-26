@@ -68,3 +68,7 @@ _audit *args:
 # Measure concrete scroll-speed changes from retained registered motion.
 _chart-motion *args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.chart_motion "$@"
+
+# Review skin tail appearance separately from the current UCS processing gate.
+_visual-support *args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.visual_support_review "$@"
