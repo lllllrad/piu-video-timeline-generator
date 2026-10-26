@@ -352,3 +352,13 @@ between targets is not a valid screen-distance measurement. A beat adjustment is
 converted back into displacement with each head's own supported clock and applied
 to its registered offset. Missing common offset support is an explicit
 `shared_spacing_model_unavailable` failure. The native pixel tolerance is unchanged.
+
+Two native coordinate blocks can transfer a target without extending an old clock
+through new motion. At least two independent head identities must have four
+observations over 65 ms on both sides, position errors at most 1.5 pixels, and
+coordinate-origin shifts agreeing within one pixel. The gap between blocks is
+bounded to 100 ms. Every intervening native frame needs an actual observation of
+an anchor; missing source frames, contradictory movement and failed coordinate
+blocks prohibit transfer. The destination's observed clock supplies the crossing,
+including its measured velocity, rather than assuming the previous speed.
+Reports retain both block identities, anchor notes, original PTS and phase offsets.

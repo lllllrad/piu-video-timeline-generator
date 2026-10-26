@@ -106,7 +106,8 @@ class ScrollMotion:
         phases = [item['phase'] for item in chunk]
         index = bisect_left(phases, phase)
         if index>=len(chunk):
-            return self.extrapolated_crossing(sample,phase,phase_error)
+            from piu_timeline.play.motion_bridge import crossing as registered_crossing
+            return registered_crossing(self,sample,phase,phase_error) or self.extrapolated_crossing(sample,phase,phase_error)
         if index<=0:return None
         before, after = chunk[index-1], chunk[index]
         if after['phase'] <= before['phase']:

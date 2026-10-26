@@ -5,7 +5,7 @@ import numpy as np
 
 from piu_timeline.play.motion import ScrollMotion
 
-FORMAT = {'schema':1,'revision':11,'method':'registered_peer_displacement'}
+FORMAT = {'schema':1,'revision':12,'method':'registered_peer_displacement'}
 
 
 def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
@@ -17,6 +17,7 @@ def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
                 at[time][index]=(track.lane,y)
     motion=ScrollMotion(height,spacing)
     motion.evidence_format=FORMAT
+    motion.registered_positions=at
     previous=None;anchor=None
     for native in timeline:
         time=native['time'];current=at[time]

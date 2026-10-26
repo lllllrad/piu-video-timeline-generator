@@ -15,7 +15,7 @@ def registered_gap(first,second,samples,offsets,frames,a,b):
     for note in (first,second):
         clock=note.get('motion_clock',{})
         if not all(key in clock for key in ('origin','velocity','intercept')) or 'motion_target_phase' not in note:return None
-        original=clock['origin']+(note['motion_target_phase']-clock['intercept'])/clock['velocity']
+        original=clock['origin']+(note.get('clock_target_phase',note['motion_target_phase'])-clock['intercept'])/clock['velocity']
         corrections.append((note['target_seconds']-original)*clock['velocity'])
     return float(np.median([gap for _,gap in gaps]))+corrections[1]-corrections[0]
 

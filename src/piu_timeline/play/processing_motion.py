@@ -23,17 +23,22 @@ def observed_path(note, data, receptor, spacing, scale):
         return path
     # Shared displacement remains a visual measurement when beat assignment
     # fails. Interpolate its receptor crossing rather than reading chart timing.
-    phase, chunk = note.get('motion_target_phase'), note.get('motion_chunk')
+    bridge=note.get('coordinate_bridge',{})
+    phase=note.get('clock_target_phase',note.get('motion_target_phase'))
+    chunk=bridge.get('to_chunk',note.get('motion_chunk'))
     samples = [s for s in data.get('scroll_motion', {}).get('samples', []) if s['chunk'] == chunk]
     if phase is not None and samples and note.get('timing_reconstruction', {}).get('status') != 'failed':
         crossing = next(((a,b) for a,b in zip(samples,samples[1:])
                          if a['phase'] <= phase < b['phase'] and 0 < b['time']-a['time'] <= .05), None)
-        velocity = note.get('velocity_pixels_per_second', 0)*scale
+        velocity = (-note['motion_clock']['velocity'] if bridge else note.get('velocity_pixels_per_second',0))*scale
         if crossing is not None and velocity < -spacing:
             a,b = crossing
             target = a['time']+(phase-a['phase'])/(b['phase']-a['phase'])*(b['time']-a['time'])
             times = [s['time'] for s in samples]
+            original={s['time']:s for s in data.get('scroll_motion',{}).get('samples',[])
+                      if bridge and s['chunk']==bridge['from_chunk']}
             def position(time):
+                if time in original:return receptor+(note['motion_target_phase']-original[time]['phase'])*scale
                 i = bisect_left(times, time-1e-6)
                 if i == len(samples) or abs(times[i]-time) > 1e-6:
                     return None
