@@ -53,6 +53,12 @@ class SpeedEffectsTest(unittest.TestCase):
             self.assertEqual(len(saved['gimmick_candidates'][0]['evidence']),2)
             self.assertEqual(saved['regions'],[])
             self.assertEqual(saved['human_field'],'preserve')
+            upgraded=deepcopy(candidates);upgraded[0]['evidence'][0]['coordinate_registration']={'model':'refined_native_positions'}
+            self.assertTrue(record(repository,path,upgraded))
+            saved=json.loads(path.read_text())
+            self.assertEqual(len(saved['gimmick_candidates'][0]['evidence']),3)
+            self.assertEqual(saved['gimmick_candidates'][0]['review_status'],'rejected')
+            self.assertFalse(record(repository,path,upgraded))
 
     def test_review_uses_only_saved_motion_and_rejects_changed_source(self):
         with tempfile.TemporaryDirectory() as temporary:

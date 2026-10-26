@@ -43,6 +43,8 @@ def proposals(measured, metadata, timing_path, source):
                'playback_range':[change['start_seconds'],change['end_seconds']],
                'before':before,'after':after,'motion_chunk':change['motion_chunk'],
                'lane_spacing_pixels':change['lane_spacing_pixels'],'ucs_bpm_context':context,
+               'coordinate_registration':measured.get('coordinate_registration'),
+               'estimation_format':measured.get('format'),
                'song_alignment_uncertainty_seconds':alignment_uncertainty,
                'long_flank_confirmation':change['long_flank_confirmation']}
         key=f"{source['source_id']}:{source['segment_number']}:{center:.3f}"
@@ -68,10 +70,10 @@ def record(repository, path, candidates):
                         and r['speed_ratio_range'][0]<=high and r['speed_ratio_range'][1]>=low),None)
             if owner is None:existing.append(candidate);continue
             proof=candidate['evidence'][0]
-            identity=(proof['source_id'],proof['segment_number'],proof['before']['source_pts_seconds'],proof['after']['source_pts_seconds'])
+            identity=(proof['source_id'],proof['segment_number'],proof['before']['source_pts_seconds'],proof['after']['source_pts_seconds'],proof.get('coordinate_registration'))
             match=next((p for p in owner.setdefault('evidence',[])
                         if (p.get('source_id'),p.get('segment_number'),p.get('before',{}).get('source_pts_seconds'),
-                            p.get('after',{}).get('source_pts_seconds'))==identity),None)
+                            p.get('after',{}).get('source_pts_seconds'),p.get('coordinate_registration'))==identity),None)
             if match is None:owner['evidence'].append(proof)
             elif 'long_flank_confirmation' not in match:
                 match['long_flank_confirmation']=proof['long_flank_confirmation']
