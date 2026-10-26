@@ -362,3 +362,15 @@ an anchor; missing source frames, contradictory movement and failed coordinate
 blocks prohibit transfer. The destination's observed clock supplies the crossing,
 including its measured velocity, rather than assuming the previous speed.
 Reports retain both block identities, anchor notes, original PTS and phase offsets.
+
+A repeatedly connected cap pair can establish a tail role before either chart
+endpoint is accepted. Preserve that observation when full hold geometry fails:
+with eight native connection frames over at least 120 ms, 80% connection support,
+unique head/tail ownership, and hold-only type evidence for both caps, the lower
+cap is not projected as an independent tap or press. Any clear tap observation, observed inter-cap gap,
+competing ownership or insufficient connection proof prevents this inference.
+The native targets, raw matches and observations remain unchanged; the presentation
+retains the tail endpoint and its provenance in `observed_tail_roles`, excludes
+it from independent tap matching/UCS placement, and emits
+`observed_hold_tail_pending_geometry`. The unresolved hold geometry warning stays
+active; a tail role does not repair a failed chart time or invent a head time.

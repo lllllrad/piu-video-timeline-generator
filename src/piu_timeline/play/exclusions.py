@@ -22,7 +22,7 @@ def exclusion_diagnostics(native, projected):
         if view.get('reason') == 'long_note_body_or_tail' and represented_by_hold(index):
             accounted.append({'note': index, 'reason': 'represented_by_reconstructed_hold'})
             continue
-        if note['status'] != 'excluded' and view.get('reason') != 'long_note_body_or_tail':
+        if note['status'] != 'excluded' and view.get('status') != 'excluded':
             continue
         duplicate = note.get('duplicate_of')
         if (note.get('reason') == 'duplicate_head_component' and type(duplicate) is int
@@ -34,7 +34,7 @@ def exclusion_diagnostics(native, projected):
             accounted.append({'note': index, 'reason': 'represented_by_duplicate_owner', 'represented_by': duplicate})
             continue
         first, last = min(point[0] for point in points), max(point[0] for point in points)
-        reason = 'unverified_hold_component' if view.get('reason') == 'long_note_body_or_tail' else note.get('reason') or 'unspecified_exclusion'
+        reason = 'unverified_hold_component' if view.get('reason') == 'long_note_body_or_tail' else view.get('reason') or note.get('reason') or 'unspecified_exclusion'
         record = {'note': index, 'lane': note['lane'], 'reason': reason,
                   'visible_start_seconds': first, 'visible_end_seconds': last, 'observed_points': len(points),
                   'target_seconds': note.get('target_seconds')}
@@ -83,6 +83,9 @@ def recognition_diagnostics(data, ranges):
         add(record,record['check'])
     for record in data.get('note_type_diagnostics', []):
         add(record, record['reason'])
+    for role in data.get('hold_analysis',{}).get('observed_tail_roles',[]):
+        add({**role,'note':role['tail_note'],'reason':'observed_hold_tail_pending_geometry',
+             'observed_points':len(role['source_pts_seconds'])})
     holds = data.get('hold_analysis', {}).get('holds', [])
     for hold in holds:
         lo = hold['start_range'][1] if hold['start_censored'] else hold['start_range'][0]

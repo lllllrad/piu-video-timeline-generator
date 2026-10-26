@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 30}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 31}
 
 
 def fingerprint(value):
@@ -91,8 +91,15 @@ def presentation(data):
         return data
     notes = [dict(note) for note in data['notes']]
     suppressed = {index for hold in holds for index in hold['covered_notes']}
+    from piu_timeline.play.holds.roles import observed_tail_roles
+    tail_roles=[r for r in observed_tail_roles(data) if r['tail_note']not in suppressed]
+    pending_tails={r['tail_note']for r in tail_roles}
+    suppressed.update(pending_tails)
     for index in suppressed:
         notes[index].update(status='excluded', reason='long_note_body_or_tail', note_type='hold_component')
+    for role in tail_roles:
+        notes[role['tail_note']].update(reason='observed_hold_tail_pending_geometry',
+                                      hold_cap_role='tail',observed_hold_head=role['head_note'])
     projected = []
     for original in holds:
         hold = dict(original)
@@ -208,7 +215,7 @@ def presentation(data):
     matches, lane_recovered = recover_rows({**data, 'notes': notes, 'matches': matches,
                                           'combo_events': events('combo_events'),
                                           'judgment_events': events('judgment_events'),
-                                          'hold_analysis': {**data['hold_analysis'], 'holds': projected}})
+                                          'hold_analysis': {**data['hold_analysis'], 'holds': projected,'observed_tail_roles':tail_roles}})
     matches = [dict(match) for match in matches]
     for match in matches:
         proof = data.get('counter_judgment_labels', {}).get(str(match.get('combo_event')))
@@ -240,5 +247,5 @@ def presentation(data):
             'combo_events': events('combo_events'), 'judgment_events': events('judgment_events'),
             'hold_tick_ambiguous_notes': [index for index in ambiguous if index not in lane_recovered],
             'recovered_dense_notes': recovered, 'recovered_lane_supported_notes': lane_recovered,
-            'hold_analysis': {**data['hold_analysis'], 'holds': projected}, 'coverage': coverage,
+            'hold_analysis': {**data['hold_analysis'], 'holds': projected,'observed_tail_roles':tail_roles}, 'coverage': coverage,
             'note_type_diagnostics': type_diagnostics})
