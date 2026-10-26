@@ -7,6 +7,7 @@ import re
 import subprocess
 
 from piu_timeline.charts.official import write_json
+from piu_timeline.charts.audio import prepare_alignment
 
 
 PROCESSING = {'standard', 'exclude_timing', 'hold_state_only'}
@@ -49,37 +50,6 @@ def validate_regions(metadata):
     return result
 
 
-def _alignment(data, directory, metadata, code):
-    registration = directory / 'chart-registration.json'
-    if registration.is_file():
-        saved = json.loads(registration.read_text())
-        if (saved.get('index') == code and saved.get('alignment', {}).get('method') == 'explicit_song_start'
-                and saved.get('alignment_media') == data.get('media')):
-            return saved['alignment']
-    seed = metadata.get('source', {})
-    identity = data.get('media', {})
-    if (seed.get('source_id') == directory.parents[1].name
-            and seed.get('segment_number') == data.get('segment_number')
-            and seed.get('media_size_bytes') == identity.get('size_bytes')
-            and seed.get('media_mtime_ns') == identity.get('mtime_ns')
-            and (data.get('segment_number') is not None
-                 or seed.get('playback_range') == [data['start_seconds'], data['end_seconds']])):
-        return metadata['alignment']
-    from piu_timeline.charts.official import Client
-    from piu_timeline.charts.audio import align
-    _, music, _ = Client().template(code)
-    contract = {'media': identity, 'start_seconds': data['start_seconds'], 'end_seconds': data['end_seconds'],
-                'ucs_index': code, 'reference_audio_sha256': sha256(music.read_bytes()).hexdigest()}
-    cache = directory / 'chart-policy-alignment.json'
-    if cache.is_file():
-        saved = json.loads(cache.read_text())
-        if saved.get('contract') == contract:
-            return saved['alignment']
-    result = align(data, music)
-    write_json(cache, {'contract': contract, 'alignment': result})
-    return result
-
-
 def attach_regions(data, directory, repository=None):
     """Read current chart annotations on every report build, without stale policy."""
     from piu_timeline.charts.data import default_repository, resolve_code
@@ -116,7 +86,7 @@ def attach_regions(data, directory, repository=None):
         candidates = validate_candidates(metadata)
         if not regions and not candidates:
             return data
-        alignment = _alignment(data, directory, metadata, code)
+        alignment = prepare_alignment(data, directory, metadata, code)
         origin = alignment['song_start_seconds']
         if not isinstance(origin, (int, float)) or not math.isfinite(origin):
             raise ValueError('Invalid song origin for chart region mapping')

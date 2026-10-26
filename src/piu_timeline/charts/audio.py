@@ -1,5 +1,7 @@
 """Translation-only reference music alignment; original media is read unchanged."""
 import math
+import json
+from hashlib import sha256
 from pathlib import Path
 import subprocess
 
@@ -76,4 +78,38 @@ def align(data, reference_path):
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
         raise ValueError('Source changed during audio alignment')
     result['song_start_seconds'] = start + result['offset_seconds']
+    return result
+
+
+def prepare_alignment(data, directory, metadata, code):
+    """Reuse a verified origin or prepare one source-bound audio translation."""
+    from piu_timeline.charts.official import write_json
+    directory=Path(directory)
+    registration = directory / 'chart-registration.json'
+    if registration.is_file():
+        saved = json.loads(registration.read_text())
+        if (saved.get('index') == code and saved.get('alignment', {}).get('method') == 'explicit_song_start'
+                and saved.get('alignment_media') == data.get('media')):
+            return saved['alignment']
+    seed = metadata.get('source', {})
+    identity = data.get('media', {})
+    if (seed.get('source_id') == directory.parents[1].name
+            and seed.get('segment_number') == data.get('segment_number')
+            and seed.get('media_size_bytes') == identity.get('size_bytes')
+            and seed.get('media_mtime_ns') == identity.get('mtime_ns')
+            and (data.get('segment_number') is not None
+                 or seed.get('playback_range') == [data['start_seconds'], data['end_seconds']])):
+        return metadata['alignment']
+    from piu_timeline.charts.official import Client
+    from piu_timeline.charts.audio import align
+    _, music, _ = Client().template(code)
+    contract = {'media': identity, 'start_seconds': data['start_seconds'], 'end_seconds': data['end_seconds'],
+                'ucs_index': code, 'reference_audio_sha256': sha256(music.read_bytes()).hexdigest()}
+    cache = directory / 'chart-policy-alignment.json'
+    if cache.is_file():
+        saved = json.loads(cache.read_text())
+        if saved.get('contract') == contract:
+            return saved['alignment']
+    result = align(data, music)
+    write_json(cache, {'contract': contract, 'alignment': result})
     return result

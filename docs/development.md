@@ -362,3 +362,11 @@ additional cases. The original warnings, failure checks and totals remain intact
 previous inspection is never a recognition exemption. Keep unresolved inspected
 cases in a local review log with their reason and follow-up. A batch file should
 be passed only after inspection, not automatically marked reviewed on collection.
+
+Beat reconstruction prepares verified reference-audio translation before fitting
+rows, even when an existing chart has no region annotations or suspected effects.
+`charts/audio.prepare_alignment` is shared by beat preparation and chart policy;
+it reuses a matching seed, explicit origin or source-bound alignment cache.
+Reference/current checks themselves remain read-only and never decode audio or
+fetch reference files. Failed preparation remains an explicit beat warning with
+the alignment error; it does not silently fall back to a guessed song origin.

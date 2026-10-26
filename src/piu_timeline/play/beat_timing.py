@@ -3,9 +3,10 @@ from collections import defaultdict
 from hashlib import sha256
 import json
 import math
+import subprocess
 from pathlib import Path
 
-FORMAT={'schema':1,'revision':3,'group_beats':4,'natural_splits':[1,2,3,4,6,8,12,16,24,32,48,64,96,192]}
+FORMAT={'schema':1,'revision':4,'group_beats':4,'natural_splits':[1,2,3,4,6,8,12,16,24,32,48,64,96,192]}
 
 
 def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0):
@@ -45,7 +46,8 @@ def reference(data, directory):
     explicit=saved.get('alignment',{})
     if explicit.get('method')=='explicit_song_start' and saved.get('alignment_media')==data.get('media'):
         origin=explicit['song_start_seconds']
-    if origin is None:return {'status':'unavailable','reason':'verified_song_alignment_missing','ucs_index':code}
+    if origin is None:return {'status':'unavailable','reason':'verified_song_alignment_missing','ucs_index':code,
+                              'metadata_path':str(metadata),'timing':str(timing),'sha256':sha256(timing.read_bytes()).hexdigest()}
     uncertainty=0 if explicit.get('method')=='explicit_song_start' and saved.get('alignment_media')==data.get('media') else meta.get('alignment',{}).get('uncertainty_seconds',0)
     cached=directory/'chart-policy-alignment.json'
     if cached.is_file():
@@ -63,13 +65,32 @@ def current(data,directory):
     return data.get('beat_timing',{}).get('contract')=={'format':FORMAT,'reference':reference(data,directory)}
 
 
+
+def prepare_reference(data,directory):
+    """Prepare audio-only alignment before beat inference, without policy gates.
+
+    Reference/current checks remain read-only. Failed preparation is retained
+    as a diagnostic on this build, not retried by a cache-current check.
+    """
+    ref=reference(data,directory)
+    if ref.get('reason')!='verified_song_alignment_missing':return None
+    from piu_timeline.charts.audio import prepare_alignment
+    try:
+        prepare_alignment(data,Path(directory),json.loads(Path(ref['metadata_path']).read_text()),ref['ucs_index'])
+    except (OSError,ValueError,KeyError,subprocess.SubprocessError) as error:
+        return {'status':'failed','reason':str(error)}
+    return {'status':'prepared','method':'reference_audio_translation'}
+
+
 def apply(data,directory):
     from piu_timeline.charts.ucs import parse, constant_tempo
+    preparation=prepare_reference(data,directory)
     ref=reference(data,directory);contract={'format':FORMAT,'reference':ref}
     result={'contract':contract,'status':ref['status'],'warnings':[],'groups':[]}
+    if preparation:result['reference_preparation']=preparation
     if ref['status']!='available':
         result['warnings']=[{'lane':0,'reason':'beat_reference_unavailable','check':'timing_reconstruction',
-                             'failure_detail':ref['reason'],'observed_points':0,
+                             'failure_detail':preparation['reason'] if preparation and preparation['status']=='failed' else ref['reason'],'observed_points':0,
                              'visible_start_seconds':data.get('start_seconds',0),
                              'visible_end_seconds':data.get('end_seconds',data.get('start_seconds',0))}]
         return {**data,'beat_timing':result}
