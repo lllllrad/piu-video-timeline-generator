@@ -12,6 +12,7 @@ from pathlib import Path
 import subprocess
 import time
 
+from piu_timeline.tools.warning_batch import WarningBatch
 from piu_timeline import ROOT
 from piu_timeline.play.analysis import VERSION, TIMING_FORMAT
 from piu_timeline.play.judgments import cache_current as judgment_current
@@ -127,12 +128,13 @@ def discover(root, sources=(), segments=(), acquire=False):
 
 
 class Replay:
-    def __init__(self, root, output, sources=(), segments=(), acquire=False, jobs=1):
+    def __init__(self, root, output, sources=(), segments=(), acquire=False, jobs=1, warning_limit=None):
         self.root, self.output = Path(root), Path(output)
         self.sources, self.segments, self.acquire = sources, segments, acquire
         if jobs < 1:
             raise ValueError("Replay jobs must be positive")
         self.jobs = jobs
+        self.warning_batch=WarningBatch(warning_limit)
         self.records = {}
         self.output.mkdir(parents=True, exist_ok=True)
         self.started = datetime.now(timezone.utc).isoformat()
@@ -144,6 +146,8 @@ class Replay:
                'state':state, 'active':active or next(iter(active_plays),None), 'counts':dict(Counter(r['status'] for r in records)),
                'play_analysis_version':VERSION, 'hold_association_format':ASSOCIATION_FORMAT,
                'plays':records}
+        doc['warning_batch']=self.warning_batch.document()
+        write_json(self.output/'warning-batch.json',doc['warning_batch'])
         write_json(self.output/'progress.json', doc)
         rows = ''.join('<tr><td>'+html.escape(r['source'])+'</td><td>'+str(r['segment'])
                        +'</td><td>'+html.escape(r['status'])+'</td><td>'+html.escape(r.get('detail', ''))+'</td></tr>'
@@ -178,7 +182,16 @@ class Replay:
         done, _ = wait(pending, return_when=FIRST_COMPLETED)
         for future in done:
             self.records[pending.pop(future)].update(future.result())
+        for record in self.records.values():
+            if record['status']=='current':self.collect_warnings(record)
         self.progress('refreshing')
+
+    def collect_warnings(self,record):
+        if self.warning_batch.full or self.warning_batch.limit is None:return
+        directory=self.root/'.local/data'/record['source']/'play'/f"segment-{record['segment']:03}"
+        try:self.warning_batch.collect(directory,record['source'],record['segment'])
+        except (OSError,ValueError,KeyError) as error:
+            record.update(status='failed',detail='Cannot collect warning batch: '+str(error))
 
     def cycle(self):
         pending = {}
@@ -186,6 +199,7 @@ class Replay:
             for source, number in discover(self.root, self.sources, self.segments, self.acquire):
                 if len(pending) >= self.jobs:
                     self.finish(pending)
+                if self.warning_batch.full:break
                 key = f'{source}/{number:03}'
                 directory = self.root/'.local/data'/source/'play'/f'segment-{number:03}'
                 path = directory/'analysis.json'
@@ -197,7 +211,9 @@ class Replay:
                              for p in (path, directory.parent.parent/'analysis/analysis.json')]
                 try:
                     if current(path):
-                        record.update(status='current', detail='Artifact contracts are current.'); continue
+                        record.update(status='current', detail='Artifact contracts are current.')
+                        self.collect_warnings(record)
+                        continue
                 except (OSError, ValueError, KeyError) as error:
                     record['detail'] = str(error)
                 if record.get('status') == 'failed' and record.get('failed_signature') == signature:
@@ -208,7 +224,7 @@ class Replay:
             while pending:
                 self.finish(pending)
         deferred = any(r['status'] in ('queued', 'busy') for r in self.records.values())
-        self.progress('deferred' if deferred else 'complete')
+        self.progress('warning_limit_reached' if self.warning_batch.full else 'deferred' if deferred else 'complete')
         return any(r['status'] == 'failed' for r in self.records.values())
 
 
@@ -222,7 +238,10 @@ def main():
     parser.add_argument('--acquire', action='store_true', help='Include metadata plays without native observations')
     parser.add_argument('--watch', action='store_true', help='Discover newly completed/promoted plays every 30 seconds')
     parser.add_argument('--run-dir', type=Path)
+    parser.add_argument('--warning-limit',type=int,help='Stop scheduling after collecting this many distinct unresolved cases; finish active plays')
     args = parser.parse_args()
+    if args.warning_limit is not None and args.warning_limit<1:
+        parser.error('--warning-limit must be positive')
     if args.jobs < 1:
         parser.error('--jobs must be positive')
     if args.segments and min(args.segments) < 1:
@@ -230,7 +249,7 @@ def main():
     destination = args.run_dir or ROOT/'.local/runs'/('play-replay-'+time.strftime('%Y%m%d-%H%M%S'))
     if not destination.resolve().is_relative_to(ROOT/'.local'):
         parser.error('--run-dir must stay under .local/')
-    runner = Replay(ROOT, destination, args.sources or (), args.segments or (), args.acquire, args.jobs)
+    runner = Replay(ROOT, destination, args.sources or (), args.segments or (), args.acquire, args.jobs, args.warning_limit)
     with (destination/'.runner.lock').open('a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -238,7 +257,7 @@ def main():
             parser.error('This replay run directory is already in use')
         while True:
             failed = runner.cycle()
-            if not args.watch:
+            if runner.warning_batch.full or not args.watch:
                 raise SystemExit(int(failed))
             time.sleep(30)
 

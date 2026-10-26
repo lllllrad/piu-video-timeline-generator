@@ -314,7 +314,8 @@ pixel displacement. Error bounds include fit error and a 1.5-pixel positional
 floor. A phase-continuous intersection must agree with the intervening native
 frames. Repeated render frames are tolerated without treating every stationary
 sample as a stop. Automatic registration additionally requires at least three
-peer heads, a relative ratio interval width of at most 15%, a native transition
+peer heads, consistent longer native flanks (at least 400 ms on each side),
+a relative ratio interval width of at most 15%, a native transition
 bracket no wider than 100 ms and no other proposed change within 600 ms.
 Gradual ramps, densely repeated changes, stops, reversals and sparse observations
 can remain unresolved; they retain their original warnings.
@@ -332,3 +333,22 @@ processing pixels. Only matching native speed-change records are classified as
 configured motion; chart reconstruction failures, missing input evidence, type
 conflicts and contradictory motion remain warnings. Metadata recording preserves
 human edits and rejected effects and deduplicates original-frame evidence.
+
+## Bounded warning review
+
+Use `just _replay --warning-limit 20 --jobs 8` to collect a small batch before
+investigating and changing rules. Only current artifacts or successfully refreshed
+plays contribute cases. The limit counts distinct unresolved warning cases collected
+in this run, not newly introduced regressions or different warning kinds. Each
+play contributes representatives of different reasons before repeated cases.
+`warning-batch.json` retains the original records and report links; all remaining
+cases stay in the original warning files. Collection neither acknowledges nor
+suppresses anything. Repeated cycles deduplicate cases inside the run; a new run
+still exposes unfixed cases.
+
+At the limit the coordinator stops scheduling, lets active children finish, records
+`warning_limit_reached` and exits, including with `--watch`. A parallel batch can
+therefore finish more plays than strictly necessary. Review the queue, fix a general
+rule or add a concrete chart-specific handler/annotation, run checks, and then start
+the next batch. Missing or malformed warning artifacts fail explicitly. Omit the
+limit only when a complete acquisition or contract refresh is intended.
