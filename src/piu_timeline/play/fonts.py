@@ -7,6 +7,7 @@ import re
 import cv2
 import numpy as np
 
+from piu_timeline.storage import read_analysis_header
 from piu_timeline.play.frames import crop_region
 from piu_timeline.metadata.recognition import capture_game
 from piu_timeline.vision.ocr import ocr_images
@@ -33,7 +34,7 @@ def validated_reader(reader, images, data_root, record, destination, settings=No
         metadata = path.parents[1]/'analysis.json'
         if not metadata.is_file():
             continue
-        saved = json.loads(metadata.read_text())
+        saved = read_analysis_header(metadata)
         origin = saved.get('media',{})
         same_recording = origin == record
         provenance = saved.get('bootstrap', {}).get('reused_from') or {}
@@ -111,7 +112,7 @@ def previous_digit_reader(directory, record):
     for previous in sorted(root.glob('segment-*/analysis.json')):
         if not re.fullmatch(r'segment-\d{3}', previous.parent.name):
             continue
-        saved = json.loads(previous.read_text())
+        saved = read_analysis_header(previous)
         if any(saved.get('media', {}).get(key) != record.get(key) for key in ('path', 'size_bytes', 'mtime_ns')):
             continue
         bank = previous.parent / 'evidence/digit-templates.npz'

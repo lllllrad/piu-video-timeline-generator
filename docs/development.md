@@ -379,3 +379,8 @@ weights. It uses NumPy only and runs on saved detections. Its diagnostics are
 retained under `scroll_motion.coordinate_registration`; failed blocks cannot
 provide shared distances, target clocks or automatic speed estimates. Native
 source-position conflicts remain separate reconstruction warnings.
+
+Font discovery reads the acquisition header before the top-level `notes` array,
+rather than parsing other plays' trajectories and derived channels. Candidate
+fonts still have to pass the same current-recording pixel validation; this I/O
+optimization does not transfer counter values or weaken validation thresholds.

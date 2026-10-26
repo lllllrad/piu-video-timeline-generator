@@ -17,3 +17,15 @@ def relocate_evidence(directory, destination, source=None):
     for path in directory.rglob("*.json"):
         value = json.loads(path.read_text(encoding="utf-8"))
         path.write_text(json.dumps(relocate(value), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def read_analysis_header(path):
+    """Read acquisition metadata without loading every saved note trajectory."""
+    parts=[]
+    with path.open() as stream:
+        for line in stream:
+            if line.startswith('  "notes":'):
+                return json.loads(''.join(parts).rstrip().rstrip(',')+'}')
+            parts.append(line)
+    return json.loads(''.join(parts))
+

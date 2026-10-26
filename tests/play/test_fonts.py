@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from io import StringIO
+from unittest.mock import Mock
 
 import cv2
 import numpy as np
@@ -105,3 +107,18 @@ class FontTest(unittest.TestCase):
         self.assertFalse(reader.train(image(4), '9', source='wrong-neural-ocr'))
         self.assertEqual(reader.sources['9'], set())
         self.assertEqual(reader.read(image(4))[0], 4)
+
+
+class AnalysisHeaderTest(unittest.TestCase):
+    def test_font_metadata_does_not_read_the_trajectory_payload(self):
+        from piu_timeline.storage import read_analysis_header
+        class HeaderStream(StringIO):
+            def __next__(self):
+                if self.tell()>=self.getvalue().index('    {"points"'):
+                    raise AssertionError('Trajectory payload must stay unread')
+                return super().__next__()
+        text='{\n  "media": {"path": "original.mkv"},\n  "bootstrap": {"kind": "font"},\n  "notes": [\n    {"points": [[1, 2]]}\n  ]\n}\n'
+        path=Mock();path.open.return_value=HeaderStream(text)
+        self.assertEqual(read_analysis_header(path),{'media':{'path':'original.mkv'},'bootstrap':{'kind':'font'}})
+        path.open.return_value=StringIO('{"media": {"path": "compact.mkv"}}')
+        self.assertEqual(read_analysis_header(path),{'media':{'path':'compact.mkv'}})

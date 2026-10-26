@@ -12,6 +12,7 @@ import uuid
 import cv2
 import numpy as np
 
+from piu_timeline.storage import read_analysis_header as cache_header
 from piu_timeline.vision.ocr import ocr_images
 from piu_timeline.play.frames import decode_frames, crop_region, TIME_EPSILON
 from piu_timeline.play.tracking import NoteTracker, DigitReader, ComboTracker, associate
@@ -301,17 +302,6 @@ def observation_settings_match(cached, document, segment, start, end, options):
             and cached.get('participant_slots',[])==sorted(segment.get('players',{}))
             and (lanes is None or len(cached.get('layout',{}).get('lanes',[]))==lanes)
             and (options.get('layout') is None or cached.get('layout')==options['layout']))
-
-
-def cache_header(path):
-    """Read acquisition metadata without loading every saved note trajectory."""
-    parts=[]
-    with path.open() as stream:
-        for line in stream:
-            if line.startswith('  "notes":'):
-                return json.loads(''.join(parts).rstrip().rstrip(',')+'}')
-            parts.append(line)
-    return json.loads(''.join(parts))
 
 
 def find_saved_observations(root, final, document, segment, start, end, options):
