@@ -78,3 +78,16 @@ class WarningBatchTest(unittest.TestCase):
             self.assertEqual(len(runner.warning_batch.items),2)
             self.assertTrue(set(i['id'] for i in first.items).isdisjoint(i['id'] for i in runner.warning_batch.items))
             self.assertEqual(path.read_bytes(),original)
+
+    def test_unaccounted_exclusions_are_queued_and_shared_warnings_are_not_duplicated(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);directory,path=self.fixture(root)
+            shared=json.loads(path.read_text())['warnings'][0]
+            extra={'reason':'unverified_duplicate_component','note':10,'lane':1}
+            excluded=directory/'excluded-trajectories.json'
+            excluded.write_text(json.dumps({'warnings':[shared,extra]}));original=excluded.read_bytes()
+            batch=WarningBatch(20);batch.collect(directory,'video',1)
+            self.assertEqual(len(batch.items),7)
+            self.assertEqual(sum(i['warning']==shared for i in batch.items),1)
+            self.assertEqual(next(i for i in batch.items if i['warning']==extra)['artifact'],excluded.name)
+            self.assertEqual(excluded.read_bytes(),original)

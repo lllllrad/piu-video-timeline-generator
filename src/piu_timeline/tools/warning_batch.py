@@ -20,18 +20,23 @@ class WarningBatch:
 
     def collect(self, directory, source, segment):
         if self.limit is None or self.full:return
-        warnings=json.loads((directory/'recognition-warnings.json').read_text())['warnings']
+        records=[(item,'recognition-warnings.json') for item in
+                 json.loads((directory/'recognition-warnings.json').read_text())['warnings']]
+        excluded=directory/'excluded-trajectories.json'
+        if excluded.is_file():
+            records.extend((item,excluded.name) for item in json.loads(excluded.read_text())['warnings'])
         groups=defaultdict(list)
-        for item in warnings:groups[item['reason']].append(item)
+        for item,artifact in records:groups[item['reason']].append((item,artifact))
         # Represent different failure types before filling the queue with repeats.
         for row in zip_longest(*groups.values()):
-            for item in row:
-                if item is None:continue
+            for entry in row:
+                if entry is None:continue
+                item,artifact=entry
                 identity={key:item.get(key) for key in ('reason','note','lane','visible_start_seconds','visible_end_seconds')}
                 key=sha256(json.dumps([source,segment,identity],sort_keys=True).encode()).hexdigest()
                 if key in self.seen:continue
                 self.seen.add(key)
-                self.items.append({'id':key,'source':source,'segment':segment,'warning':item,
+                self.items.append({'id':key,'source':source,'segment':segment,'warning':item,'artifact':artifact,
                                    'report':str(directory/'report.html')})
                 if self.full:return
 

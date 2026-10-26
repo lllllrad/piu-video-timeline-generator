@@ -339,7 +339,8 @@ human edits and rejected effects and deduplicates original-frame evidence.
 Use `just _replay --warning-limit 20 --jobs 8` to collect a small batch before
 investigating and changing rules. Only current artifacts or successfully refreshed
 plays contribute cases. The limit counts distinct unresolved warning cases collected
-in this run, not newly introduced regressions or different warning kinds. Each
+in this run, not newly introduced regressions or different warning kinds. Both recognition failures and unaccounted excluded trajectories contribute;
+identical cases present in both files count once. Each
 play contributes representatives of different reasons before repeated cases.
 `warning-batch.json` retains the original records and report links; all remaining
 cases stay in the original warning files. Collection neither acknowledges nor
