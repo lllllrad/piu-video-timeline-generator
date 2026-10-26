@@ -5,7 +5,7 @@ import numpy as np
 
 from piu_timeline.play.motion import ScrollMotion
 
-FORMAT = {'schema':1,'revision':8,'method':'registered_peer_displacement'}
+FORMAT = {'schema':1,'revision':9,'method':'registered_peer_displacement'}
 
 
 def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
@@ -20,12 +20,12 @@ def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
     previous=None;anchor=None
     for native in timeline:
         time=native['time'];current=at[time]
-        displacement=None;support=lanes=0;scatter=0.;basis='unsupported'
+        displacement=None;observed=None;support=lanes=0;scatter=0.;basis='unsupported'
         if previous is not None and 0 < time-previous['time'] <= .05+1e-6:
             before=at[previous['time']]
             pairs=[(before[i][1]-current[i][1],current[i][0],i) for i in before.keys() & current.keys()]
             if pairs:
-                center=float(np.median([p[0] for p in pairs]))
+                center=float(np.median([p[0] for p in pairs]));observed=center
                 kept=[p for p in pairs if abs(p[0]-center)<=1.5]
                 support=len(kept);lanes=len({p[1] for p in kept})
                 if support>=2 and (lanes>=2 or max(current[p[2]][1] for p in kept)-min(current[p[2]][1] for p in kept)>.65*spacing) and -.75<=center<=spacing*30*(time-previous['time']):
@@ -45,11 +45,14 @@ def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
         else:
             phase=motion.samples[-1]['phase']+displacement
             variance=motion.samples[-1]['variance']+scatter**2
-        sample={**native,'phase':phase,'variance':variance,'chunk':len(motion.chunks)-1,
+        sample={**native,'phase':phase,'pairwise_phase_pixels':phase,'observed_peer_displacement_pixels':observed,
+                'variance':variance,'chunk':len(motion.chunks)-1,
                 'support':support if displacement is not None else 0,'lanes':lanes if displacement is not None else 0,
                 'displacement_basis':basis}
         motion.samples.append(sample);motion.at_time[time]=sample;motion.chunks[-1].append(sample)
         previous=native
+    from piu_timeline.play.registered_coordinates import refine
+    refine(motion,tracks,receptor,spacing,bottom)
     return motion
 
 
@@ -62,7 +65,7 @@ def restore(notes, tracks, timeline, layout, width, height):
     shared_frames=defaultdict(dict)
     for i,track in enumerate(tracks):
         for t,y in track.points:shared_frames[t][i]=y
-    warnings=[]
+    warnings=list(motion.coordinate_conflicts)
     for index,(note,track) in enumerate(zip(notes,tracks,strict=True)):
         # Short/noisy candidates already have explicit exclusion diagnostics.
         if len(track.points)<4 or track.points[-1][0]-track.points[0][0]<.065:
@@ -80,14 +83,17 @@ def restore(notes, tracks, timeline, layout, width, height):
             if direct['status']=='estimated':
                 fitted={**direct,'fit_method':'isolated_native_track'}
         if fitted is None:
+            visible=[motion.at_time[t] for t,y in track.points if receptor+.85*spacing<y<layout.get('note_y_max',.95)*height-.55*spacing]
+            failure=motion.coordinate_failures.get(visible[-1]['chunk']) if visible else None
+            failure=failure or 'insufficient_or_inconsistent_shared_motion'
             previous={k:note.get(k) for k in ('target_seconds','prediction_uncertainty_seconds','fit_method')}
             note.update(status='excluded',reason='shared_timing_reconstruction_failed',target_seconds=None,
-                        timing_reconstruction={'status':'failed','reason':'insufficient_or_inconsistent_shared_motion',
+                        timing_reconstruction={'status':'failed','reason':failure,
                                                'unaccepted_previous_estimate':previous})
             warnings.append({'note':index,'lane':track.lane,'reason':'shared_timing_reconstruction_failed',
                              'check':'timing_reconstruction','visible_start_seconds':track.points[0][0],
                              'visible_end_seconds':track.points[-1][0],'observed_points':len(track.points),
-                             'failure_detail':'insufficient_or_inconsistent_shared_motion'})
+                             'failure_detail':failure})
         else:
             note.update(**fitted,timing_reconstruction={'status':'restored','format':FORMAT})
     from piu_timeline.play.spacing_checks import spacing_failures

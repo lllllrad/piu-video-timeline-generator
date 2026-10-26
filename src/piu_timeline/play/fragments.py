@@ -32,7 +32,7 @@ def interleaved_tracks(tracks, spacing, motion):
                 if not start<begin<end<stop or end-begin>.1+1e-6:continue
                 if {t for t,y in first.points}&{t for t,y in second.points}:continue
                 anchor=motion.at_time.get(begin)
-                if anchor is None:continue
+                if anchor is None or anchor['chunk'] in getattr(motion,'coordinate_failures',{}):continue
                 offsets=[];valid=True
                 for track in (first,second):
                     points=[(t,y,motion.at_time.get(t)) for t,y in track.points]

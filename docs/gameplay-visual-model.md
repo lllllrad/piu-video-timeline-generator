@@ -291,3 +291,25 @@ points. Conversely, two targets within a few captured frames are not proof of
 a duplicate: collapsing head components requires matching same-lane positions
 in at least four shared native frames. Distinct co-observed heads stay distinct
 even when their target times are close.
+
+### Joint registration of shared displacement
+
+Summing frame-to-frame median displacements can accumulate bias from pixel
+quantization and changing peers. Instead, identified heads jointly constrain
+`y_i(t) + d(t) = c_i`: each head has one offset within a connected observed
+motion block, and each native frame has its own displacement. Robust least
+squares estimates those coordinates without a BPM, presumed note grid, FPS
+conversion or constant-velocity assumption. Stops and changes of speed remain
+in the measured frame coordinates.
+
+The original signed peer-step measurement and accumulated pairwise phase are
+retained alongside the refined phase. The solver changes derived coordinates only.
+Source detections and PTS remain
+immutable. It retains per-block fit residuals, head offsets and native support;
+points outside the existing position-fit gate produce
+`shared_motion_observation_conflict` warnings even when a robust target can be
+estimated. Disconnected identities, nonconvergence and motion contradicting the
+forward model fail explicitly and cannot supply a shared clock or speed proposal.
+Small forward adjustments are bounded by the positional noise floor and recorded.
+Known capture gaps still separate motion blocks. Shared targets use the jointly
+estimated offset, rather than independently rescaling each head's trajectory.

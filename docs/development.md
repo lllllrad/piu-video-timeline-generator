@@ -370,3 +370,10 @@ it reuses a matching seed, explicit origin or source-bound alignment cache.
 Reference/current checks themselves remain read-only and never decode audio or
 fetch reference files. Failed preparation remains an explicit beat warning with
 the alignment error; it does not silently fall back to a guessed song origin.
+
+`play/registered_coordinates.py` refines registered displacement with a
+matrix-free solve of the head-overlap Laplacian and robust native-position
+weights. It uses NumPy only and runs on saved detections. Its diagnostics are
+retained under `scroll_motion.coordinate_registration`; failed blocks cannot
+provide shared distances, target clocks or automatic speed estimates. Native
+source-position conflicts remain separate reconstruction warnings.

@@ -49,7 +49,8 @@ def continuity_diagnostics(data, frames):
                 if now in observed:
                     continue
                 peer = peers.get(now)
-                if start_peer and peer and start_peer['chunk']==peer['chunk']:
+                if (start_peer and peer and start_peer['chunk']==peer['chunk']
+                        and start_peer.get('coordinate_status')!='failed' and peer.get('coordinate_status')!='failed'):
                     predicted = y-(peer['phase']-start_peer['phase'])
                     method = 'peer_displacement'
                 elif not last:

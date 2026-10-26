@@ -8,6 +8,8 @@ FORMAT={'schema':1,'revision':2,'window_seconds':.3,'confirmation_seconds':.45,'
 
 
 def window(samples, spacing):
+    if any(s.get('coordinate_status')=='failed' for s in samples):
+        return None,'registered_coordinate_failure'
     if len(samples)<12 or samples[-1]['time']-samples[0]['time']<.24:
         return None,'insufficient_native_span'
     independent=sum(s['support']>=2 and s['lanes']>=2 for s in samples)

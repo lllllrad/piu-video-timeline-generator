@@ -50,7 +50,8 @@ class ScrollMotion:
 
     def distance(self, first, last):
         before, after = self.at_time.get(first), self.at_time.get(last)
-        if before is None or after is None or before['chunk'] != after['chunk']:
+        if (before is None or after is None or before['chunk'] != after['chunk']
+                or before['chunk'] in getattr(self,'coordinate_failures',{})):
             return None
         return after['phase']-before['phase']
 
@@ -152,6 +153,7 @@ class ScrollMotion:
         if not visible or visible[-1][2] is None:
             return None
         chunk = visible[-1][2]['chunk']
+        if chunk in getattr(self,'coordinate_failures',{}):return None
         visible = [point for point in visible if point[2] is not None and point[2]['chunk'] == chunk]
         if len(visible) < 4 or visible[-1][0]-visible[0][0] < .065:
             return None
@@ -166,7 +168,8 @@ class ScrollMotion:
         # moves one pixel per phase pixel; independently fitting that slope for
         # every head would reintroduce unequal timings for equal screen gaps.
         slope = -1.
-        intercept = float(np.median(y+phase-phase[-1]))
+        offset=getattr(self,'coordinate_offsets',{}).get((id(track),chunk))
+        intercept = float(offset-phase[-1] if offset is not None else np.median(y+phase-phase[-1]))
         errors = y+phase-phase[-1]-intercept
         inliers = abs(errors) <= .15*self.spacing
         if sum(inliers) < max(4, math.ceil(.85*len(visible))):
@@ -194,4 +197,5 @@ class ScrollMotion:
     def evidence(self):
         return {'format': getattr(self,'evidence_format',{'schema': 1, 'method': 'peer_note_displacement'}),
                 'supported_steps': sum(sample['support'] > 0 for sample in self.samples),
-                'total_steps': max(0, len(self.samples)-1), 'samples': self.samples}
+                'total_steps': max(0, len(self.samples)-1), 'samples': self.samples,
+                **({'coordinate_registration':self.coordinate_registration} if hasattr(self,'coordinate_registration') else {})}
