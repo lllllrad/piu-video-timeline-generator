@@ -23,8 +23,11 @@ from piu_timeline.play.layout import (validate_layout, receptor_centers, locate_
                                      combine_receptor_observations, recover_layout)
 from piu_timeline.play.fonts import previous_digit_reader, bootstrap_digits
 
+from piu_timeline.play.shared_timing import FORMAT as SHARED_TIMING_FORMAT
+from piu_timeline.play.beat_timing import FORMAT as BEAT_TIMING_FORMAT, current as beat_current, apply as apply_beats, reassociate as reassociate_beats
+
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON}
+TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT}
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 
@@ -67,6 +70,7 @@ def resolve_timing(tracker, combo, display_delay_ms):
         else:
             matches.append(match)
     return {'timing_format': TIMING_FORMAT, 'notes': notes, **({'scroll_motion': tracker.motion.evidence()} if hasattr(tracker, 'motion') else {}),
+            'timing_reconstruction':getattr(tracker,'timing_reconstruction',{}),
             'combo_events': combo.events, 'matches': matches, 'deferred_matches': deferred,
             'unsupported_intervals': tracker.unsupported_intervals,
             'coverage': {'visible_note_heads': sum(n['status'] == 'estimated' for n in notes),
@@ -363,7 +367,7 @@ def run(source, segment_number=1, force=False, **options):
                          and all(key in cached for key in ('layout','analysis_height','frame_count'))
                          and (final / 'frames.jsonl').is_file())
             if (same_source and same_settings and cached.get('play_analysis_version') == VERSION
-                    and cached.get('timing_format') == TIMING_FORMAT
+                    and cached.get('timing_format') == TIMING_FORMAT and beat_current(cached,final)
                     and cached.get('song')==segments[segment_number-1].get('song')
                     and cached.get('chart')==segments[segment_number-1].get('chart')
                     and cached.get('chart_identity')==segments[segment_number-1].get('chart_identity')
@@ -402,6 +406,9 @@ def run(source, segment_number=1, force=False, **options):
             result = refit_saved(cached, donor, pending, segments[segment_number-1], options.get('display_delay_ms',0))
         else:
             result = analyze_play(document, segments[segment_number-1], pending, **options)
+        result['segment_number']=segment_number
+        result=apply_beats(result,pending)
+        result=reassociate_beats(result,options.get('display_delay_ms',0))
         result = augment_judgments(result,pending)
         from piu_timeline.play.holds.analysis import augment_holds
         result = augment_holds(result,pending)

@@ -55,7 +55,8 @@
                 "note_type_conflict",
                 "note_type_unresolved",
                 "note_visibility",
-                "scroll_motion"
+                "scroll_motion",
+                "timing_reconstruction"
               ]
             }
           },

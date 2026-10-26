@@ -28,6 +28,11 @@ def write_report(data, path, final_directory=None):
     continuity = continuity_diagnostics(data,native_frames)
     data = {**data, 'timing_ranges': ranges, 'visibility_diagnostics':continuity}
     path.with_name('visibility-diagnostics.json').write_text(json.dumps(continuity,ensure_ascii=False,indent=2)+'\n')
+    path.with_name('beat-timing.json').write_text(json.dumps(data.get('beat_timing',{}),ensure_ascii=False,indent=2)+'\n')
+    reconstruction=data.get('timing_reconstruction',{})
+    if reconstruction.get('status')=='failed':
+        print(f"Warning: timing reconstruction FAILED for {reconstruction['failed_notes']} note trajectories; rejected estimates are retained only for review.",file=sys.stderr)
+    path.with_name('timing-reconstruction.json').write_text(json.dumps(reconstruction,ensure_ascii=False,indent=2)+'\n')
     recognition = recognition_diagnostics(data, ranges)
     data['recognition_diagnostics'] = recognition
     if data.get('chart_policy'):

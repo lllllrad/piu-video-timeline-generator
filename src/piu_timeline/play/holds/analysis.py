@@ -104,6 +104,8 @@ def presentation(data):
         notes[head].update(status='estimated', reason=None, note_type='hold', hold_id=hold['id'],
                            target_seconds=target,
                            prediction_uncertainty_seconds=0 if hold['start_censored'] else (start[1]-start[0])/2)
+        if notes[head].get('timing_reconstruction',{}).get('status')=='failed' or notes[head].get('beat_reconstruction',{}).get('status')=='failed':
+            notes[head].update(status='excluded',reason='timing_reconstruction_failed')
         hold['display_note'] = head
         projected.append(hold)
     def during_hold(lo, hi):

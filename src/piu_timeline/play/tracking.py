@@ -129,6 +129,7 @@ class NoteTracker:
     def finish(self):
         from piu_timeline.play.fragments import stitch_tracks
         notes = []
+        tracks = []
         for track, fragments in stitch_tracks(self.finished + self.active, self.layout['receptor_y'] * self.height, self.spacing,
                                               motion=self.motion, layout=self.layout):
             note = fit_track(track, self.layout['receptor_y'] * self.height, self.spacing, motion=self.motion, layout=self.layout)
@@ -138,6 +139,9 @@ class NoteTracker:
                     note['fit_method'] = 'corroborated_fragments'
                 note['source_track_fragments'] = fragments
             notes.append(note)
+            tracks.append(track)
+        from piu_timeline.play.shared_timing import restore
+        self.motion,self.timing_reconstruction = restore(notes,tracks,self.motion.samples,self.layout,self.width,self.height)
         # One arrow can yield multiple disconnected colored components. Keep the
         # best trajectory when same-lane crossings coincide within two frames.
         kept = []

@@ -10,7 +10,7 @@ from piu_timeline.charts.official import write_json
 
 
 PROCESSING = {'standard', 'exclude_timing', 'hold_state_only'}
-CHECKS = {'timing_evidence', 'stage_grade_totals', 'note_type_conflict', 'note_type_unresolved', 'note_visibility', 'scroll_motion'}
+CHECKS = {'timing_evidence', 'stage_grade_totals', 'note_type_conflict', 'note_type_unresolved', 'note_visibility', 'scroll_motion', 'timing_reconstruction'}
 
 
 def validate_regions(metadata):

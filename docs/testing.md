@@ -52,3 +52,10 @@ retry only after input changes. Audit tests retain unresolved classifications,
 flag changed sources, escape report text and verify that evidence is not
 rewritten. Report runtime tests execute the JavaScript embedded from the
 shipped HTML/CSS/JS resources, including their standalone output.
+
+Song-specific video observations and corpus diagnostics stay under ignored
+`.local/`. Do not add recording coordinates, IDs or clip fixtures here. Tests
+in this repository exercise general geometry, native-time integrity, natural
+beat subdivisions, ambiguity and failure behavior using synthetic observations.
+Song/chart facts belong in the separate editable UCS repository. If a reusable
+artifact fits neither repository, discuss a storage location before tracking it.

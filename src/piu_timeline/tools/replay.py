@@ -48,7 +48,8 @@ def file_signature(path):
 def current(path):
     """Check derived artifact contracts without decoding, OCR or cache writes."""
     if not all(path.with_name(name).is_file() for name in
-               ('frames.jsonl', 'report.html', 'recognition-warnings.json', 'timing-ranges.json')):
+               ('frames.jsonl', 'report.html', 'recognition-warnings.json', 'timing-ranges.json',
+                'timing-reconstruction.json','beat-timing.json')):
         return False
     from piu_timeline.play.continuity import FORMAT as VISIBILITY_FORMAT
     visibility = path.with_name('visibility-diagnostics.json')
@@ -74,6 +75,9 @@ def current(path):
                 metadata = json.loads(metadata_path.read_text())
                 if metadata.get('regions') or metadata.get('gimmick_candidates'):
                     return False
+    from piu_timeline.play.beat_timing import current as beat_current
+    if not beat_current(data,path.parent):
+        return False
     holds = data.get('hold_analysis', {})
     contract = holds.get('association_contract', {})
     if (data.get('play_analysis_version') != VERSION or data.get('timing_format') != TIMING_FORMAT

@@ -154,3 +154,11 @@ Native visibility and motion audits have separate scoped checks,
 not suppress them. Use the concrete effect handler when observations establish
 the behavior, and retain an explicit reason for any manual check exception.
 See [screen positions and strict warnings](gameplay-screen-map.md).
+
+Playback timing reconstruction compares supported video estimates with the
+original timing skeleton, independently of the generated chart's note rows.
+It selects natural subdivisions and requires one compatible song phase across
+accepted groups. Ambiguous rows and spatial conflicts are explicit failures;
+accepted notes retain their video ranges. A `timing_reconstruction` exception
+is separate from generic timing-evidence exclusions. Song-specific timing facts
+belong here; general algorithm tests belong in the analyzer repository.

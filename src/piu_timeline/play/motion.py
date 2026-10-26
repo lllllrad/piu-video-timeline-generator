@@ -61,7 +61,8 @@ class ScrollMotion:
         phase = np.array([sample['phase'] for sample in samples])
         velocity, intercept = np.polyfit(t, phase, 1)
         residual = float(np.sqrt(np.mean((phase-velocity*t-intercept)**2)))
-        if velocity <= self.spacing or residual > .5*self.spacing:
+        cadence = float(np.median(np.diff([sample['time'] for sample in samples])))
+        if velocity <= self.spacing or residual > max(.75,.5*cadence*velocity+.75):
             return None
         half = len(t)//2
         slopes = [np.polyfit(x, y, 1)[0] for x, y in ((t[:half], phase[:half]), (t[half:], phase[half:]))]
@@ -92,6 +93,14 @@ class ScrollMotion:
             local = [item for item in chunk if abs(item['time']-interpolated) <= .5]
             clock = self._clock(local)
         cadence = float(np.median(np.diff([item['time'] for item in chunk[max(0,index-8):index+8]])))
+        capture_error=cadence/2
+        if clock:
+            proposed = clock['origin']+(phase-clock['intercept'])/clock['velocity']
+            capture_error = cadence/2+phase_error/clock['velocity']
+            if not before['time']-capture_error <= proposed <= after['time']+capture_error:
+                clock = None
+        if clock is None and getattr(self,'strict_clock',False):
+            return None
         if clock:
             time = clock['origin']+(phase-clock['intercept'])/clock['velocity']
             uncertainty = max(cadence/2, (phase_error+clock['residual'])/clock['velocity'])
@@ -104,7 +113,8 @@ class ScrollMotion:
         return {'target_seconds': float(time), 'prediction_uncertainty_seconds': float(uncertainty),
                 'fit_method': method, 'motion_clock': clock,
                 'crossing_source_pts_seconds': [before['source_pts'], after['source_pts']],
-                'crossing_frame_seconds': [before['time'], after['time']]}
+                'crossing_frame_seconds': [before['time'], after['time']],
+                'crossing_capture_range':[before['time']-capture_error,after['time']+capture_error]}
 
     def fit(self, track, receptor, layout=None):
         bottom = (layout or {}).get('note_y_max', .95)*self.height-.55*self.spacing
@@ -153,6 +163,6 @@ class ScrollMotion:
                 'observed_phase_slope': float(measured_slope)}
 
     def evidence(self):
-        return {'format': {'schema': 1, 'method': 'peer_note_displacement'},
+        return {'format': getattr(self,'evidence_format',{'schema': 1, 'method': 'peer_note_displacement'}),
                 'supported_steps': sum(sample['support'] > 0 for sample in self.samples),
                 'total_steps': max(0, len(self.samples)-1), 'samples': self.samples}

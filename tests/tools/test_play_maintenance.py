@@ -26,6 +26,8 @@ def play(root, source='source', number=1, stale=False):
           'combo_events':[], 'judgment_events':[], 'analysis_width':650,
           'media':{'path':str(media),'size_bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns},
           'start_seconds':0, 'end_seconds':1, 'game_roi':[0,0,1300,730], 'layout':{'lanes':[]}}
+    from piu_timeline.play.beat_timing import FORMAT as BEAT_FORMAT, reference
+    data['beat_timing']={'contract':{'format':BEAT_FORMAT,'reference':reference(data,directory)}}
     data['judgment_cache']=cache_contracts(data, [])
     data['hold_analysis']={'feature_contract':feature_contract(data), 'association_contract':{
         'format':ASSOCIATION_FORMAT, 'notes':fingerprint([]),
@@ -36,6 +38,8 @@ def play(root, source='source', number=1, stale=False):
     (directory/'recognition-warnings.json').write_text('{"warnings":[]}')
     (directory/'excluded-trajectories.json').write_text('{"counts":{},"warnings":[]}')
     (directory/'timing-ranges.json').write_text('{"notes":{}}')
+    (directory/'timing-reconstruction.json').write_text('{}')
+    (directory/'beat-timing.json').write_text(json.dumps(data['beat_timing']))
     from piu_timeline.play.continuity import FORMAT
     (directory/'visibility-diagnostics.json').write_text(json.dumps({'format':FORMAT,'warnings':[]}))
     return path, data

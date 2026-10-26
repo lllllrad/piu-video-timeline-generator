@@ -202,3 +202,43 @@ independent lane evidence and unique visible-row ownership are still required.
 
 The [gameplay screen map](gameplay-screen-map.md) lists fixed geometry, named
 foreground occluders and the strict per-frame visibility/motion warning policy.
+
+## Shared timing and beat reconstruction
+
+Final registered trajectories can corroborate displacement without guessing
+which equally spaced outline in a repeated pattern corresponds to the next
+frame. Shared steps require two independently positioned track identities;
+near-coincident fragments of one same-lane cap cannot supply that support.
+Each accepted head uses the same measured displacement scale. A genuinely
+isolated head can use its explicitly identified bounded native-track fit;
+that method cannot silently replace failed shared support among visible peers.
+
+A linear shared clock must explain displacement within capture/position noise.
+Its target must lie inside the native crossing bracket expanded only by the
+measured capture cadence and positional error. A long-window average outside
+that envelope is rejected. Repeated native co-observations also constrain
+relative note spacing in pixels. Incompatible shared clocks or predicted gaps
+beyond measured spatial scatter produce reconstruction failure, regardless of
+successful combo or grade association. Failed trajectories retain their source
+points and rejected estimate for review and do not enter normal associations.
+
+When official UCS timing and a verified recording-to-song translation are
+available, compare bounded four-beat groups against natural `Split` candidates
+1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96 and 192. Use the smallest split
+that explains the group, preserving distinct rows. Multiple admissible rows
+are a failure, not permission to choose a convenient nearest cell. Unsupported
+positions, uncertain phase, timing outside official sections and conflicts
+with observed spatial spacing remain explicit failures. One common song-phase correction must satisfy every accepted group within
+the independently measured audio-alignment uncertainty. The phase search has
+a resolution of at most 1 ms, retained explicitly in its uncertainty range;
+native source timestamps are unchanged. Conflicting group
+phases fail; each note cannot choose its own phase. Accepted beat times
+retain the original video estimate/range and alignment uncertainty. Input
+associations are recomputed before word grading after chart targets change.
+Missing UCS identity or verified alignment is explicitly unverified with a
+warning; the video timing is not labeled as a verified beat reconstruction.
+
+`timing-reconstruction.json` and `beat-timing.json` retain these states. Reports
+show failures and individual warnings. General timing exclusions do not hide
+the separate `timing_reconstruction` check. A concrete reviewed exception can
+scope a special chart behavior without erasing native observations.
