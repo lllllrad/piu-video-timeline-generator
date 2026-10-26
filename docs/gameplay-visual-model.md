@@ -338,3 +338,9 @@ with intact source frames and no subsequent independent motion before the target
 Every later native position must agree with that clock within its retained timing
 uncertainty plus the positional floor. Contradictory positions or a new supported
 motion block prevent recovery; all original observations remain available.
+
+A connected colored stripe must also fit the calibrated note width. A same-hue BGA
+component touching a cap can contain a remote straight column; connectivity alone
+does not make that column a hold stem. A component wider than the maximum complete
+cap width (1.25 lane spacings) cannot prove a hold. If its overlap also prevents
+clear cap margins, that native frame remains unknown rather than proving a tap.

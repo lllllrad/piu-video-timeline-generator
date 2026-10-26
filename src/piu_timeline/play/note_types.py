@@ -7,7 +7,7 @@ import numpy as np
 
 from piu_timeline.play.appearance import APPEARANCE_FORMAT
 
-TYPE_FORMAT = {'schema': 1, 'revision': 5, 'appearance': APPEARANCE_FORMAT}
+TYPE_FORMAT = {'schema': 1, 'revision': 6, 'appearance': APPEARANCE_FORMAT}
 
 
 def cap_envelope(relaxed, white, cap, spacing):
@@ -44,7 +44,7 @@ def shape(color, white, visibility, center, spacing, relaxed=None, valid=None):
         return 'unknown', 'no_complete_cap_outline'
     _, labels, stats, _ = cv2.connectedComponentsWithStats(color.astype('uint8'), 8)
     for component, (x,y,w,h,_) in enumerate(stats[1:],1):
-        if h <= 1.6*spacing or w < .16*spacing:
+        if h <= 1.6*spacing or not .16*spacing <= w < 1.25*spacing:
             continue
         stripe = (labels[y:y+h,x:x+w] == component).mean(axis=0).max()
         if stripe >= .8 and any(np.any(labels[cy:cy+ch,cx:cx+cw] == component) for cx,cy,cw,ch in caps):

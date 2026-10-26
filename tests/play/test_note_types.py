@@ -172,3 +172,18 @@ class NoteTypeTest(unittest.TestCase):
         kind,reason=shape(color,white,np.ones_like(color),35,20)
         self.assertEqual(kind,'unknown')
         self.assertEqual(reason,'cap_margins_obscured_or_connected_shape_unresolved')
+
+    def test_a_background_color_component_wider_than_a_note_cannot_prove_a_hold(self):
+        color=np.zeros((120,67),dtype=bool);white=np.zeros_like(color)
+        cv2.rectangle(white.view('uint8'),(20,35),(46,61),1,2)
+        color[38:59,24:43]=True
+        visible=np.ones_like(color)
+        self.assertEqual(shape(color,white,visible,48,38)[0],'tap')
+        # A tall BGA region reaches a real isolated cap through a colored
+        # bridge. Its remote straight column is not a lane-owned hold stem.
+        color[:,0:15]=True;color[:8,:]=True;color[45:50,14:25]=True
+        self.assertEqual(shape(color,white,visible,48,38)[0],'unknown')
+        # The same cap with an actual lane-width stem is positive evidence.
+        color[:,:15]=False;color[:8,:]=False;color[45:50,14:25]=False
+        color[55:,29:38]=True
+        self.assertEqual(shape(color,white,visible,48,38)[0],'hold')
