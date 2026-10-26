@@ -55,3 +55,14 @@ class SharedTimingTest(unittest.TestCase):
         notes[3]['target_seconds']+=.05
         conflicts=spacing_failures(notes,40)
         self.assertTrue(any(r['note']==3 for r in conflicts))
+
+    def test_large_recording_timestamp_does_not_turn_boundary_roundoff_into_conflict(self):
+        tracks,notes,_=scenario()
+        for i,n in enumerate(notes):
+            n.update(fit_method='shared_scroll_clock',motion_clock={'velocity':240},target_seconds=1000+.125*i)
+        # One physical pixel is admissible. Subtracting large source times
+        # introduces a few picopixels of floating-point error at this boundary.
+        notes[1]['target_seconds']=1000+29/240
+        self.assertEqual(spacing_failures(notes,40),[])
+        notes[1]['target_seconds']-=.001/240
+        self.assertTrue(spacing_failures(notes,40))

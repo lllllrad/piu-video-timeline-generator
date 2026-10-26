@@ -25,7 +25,7 @@ def spacing_failures(notes, spacing):
         speed=(ca['velocity']+cb['velocity'])/2
         predicted=(second['target_seconds']-first['target_seconds'])*speed
         tolerance=max(1.,3*scatter)
-        if abs(predicted-gap)<=tolerance:continue
+        if abs(predicted-gap)<=tolerance+1e-6:continue
         for index in (a,b):
             failed.append({'note':index,'lane':notes[index]['lane'],'reason':'shared_spacing_reconstruction_conflict',
                            'check':'timing_reconstruction','visible_start_seconds':samples[0][0],
