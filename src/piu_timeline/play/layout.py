@@ -28,9 +28,9 @@ def fixed_layout(segment, player=None):
     known player side; missing mode/side uses the visual/manual fallback.
     """
     chart = segment.get('chart') or ''
-    if re.fullmatch(r'D\d{1,2}', chart):
+    if re.fullmatch(r'(?:D|HD)\d{1,2}', chart):
         xs, profile = DOUBLE_X, 'double'
-    elif re.fullmatch(r'S\d{1,2}|VERY HARD \d{1,2}', chart):
+    elif re.fullmatch(r'(?:S|HS)\d{1,2}|VERY HARD \d{1,2}', chart):
         players = segment.get('players', {})
         side = player or (next(iter(players)) if len(players) == 1 else None)
         if side not in SINGLE_X:
@@ -154,6 +154,8 @@ def recover_layout(record, roi, segment, preview, rgb, calibration, player=None)
         calibration['geometry_basis'] = {'kind': 'declared_game_layout',
                                          'profile': fixed['profile'], 'revision': fixed['profile_revision']}
         return validate_layout(fixed)
+    from piu_timeline.play.layout_evidence import MovingHeadProfiles
+    moving_heads = MovingHeadProfiles(segment, player)
     candidates, seen, images, observations = [], [], [rgb], [dict(calibration)]
     expected = (10 if str(segment['chart']).startswith(('D','HD')) else 5) if segment.get('chart') else None
     for saved_path in sorted(preview.parent.parent.glob('segment-*/analysis.json')):
@@ -167,6 +169,11 @@ def recover_layout(record, roi, segment, preview, rgb, calibration, player=None)
             candidates.append((candidate, {'source_pts_seconds': None, 'shared_from': str(saved_path)}))
 
     def observe(image, observation):
+        declared = moving_heads.observe(image, observation)
+        if declared is not None:
+            calibration['geometry_basis'] = {'kind':'declared_layout_with_observed_moving_heads',
+                                             'profile':declared['profile'], 'support':declared['geometry_support']}
+            return validate_layout(declared)
         centers = receptor_centers(image)
         seen.append((centers, observation))
         try:
@@ -217,7 +224,9 @@ def recover_layout(record, roi, segment, preview, rgb, calibration, player=None)
     # Widely spaced integer-second samples can repeatedly hit the same beat
     # flash. Observe distinct native frames in a short off-phase window before
     # taking a median that may erase every receiver it was meant to reveal.
-    window_start = min(segment['start_seconds']+3.137, segment['end_seconds']-.1)
+    support = moving_heads.latest_support()
+    anchor = segment['start_seconds']+3 if support is None else support-record.get('container_start_seconds',0)
+    window_start = min(max(segment['start_seconds'],anchor+.137), segment['end_seconds']-.1)
     window_end = min(window_start+.8, segment['end_seconds'])
     for index,(pts,seconds,image) in enumerate(decode_frames(record,window_start,window_end,roi,rgb.shape[1])):
         if index % 3:

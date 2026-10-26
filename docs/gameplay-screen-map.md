@@ -97,3 +97,18 @@ chart intervals and reasons. Timing exclusions and type exceptions cannot
 silence these checks. A gimmick annotation only changes behavior through its
 concrete processing handler; an unsupported annotation leaves warnings active.
 Source frames and timestamps are never rewritten by this audit.
+
+When the chart label is unreadable, a declared profile can be selected from
+moving colored-head outlines instead of bright receptor outlines. Require at
+least three observed lanes, with two spatially separated lanes supported by
+three distinct original source timestamps and changing head positions. Only a
+unique compatible single-side or double profile is accepted; repeated PTS,
+stationary scenery and single-lane evidence cannot select it. Store this as
+`declared_geometry_with_moving_head_support`, including per-lane source PTS.
+This validates geometry only: it neither recognizes a chart level nor supplies
+missing chart identity or official timing. Ambiguous geometry still fails.
+If sparse calibration samples first reveal heads after an empty introduction,
+place the short native-frame corroboration window near the latest observed
+heads rather than repeatedly inspecting the empty opening. Declared `HD` and
+`HS` mode labels select the same double/single coordinate profiles already
+used by the image-derived fallback; they do not imply a newly inferred level.
