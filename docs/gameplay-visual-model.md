@@ -274,3 +274,13 @@ recording must continue across the predicted target without a native-frame gap.
 A new corroborated motion block, unstable clock, censored recording or longer
 unobserved approach prevents this inference. This is chart-target evidence,
 not physical input or an observed disappearance.
+
+A tracker can briefly alternate two identities for the same physical head.
+Their time spans may overlap even though they never appear in the same native
+frame. Such fragments may be joined only with one corroborated registered-motion
+chunk, short overlap (at most 100 ms), a consistent pixel offset, sufficient
+observations on both identities, and a unique partner. Co-observed heads,
+competing partners, different paths and unsupported motion stay separate.
+Joining sorts and retains every original point and source-fragment identity;
+it does not synthesize a detection in a missing frame. Final shared timing and
+visibility checks still apply to the joined trajectory.

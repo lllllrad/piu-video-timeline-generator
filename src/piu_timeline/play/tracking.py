@@ -130,8 +130,12 @@ class NoteTracker:
         from piu_timeline.play.fragments import stitch_tracks
         notes = []
         tracks = []
-        for track, fragments in stitch_tracks(self.finished + self.active, self.layout['receptor_y'] * self.height, self.spacing,
-                                              motion=self.motion, layout=self.layout):
+        from piu_timeline.play.shared_timing import registered_motion
+        source_tracks=self.finished+self.active
+        registered=registered_motion(source_tracks,self.motion.samples,self.height,self.spacing,
+                                     self.layout['receptor_y']*self.height,self.layout.get('note_y_max',.95)*self.height)
+        for track, fragments in stitch_tracks(source_tracks, self.layout['receptor_y'] * self.height, self.spacing,
+                                              motion=registered, layout=self.layout):
             note = fit_track(track, self.layout['receptor_y'] * self.height, self.spacing, motion=self.motion, layout=self.layout)
             if len(fragments) > 1:
                 note['tracking_method'] = 'corroborated_fragments'

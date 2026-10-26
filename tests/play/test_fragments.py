@@ -50,3 +50,30 @@ class FragmentTest(unittest.TestCase):
         for other in (Track(1, [(t, 230-300*t) for t in (.4, .42, .44)]),
                       Track(0, [(t, 230-300*t) for t in (.6, .62, .64)])):
             self.assertEqual(len(stitch_tracks([first, other], 50, 40)), 2)
+
+    def test_native_frame_interleaving_requires_unique_registered_identity(self):
+        from piu_timeline.play.fragments import interleaved_tracks
+        from piu_timeline.play.shared_timing import registered_motion
+        timeline=[{'time':i/60,'source_pts':100+i/60} for i in range(80)]
+        first=Track(0,[(f['time'],300-240*f['time']) for f in timeline if f['time']<=.3 or abs(f['time']-1/3)<1e-6])
+        second=Track(0,[(f['time'],300-240*f['time']) for f in timeline if .3<f['time']<1 and abs(f['time']-1/3)>1e-6])
+        peers=[Track(lane,[(f['time'],330-240*f['time']) for f in timeline]) for lane in (1,2)]
+        tracks=[first,second,*peers];original=deepcopy(tracks)
+        motion=registered_motion(tracks,timeline,400,40,40,380)
+        joined,origins=interleaved_tracks(tracks,40,motion)
+        self.assertEqual(len(joined),3)
+        self.assertEqual(origins[0],[0,1])
+        self.assertEqual(joined[0].points,sorted(first.points+second.points))
+        self.assertEqual(tracks,original)
+        reversed_tracks=[second,first,*peers]
+        reversed_joined,reversed_origins=interleaved_tracks(reversed_tracks,40,motion)
+        self.assertEqual(len(reversed_joined),3)
+        self.assertEqual(reversed_origins[0],[1,0])
+        self.assertEqual(len(interleaved_tracks(tracks,40,None)[0]),4)
+        competitor=Track(0,[(t,y+1) for t,y in second.points])
+        self.assertEqual(len(interleaved_tracks([*tracks,competitor],40,motion)[0]),5)
+        simultaneous=Track(0,second.points+[(first.points[-1][0],first.points[-1][1]+1)])
+        simultaneous.points.sort()
+        self.assertEqual(len(interleaved_tracks([first,simultaneous,*peers],40,motion)[0]),4)
+        different=Track(0,[(t,y+40) for t,y in second.points])
+        self.assertEqual(len(interleaved_tracks([first,different,*peers],40,motion)[0]),4)

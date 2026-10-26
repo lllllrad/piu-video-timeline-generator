@@ -5,8 +5,58 @@ from collections import defaultdict
 import numpy as np
 
 
+
+def interleaved_tracks(tracks, spacing, motion):
+    """Join uniquely supported identities that alternate native frames briefly."""
+    if motion is None or getattr(motion,'evidence_format',{}).get('method')!='registered_peer_displacement':
+        return tracks,[[i] for i in range(len(tracks))]
+    by_lane=defaultdict(list)
+    for i,track in enumerate(tracks):
+        if len(track.points)>=4:by_lane[track.lane].append(i)
+    outgoing,incoming=defaultdict(list),defaultdict(list)
+    for indices in by_lane.values():
+        indices.sort(key=lambda i:tracks[i].points[0][0])
+        for pos,a in enumerate(indices):
+            first=tracks[a];start,end=first.points[0][0],first.points[-1][0]
+            for b in indices[pos+1:]:
+                second=tracks[b];begin,stop=second.points[0][0],second.points[-1][0]
+                if begin>=end:break
+                if not start<begin<end<stop or end-begin>.1+1e-6:continue
+                if {t for t,y in first.points}&{t for t,y in second.points}:continue
+                anchor=motion.at_time.get(begin)
+                if anchor is None:continue
+                offsets=[];valid=True
+                for track in (first,second):
+                    points=[(t,y,motion.at_time.get(t)) for t,y in track.points]
+                    points=[(t,y,s) for t,y,s in points if s is not None and s['chunk']==anchor['chunk']]
+                    if len(points)<4 or points[-1][0]-points[0][0]<.065:
+                        valid=False;break
+                    values=np.array([y+s['phase'] for t,y,s in points]);center=float(np.median(values))
+                    if np.max(abs(values-center))>.15*spacing:
+                        valid=False;break
+                    offsets.append(center)
+                if valid and abs(offsets[0]-offsets[1])<=.12*spacing:
+                    outgoing[a].append(b);incoming[b].append(a)
+    pairs={}
+    for i,owners in outgoing.items():
+        if len(owners)==1 and len(incoming[owners[0]])==1:
+            other=owners[0]
+            if not outgoing.get(other) and not incoming.get(i):pairs[min(i,other)]=(i,other)
+    used=set();result=[];origins=[]
+    for i,track in enumerate(tracks):
+        if i in used:continue
+        if i in pairs:
+            first,second=pairs[i]
+            from piu_timeline.play.tracking import Track
+            result.append(Track(track.lane,sorted(tracks[first].points+tracks[second].points)))
+            origins.append([first,second]);used.update((first,second))
+        else:result.append(track);origins.append([i])
+    return result,origins
+
+
 def stitch_tracks(tracks, receptor, spacing, motion=None, layout=None):
     from piu_timeline.play.tracking import Track, fit_track
+    tracks,origins=interleaved_tracks(tracks,spacing,motion)
     by_lane = defaultdict(list)
     for index, track in enumerate(tracks):
         by_lane[track.lane].append(index)
@@ -67,7 +117,7 @@ def stitch_tracks(tracks, receptor, spacing, motion=None, layout=None):
             successor, joined = links[0]
             if len(incoming[successor]) == 1 and successor not in used and successor > index:
                 used.add(successor)
-                result.append((joined, [index, successor]))
+                result.append((joined, origins[index]+origins[successor]))
                 continue
-        result.append((track, [index]))
+        result.append((track, origins[index]))
     return result
