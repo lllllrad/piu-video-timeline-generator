@@ -74,3 +74,16 @@ class GimmickTest(unittest.TestCase):
         for value in (None,[{}],[{'id':'a','kind':'visibility','reason':'review','review_status':'pending',
                                  'start_seconds':2,'end_seconds':1}]):
             with self.assertRaises(ValueError):validate_candidates({'gimmick_candidates':value})
+
+    def test_same_native_frames_do_not_accumulate_refit_roundoff_but_new_frames_remain(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output,chart,data,registration=self.fixture(Path(temp))
+            record_candidates(data,output,registration)
+            before=chart.with_name('metadata.json').read_bytes()
+            data['visual_channels']['processing']['visibility_boundaries'][0]['last_visible_height_spacing']=[.8000000000000002,.9000000000000001]
+            self.assertFalse(record_candidates(data,output,registration)['changed'])
+            self.assertEqual(chart.with_name('metadata.json').read_bytes(),before)
+            data['visual_channels']['processing']['notes'][0]['visibility_loss']['source_pts_seconds'][1]=52.033
+            self.assertTrue(record_candidates(data,output,registration)['changed'])
+            saved=json.loads(chart.with_name('metadata.json').read_text())
+            self.assertEqual(len(saved['gimmick_candidates'][0]['evidence']),2)

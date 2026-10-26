@@ -58,6 +58,24 @@ def known_origin(data, output, metadata):
     return None
 
 
+def visibility_evidence_key(proof):
+    """Native frame identity, independent of fit noise or transient track IDs."""
+    keys=('source_id','segment_number','lanes','loss_source_pts_ranges')
+    if not isinstance(proof,dict) or not all(key in proof for key in keys):
+        return json.dumps(proof,sort_keys=True)
+    frames=sorted([round(value,6) for value in interval] for interval in proof['loss_source_pts_ranges'])
+    return json.dumps([proof['source_id'],proof['segment_number'],sorted(proof['lanes']),frames])
+
+
+def distinct_visibility_evidence(records):
+    seen=set();result=[]
+    for record in records:
+        key=visibility_evidence_key(record)
+        if key not in seen:
+            result.append(record);seen.add(key)
+    return result
+
+
 def record_candidates(data, output, registration):
     """Append conservative visibility-effect candidates without changing UCS/policy."""
     boundaries = data.get('visual_channels',{}).get('processing',{}).get('visibility_boundaries',[])
@@ -96,8 +114,10 @@ def record_candidates(data, output, registration):
                      'lanes':sorted({data['notes'][n]['lane'] for n in boundary['notes']}),
                      'last_visible_height_spacing':boundary['last_visible_height_spacing'],
                      'loss_source_pts_ranges':[processing[n]['visibility_loss']['source_pts_seconds'] for n in boundary['notes']]}
-            if proof not in match.setdefault('evidence',[]):
-                match['evidence'].append(proof)
+            evidence=distinct_visibility_evidence(match.setdefault('evidence',[]))
+            if visibility_evidence_key(proof) not in {visibility_evidence_key(item) for item in evidence}:
+                evidence.append(proof)
+            match['evidence']=evidence
         changed = before != json.dumps(candidates,sort_keys=True)
         if changed:
             metadata['gimmick_candidates'] = candidates
