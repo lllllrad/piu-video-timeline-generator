@@ -66,3 +66,19 @@ class SharedTimingTest(unittest.TestCase):
         self.assertEqual(spacing_failures(notes,40),[])
         notes[1]['target_seconds']-=.001/240
         self.assertTrue(spacing_failures(notes,40))
+
+    def test_corroborated_identity_carries_short_peer_loss_without_filling_empty_frames(self):
+        from piu_timeline.play.shared_timing import registered_motion
+        timeline=[{'time':i/60,'source_pts':100+i/60} for i in range(61)]
+        first=Track(0,[(f['time'],300-120*f['time']) for f in timeline])
+        peer=Track(1,[(f['time'],280-120*f['time']) for f in timeline if f['time']<=.5])
+        motion=registered_motion([first,peer],timeline,400,40,40,380)
+        self.assertAlmostEqual(motion.distance(.5,.7),24)
+        self.assertEqual(motion.at_time[.7]['displacement_basis'],'registered_identity_continuation')
+        self.assertEqual(motion.at_time[.7]['source_pts'],100.7)
+        self.assertIsNone(motion.distance(.5,.8))
+        alone=registered_motion([first],timeline,400,40,40,380)
+        self.assertIsNone(alone.distance(.5,.7))
+        first.points=[p for p in first.points if p[0]!=.6]
+        broken=registered_motion([first,peer],timeline,400,40,40,380)
+        self.assertIsNone(broken.distance(.5,.7))

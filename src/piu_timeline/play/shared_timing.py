@@ -5,7 +5,7 @@ import numpy as np
 
 from piu_timeline.play.motion import ScrollMotion
 
-FORMAT = {'schema':1,'revision':3,'method':'registered_peer_displacement'}
+FORMAT = {'schema':1,'revision':4,'method':'registered_peer_displacement'}
 
 
 def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
@@ -17,10 +17,10 @@ def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
                 at[time][index]=(track.lane,y)
     motion=ScrollMotion(height,spacing)
     motion.evidence_format=FORMAT
-    previous=None
+    previous=None;anchor=None
     for native in timeline:
         time=native['time'];current=at[time]
-        displacement=None;support=lanes=0;scatter=0.
+        displacement=None;support=lanes=0;scatter=0.;basis='unsupported'
         if previous is not None and 0 < time-previous['time'] <= .05+1e-6:
             before=at[previous['time']]
             pairs=[(before[i][1]-current[i][1],current[i][0],i) for i in before.keys() & current.keys()]
@@ -31,13 +31,23 @@ def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
                 if support>=2 and (lanes>=2 or max(current[p[2]][1] for p in kept)-min(current[p[2]][1] for p in kept)>.65*spacing) and -.75<=center<=spacing*30*(time-previous['time']):
                     displacement=max(0,float(np.median([p[0] for p in kept])))
                     scatter=max(.35,float(np.std([p[0] for p in kept])))
+                    basis='independent_registered_peers'
+                    anchor=(time,{p[2] for p in kept})
+                elif (len(pairs)==1 and anchor is not None and time-anchor[0]<=.25+1e-6
+                      and pairs[0][2] in anchor[1] and -.75<=pairs[0][0]<=spacing*30*(time-previous['time'])):
+                    # A previously corroborated identity may carry the same
+                    # coordinate system briefly. This is measured displacement,
+                    # never interpolation across an absent source observation.
+                    displacement=max(0,pairs[0][0]);support=lanes=1;scatter=.75
+                    basis='registered_identity_continuation'
         if displacement is None:
-            motion.chunks.append([]);phase=variance=0.
+            motion.chunks.append([]);phase=variance=0.;anchor=None
         else:
             phase=motion.samples[-1]['phase']+displacement
             variance=motion.samples[-1]['variance']+scatter**2
         sample={**native,'phase':phase,'variance':variance,'chunk':len(motion.chunks)-1,
-                'support':support if displacement is not None else 0,'lanes':lanes if displacement is not None else 0}
+                'support':support if displacement is not None else 0,'lanes':lanes if displacement is not None else 0,
+                'displacement_basis':basis}
         motion.samples.append(sample);motion.at_time[time]=sample;motion.chunks[-1].append(sample)
         previous=native
     return motion

@@ -242,3 +242,13 @@ warning; the video timing is not labeled as a verified beat reconstruction.
 show failures and individual warnings. General timing exclusions do not hide
 the separate `timing_reconstruction` check. A concrete reviewed exception can
 scope a special chart behavior without erasing native observations.
+
+A shared displacement coordinate system needs independent visible heads to
+establish it. Once established, a previously corroborated trajectory can carry
+that coordinate system through a brief loss of its peers while its own actual
+position is still measured in every intervening native frame. The implementation
+bounds this continuation to 250 ms after the last independent corroboration.
+It records `registered_identity_continuation`, retains original source PTS and
+increases positional uncertainty. A blank observation, capture gap, different
+unanchored identity or expired bound breaks the coordinate system. This does not
+establish shared motion from a lone head or extrapolate through missing pixels.
