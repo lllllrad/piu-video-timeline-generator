@@ -65,3 +65,15 @@ class SpeedEffectsTest(unittest.TestCase):
                 Path(data['media']['path']).write_bytes(b'replaced source recording')
                 with self.assertRaisesRegex(ValueError,'Source identity changed'):review(path,write=True)
                 self.assertEqual(path.read_bytes(),original)
+
+    def test_old_integrated_phase_cannot_be_written_as_a_chart_speed_effect(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);_,path,_,_,data=self.fixture(root)
+            data['scroll_motion'].pop('coordinate_registration')
+            (root/'.local/data/video/play/segment-001/analysis.json').write_text(json.dumps(data))
+            original=path.read_bytes()
+            with patch('piu_timeline.tools.chart_motion.ROOT',root):result=review(path,write=True)
+            self.assertTrue(result['measurements']['transitions'])
+            self.assertEqual(result['candidates'],[])
+            self.assertFalse(result['changed'])
+            self.assertEqual(path.read_bytes(),original)

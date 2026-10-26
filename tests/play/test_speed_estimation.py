@@ -4,6 +4,7 @@ import math
 from copy import deepcopy
 
 from piu_timeline.play.speed_estimation import estimate
+from piu_timeline.play.registered_coordinates import FORMAT as COORDINATE_FORMAT
 
 
 def scenario(ratio=2.,repeated=False):
@@ -13,7 +14,8 @@ def scenario(ratio=2.,repeated=False):
         phase=240*min(render,2)+240*ratio*max(0,render-2)
         samples.append({'time':1000+time,'source_pts':9000+time,'phase':phase,'chunk':0,'support':4,'lanes':2})
     return {'analysis_width':400,'layout':{'lanes':[{'x':.2},{'x':.3}]},
-            'scroll_motion':{'format':{'method':'registered_peer_displacement'},'samples':samples}}
+            'scroll_motion':{'format':{'method':'registered_peer_displacement'},
+                             'coordinate_registration':{'format':COORDINATE_FORMAT},'samples':samples}}
 
 
 class SpeedEstimationTest(unittest.TestCase):
@@ -58,3 +60,11 @@ class SpeedEstimationTest(unittest.TestCase):
         self.assertTrue(changes)
         self.assertTrue(any('longer_native_flanks_do_not_confirm_change' in c['review_reasons'] for c in changes))
         self.assertFalse(any(c['auto_recordable'] for c in changes))
+
+    def test_legacy_integrated_coordinates_remain_proposals_without_automatic_registration(self):
+        data=scenario();data['scroll_motion'].pop('coordinate_registration')
+        result=estimate(data)
+        self.assertTrue(result['transitions'])
+        self.assertFalse(any(change['auto_recordable'] for change in result['transitions']))
+        self.assertTrue(all('joint_native_coordinate_registration_required' in change['review_reasons']
+                            for change in result['transitions']))

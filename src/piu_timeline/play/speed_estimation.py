@@ -4,7 +4,7 @@ from bisect import bisect_left, bisect_right
 
 import numpy as np
 
-FORMAT={'schema':1,'revision':2,'window_seconds':.3,'confirmation_seconds':.45,'minimum_independent_fraction':.7}
+FORMAT={'schema':1,'revision':3,'window_seconds':.3,'confirmation_seconds':.45,'minimum_independent_fraction':.7}
 
 
 def window(samples, spacing):
@@ -74,6 +74,8 @@ def estimate(data):
     spacing=float(np.median(np.diff([lane['x']*data['analysis_width'] for lane in lanes])))
     chunks=defaultdict(list)
     for sample in motion['samples']:chunks[sample['chunk']].append(sample)
+    from piu_timeline.play.registered_coordinates import FORMAT as COORDINATE_FORMAT
+    registered=motion.get('coordinate_registration',{}).get('format')==COORDINATE_FORMAT
     proposals=[];rejected=Counter();accepted=0
     for chunk,samples in chunks.items():
         times=[s['time'] for s in samples];windows=[]
@@ -103,6 +105,7 @@ def estimate(data):
     kept.sort(key=lambda p:p['estimated_transition_seconds'])
     for i,p in enumerate(kept):
         reasons=[]
+        if not registered:reasons.append('joint_native_coordinate_registration_required')
         # A short-window difference can be capture jitter or a biased local
         # registration. Independent longer flanks must sustain the same change.
         samples=chunks[p['motion_chunk']];t=p['before']['end'];u=p['after']['start']
@@ -129,5 +132,6 @@ def estimate(data):
             reasons.append('nearby_changes_need_complex_motion_review')
         p.update(auto_recordable=not reasons,review_reasons=reasons)
     return {'format':FORMAT,'status':'measured' if kept else 'no_verified_speed_transition',
+            'coordinate_registration':motion.get('coordinate_registration',{}).get('format'),
             'transitions':kept,'stable_windows':accepted,'rejected_windows':dict(rejected),
             'semantics':'Upward-positive screen velocity. Ratios are measured, not forced to simple subdivisions; absence of a proposal does not clear warnings.'}

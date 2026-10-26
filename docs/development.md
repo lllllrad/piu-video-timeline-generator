@@ -313,7 +313,9 @@ at least 12 native samples, 70% independent multi-lane support and sufficient
 pixel displacement. Error bounds include fit error and a 1.5-pixel positional
 floor. A phase-continuous intersection must agree with the intervening native
 frames. Repeated render frames are tolerated without treating every stationary
-sample as a stop. Automatic registration additionally requires at least three
+sample as a stop. Automatic registration requires the current joint native-coordinate contract; older
+integrated phases remain review proposals and cannot be written as chart effects.
+It additionally requires at least three
 peer heads, consistent longer native flanks (at least 400 ms on each side),
 a relative ratio interval width of at most 15%, a native transition
 bracket no wider than 100 ms and no other proposed change within 600 ms.
