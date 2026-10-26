@@ -64,3 +64,7 @@ _replay *args:
 # Classify saved recognition warnings without changing source media or analyses.
 _audit *args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.audit "$@"
+
+# Measure concrete scroll-speed changes from retained registered motion.
+_chart-motion *args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.chart_motion "$@"

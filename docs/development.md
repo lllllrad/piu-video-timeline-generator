@@ -296,3 +296,39 @@ identities. `play/spacing_checks.py` checks relative geometry, while
 alignment to test natural subdivisions. Missing references, failed shared
 support and ambiguous beat rows remain explicit review states. Native video,
 frame traces and pixel caches are reusable across these derived-rule changes.
+
+## Measuring scroll-speed changes
+
+`just _chart-motion --sources VIDEO_ID --charts S23` estimates concrete speed
+changes from saved `registered_peer_displacement` samples. It reads native
+motion and verified source/alignment identities without decoding video, OCR or
+new audio alignment. The default is read-only; `--write` appends qualified,
+provisionally active effects to the separate chart repository. Measurements and
+rejected-window reasons stay in `.local/reports/chart-motion/report.json` (or
+an explicit `.local/` output path). Missing acquisition, changed media and
+unsupported alignment fail explicitly; no proposal does not clear warnings.
+
+The estimator compares approximately 300 ms linear displacement windows with
+at least 12 native samples, 70% independent multi-lane support and sufficient
+pixel displacement. Error bounds include fit error and a 1.5-pixel positional
+floor. A phase-continuous intersection must agree with the intervening native
+frames. Repeated render frames are tolerated without treating every stationary
+sample as a stop. Automatic registration additionally requires at least three
+peer heads, a relative ratio interval width of at most 15%, a native transition
+bracket no wider than 100 ms and no other proposed change within 600 ms.
+Gradual ramps, densely repeated changes, stops, reversals and sparse observations
+can remain unresolved; they retain their original warnings.
+
+`scroll_speed_change.speed_multiplier` is the measured **after/before screen
+velocity ratio**, not an absolute game speed setting. Evidence retains velocities
+in analysis pixels per second, lane spacing, original PTS, fit errors and the
+nominal UCS BPM before and after. BPM ratio and measured ratio are separate;
+neither a presumed half/double multiplier nor a musical grid replaces the
+observations. Song-relative transition bounds include alignment uncertainty.
+
+Pending and confirmed effects apply immediately. The concrete handler checks a
+piecewise trajectory against each actual head before using it to inspect retained
+processing pixels. Only matching native speed-change records are classified as
+configured motion; chart reconstruction failures, missing input evidence, type
+conflicts and contradictory motion remain warnings. Metadata recording preserves
+human edits and rejected effects and deduplicates original-frame evidence.

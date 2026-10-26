@@ -87,7 +87,7 @@ def classify_warnings(data, records):
 def refresh_processing(data,directory):
     """Reinterpret retained receptor pixels with the paused motion model."""
     path=directory/'processing-features.npz'
-    if not data.get('scroll_pause_model') or not path.is_file():
+    if not (data.get('scroll_pause_model') or data.get('scroll_speed_model')) or not path.is_file():
         return data
     from piu_timeline.play.processing import observe_processing
     channels=data.get('visual_channels',{})

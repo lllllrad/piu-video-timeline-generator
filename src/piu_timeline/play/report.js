@@ -12,7 +12,7 @@ if(beatTiming)text('p','Beat timing: '+beatTiming.status+(beatTiming.contract.re
 const reconstruction=data.timing_reconstruction;
 if(reconstruction?.status==='failed')text('p','Timing reconstruction FAILED: '+reconstruction.failed_notes+' trajectories have rejected timing. Consult warnings and original observations.',$('quality'));
 const visibility=data.visibility_diagnostics;
-if(visibility)text('p','Visibility audit: '+visibility.warnings.length+' warnings / '+visibility.known_occlusions.length+' explained occlusion intervals / '+(visibility.known_motion_effects?.length||0)+' observed configured pause records / '+visibility.accounted_exits.length+' accounted detector exits or continued detections.',$('quality'));
+if(visibility)text('p','Visibility audit: '+visibility.warnings.length+' warnings / '+visibility.known_occlusions.length+' explained occlusion intervals / '+(visibility.known_motion_effects?.length||0)+' observed configured motion records / '+visibility.accounted_exits.length+' accounted detector exits or continued detections.',$('quality'));
 const excludedTracks=[...(data.exclusion_diagnostics?.warnings||[]),...(data.recognition_diagnostics?.warnings||[])];
 if(excludedTracks.length){
   $('exclusionWarnings').hidden=false;
@@ -39,7 +39,11 @@ if(data.chart_policy){
     const warning=document.createElement('p');warning.textContent='Chart region policies were not applied: '+data.chart_policy.reason;$('chartPolicyDetails').appendChild(warning);
   }
   for(const candidate of data.chart_policy.gimmick_candidates||[]){
-    const item=text('p','Suspected gimmick / '+candidate.review_status+(candidate.combo_increment?' / exactly +'+candidate.combo_increment+' per simultaneous refresh':'')+(candidate.kind==='scroll_pause'?' / scrolling ×0 for '+candidate.pause_duration_seconds.toFixed(3)+' s':'')+' / '+candidate.reason+(candidate.review_status==='rejected'?' / inactive':' / provisionally applied'),$('chartPolicyDetails'));
+    const item=text('p','Suspected gimmick / '+candidate.review_status+
+      (candidate.combo_increment?' / exactly +'+candidate.combo_increment+' per simultaneous refresh':'')+
+      (candidate.kind==='scroll_pause'?' / scrolling ×0 for '+candidate.pause_duration_seconds.toFixed(3)+' s':'')+
+      (candidate.kind==='scroll_speed_change'?' / measured speed ×'+candidate.speed_multiplier.toFixed(3)+' / range '+candidate.speed_ratio_range.map(n=>n.toFixed(3)).join('…'):'')+
+      ' / '+candidate.reason+(candidate.review_status==='rejected'?' / inactive':' / provisionally applied'),$('chartPolicyDetails'));
     const jump=text('button','Review '+fmt(candidate.playback_start_seconds)+' … '+fmt(candidate.playback_end_seconds),item);
     jump.onclick=()=>seek(candidate.playback_start_seconds);
   }

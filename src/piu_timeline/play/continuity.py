@@ -6,7 +6,7 @@ import numpy as np
 
 from piu_timeline.play.screen_regions import note_occluders, overlapping_occluders
 
-FORMAT = {'schema':1, 'revision':1}
+FORMAT = {'schema':1, 'revision':2}
 
 
 def continuity_diagnostics(data, frames):
@@ -109,6 +109,9 @@ def continuity_diagnostics(data, frames):
     from piu_timeline.play.scroll_pauses import classify_warnings
     native_motion = motion_warnings(data,frames)
     remaining,expected_motion=classify_warnings(data,native_motion)
+    from piu_timeline.play.scroll_speeds import classify_warnings as classify_speeds
+    remaining,expected_speeds=classify_speeds(data,remaining)
+    expected_motion+=expected_speeds
     warnings.extend(remaining)
     return {'format':FORMAT,'native_motion_warnings':native_motion,'known_motion_effects':expected_motion,'warnings':warnings,'known_occlusions':occlusions,'accounted_exits':exits,
             'regions':note_occluders(layout),'counts':dict(Counter(r['reason'] for r in warnings))}

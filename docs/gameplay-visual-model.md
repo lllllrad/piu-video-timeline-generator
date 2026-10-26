@@ -252,3 +252,15 @@ It records `registered_identity_continuation`, retains original source PTS and
 increases positional uncertainty. A blank observation, capture gap, different
 unanchored identity or expired bound breaks the coordinate system. This does not
 establish shared motion from a lone head or extrapolate through missing pixels.
+
+### Measured relative scroll speed
+
+For a bounded abrupt speed change, independent peer displacement can establish
+stable velocities on both sides and a continuous intersection between them.
+Record the measured after/before ratio with uncertainty, native boundary frames
+and the official BPM context separately. A screen ratio does not identify the
+player's absolute speed setting or prove that BPM alone caused the change.
+Concrete metadata may authorize a piecewise displacement clock only where a
+head's own pixels agree with that model. Sparse support, ramps, reverse motion,
+multiple nearby changes and inconsistent positions remain explicit review cases.
+See [the measurement workflow](development.md#measuring-scroll-speed-changes).

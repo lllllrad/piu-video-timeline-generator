@@ -124,7 +124,7 @@
           },
           "speed_multiplier": {
             "type": "number",
-            "const": 0
+            "minimum": 0
           },
           "pause_duration_seconds": {
             "type": "number",
@@ -134,6 +134,24 @@
             "type": "number",
             "minimum": 0,
             "maximum": 0.1
+          },
+          "speed_ratio_range": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "transition_range_seconds": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number",
+              "minimum": 0
+            }
           }
         },
         "allOf": [
@@ -170,7 +188,36 @@
                 "speed_multiplier",
                 "pause_duration_seconds",
                 "boundary_uncertainty_seconds"
+              ],
+              "properties": {
+                "speed_multiplier": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "scroll_speed_change"
+                }
+              },
+              "required": [
+                "kind"
               ]
+            },
+            "then": {
+              "required": [
+                "speed_multiplier",
+                "speed_ratio_range",
+                "transition_range_seconds"
+              ],
+              "properties": {
+                "speed_multiplier": {
+                  "exclusiveMinimum": 0
+                }
+              }
             }
           }
         ]

@@ -12,6 +12,10 @@ def observed_path(note, data, receptor, spacing, scale):
     paused=paused_path(note,data,receptor,spacing,scale)
     if paused is not None:
         return paused
+    from piu_timeline.play.scroll_speeds import observed_path as speed_path
+    measured=speed_path(note,data,receptor,spacing,scale)
+    if measured is not None:
+        return measured
     from piu_timeline.play.tracking import Track, fit_track
     points = note.get('points', [])
     path = {'supported': False, 'basis': 'unsupported_native_trajectory', 'velocity': 0, 'target': None}

@@ -8,7 +8,7 @@ from piu_timeline.play.processing import processing_support
 from piu_timeline.play.tracking import associate
 
 
-FORMAT = {'schema':1, 'revision':3}
+FORMAT = {'schema':1, 'revision':4}
 
 
 def active_effects(data, kind):
@@ -152,15 +152,16 @@ def simultaneous_increment(data):
 
 
 from piu_timeline.play.scroll_pauses import apply as scroll_pauses
+from piu_timeline.play.scroll_speeds import apply as scroll_speeds
 
-HANDLERS = {'scroll_pause':scroll_pauses, 'suspected_visibility_modifier':visibility_modifier,
+HANDLERS = {'scroll_pause':scroll_pauses, 'scroll_speed_change':scroll_speeds, 'suspected_visibility_modifier':visibility_modifier,
             'suspected_multi_increment':simultaneous_increment}
 
 
 def apply_gimmicks(data, directory=None):
     for kind,handler in HANDLERS.items():
         data = handler(data)
-        if kind=='scroll_pause' and directory is not None:
+        if kind=='scroll_speed_change' and directory is not None:
             from piu_timeline.play.scroll_pauses import refresh_processing
             data=refresh_processing(data,directory)
     policy = data.get('chart_policy')

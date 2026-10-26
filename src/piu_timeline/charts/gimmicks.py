@@ -33,6 +33,15 @@ def validate_candidates(metadata):
                     or any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) for v in (duration,uncertainty))
                     or abs(duration-(end-start))>1e-6 or not 0<=uncertainty<=.1):
                 raise ValueError('Scroll pauses require zero speed, matching duration and bounded boundary uncertainty')
+        if record['kind']=='scroll_speed_change':
+            ratio=record.get('speed_multiplier');bounds=record.get('speed_ratio_range');transition=record.get('transition_range_seconds')
+            if (isinstance(ratio,bool) or not isinstance(ratio,(int,float)) or not math.isfinite(ratio) or ratio<=0
+                    or any(not isinstance(a,list) or len(a)!=2 or any(isinstance(v,bool) or not isinstance(v,(int,float))
+                           or not math.isfinite(v) for v in a) for a in (bounds,transition))):
+                raise ValueError('Speed changes require a positive measured ratio and finite two-element ranges')
+            if not (0<bounds[0]<=ratio<=bounds[1] and not bounds[0]<=1<=bounds[1]
+                    and start<=transition[0]<=transition[1]<=end):
+                raise ValueError('Speed ratio bounds must exclude one and the transition must lie inside the effect')
         identifiers.add(record['id'])
     pauses=sorted([r for r in candidates if r['kind']=='scroll_pause' and r['review_status']!='rejected'],key=lambda r:r['start_seconds'])
     if any(a['end_seconds']>b['start_seconds'] for a,b in zip(pauses,pauses[1:])):
