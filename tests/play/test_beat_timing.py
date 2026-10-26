@@ -86,3 +86,30 @@ class BeatGridTest(unittest.TestCase):
         result=fit_phase([group],0)
         self.assertEqual(result['status'],'failed')
         self.assertEqual(result['fits'][0]['reason'],'ambiguous_or_unsupported_song_phase')
+
+    def test_constant_catalogue_tempo_extends_short_template_without_changing_original(self):
+        from pathlib import Path
+        import tempfile
+        from unittest.mock import patch
+        from piu_timeline.play.beat_timing import apply
+        from piu_timeline.charts.ucs import constant_tempo,parse
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);timing=root/'timing.ucs'
+            original=':Format=1\n:Mode=Single\n:BPM=120\n:Delay=0\n:Beat=4\n:Split=4\n'+'.....\n'*8
+            timing.write_text(original)
+            data={'notes':[{'status':'estimated','lane':0,'points':[[11,200]],
+                          'target_seconds':12.125,'prediction_uncertainty_seconds':.001}]}
+            ref={'status':'available','timing':str(timing),'song_start_seconds':10,
+                 'alignment_uncertainty_seconds':0,'constant_tempo_bpm':'120'}
+            with patch('piu_timeline.play.beat_timing.reference',return_value=ref):
+                result=apply(data,root)
+                self.assertEqual(result['beat_timing']['status'],'restored')
+                self.assertEqual(result['notes'][0]['target_seconds'],12.125)
+                self.assertTrue(result['beat_timing']['timing_extension']['review_required'])
+                for bpm in ('120~240','121',None):
+                    ref['constant_tempo_bpm']=bpm;result=apply(data,root)
+                    self.assertEqual(result['beat_timing']['status'],'failed')
+                    self.assertEqual(result['beat_timing']['warnings'][0]['failure_detail'],'outside_official_timing_sections')
+            self.assertFalse(constant_tempo(parse(original+':BPM=240\n.....\n'),'120'))
+            self.assertEqual(timing.read_text(),original)
+            self.assertEqual(data['notes'][0]['target_seconds'],12.125)

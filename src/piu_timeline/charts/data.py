@@ -271,8 +271,7 @@ def register(data, output, code=None, repository=None, song_start=None, revision
         alignment = align(data, music)
     code_entry = next(item for item in catalogue(repository)['songs'] if item['index'] == resolved)
     bpm = code_entry.get('bpm', '')
-    constant = (re.fullmatch(r'\d+(?:\.\d+)?', bpm) is not None
-                and {Fraction(value) for section in template.sections for key, value in section.directives if key == 'BPM'} == {Fraction(bpm)})
+    constant = ucs.constant_tempo(template,bpm)
     document, evidence = draft(template, data, alignment, extend_constant_tempo=constant)
     content = document.text().encode()
     metadata = {'$schema': '../../../../schema.json', 'schema': 1, 'regions': [],

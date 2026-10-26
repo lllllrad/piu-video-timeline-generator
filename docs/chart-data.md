@@ -45,7 +45,9 @@ manual handling.
 Some official skeletons end before their music ends. When both the catalogue and every template
 section declare the same single constant BPM, registration appends timing rows through the last
 bounded observation. Original rows remain at their original times. Metadata records the extension
-and requires review; variable-tempo catalogue entries are never extrapolated. `add --rebuild-draft`
+and requires review; variable-tempo catalogue entries are never extrapolated. Beat reconstruction uses the same
+independent catalogue/template agreement to extend its derived timing extent through bounded
+observations; it retains the original template and reports the provisional extension. `add --rebuild-draft`
 explicitly regenerates an untouched, unreviewed UCS draft and preserves an ignored backup directory.
 Reviewed charts and UCS files with human edits are refused; ordinary automatic registration never
 rebuilds them.

@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm
+import re
 
 
 @dataclass
@@ -110,3 +111,11 @@ def parse(text):
     if dict(header).get('Format') != '1' or not sections:
         raise ValueError('Expected a nonempty Format=1 UCS document')
     return Document(header, sections)
+
+
+def constant_tempo(template, catalogue_bpm):
+    """Only independent catalogue/template agreement permits tail extension."""
+    return (isinstance(catalogue_bpm,str) and re.fullmatch(r'\d+(?:\.\d+)?',catalogue_bpm) is not None
+            and Fraction(catalogue_bpm)>0
+            and {Fraction(value) for section in template.sections for key,value in section.directives if key=='BPM'}
+                =={Fraction(catalogue_bpm)})

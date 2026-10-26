@@ -24,7 +24,7 @@ def fit_phase(groups, uncertainty):
         elif score==best:winners.append((phase,fits,signature))
     if not best[0] or len({w[2] for w in winners})!=1:
         return {'status':'failed','reason':'ambiguous_or_unsupported_song_phase','fits':[
-            {'status':'failed','reason':'ambiguous_or_unsupported_song_phase'} for _ in groups]}
+            {'status':'failed','reason':g.get('invalid','ambiguous_or_unsupported_song_phase')} for g in groups]}
     lo,hi=winners[0][0],winners[-1][0];phase=(lo+hi)/2
     fits=[({'status':'failed','reason':g['invalid']} if g.get('invalid') else
            fit_grid(g['targets'],g['errors'],g['bpm'],g['origin']+phase)) for g in groups]

@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 
-FORMAT={'schema':1,'revision':2,'group_beats':4,'natural_splits':[1,2,3,4,6,8,12,16,24,32,48,64,96,192]}
+FORMAT={'schema':1,'revision':3,'group_beats':4,'natural_splits':[1,2,3,4,6,8,12,16,24,32,48,64,96,192]}
 
 
 def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0):
@@ -52,7 +52,10 @@ def reference(data, directory):
         saved_alignment=json.loads(cached.read_text())
         if saved_alignment.get('contract',{}).get('media')==data.get('media') and saved_alignment.get('alignment',{}).get('song_start_seconds')==origin:
             uncertainty=saved_alignment['alignment'].get('uncertainty_seconds',uncertainty)
-    return {'status':'available','ucs_index':code,'timing':str(timing),'sha256':sha256(timing.read_bytes()).hexdigest(),
+    catalogue=repo/'catalog.json'
+    entries=json.loads(catalogue.read_text()).get('songs',[]) if catalogue.is_file() else []
+    bpm=next((entry.get('bpm') for entry in entries if entry['index']==code),None)
+    return {'status':'available','ucs_index':code,'constant_tempo_bpm':bpm,'timing':str(timing),'sha256':sha256(timing.read_bytes()).hexdigest(),
             'song_start_seconds':origin,'alignment_uncertainty_seconds':uncertainty}
 
 
@@ -61,7 +64,7 @@ def current(data,directory):
 
 
 def apply(data,directory):
-    from piu_timeline.charts.ucs import parse
+    from piu_timeline.charts.ucs import parse, constant_tempo
     ref=reference(data,directory);contract={'format':FORMAT,'reference':ref}
     result={'contract':contract,'status':ref['status'],'warnings':[],'groups':[]}
     if ref['status']!='available':
@@ -78,7 +81,17 @@ def apply(data,directory):
         sections.append((start,end,bpm))
     if any(b[0] < a[1]-1e-6 for a,b in zip(sections,sections[1:])):
         raise ValueError('Overlapping UCS timing sections prevent beat reconstruction')
-    groups=defaultdict(list);origin=ref['song_start_seconds']
+    origin=ref['song_start_seconds']
+    latest=max((n['target_seconds']+n['prediction_uncertainty_seconds']-origin
+                for n in data['notes'] if n['status']=='estimated'),default=sections[-1][1])
+    if latest>=sections[-1][1] and constant_tempo(doc,ref.get('constant_tempo_bpm')):
+        lo,hi,bpm=sections[-1];step=60/(bpm*int(settings['Split']))
+        end=lo+(math.ceil((latest-lo)/step)+1)*step
+        if end-hi>900:raise ValueError('Timing extension exceeds supported song duration')
+        sections[-1]=(lo,end,bpm)
+        result['timing_extension']={'basis':'constant_tempo_catalogue_and_template',
+            'original_end_seconds':hi,'extended_end_seconds':end,'review_required':True}
+    groups=defaultdict(list)
     notes=[dict(n) for n in data['notes']]
     for ni,note in enumerate(notes):
         if note['status']!='estimated':continue
