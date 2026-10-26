@@ -128,13 +128,19 @@ def discover(root, sources=(), segments=(), acquire=False):
 
 
 class Replay:
-    def __init__(self, root, output, sources=(), segments=(), acquire=False, jobs=1, warning_limit=None):
+    def __init__(self, root, output, sources=(), segments=(), acquire=False, jobs=1, warning_limit=None, reviewed_batches=()):
         self.root, self.output = Path(root), Path(output)
         self.sources, self.segments, self.acquire = sources, segments, acquire
         if jobs < 1:
             raise ValueError("Replay jobs must be positive")
         self.jobs = jobs
-        self.warning_batch=WarningBatch(warning_limit)
+        reviewed=[]
+        for path in reviewed_batches:
+            items=json.loads(Path(path).read_text())['items']
+            if any(not isinstance(item.get('id'),str) or not item['id'] for item in items):
+                raise ValueError('Reviewed batches require explicit case identities')
+            reviewed.extend(item['id'] for item in items)
+        self.warning_batch=WarningBatch(warning_limit,reviewed)
         self.records = {}
         self.output.mkdir(parents=True, exist_ok=True)
         self.started = datetime.now(timezone.utc).isoformat()
@@ -238,6 +244,8 @@ def main():
     parser.add_argument('--acquire', action='store_true', help='Include metadata plays without native observations')
     parser.add_argument('--watch', action='store_true', help='Discover newly completed/promoted plays every 30 seconds')
     parser.add_argument('--run-dir', type=Path)
+    parser.add_argument('--reviewed-batch',type=Path,action='append',default=[],
+                        help='Previously inspected warning-batch.json; skip these IDs only in the new review queue')
     parser.add_argument('--warning-limit',type=int,help='Stop scheduling after collecting this many distinct unresolved cases; finish active plays')
     args = parser.parse_args()
     if args.warning_limit is not None and args.warning_limit<1:
@@ -249,7 +257,7 @@ def main():
     destination = args.run_dir or ROOT/'.local/runs'/('play-replay-'+time.strftime('%Y%m%d-%H%M%S'))
     if not destination.resolve().is_relative_to(ROOT/'.local'):
         parser.error('--run-dir must stay under .local/')
-    runner = Replay(ROOT, destination, args.sources or (), args.segments or (), args.acquire, args.jobs, args.warning_limit)
+    runner = Replay(ROOT, destination, args.sources or (), args.segments or (), args.acquire, args.jobs, args.warning_limit, args.reviewed_batch)
     with (destination/'.runner.lock').open('a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

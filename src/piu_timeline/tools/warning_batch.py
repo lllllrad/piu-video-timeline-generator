@@ -6,11 +6,12 @@ import json
 
 
 class WarningBatch:
-    def __init__(self, limit):
+    def __init__(self, limit, reviewed=()):
         if limit is not None and limit<1:
             raise ValueError('Warning limit must be positive')
         self.limit=limit
-        self.seen=set()
+        self.seen=set(reviewed)
+        self.reviewed_count=len(self.seen)
         self.items=[]
 
     @property
@@ -35,5 +36,5 @@ class WarningBatch:
                 if self.full:return
 
     def document(self):
-        return {'limit':self.limit,'collected':len(self.items),'limit_reached':self.full,'items':self.items,
+        return {'limit':self.limit,'previously_reviewed_cases':self.reviewed_count,'collected':len(self.items),'limit_reached':self.full,'items':self.items,
                 'semantics':'Distinct unresolved cases collected in this run. Original warning files retain all remaining cases; this queue does not acknowledge, suppress or delete them.'}

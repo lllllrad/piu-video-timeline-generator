@@ -352,3 +352,12 @@ therefore finish more plays than strictly necessary. Review the queue, fix a gen
 rule or add a concrete chart-specific handler/annotation, run checks, and then start
 the next batch. Missing or malformed warning artifacts fail explicitly. Omit the
 limit only when a complete acquisition or contract refresh is intended.
+
+
+After inspecting a queue, pass `--reviewed-batch PATH/TO/warning-batch.json` to
+the next run (repeat the option for multiple inspected batches). Those identities
+are excluded only from the new review queue, so the next batch can discover
+additional cases. The original warnings, failure checks and totals remain intact;
+previous inspection is never a recognition exemption. Keep unresolved inspected
+cases in a local review log with their reason and follow-up. A batch file should
+be passed only after inspection, not automatically marked reviewed on collection.

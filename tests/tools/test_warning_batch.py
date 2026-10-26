@@ -65,3 +65,16 @@ class WarningBatchTest(unittest.TestCase):
                 self.assertTrue(runner.cycle())
             self.assertFalse(runner.warning_batch.full)
             self.assertEqual(runner.records['video/001']['status'],'failed')
+
+    def test_reviewed_cases_remain_warnings_but_next_batch_collects_additional_cases(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);directory,path=self.fixture(root);original=path.read_bytes()
+            first=WarningBatch(3);first.collect(directory,'video',1)
+            reviewed=root/'reviewed.json';reviewed.write_text(json.dumps(first.document()))
+            runner=Replay(root,root/'next',warning_limit=2,reviewed_batches=[reviewed])
+            with patch('piu_timeline.tools.replay.discover',return_value=[('video',1)]),patch('piu_timeline.tools.replay.current',return_value=True):
+                self.assertFalse(runner.cycle())
+            self.assertEqual(runner.warning_batch.document()['previously_reviewed_cases'],3)
+            self.assertEqual(len(runner.warning_batch.items),2)
+            self.assertTrue(set(i['id'] for i in first.items).isdisjoint(i['id'] for i in runner.warning_batch.items))
+            self.assertEqual(path.read_bytes(),original)
