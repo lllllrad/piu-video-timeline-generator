@@ -119,3 +119,27 @@ class SharedTimingTest(unittest.TestCase):
             if expected=='estimated':
                 self.assertAlmostEqual(notes[0]['target_seconds'],1.008)
                 self.assertLess(notes[0]['target_seconds'],notes[0]['crossing_frame_seconds'][1])
+
+    def test_short_peer_loss_preserves_clock_only_with_confirming_native_head_positions(self):
+        layout={'receptor_y':.1,'note_y_max':.95,'lanes':[{'x':.1+.1*i}for i in range(5)]}
+        timeline=[{'time':i/60,'source_pts':800+i/60}for i in range(73)]
+        from piu_timeline.play.shared_timing import registered_motion
+        for delta,expected in ((0,True),(12,False)):
+            head=Track(0,[(f['time'],284.8-240*f['time']+(delta if f['time']>.85 else 0))
+                          for f in timeline if f['time']<=.88])
+            peer=Track(4,[(f['time'],284.8-240*f['time'])for f in timeline if f['time']<=.6])
+            motion=registered_motion([head,peer],timeline,400,40,40,380);motion.strict_clock=True
+            before=deepcopy(head.points);result=motion.fit(head,40,layout)
+            self.assertEqual(result is not None,expected)
+            if result:
+                self.assertAlmostEqual(result['target_seconds'],1.02)
+                self.assertGreater(result['validated_later_observations'],0)
+                self.assertEqual(result['fit_method'],'shared_scroll_clock_extrapolation')
+            self.assertEqual(head.points,before)
+        # A fresh independently supported block, including a changed speed,
+        # cannot be replaced by the older clock.
+        following=[Track(lane,[(f['time'],300-300*(f['time']-.86))for f in timeline if f['time']>=.86])
+                   for lane in (1,2)]
+        head=Track(0,[(f['time'],284.8-240*f['time'])for f in timeline if f['time']<=.88])
+        motion=registered_motion([head,peer]+following,timeline,400,40,40,380);motion.strict_clock=True
+        self.assertIsNone(motion.fit(head,40,layout))

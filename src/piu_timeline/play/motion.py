@@ -153,10 +153,38 @@ class ScrollMotion:
         if not visible or visible[-1][2] is None:
             return None
         chunk = visible[-1][2]['chunk']
+        latest=[point for point in visible if point[2] is not None and point[2]['chunk']==chunk]
+        if len(latest)>=4 and latest[-1][0]-latest[0][0]>=.065:
+            return self._fit_visible(track,latest,receptor,layout)
+        # A brief loss of peers must not erase an already measured approach.
+        # Later native positions still have to validate that same bounded clock.
+        groups={}
+        for point in visible:
+            if point[2] is not None:groups.setdefault(point[2]['chunk'],[]).append(point)
+        for key,points in reversed(list(groups.items())):
+            if key==chunk:continue
+            later=[point for point in visible if point[0]>points[-1][0]]
+            if any(p[2] is None or p[2]['support']>=2
+                   or p[2]['chunk'] in getattr(self,'coordinate_failures',{}) for p in later):
+                return None
+            result=self._fit_visible(track,points,receptor,layout)
+            if result is None:continue
+            clock=result.get('motion_clock')
+            if clock is None:return None
+            native=[(t,y)for t,y in track.points if t>points[-1][0]]
+            limit=.75+clock['velocity']*result['prediction_uncertainty_seconds']
+            errors=[abs(y-(receptor+clock['velocity']*(result['target_seconds']-t)))for t,y in native]
+            if (not errors or max(errors)>limit or any(t>result['target_seconds'] for t,y in native)):
+                return None
+            return {**result,'validated_later_observations':len(native),
+                    'later_observation_maximum_error_pixels':max(errors),
+                    'later_observation_tolerance_pixels':limit}
+        return None
+
+    def _fit_visible(self,track,visible,receptor,layout):
+        chunk=visible[-1][2]['chunk']
         if chunk in getattr(self,'coordinate_failures',{}):return None
-        visible = [point for point in visible if point[2] is not None and point[2]['chunk'] == chunk]
-        if len(visible) < 4 or visible[-1][0]-visible[0][0] < .065:
-            return None
+        if len(visible)<4 or visible[-1][0]-visible[0][0]<.065:return None
         phase = np.array([point[2]['phase'] for point in visible])
         y = np.array([point[1] for point in visible])
         if phase[-1]-phase[0] < .8*self.spacing:

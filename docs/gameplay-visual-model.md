@@ -330,3 +330,11 @@ Body continuity can use observed caps without timestamps. A projected hold head
 retains its native owner's reconstruction failure instead of creating a clean
 synthetic head that bypasses it. Type evidence may use the independently observed
 head and tail identities while timing remains unresolved.
+
+A final fragment with fewer than four supported observations cannot erase an earlier
+shared approach solely because peers left the detector field. The earlier clock
+may supply a target only under the existing 250 ms / 1.1-lane extrapolation limits,
+with intact source frames and no subsequent independent motion before the target.
+Every later native position must agree with that clock within its retained timing
+uncertainty plus the positional floor. Contradictory positions or a new supported
+motion block prevent recovery; all original observations remain available.
