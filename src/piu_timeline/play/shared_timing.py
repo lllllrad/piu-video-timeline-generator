@@ -5,7 +5,7 @@ import numpy as np
 
 from piu_timeline.play.motion import ScrollMotion
 
-FORMAT = {'schema':1,'revision':10,'method':'registered_peer_displacement'}
+FORMAT = {'schema':1,'revision':11,'method':'registered_peer_displacement'}
 
 
 def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
@@ -97,7 +97,7 @@ def restore(notes, tracks, timeline, layout, width, height):
         else:
             note.update(**fitted,timing_reconstruction={'status':'restored','format':FORMAT})
     from piu_timeline.play.spacing_checks import spacing_failures
-    conflicts=spacing_failures(notes,spacing)
+    conflicts=spacing_failures(notes,spacing,motion)
     warnings.extend(conflicts)
     for record in conflicts:
         note=notes[record['note']]

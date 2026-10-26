@@ -143,3 +143,24 @@ class SharedTimingTest(unittest.TestCase):
         head=Track(0,[(f['time'],284.8-240*f['time'])for f in timeline if f['time']<=.88])
         motion=registered_motion([head,peer]+following,timeline,400,40,40,380);motion.strict_clock=True
         self.assertIsNone(motion.fit(head,40,layout))
+
+    def test_shared_spacing_compares_native_offsets_across_different_clock_windows(self):
+        times=[.4+i/60 for i in range(8)]
+        notes=[{'status':'estimated','lane':i,'points':[(t,180+60*i-240*(t-.4))for t in times],
+                'target_seconds':target,'fit_method':'shared_scroll_clock',
+                'motion_target_phase':target*velocity,
+                'motion_clock':{'origin':0,'velocity':velocity,'intercept':0}}
+               for i,(target,velocity)in enumerate(((1,240),(1.25,300)))]
+        motion={'samples':[{'time':t,'chunk':0}for t in times],
+                'coordinate_registration':{'chunks':[{'chunk':0,'status':'fitted','head_offsets':[
+                    {'note':0,'offset_pixels':220},{'note':1,'offset_pixels':280}]}]}}
+        before=deepcopy(notes)
+        self.assertTrue(spacing_failures(notes,40))  # Different clocks without common registration cannot verify a gap.
+        self.assertEqual(spacing_failures(notes,40,motion),[])
+        self.assertEqual(notes,before)
+        notes[1]['target_seconds']+=.02
+        failed=spacing_failures(notes,40,motion)
+        self.assertEqual(failed[0]['observed_gap_pixels'],60)
+        self.assertAlmostEqual(failed[0]['reconstructed_gap_pixels'],66)
+        motion['coordinate_registration']['chunks']=[]
+        self.assertEqual(spacing_failures(notes,40,motion)[0]['reason'],'shared_spacing_model_unavailable')

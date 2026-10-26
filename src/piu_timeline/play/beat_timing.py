@@ -162,7 +162,7 @@ def apply(data,directory):
     from piu_timeline.play.spacing_checks import spacing_failures
     if len(data.get('layout',{}).get('lanes',[]))>=2:
         spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
-        conflicts=spacing_failures(notes,spacing)
+        conflicts=spacing_failures(notes,spacing,data.get('scroll_motion'))
         for conflict in conflicts:
             index=conflict['note'];conflict.update(reason='beat_grid_conflicts_with_spatial_spacing')
             notes[index].update(status='excluded',reason=conflict['reason'],target_seconds=None,

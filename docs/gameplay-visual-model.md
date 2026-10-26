@@ -344,3 +344,11 @@ component touching a cap can contain a remote straight column; connectivity alon
 does not make that column a hold stem. A component wider than the maximum complete
 cap width (1.25 lane spacings) cannot prove a hold. If its overlap also prevents
 clear cap margins, that native frame remains unknown rather than proving a tap.
+
+Spatial checks compare jointly registered head offsets in actual co-observed frames.
+Different clock windows can have different fitted velocities after capture jitter
+or a real speed transition; multiplying their averaged velocity by the difference
+between targets is not a valid screen-distance measurement. A beat adjustment is
+converted back into displacement with each head's own supported clock and applied
+to its registered offset. Missing common offset support is an explicit
+`shared_spacing_model_unavailable` failure. The native pixel tolerance is unchanged.

@@ -4,7 +4,28 @@ from collections import defaultdict
 import numpy as np
 
 
-def spacing_failures(notes, spacing):
+def registered_gap(first,second,samples,offsets,frames,a,b):
+    gaps=[]
+    for time,_ in samples:
+        chunk=frames.get(time)
+        if (chunk,a) in offsets and (chunk,b) in offsets:
+            gaps.append((time,offsets[chunk,b]-offsets[chunk,a]))
+    if len(gaps)<4 or gaps[-1][0]-gaps[0][0]<.065:return None
+    corrections=[]
+    for note in (first,second):
+        clock=note.get('motion_clock',{})
+        if not all(key in clock for key in ('origin','velocity','intercept')) or 'motion_target_phase' not in note:return None
+        original=clock['origin']+(note['motion_target_phase']-clock['intercept'])/clock['velocity']
+        corrections.append((note['target_seconds']-original)*clock['velocity'])
+    return float(np.median([gap for _,gap in gaps]))+corrections[1]-corrections[0]
+
+
+def spacing_failures(notes, spacing, motion=None):
+    if motion is not None and hasattr(motion,'evidence'):motion=motion.evidence()
+    offsets={(record['chunk'],head['note']):head['offset_pixels']
+             for record in (motion or {}).get('coordinate_registration',{}).get('chunks',[]) if record.get('status')=='fitted'
+             for head in record.get('head_offsets',[])}
+    frames={sample['time']:sample['chunk']for sample in (motion or {}).get('samples',[])}
     at=defaultdict(list);pairs=defaultdict(list)
     for i,note in enumerate(notes):
         if note['status']!='estimated' or note.get('fit_method')=='isolated_native_track':continue
@@ -22,12 +43,14 @@ def spacing_failures(notes, spacing):
         gaps=np.array([gap for _,gap in samples]);gap=float(np.median(gaps))
         scatter=float(np.median(abs(gaps-gap)))
         if scatter>1.5:continue
-        speed=(ca['velocity']+cb['velocity'])/2
-        predicted=(second['target_seconds']-first['target_seconds'])*speed
+        if motion is None:
+            predicted=((second['target_seconds']-first['target_seconds'])*ca['velocity'] if ca==cb else None)
+        else:
+            predicted=registered_gap(first,second,samples,offsets,frames,a,b)
         tolerance=max(1.,3*scatter)
-        if abs(predicted-gap)<=tolerance+1e-6:continue
+        if predicted is not None and abs(predicted-gap)<=tolerance+1e-6:continue
         for index in (a,b):
-            failed.append({'note':index,'lane':notes[index]['lane'],'reason':'shared_spacing_reconstruction_conflict',
+            failed.append({'note':index,'lane':notes[index]['lane'],'reason':'shared_spacing_reconstruction_conflict' if predicted is not None else 'shared_spacing_model_unavailable',
                            'check':'timing_reconstruction','visible_start_seconds':samples[0][0],
                            'visible_end_seconds':samples[-1][0],'observed_points':len(samples),
                            'peer_notes':[a,b],'observed_gap_pixels':gap,'reconstructed_gap_pixels':predicted,
