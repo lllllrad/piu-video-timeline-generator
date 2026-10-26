@@ -43,7 +43,8 @@ def proposals(measured, metadata, timing_path, source):
                'playback_range':[change['start_seconds'],change['end_seconds']],
                'before':before,'after':after,'motion_chunk':change['motion_chunk'],
                'lane_spacing_pixels':change['lane_spacing_pixels'],'ucs_bpm_context':context,
-               'song_alignment_uncertainty_seconds':alignment_uncertainty}
+               'song_alignment_uncertainty_seconds':alignment_uncertainty,
+               'long_flank_confirmation':change['long_flank_confirmation']}
         key=f"{source['source_id']}:{source['segment_number']}:{center:.3f}"
         result.append({'id':'measured-speed-'+sha256(key.encode()).hexdigest()[:12],
             'kind':'scroll_speed_change','start_seconds':start,'end_seconds':end,
@@ -68,9 +69,12 @@ def record(repository, path, candidates):
             if owner is None:existing.append(candidate);continue
             proof=candidate['evidence'][0]
             identity=(proof['source_id'],proof['segment_number'],proof['before']['source_pts_seconds'],proof['after']['source_pts_seconds'])
-            if not any((p.get('source_id'),p.get('segment_number'),p.get('before',{}).get('source_pts_seconds'),
-                        p.get('after',{}).get('source_pts_seconds'))==identity for p in owner.setdefault('evidence',[])):
-                owner['evidence'].append(proof)
+            match=next((p for p in owner.setdefault('evidence',[])
+                        if (p.get('source_id'),p.get('segment_number'),p.get('before',{}).get('source_pts_seconds'),
+                            p.get('after',{}).get('source_pts_seconds'))==identity),None)
+            if match is None:owner['evidence'].append(proof)
+            elif 'long_flank_confirmation' not in match:
+                match['long_flank_confirmation']=proof['long_flank_confirmation']
         validate_candidates(metadata)
         changed=before!=json.dumps(existing,sort_keys=True)
         if changed:write_json(path,metadata)

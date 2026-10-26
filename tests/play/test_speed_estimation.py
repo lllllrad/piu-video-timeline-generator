@@ -1,5 +1,6 @@
 """Independent native clocks, measured ratios and explicit estimation limits."""
 import unittest
+import math
 from copy import deepcopy
 
 from piu_timeline.play.speed_estimation import estimate
@@ -47,3 +48,13 @@ class SpeedEstimationTest(unittest.TestCase):
         self.assertEqual(estimate(data)['transitions'],[])
         data['scroll_motion']['format']['method']='unregistered_correspondence'
         self.assertEqual(estimate(data)['status'],'unavailable')
+
+    def test_local_capture_distortion_stays_reviewable_instead_of_becoming_metadata(self):
+        data=scenario(1)
+        for sample in data['scroll_motion']['samples']:
+            delta=sample['time']-1002
+            if abs(delta)<.5:sample['phase']+=15*math.cos(delta*math.pi)**2
+        changes=estimate(data)['transitions']
+        self.assertTrue(changes)
+        self.assertTrue(any('longer_native_flanks_do_not_confirm_change' in c['review_reasons'] for c in changes))
+        self.assertFalse(any(c['auto_recordable'] for c in changes))

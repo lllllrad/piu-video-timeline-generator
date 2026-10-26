@@ -4,7 +4,7 @@ from bisect import bisect_left, bisect_right
 
 import numpy as np
 
-FORMAT={'schema':1,'revision':1,'window_seconds':.3,'minimum_independent_fraction':.7}
+FORMAT={'schema':1,'revision':2,'window_seconds':.3,'confirmation_seconds':.45,'minimum_independent_fraction':.7}
 
 
 def window(samples, spacing):
@@ -101,6 +101,21 @@ def estimate(data):
     kept.sort(key=lambda p:p['estimated_transition_seconds'])
     for i,p in enumerate(kept):
         reasons=[]
+        # A short-window difference can be capture jitter or a biased local
+        # registration. Independent longer flanks must sustain the same change.
+        samples=chunks[p['motion_chunk']];t=p['before']['end'];u=p['after']['start']
+        before,_=window([s for s in samples if t-FORMAT['confirmation_seconds']-1e-6<=s['time']<=t+1e-6],spacing)
+        after,_=window([s for s in samples if u-1e-6<=s['time']<=u+FORMAT['confirmation_seconds']+1e-6],spacing)
+        confirmed=False
+        if before and after and min(before['end']-before['start'],after['end']-after['start'])>=.4-1e-6:
+            ratio=after['speed']/before['speed']
+            bounds=[float((after['speed']-after['error'])/(before['speed']+before['error'])),
+                    float((after['speed']+after['error'])/(before['speed']-before['error']))]
+            confirmed=(not bounds[0]<=1<=bounds[1] and abs(ratio-1)>=.15
+                       and p['speed_ratio_range'][0]<=ratio<=p['speed_ratio_range'][1])
+            p['long_flank_confirmation']={'before':before,'after':after,'speed_multiplier':float(ratio),
+                                          'speed_ratio_range':bounds,'consistent':bool(confirmed)}
+        if not confirmed:reasons.append('longer_native_flanks_do_not_confirm_change')
         if (p['speed_ratio_range'][1]-p['speed_ratio_range'][0])/p['speed_multiplier']>.15:
             reasons.append('ratio_uncertainty_too_wide')
         if p['transition_range_seconds'][1]-p['transition_range_seconds'][0]>.1+1e-6:
