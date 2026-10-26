@@ -57,6 +57,10 @@ def current(path):
     if not visibility.is_file() or json.loads(visibility.read_text()).get('format') != VISIBILITY_FORMAT:
         return False
     data = json.loads(path.read_text())
+    from piu_timeline.play.support import visual_support
+    support_file=path.with_name('visual-support.json')
+    if (json.loads(support_file.read_text()) if support_file.is_file() else None)!=visual_support(data):
+        return False
     policy_path = path.with_name('chart-policy.json')
     if policy_path.is_file():
         policy = json.loads(policy_path.read_text())

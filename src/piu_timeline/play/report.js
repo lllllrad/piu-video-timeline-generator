@@ -9,6 +9,7 @@ const targetColor='#b6ff59',inputColor='#ff70dd';
 const notePalette={blue:['#267bcc','#83caff'],red:['#c63c52','#ff9da9'],yellow:['#d8a600','#ffe476']};
 const beatTiming=data.beat_timing;
 if(beatTiming)text('p','Beat timing: '+beatTiming.status+(beatTiming.contract.reference.reason?' / '+beatTiming.contract.reference.reason.replaceAll('_',' '):'')+' / '+(beatTiming.warnings?.length||0)+' rejected note timings.',$('quality'));
+if(data.visual_support&&!data.visual_support.chart_geometry)text('p','UCS generation unavailable: '+data.visual_support.regions.filter(r=>!r.chart_geometry).map(r=>r.reason).join('; '),$('quality'));
 const reconstruction=data.timing_reconstruction;
 if(reconstruction?.status==='failed')text('p','Timing reconstruction FAILED: '+reconstruction.failed_notes+' trajectories have rejected timing. Consult warnings and original observations.',$('quality'));
 const visibility=data.visibility_diagnostics;

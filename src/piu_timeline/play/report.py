@@ -9,6 +9,9 @@ from urllib.parse import quote
 
 
 def write_report(data, path, final_directory=None):
+    from piu_timeline.play.support import visual_support
+    data={**data,'visual_support':visual_support(data)}
+    path.with_name('visual-support.json').write_text(json.dumps(data['visual_support'],ensure_ascii=False,indent=2)+'\n')
     native = data
     from piu_timeline.charts.policy import attach_regions, apply_projection
     data = attach_regions(data, path.parent)

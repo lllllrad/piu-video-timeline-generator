@@ -75,6 +75,11 @@ def recognition_diagnostics(data, ranges):
                    and r['playback_start_seconds'] <= record['visible_start_seconds']
                    and record['visible_end_seconds'] < r['playback_end_seconds']]
         (exceptions if allowed else warnings).append({**record, **({'exception_regions': allowed} if allowed else {})})
+    support=data.get('visual_support')
+    if support and not support['chart_geometry']:
+        warnings.append({'reason':'unsupported_visual_profile','lane':0,'observed_points':0,
+                         'visible_start_seconds':data['start_seconds'],'visible_end_seconds':data['end_seconds'],
+                         'source_review':support})
     for record in data.get('timing_reconstruction',{}).get('warnings',[]):
         add(record,'timing_reconstruction')
     for record in data.get('beat_timing',{}).get('warnings',[]):

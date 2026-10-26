@@ -224,6 +224,8 @@ def draft(template, data, alignment, extend_constant_tempo=False):
 
 
 def register(data, output, code=None, repository=None, song_start=None, revision='phoenix', client=None, rebuild_draft=False):
+    from piu_timeline.play.support import require_chart_geometry
+    require_chart_geometry(data)
     repository = Path(repository) if repository is not None else default_repository()
     output = Path(output)
     if not repository.is_dir():
