@@ -6,7 +6,7 @@ from piu_timeline.play.holds.state import recognition_segments, recognition_wind
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 3, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 4, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo

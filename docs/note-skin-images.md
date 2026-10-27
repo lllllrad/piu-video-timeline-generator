@@ -80,6 +80,9 @@ half a lane spacing of motion. Coverage uses rows with actual compared alpha
 support in the acquired reference bank, preserving unsupported internal gaps.
 A template canvas rectangle cannot bridge padding or uncompared rows. The bank
 identity must match the native observations; changed references fail explicitly.
+Deduplicated complete body-tile matches retain their own measured row support;
+the representative tile does not replace overlapping positive comparisons.
+Unknown patterns and alternative cap roles cannot supply body coverage.
 These rows establish image-comparison coverage, rather than a solid foreground
 segmentation. Varying endpoint separation, contradictory roles and competing ownership
 prevent reconstruction. A missing image match is not a positive observation of

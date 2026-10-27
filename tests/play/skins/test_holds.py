@@ -89,6 +89,23 @@ class ImageHoldTest(unittest.TestCase):
             self.assertEqual(reconstruct_images(data,receptors,native,warnings,references=references),[])
             self.assertTrue(warnings)
 
+    def test_deduplicated_positive_body_tiles_keep_their_own_compared_image_coverage(self):
+        data,native,receptors=scenario();references={**REFERENCES,'hold_body':[[0,8]]}
+        for frame in native:
+            body=frame['skin_observations'][-1]
+            alternative=deepcopy(body);alternative.update(classification_status='full_pattern')
+            alternative['bounds_pixels']=[v+7 if i%2 else v for i,v in enumerate(body['bounds_pixels'])]
+            body['alternatives']=[alternative]
+        self.assertEqual(len(reconstruct_images(data,receptors,native,[],references=references)),1)
+        # Unknown or contrary-role alternatives do not supply missing body pixels.
+        for case in ('cap_only','tap'):
+            changed=deepcopy(native)
+            for frame in changed:
+                alt=frame['skin_observations'][-1]['alternatives'][0]
+                if case=='cap_only':alt['classification_status']='cap_only'
+                else:alt['role']='tap'
+            self.assertEqual(reconstruct_images(data,receptors,changed,[],references=references),[])
+
     def test_one_hold_does_not_claim_unrelated_body_images_in_the_same_lane_and_frame(self):
         data,native,receptors=scenario()
         for frame in native:
