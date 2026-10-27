@@ -3,9 +3,9 @@ from collections import defaultdict
 
 import numpy as np
 
-from piu_timeline.play.motion import ScrollMotion
+from piu_timeline.play.motion import ScrollMotion, LOCAL_CLOCK_FORMAT
 
-FORMAT = {'schema':1,'revision':14,'method':'registered_peer_displacement'}
+FORMAT = {'schema':1,'revision':15,'method':'registered_peer_displacement','local_clock':LOCAL_CLOCK_FORMAT}
 
 
 def registered_motion(tracks, timeline, height, spacing, receptor, bottom):

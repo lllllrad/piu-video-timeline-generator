@@ -5,6 +5,10 @@ import math
 import numpy as np
 
 
+LOCAL_CLOCK_FORMAT = {'schema': 1, 'revision': 1, 'selection': 'precision_then_native_support',
+                      'position_floor_pixels': .75, 'maximum_radius_seconds': .5}
+
+
 class ScrollMotion:
     def __init__(self, height, spacing):
         self.height, self.spacing = height, spacing
@@ -73,6 +77,29 @@ class ScrollMotion:
         return {'origin': samples[0]['time'], 'velocity': float(velocity), 'intercept': float(intercept),
                 'residual': residual, 'window': [samples[0]['time'], samples[-1]['time']]}
 
+    def _local_clock(self, chunk, crossing, phase, phase_error, before, after, cadence):
+        """Keep a fully observed crossing neighborhood when distant motion differs."""
+        local = [item for item in chunk if abs(item['time']-crossing) <= LOCAL_CLOCK_FORMAT['maximum_radius_seconds']]
+        trimmed = 0; best = None
+        while len(local) >= 16 and local[-1]['time']-local[0]['time'] >= .3:
+            clock = self._clock(local)
+            if clock:
+                proposed = clock['origin']+(phase-clock['intercept'])/clock['velocity']
+                capture_error = cadence/2+phase_error/clock['velocity']
+                if before['time']-capture_error <= proposed <= after['time']+capture_error:
+                    score = (max(LOCAL_CLOCK_FORMAT['position_floor_pixels'],clock['residual']),-len(local))
+                    if best is None or score < best[0]:
+                        best = (score,{**clock, 'selection': LOCAL_CLOCK_FORMAT['selection'],
+                                       'trimmed_outer_frames': trimmed},capture_error)
+            # Remove the most remote sample, never a point inside the window.
+            # The crossing bracket and all intervening source PTS stay intact.
+            if crossing-local[0]['time'] >= local[-1]['time']-crossing:
+                local = local[1:]
+            else:
+                local = local[:-1]
+            trimmed += 1
+        return (best[1],best[2]) if best else (None,None)
+
     def extrapolated_crossing(self, sample, phase, phase_error):
         """A chord can leave the shared detector field before its target arrives."""
         chunk=self.chunks[sample['chunk']];last=chunk[-1]
@@ -130,13 +157,9 @@ class ScrollMotion:
                 rejected_clock={'clock':clock,'target_seconds':float(proposed)}
                 clock = None
         if clock is None:
-            local = [item for item in chunk if abs(item['time']-interpolated) <= .5]
-            clock = self._clock(local)
+            clock, local_error = self._local_clock(chunk, interpolated, phase, phase_error, before, after, cadence)
             if clock:
-                proposed = clock['origin']+(phase-clock['intercept'])/clock['velocity']
-                capture_error = cadence/2+phase_error/clock['velocity']
-                if not before['time']-capture_error <= proposed <= after['time']+capture_error:
-                    clock = None
+                capture_error = local_error
         if clock is None and getattr(self,'strict_clock',False):
             return None
         if clock:

@@ -42,3 +42,30 @@ class LocalCrossingClockTest(unittest.TestCase):
         motion=fixture()
         # The phase jump itself is not a measured constant-speed crossing.
         self.assertIsNone(motion.crossing(motion.at_time[4.8],1208,.75))
+
+    def test_remote_repeated_frames_do_not_erase_a_supported_moving_crossing(self):
+        motion=ScrollMotion(400,40);motion.strict_clock=True;motion.chunks=[[]]
+        for i in range(121):
+            time=i/60;pause=min(.2,max(0,time-.2))
+            sample={'time':time,'source_pts':800+time,'phase':240*(time-pause),
+                    'chunk':0,'variance':0,'support':2,'lanes':2}
+            motion.samples.append(sample);motion.chunks[0].append(sample);motion.at_time[time]=sample
+        original=deepcopy(motion.samples)
+        self.assertIsNone(motion._clock(motion.chunks[0]))
+        result=motion.crossing(motion.at_time[.5],240*(.65-.2),.75)
+        self.assertIsNotNone(result)
+        self.assertLessEqual(abs(result['target_seconds']-.65),result['prediction_uncertainty_seconds'])
+        clock=result['motion_clock']
+        self.assertLessEqual(clock['residual'],.75)
+        self.assertLessEqual(abs(result['target_seconds']-.65)*240,.75)
+        self.assertEqual(clock['selection'],'precision_then_native_support')
+        self.assertGreater(clock['trimmed_outer_frames'],0)
+        self.assertGreater(clock['window'][0],.2)
+        self.assertGreaterEqual(clock['window'][1]-clock['window'][0],.3)
+        self.assertEqual(result['crossing_source_pts_seconds'],[800+38/60,800+.65])
+        # The stationary interval itself and a sparse moving flank remain failures.
+        self.assertIsNone(motion.crossing(motion.at_time[.1],48,.75))
+        self.assertEqual(motion.samples,original)
+        keep=[s for s in motion.samples if not .4<s['time']<.9 or s['time']in(.5,38/60,.65)]
+        motion.chunks=[keep];motion.samples=keep;motion.clocks={}
+        self.assertIsNone(motion.crossing(motion.at_time[.5],240*(.65-.2),.75))

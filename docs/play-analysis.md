@@ -47,24 +47,8 @@ motion checks still apply. Original partial observations remain in the trace.
 
 For each usable note track, observed motion predicts when its center crosses the receptor row. A confirmed combo change is bracketed between the last frame with the old counter and the first frame with the new counter. Two observations must confirm each counter value. Judgment words are observed independently of the counter, including before combo 4 and after a combo break. Input matching uses those observed intervals, never invented subframe press timestamps.
 
-Shared displacement requires at least three one-to-one head correspondences across at least two
-lanes. Ambiguous displacement and gaps in independent support break the motion history. This history
-lets a head reconnect through a HUD occlusion even when short per-head source-time velocity
-estimates disagree because captured game images repeat. A corroborated head uses one screen pixel
-per shared displacement pixel; a measured slope inconsistent with that model is refused. Full
-unclipped observations estimate its position robustly, preserving the relative spacing of
-simultaneously visible notes.
-
-Stable shared runs use one affine time mapping; otherwise a validated nearby mapping or fractional
-interpolation between original source frames is used. Target estimates are not rounded to frame
-numbers or snapped to beat quotas. Tests distinguish equal relative pixel spacing from unknown
-absolute capture latency. Source-frame cadence, measured clock residual and displacement uncertainty
-remain in the target range. True speed changes that fail the clock checks do not borrow a constant
-song speed. A head last observed inside the HUD may use up to 650 ms / six lane spacings of
-independently observed shared motion; other heads retain the normal proximity bound. With
-insufficient shared evidence, the original local fit and explicit exclusions remain.
-
-`scroll_motion` records the original-time displacement history and supporting lane counts. Per-note `fit_method`, `motion_target_phase`, clock model and original crossing-frame PTS explain the estimate. Saved native detections can be refitted without decoding gameplay frames or running OCR; these models never retime the recording.
+Shared motion and local crossing clocks preserve native positions, capture uncertainty and
+source PTS. See [motion clocks](motion-clocks.md) for support requirements and failure handling.
 
 The default association tolerance is 45 ms around the observed update interval. A monotone sequence
 alignment compares rows and counter updates in time order, so close successive notes do not all get

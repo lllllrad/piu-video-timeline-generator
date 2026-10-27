@@ -67,6 +67,8 @@ With a shared forward displacement **d(t)**, notes moving together instead satis
 
 Equal pixel gaps imply equal time gaps only where the displacement-to-time mapping is linear. Under speed changes, equal pixel gaps need not mean equal musical or recording-time gaps. Do not snap targets to integer frames or assume a song-wide scroll speed. Continuous interpolation can improve relative timing while capture cadence, fit residual, position error and unknown capture phase still limit absolute accuracy.
 
+Clock support, local window selection and explicit failure rules are documented in [motion clocks](motion-clocks.md).
+
 A disappearance is an observation gap, not proof of a note ending, a successful press, a MISS or a gimmick. Seek in both directions. A matching trajectory before and after an overlay can establish one note. Reconnection requires lane, position, motion and unique identity; proximity in time alone is insufficient. Visible detections that cannot be retained or accounted for must remain reviewable, with a warning unless a human-authored chart-region exception covers them.
 
 ## Taps, holds and two adjacent heads
