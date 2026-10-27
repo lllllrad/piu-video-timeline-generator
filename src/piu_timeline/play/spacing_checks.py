@@ -6,7 +6,13 @@ import numpy as np
 
 def registered_gap(first,second,samples,offsets,frames,a,b):
     gaps=[]
-    for time,_ in samples:
+    # Adjacency selects which gap needs checking, not which simultaneous
+    # observations can prove its coordinate model. An intervening third head
+    # cannot invalidate a measured pair inside that same source-time window.
+    first_points=dict(first['points']);second_points=dict(second['points'])
+    times=sorted(t for t in first_points.keys()&second_points.keys()
+                 if samples[0][0]<=t<=samples[-1][0])
+    for time in times:
         chunk=frames.get(time)
         if (chunk,a) in offsets and (chunk,b) in offsets:
             gaps.append((time,offsets[chunk,b]-offsets[chunk,a]))
@@ -30,7 +36,7 @@ def spacing_failures(notes, spacing, motion=None):
     for i,note in enumerate(notes):
         if note['status']!='estimated' or note.get('fit_method')=='isolated_native_track':continue
         for t,y in note['points']:at[t].append((y,i))
-    for time,points in at.items():
+    for time,points in sorted(at.items()):
         points.sort()
         for (ya,a),(yb,b) in zip(points,points[1:]):
             if yb-ya>.65*spacing:pairs[(a,b)].append((time,yb-ya))

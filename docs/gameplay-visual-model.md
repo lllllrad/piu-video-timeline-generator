@@ -432,3 +432,13 @@ The measured offsets must pass the same repeated-frame stability gates as direct
 silhouette measurements. Failed direct registrations are not replaced with a
 more convenient template result. Templates provide coordinates only: matching a
 glyph does not classify a tap or hold, establish body ownership or prove input.
+
+A neighboring-head spacing check selects a pair when the heads are adjacent in
+height. Its common coordinate proof may use every frame where those same two
+identities are observed together inside the selected source-time interval, even
+if a third head lies between them in some frames. Height adjacency does not erase
+simultaneous coordinate evidence. Retain the minimum four registered observations
+spanning 65 ms, the observed gap/scatter and the existing pixel tolerance. Do not
+borrow support outside the checked interval or from a block lacking either head.
+Sort source times independently of trajectory storage order before defining that
+interval; processing a short track first must not change the geometry verdict.
