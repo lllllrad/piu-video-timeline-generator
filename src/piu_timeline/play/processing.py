@@ -8,7 +8,7 @@ import numpy as np
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
-PROCESSING_FORMAT = {'schema': 1, 'revision': 4}
+PROCESSING_FORMAT = {'schema': 1, 'revision': 6,'partial_confirmation_minimum_coverage':.8}
 
 
 class ReceptorPixels:
@@ -64,6 +64,18 @@ def overlap(template, image):
     return 2*int((template & image).sum())/total if total else 0.
 
 
+def visible_template(mask,template,y,radius):
+    """Keep the true clipped intersection, without padding unseen pixels."""
+    center=round(y);middle=mask.shape[1]//2
+    top,bottom=max(0,center-radius),min(mask.shape[0],center+radius+1)
+    left,right=middle-radius,middle+radius+1
+    if bottom<=top or left<0 or right>mask.shape[1]or not template.any():return None
+    a=top-(center-radius);part=template[a:a+bottom-top]
+    coverage={'area_fraction':part.size/template.size,'foreground_fraction':int(part.sum())/int(template.sum())}
+    if min(coverage.values())<PROCESSING_FORMAT['partial_confirmation_minimum_coverage']:return None
+    return (slice(top,bottom),slice(left,right)),part,coverage
+
+
 def transition(samples, receptor, spacing):
     """A disappearance is a visual event, never a successful judgment by itself."""
     present = [s for s in samples if s['state'] == 'present']
@@ -73,22 +85,28 @@ def transition(samples, receptor, spacing):
         return {'status': 'passed_target', 'reason': 'head_observed_beyond_receptor'}
     last = present[-1]
     after = [s for s in samples if s['time'] > last['time']]
-    absent = [s for s in after if s['state'] == 'absent']
+    absent = [s for s in after if s['state'] == 'absent'and not s.get('confirmation_only')]
+    confirmation=next((s for s in after if s['state']=='absent'and absent and s['time']>absent[0]['time']
+                       and (not s.get('confirmation_only')or all(s.get('template_coverage',{}).get(k,0)
+                            >=PROCESSING_FORMAT['partial_confirmation_minimum_coverage']
+                            for k in ('area_fraction','foreground_fraction')))),None)
     # A bounded flash may hide the transition. Clear observations on both
     # sides bracket it; later clear absence corroborates without narrowing it.
     blocked = any(s.get('unknown_reason') not in (None, 'white_effect', 'partial_shape')
                   for s in after if s['state'] == 'unknown' and (not absent or s['time'] <= absent[0]['time']))
-    if (len(absent) >= 2 and len(present) >= 3 and not blocked
+    blocked=blocked or any(s.get('unknown_reason')=='partial_head_present'for s in after)
+    if (absent and confirmation is not None and len(present) >= 3 and not blocked
             and 0 < absent[0]['time']-last['time'] <= .075
-            and 0 < absent[1]['time']-absent[0]['time'] <= .1
-            and absent[1]['time']-last['time'] <= .15
+            and 0 < confirmation['time']-absent[0]['time'] <= .1
+            and confirmation['time']-last['time'] <= .15
             and -.45*spacing <= last['y']-receptor <= 1.25*spacing
             and absent[0]['y'] >= receptor-.8*spacing
             and all(0 < b['time']-a['time'] <= .05 for a,b in zip([last]+after,after))):
         return {'status': 'disappeared_near_receptor', 'reason': 'verified_head_then_clear_absence',
                 'range': [last['time'], absent[0]['time']],
                 'source_pts_seconds': [last['pts'], absent[0]['pts']],
-                'confirmation_source_pts_seconds': absent[1]['pts']}
+                'confirmation_source_pts_seconds': confirmation['pts'],
+                'confirmation_partial_template':bool(confirmation.get('confirmation_only'))}
     return {'status': 'unresolved', 'reason': 'occlusion_gap_or_unobserved_transition'}
 
 
@@ -156,8 +174,11 @@ def observe_processing(data, path):
                 continue
             state, score, reason = 'unknown', None, 'partial_shape'
             color, light, visibility = lane_mask(fi)
-            image = patch_at(color, y-top, radius)
-            white = patch_at(light, y-top, radius)
+            cropped=visible_template(color,template,y-top,radius)
+            if cropped:
+                slices,observed_template,coverage=cropped
+                image,white=color[slices],light[slices]
+            else:image=white=None
             x = data['layout']['lanes'][note['lane']]['x']
             hidden = any(rx <= x <= rx+rw and ry*height-radius <= y <= (ry+rh)*height+radius
                          for rx,ry,rw,rh in regions)
@@ -172,17 +193,21 @@ def observe_processing(data, path):
             elif white.mean()>=.45:
                 reason = 'white_effect'
             else:
-                score = overlap(template, image)
+                score = overlap(observed_template, image)
                 state = 'present' if score>=.65 else 'absent' if score<=.18 else 'unknown'
                 if state == 'absent':
                     # Bloom can desaturate the colored head outside the strict
                     # white core. Its neighboring pixels are not clear absence.
                     halo_radius = max(1, round(.1*spacing))
                     halo = cv2.dilate(white.astype('uint8'), np.ones((2*halo_radius+1,2*halo_radius+1), dtype='uint8'))
-                    if template.any() and halo[template].mean() >= .3:
+                    if halo[observed_template].mean() >= .3:
                         state, reason = 'unknown', 'white_effect'
+                if coverage['area_fraction']<1 and state=='present':
+                    state,reason='unknown','partial_head_present'
             record['samples'].append({'time': time, 'pts': source_pts, 'y': float(y), 'state': state, 'score': score,
-                                      'unknown_reason': reason if state == 'unknown' else None})
+                                      'unknown_reason': reason if state == 'unknown' else None,
+                                      **({'template_coverage':coverage,'confirmation_only':True}
+                                         if cropped and coverage['area_fraction']<1 else {})})
         result.append({**record, **transition(record['samples'], receptor, spacing)})
     from piu_timeline.play.visibility import pre_receptor_losses
     boundaries = pre_receptor_losses(result, receptor, spacing)

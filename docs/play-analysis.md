@@ -444,3 +444,12 @@ as the cap. Templates are learned from directly measured isolated caps once per
 segment and never from their own inferred matches. Low-similarity and ambiguous
 matches do not supply an offset; existing geometry/type warnings remain. Native
 NPZ arrays are loaded once for this pass rather than decompressed per sample.
+
+Processing samples may include `template_coverage` (visible area and expected
+foreground fractions) and `confirmation_only` when a comparison window is partly
+outside the pixel band. Such a sample can corroborate an earlier full clear
+absence, never establish its timestamp. Confirmed events expose
+`confirmation_partial_template` alongside the original confirmation PTS. Strong
+partial presence remains `partial_head_present` and blocks an earlier proposed
+disappearance. This processing evidence does not change chart coordinates or
+create a physical press, release or grade.
