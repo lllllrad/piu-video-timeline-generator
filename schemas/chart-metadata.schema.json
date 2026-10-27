@@ -222,6 +222,55 @@
           }
         ]
       }
+    },
+    "row_assertions": {
+      "type": "array",
+      "description": "Reviewed chart facts; all specified cells must match one row within the half-open song-time window.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "start_seconds",
+          "end_seconds",
+          "cells",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "start_seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "end_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "cells": {
+            "type": "object",
+            "minProperties": 1,
+            "propertyNames": {
+              "pattern": "^[0-9]+$"
+            },
+            "additionalProperties": {
+              "enum": [
+                ".",
+                "X",
+                "M",
+                "H",
+                "W"
+              ]
+            }
+          }
+        }
+      }
     }
   }
 }
