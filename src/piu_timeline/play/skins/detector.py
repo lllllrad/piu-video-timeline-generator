@@ -5,8 +5,8 @@ import math
 
 from piu_timeline.play.screen_regions import note_occluders
 
-FORMAT = {'schema': 1, 'revision': 3, 'method': 'lane_masked_rgb_regions',
-          'horizontal_search_spacing': .12, 'same_anchor_spacing': .25}
+FORMAT = {'schema': 1, 'revision': 4, 'method': 'lane_masked_rgb_regions',
+          'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor'}
 
 
 def occluded_support(layout, support, left, top, width, height):
@@ -62,7 +62,7 @@ class SkinDetector:
                 radius = max(1, round(FORMAT['horizontal_search_spacing'] * self.spacing))
                 left, right = max(0, round(center - ax) - radius), min(self.width, round(center - ax) + w + radius)
                 top = max(0, int(self.layout['receptor_y'] * self.height + .55 * self.spacing - ay))
-                bottom = min(self.height, round(self.layout.get('note_y_max', .95) * self.height))
+                bottom = self.height
                 if right - left < w or bottom - top < h:
                     continue
                 search = image[top:bottom, left:right]
@@ -88,6 +88,8 @@ class SkinDetector:
                 rows, cols = np.nonzero(allowed & (proposal_scores <= minima + 1e-7))
                 for row, col in zip(rows, cols, strict=True):
                     x, y = left + col + ax, top + row + ay
+                    if y > self.layout.get('note_y_max',.95)*self.height:
+                        continue
                     bounds = [left + int(col), top + int(row), left + int(col) + w, top + int(row) + h]
                     hidden=occluded_support(self.layout,template['support'],bounds[0],bounds[1],self.width,self.height)
                     position_support=template['cap_support']if 'cap'in errors else template['support']

@@ -42,6 +42,17 @@ def examples(root):
 
 
 class SkinDetectorTest(unittest.TestCase):
+    def test_anchor_limit_does_not_crop_visible_context_at_the_bottom_of_the_game(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);items,_=examples(root);bank=load_bank(root/'bank.json')
+            layout={'receptor_y':.05,'note_y_max':.95,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+            detector=SkinDetector(bank,layout,200,300)
+            image=np.zeros((300,200,3),dtype='uint8');image[260:300,10:30]=items[0][1]
+            found=detector.detect(image)
+            self.assertTrue(any(o['role']=='tap'and abs(o['y']*300-280)<1e-6 for o in found))
+            layout['note_y_max']=.9
+            self.assertFalse(any(abs(o['y']*300-280)<1e-6 for o in detector.detect(image)))
+
     def test_cap_only_reference_or_changed_context_keeps_position_without_asserting_a_tap(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);items,manifest=examples(root)

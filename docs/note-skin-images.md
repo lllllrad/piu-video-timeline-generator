@@ -46,6 +46,10 @@ The detector rejects compared support pixels intersecting documented HUD
 rectangles. Transparent padding and pixels outside the declared comparison
 regions do not make an otherwise clear cap or connection hidden. Every supported
 pixel still has to be outside HUD; both cap and connection checks remain mandatory.
+The lower search limit applies to note anchors. Surrounding image context can
+extend beyond that limit while remaining inside the original game image; it is
+still subject to HUD support checks. A fully visible template must not be
+rejected just because its canvas extends below the anchor limit.
 Local image minima supply candidate positions. Nearby matches from the same
 role are deduplicated. A complete end pattern has additional connection evidence
 that a cap-only candidate lacks; retain the end and both image comparisons.
