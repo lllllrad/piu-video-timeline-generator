@@ -6,8 +6,9 @@ import cv2
 import numpy as np
 
 from piu_timeline.play.appearance import APPEARANCE_FORMAT
+from piu_timeline.play.holds.type_links import FORMAT as LINKED_CAP_FORMAT
 
-TYPE_FORMAT = {'schema': 1, 'revision': 6, 'appearance': APPEARANCE_FORMAT}
+TYPE_FORMAT = {'schema': 1, 'revision': 7, 'appearance': APPEARANCE_FORMAT,'connected_caps':LINKED_CAP_FORMAT}
 
 
 def cap_envelope(relaxed, white, cap, spacing):
@@ -134,6 +135,8 @@ def observe_types(data, path, frames=()):
         kinds = {o['kind'] for o in observations}-{'unknown'}
         status = 'conflict' if len(kinds)>1 else next(iter(kinds)) if kinds else 'unknown'
         result.append({'note':index,'status':status,'observations':observations})
+    from piu_timeline.play.holds.type_links import augment_types
+    result=augment_types(data,result,frames)
     return {'format':TYPE_FORMAT,'available':True,'notes':result,
             'counts':dict(Counter(r['status'] for r in result)),
             'traces':['processing-features.npz','hold-frames.jsonl'],
@@ -176,6 +179,8 @@ def observe_appearance(data, path, frames):
         kinds = {o['kind'] for o in observations}-{'unknown'}
         records.append({'note':index,'status':'conflict' if len(kinds)>1 else next(iter(kinds)) if kinds else 'unknown',
                         'observations':observations})
+    from piu_timeline.play.holds.type_links import augment_types
+    records=augment_types(data,records,frames)
     return {'format':TYPE_FORMAT,'available':True,'notes':records,
             'counts':dict(Counter(r['status'] for r in records)),
             'traces':['appearance-features.npz','hold-frames.jsonl'],

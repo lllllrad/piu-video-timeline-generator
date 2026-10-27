@@ -209,6 +209,19 @@ alone is insufficient. Other samples remain unknown.
 Projection combines evidence by the existing trajectory/hold identities, never
 by time proximity alone. A single valid observation of each kind produces
 `note_type_conflict`; repeated observations cannot vote away the contradiction.
+
+A cap whose own shape is obscured can inherit hold-kind evidence from a
+uniquely connected cap in the same native frame. The retained connection must
+already have at least eight connected frames over 120 ms, at least 80% support,
+no observed gap, and unique ownership in both directions. Every connection PTS
+must map to a real frame with both native positions. At least one endpoint must
+have direct complete-cap/extended-body hold evidence at that exact PTS, with no
+contradictory tap observation. An unknown cap or an inferred type cannot seed propagation. Preserve the anchor
+observation, connection PTS and original unknown/tap observations. This is one
+topology step without feedback: a clear tap still creates a conflict, while
+failed endpoint times and pending hold geometry remain warnings. It supplies
+neither a chart time nor an input event.
+
 Reconstructed hold geometry also supplies hold evidence, with its source-frame
 range retained. An isolated cap after that hold has reached the receptor is a
 possible processing remnant, not tap evidence; retain its observed appearance
