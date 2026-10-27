@@ -11,7 +11,7 @@ from piu_timeline.play.beats.domains import FORMAT as DOMAIN_FORMAT
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
-FORMAT={'schema':1,'revision':8,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
+FORMAT={'schema':1,'revision':10,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
         'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT,'native_row_domains':DOMAIN_FORMAT}
 
 
@@ -192,8 +192,9 @@ def apply(data,directory):
         for group in proposals:
             positions={index:j for j,index in enumerate(group['notes'])}
             group['native_coordinates']=[{'chunk':number,'heads':{positions[i]:{**head,'native_note':i} for i,head in heads.items()
-                                         if i in positions}}for number,heads in coordinate_support['chunks'].items()
-                                         if sum(i in positions for i in heads)>=DOMAIN_FORMAT['measurement_limits']['minimum_references']+1]
+                                         if i in positions},'neighbor_heads':{i:head for i,head in heads.items()if i not in positions}}
+                                         for number,heads in coordinate_support['chunks'].items()
+                                         if any(i in positions for i in heads)]
     validate=(lambda fits:spacing_supported_notes(notes,proposals,fits,spacing,data.get('scroll_motion'),coordinate_support,chords))if spacing else None
     phase=fit_phase(proposals,ref['alignment_uncertainty_seconds'],consistent_notes=validate)
     result.update(song_phase_range=phase.get('phase_range'),song_phase_correction_seconds=phase.get('phase'),

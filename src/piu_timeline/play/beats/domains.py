@@ -3,7 +3,7 @@ import math
 
 from piu_timeline.play.beats.coordinates import fit, FORMAT as COORDINATE_FORMAT
 
-FORMAT = {'schema': 1, 'revision': 1, 'references': 'unique_rows_in_same_beat_group',
+FORMAT = {'schema': 1, 'revision': 2, 'references': 'frozen_unique_rows_in_shared_native_block',
           'measurement_limits': COORDINATE_FORMAT}
 
 
@@ -18,7 +18,8 @@ def constrain(options, step, origin, blocks):
             if index not in heads:
                 continue
             radius = COORDINATE_FORMAT['reference_radius_seconds']
-            references = []
+            references = [dict(r) for r in block.get('references',())
+                          if origin+lo*step-radius <= r['target_seconds'] <= origin+hi*step+radius]
             for peer, head in heads.items():
                 a,b = options[peer]
                 if peer == index or a != b:

@@ -49,9 +49,9 @@ does not suppress motion/visibility warnings or identify a chart gimmick.
 
 ## Independent spacing constraints
 
-A broad time interval can also cover several nonconcurrent rows. Within the
-same beat group, use uniquely placed heads as independent anchors in each
-registered coordinate block. A model needs at least five other heads, two
+A broad time interval can also cover several nonconcurrent rows. Use uniquely
+placed heads as independent anchors in each registered coordinate block,
+including nearby measures at the same tempo. A model needs at least five other heads, two
 lanes, three distinct target times and a target span of at least 300 ms.
 Every reference must satisfy the existing one-pixel model residual limit;
 no disagreeing reference is discarded. The tested head needs qualified native
@@ -63,7 +63,15 @@ coordinate interval, using the reference model's actual maximum residual plus
 the existing 1.5-pixel native support limit. Models can remove candidate rows,
 never add one or enlarge a time interval. Every qualified block constrains the
 result; conflicting evidence cannot be bypassed by selecting a favorable block.
-Newly resolved heads are not reused as training anchors within this operation.
+At each candidate song phase, freeze unique rows from the initial independent
+group fits before comparing neighboring groups. Newly resolved heads are not
+reused as training anchors within this operation. A reference must retain its
+original target in the final fit; changed or failed references explicitly fail
+dependent groups. Measure boundaries do not discard native support, and tempo
+changes do not transfer reference timings between groups. The local and combined
+reference models constrain the domain separately. An incompatible combined
+model cannot erase a valid local constraint; two qualified but contradictory
+models fail rather than selecting the preferred one.
 
 One surviving row resolves the ambiguity. Multiple survivors remain explicitly
 ambiguous; no survivor refutes the subdivision. A finer natural Split can be
