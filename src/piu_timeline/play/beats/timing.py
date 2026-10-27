@@ -5,16 +5,18 @@ import json
 import math
 import subprocess
 from pathlib import Path
-from piu_timeline.play.beat_coordinates import FORMAT as COORDINATE_FORMAT
+from piu_timeline.play.beats.coordinates import FORMAT as COORDINATE_FORMAT
+from piu_timeline.play.beats.chords import FORMAT as CHORD_FORMAT
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
-FORMAT={'schema':1,'revision':6,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
-        'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT}
+FORMAT={'schema':1,'revision':7,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
+        'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT}
 
 
-def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0):
+def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0,native_chords=()):
     """Choose the smallest explanatory split, never an arbitrarily fine nearest row."""
+    incompatible=False
     for split in splits or FORMAT['natural_splits']:
         step=60/(bpm*split)
         options=[]
@@ -23,6 +25,10 @@ def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty
             hi=math.floor((time+error+phase_uncertainty-origin)/step+1e-8)
             options.append((lo,hi))
         if any(lo>hi for lo,hi in options):continue
+        from piu_timeline.play.beats.chords import constrain
+        original_options=options
+        options,proofs=constrain(options,step,native_chords)
+        if any(lo>hi for lo,hi in options):incompatible=True;continue
         if any(hi>lo for lo,hi in options):
             return {'status':'failed','reason':'ambiguous_beat_rows','split':split}
         rows=[lo for lo,hi in options]
@@ -31,8 +37,9 @@ def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty
         phase_lo=max([-phase_uncertainty]+[t-e-g for t,e,g in zip(targets,uncertainties,exact)])
         phase_hi=min([phase_uncertainty]+[t+e-g for t,e,g in zip(targets,uncertainties,exact)])
         if phase_lo>phase_hi+1e-8:continue
-        return {'status':'restored','split':split,'rows':rows,'targets':exact,'phase_range':[phase_lo,phase_hi]}
-    return {'status':'failed','reason':'no_natural_beat_subdivision'}
+        return {'status':'restored','split':split,'rows':rows,'targets':exact,'phase_range':[phase_lo,phase_hi],
+                **({'native_chord_constraints':proofs,'unconstrained_row_domains':original_options}if proofs else {})}
+    return {'status':'failed','reason':'native_chord_domains_incompatible'if incompatible else'no_natural_beat_subdivision'}
 
 
 def reference(data, directory):
@@ -86,7 +93,7 @@ def prepare_reference(data,directory):
     return {'status':'prepared','method':'reference_audio_translation'}
 
 
-def spacing_supported_notes(notes,groups,fits,spacing,motion,coordinate_support=None):
+def spacing_supported_notes(notes,groups,fits,spacing,motion,coordinate_support=None,chords=()):
     """Score a candidate using the same native spacing constraints as its output."""
     from piu_timeline.play.spacing_checks import spacing_failures
     candidate=[dict(note)for note in notes]
@@ -95,6 +102,8 @@ def spacing_supported_notes(notes,groups,fits,spacing,motion,coordinate_support=
             if fit['status']=='restored':candidate[index]['target_seconds']=fit['targets'][j]
             else:candidate[index]['status']='excluded'
     rejected={w['note']for w in spacing_failures(candidate,spacing,motion,coordinate_support)}
+    from piu_timeline.play.beats.chords import conflicts
+    rejected.update(w['note']for w in conflicts(candidate,chords))
     return tuple(i for i,note in enumerate(candidate)if note['status']=='estimated'and i not in rejected)
 
 
@@ -142,23 +151,29 @@ def apply(data,directory):
             'check':'timing_reconstruction','observed_points':0,'visible_start_seconds':data.get('start_seconds',0),
             'visible_end_seconds':data.get('end_seconds',data.get('start_seconds',0))}])
         return {**data,'beat_timing':result}
-    from piu_timeline.play.beat_phase import fit_phase
+    from piu_timeline.play.beats.phase import fit_phase
+    spacing=None
+    if len(data.get('layout',{}).get('lanes',[]))>=2:
+        spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
+    from piu_timeline.play.beats.chords import prepare as prepare_chords,conflicts as chord_conflicts
+    chords=prepare_chords(data,spacing)if spacing else []
+    result['native_chords']=chords
     proposals=[]
     for (si,bar),indices in groups.items():
         indices.sort(key=lambda i:notes[i]['target_seconds'])
         group={'notes':indices,'section':si,'beat_group':bar,
                'targets':[notes[i]['target_seconds'] for i in indices],
                'errors':[notes[i]['prediction_uncertainty_seconds'] for i in indices]}
+        positions={index:j for j,index in enumerate(indices)}
+        group['native_chords']=[{**p,'indices':[positions[i]for i in p['peer_notes']]}
+                                for p in chords if all(i in positions for i in p['peer_notes'])]
         if si<0:group['invalid']='outside_official_timing_sections'
         else:
             lo,hi,bpm=sections[si];group.update(bpm=bpm,origin=origin+lo)
         proposals.append(group)
-    spacing=None
-    if len(data.get('layout',{}).get('lanes',[]))>=2:
-        spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
-    from piu_timeline.play.beat_coordinates import prepare
+    from piu_timeline.play.beats.coordinates import prepare
     coordinate_support=prepare(data,spacing)if spacing else None
-    validate=(lambda fits:spacing_supported_notes(notes,proposals,fits,spacing,data.get('scroll_motion'),coordinate_support))if spacing else None
+    validate=(lambda fits:spacing_supported_notes(notes,proposals,fits,spacing,data.get('scroll_motion'),coordinate_support,chords))if spacing else None
     phase=fit_phase(proposals,ref['alignment_uncertainty_seconds'],consistent_notes=validate)
     result.update(song_phase_range=phase.get('phase_range'),song_phase_correction_seconds=phase.get('phase'),
                   phase_resolution_seconds=phase.get('resolution_seconds'),
@@ -192,6 +207,11 @@ def apply(data,directory):
             notes[index].update(status='excluded',reason=conflict['reason'],target_seconds=None,
                                  beat_reconstruction={'status':'failed','reason':conflict['reason']})
         result['warnings'].extend(conflicts)
+    conflicts=chord_conflicts(notes,chords)
+    for conflict in conflicts:
+        notes[conflict['note']].update(status='excluded',reason=conflict['reason'],target_seconds=None,
+                                     beat_reconstruction={'status':'failed','reason':conflict['reason']})
+    result['warnings'].extend(conflicts)
     result['status']='failed' if result['warnings'] else 'restored'
     return {**data,'notes':notes,'beat_timing':result}
 

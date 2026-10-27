@@ -80,7 +80,7 @@ def current(path):
                 metadata = json.loads(metadata_path.read_text())
                 if metadata.get('regions') or metadata.get('gimmick_candidates'):
                     return False
-    from piu_timeline.play.beat_timing import current as beat_current
+    from piu_timeline.play.beats.timing import current as beat_current
     if not beat_current(data,path.parent):
         return False
     holds = data.get('hold_analysis', {})

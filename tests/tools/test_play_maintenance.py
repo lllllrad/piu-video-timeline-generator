@@ -26,7 +26,7 @@ def play(root, source='source', number=1, stale=False):
           'combo_events':[], 'judgment_events':[], 'analysis_width':650,
           'media':{'path':str(media),'size_bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns},
           'start_seconds':0, 'end_seconds':1, 'game_roi':[0,0,1300,730], 'layout':{'lanes':[]}}
-    from piu_timeline.play.beat_timing import FORMAT as BEAT_FORMAT, reference
+    from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
     data['beat_timing']={'contract':{'format':BEAT_FORMAT,'reference':reference(data,directory)}}
     data['judgment_cache']=cache_contracts(data, [])
     data['hold_analysis']={'feature_contract':feature_contract(data), 'association_contract':{

@@ -26,7 +26,7 @@ from piu_timeline.play.fonts import previous_digit_reader, bootstrap_digits
 
 from piu_timeline.play.shared_timing import FORMAT as SHARED_TIMING_FORMAT
 from piu_timeline.play.head_registration import FORMAT as HEAD_REGISTRATION_FORMAT
-from piu_timeline.play.beat_timing import FORMAT as BEAT_TIMING_FORMAT, current as beat_current, apply as apply_beats, reassociate as reassociate_beats
+from piu_timeline.play.beats.timing import FORMAT as BEAT_TIMING_FORMAT, current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
 TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT}

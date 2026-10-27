@@ -33,7 +33,7 @@ class PlayCacheTest(unittest.TestCase):
                    'analysis_height':180,'layout':layout,'frame_count':2,'participant_slots':[],
                    'frame_observation_version':play.FRAME_OBSERVATION_VERSION,
                    'judgment_events':[],'calibration':{'file':str(donor/'evidence/proof.png')}}
-            from piu_timeline.play.beat_timing import FORMAT as BEAT_FORMAT, reference
+            from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,donor)}}
             saved['judgment_cache']=cache_contracts(saved,[])
             (donor/'analysis.json').write_text(json.dumps(saved,indent=2))
@@ -95,7 +95,7 @@ class PlayCacheTest(unittest.TestCase):
                    'layout':layout,'frame_count':2,'display_delay_correction_ms':0,
                    'judgment_analysis_version':JUDGMENT_VERSION,'judgment_template_labels':[],'judgment_events':[]}
             saved['play_analysis_version']='unrelated application release'
-            from piu_timeline.play.beat_timing import FORMAT as BEAT_FORMAT, reference
+            from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,final)}}
             saved['judgment_cache']=cache_contracts(saved,[])
             (final/'analysis.json').write_text(json.dumps(saved))
@@ -140,7 +140,7 @@ class PlayCacheTest(unittest.TestCase):
             saved={**segment,'media':media,'game_roi':document['game_roi'],'play_analysis_version':play.VERSION,'timing_format':play.TIMING_FORMAT,
                    'analysis_width':650,'player':None,'participant_slots':[],'judgment_analysis_version':JUDGMENT_VERSION,'judgment_template_labels':[],'judgment_events':[]}
             saved['layout']={'lanes':[{'x':.1+.2*i} for i in range(5)],'combo_roi':[.4,.5,.2,.1]}
-            from piu_timeline.play.beat_timing import FORMAT as BEAT_FORMAT, reference
+            from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,final)}}
             saved['judgment_cache']=cache_contracts(saved,[])
             (final/'analysis.json').write_text(json.dumps(saved))
@@ -163,7 +163,7 @@ class PlayCacheTest(unittest.TestCase):
                    'play_analysis_version':play.VERSION,'timing_format':play.TIMING_FORMAT,
                    'notes':[],'matches':[],'coverage':{},'combo_events':[],'judgment_events':[],
                    'layout':{'lanes':[{'x':.1+.2*i} for i in range(5)],'combo_roi':[.4,.5,.2,.1]}}
-            from piu_timeline.play.beat_timing import FORMAT as BEAT_FORMAT, reference
+            from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,final)}}
             saved['judgment_cache']=cache_contracts(saved,[])
             saved['judgment_cache']['association']['format']={'schema':1,'revision':0}

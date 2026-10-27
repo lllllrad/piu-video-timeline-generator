@@ -2,7 +2,7 @@
 from copy import deepcopy
 import unittest
 
-from piu_timeline.play.beat_coordinates import prepare,predictions,fit
+from piu_timeline.play.beats.coordinates import prepare,predictions,fit
 from piu_timeline.play.spacing_checks import spacing_failures
 
 

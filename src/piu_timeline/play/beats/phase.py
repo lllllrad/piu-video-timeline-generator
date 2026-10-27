@@ -1,7 +1,7 @@
 """Choose a common bounded song phase before selecting local subdivisions."""
 import math
 
-from piu_timeline.play.beat_timing import fit_grid
+from piu_timeline.play.beats.timing import fit_grid
 
 
 def fit_phase(groups, uncertainty, consistent_notes=None):
@@ -15,7 +15,8 @@ def fit_phase(groups, uncertainty, consistent_notes=None):
         for group in groups:
             if group.get('invalid'):
                 fits.append({'status':'failed','reason':group['invalid']});continue
-            fits.append(fit_grid(group['targets'],group['errors'],group['bpm'],group['origin']+phase))
+            fits.append(fit_grid(group['targets'],group['errors'],group['bpm'],group['origin']+phase,
+                                 native_chords=group.get('native_chords',())))
         count=sum(len(g['targets']) for g,f in zip(groups,fits) if f['status']=='restored')
         complexity=sum(f['split']*len(g['targets']) for g,f in zip(groups,fits) if f['status']=='restored')
         supported=tuple(sorted(consistent_notes(fits)))if consistent_notes else None
@@ -31,7 +32,8 @@ def fit_phase(groups, uncertainty, consistent_notes=None):
                 'phase_trials':trials}
     lo,hi=winners[0][0],winners[-1][0];phase=(lo+hi)/2
     fits=[({'status':'failed','reason':g['invalid']} if g.get('invalid') else
-           fit_grid(g['targets'],g['errors'],g['bpm'],g['origin']+phase)) for g in groups]
+           fit_grid(g['targets'],g['errors'],g['bpm'],g['origin']+phase,
+                    native_chords=g.get('native_chords',()))) for g in groups]
     if consistent_notes and tuple(sorted(consistent_notes(fits)))!=winners[0][3]:
         return {'status':'failed','reason':'unstable_spatial_song_phase','phase_trials':trials,
                 'fits':[{'status':'failed','reason':'unstable_spatial_song_phase'}for _ in groups]}

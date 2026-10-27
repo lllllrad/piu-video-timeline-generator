@@ -2,7 +2,7 @@
 from collections import defaultdict
 
 import numpy as np
-from piu_timeline.play.beat_coordinates import predictions
+from piu_timeline.play.beats.coordinates import predictions
 
 
 def registered_gap(first,second,samples,offsets,frames,a,b):

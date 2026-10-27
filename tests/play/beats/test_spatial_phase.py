@@ -2,8 +2,8 @@
 from copy import deepcopy
 import unittest
 
-from piu_timeline.play.beat_phase import fit_phase
-from piu_timeline.play.beat_timing import spacing_supported_notes
+from piu_timeline.play.beats.phase import fit_phase
+from piu_timeline.play.beats.timing import spacing_supported_notes
 
 
 def scenario():

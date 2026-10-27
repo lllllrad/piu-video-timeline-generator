@@ -298,7 +298,7 @@ generation. Generic timing exclusions do not suppress these checks.
 
 `play/shared_timing.py` rebuilds displacement from registered trajectory
 identities. `play/spacing_checks.py` checks relative geometry, while
-`play/beat_timing.py` uses locally available official UCS timing and verified
+`play/beats/timing.py` uses locally available official UCS timing and verified
 alignment to test natural subdivisions. Missing references, failed shared
 support and ambiguous beat rows remain explicit review states. Native video,
 frame traces and pixel caches are reusable across these derived-rule changes.

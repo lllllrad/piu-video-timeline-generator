@@ -1,7 +1,7 @@
 """Natural subdivisions describe rhythm; increasing Split cannot hide uncertainty."""
 import unittest
 
-from piu_timeline.play.beat_timing import fit_grid
+from piu_timeline.play.beats.timing import fit_grid
 
 
 class BeatGridTest(unittest.TestCase):
@@ -30,7 +30,7 @@ class BeatGridTest(unittest.TestCase):
         from pathlib import Path
         import tempfile
         from unittest.mock import patch
-        from piu_timeline.play.beat_timing import apply
+        from piu_timeline.play.beats.timing import apply
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);timing=root/'timing.ucs'
             timing.write_text(':Format=1\n:Mode=Single\n:BPM=120\n:Delay=0\n:Beat=4\n:Split=4\n'+'.....\n'*32)
@@ -38,7 +38,7 @@ class BeatGridTest(unittest.TestCase):
             data={'notes':[{'status':'estimated','lane':i,'points':[[9.9,200]],
                             'target_seconds':t,'prediction_uncertainty_seconds':.003}
                             for i,t in enumerate([10.001,10.124,10.251])]}
-            with patch('piu_timeline.play.beat_timing.reference',return_value=reference):
+            with patch('piu_timeline.play.beats.timing.reference',return_value=reference):
                 result=apply(data,root)
                 self.assertEqual(result['beat_timing']['status'],'restored')
                 self.assertEqual([n['target_seconds'] for n in result['notes']],[10,10.125,10.25])
@@ -58,7 +58,7 @@ class BeatGridTest(unittest.TestCase):
         self.assertEqual(conflict['status'],'failed')
 
     def test_input_associations_are_rebuilt_from_restored_targets_and_failed_notes_are_not_used(self):
-        from piu_timeline.play.beat_timing import reassociate
+        from piu_timeline.play.beats.timing import reassociate
         data={'notes':[{'lane':0,'status':'estimated','target_seconds':1.,'prediction_uncertainty_seconds':.01}],
               'matches':[{'note':99}], 'beat_timing':{'status':'restored'},
               'timing_reconstruction':{'status':'restored'}, 'unsupported_intervals':[],
@@ -72,7 +72,7 @@ class BeatGridTest(unittest.TestCase):
         self.assertEqual(reassociate(data,0)['matches'],[])
 
     def test_global_phase_is_chosen_before_greedy_local_subdivisions(self):
-        from piu_timeline.play.beat_phase import fit_phase
+        from piu_timeline.play.beats.phase import fit_phase
         groups=[{'targets':[10.001,10.124,10.251],'errors':[.003]*3,'bpm':120,'origin':10},
                 {'targets':[12.001,12.124,12.251],'errors':[.003]*3,'bpm':120,'origin':10}]
         result=fit_phase(groups,.02)
@@ -81,7 +81,7 @@ class BeatGridTest(unittest.TestCase):
         self.assertAlmostEqual(result['phase'],0,delta=.003)
 
     def test_phase_without_supported_groups_is_explicitly_failed(self):
-        from piu_timeline.play.beat_phase import fit_phase
+        from piu_timeline.play.beats.phase import fit_phase
         group={'targets':[10.137],'errors':[.000001],'bpm':120,'origin':10}
         result=fit_phase([group],0)
         self.assertEqual(result['status'],'failed')
@@ -91,7 +91,7 @@ class BeatGridTest(unittest.TestCase):
         from pathlib import Path
         import tempfile
         from unittest.mock import patch
-        from piu_timeline.play.beat_timing import apply
+        from piu_timeline.play.beats.timing import apply
         from piu_timeline.charts.ucs import constant_tempo,parse
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);timing=root/'timing.ucs'
@@ -101,7 +101,7 @@ class BeatGridTest(unittest.TestCase):
                           'target_seconds':12.125,'prediction_uncertainty_seconds':.001}]}
             ref={'status':'available','timing':str(timing),'song_start_seconds':10,
                  'alignment_uncertainty_seconds':0,'constant_tempo_bpm':'120'}
-            with patch('piu_timeline.play.beat_timing.reference',return_value=ref):
+            with patch('piu_timeline.play.beats.timing.reference',return_value=ref):
                 result=apply(data,root)
                 self.assertEqual(result['beat_timing']['status'],'restored')
                 self.assertEqual(result['notes'][0]['target_seconds'],12.125)
@@ -118,21 +118,21 @@ class BeatGridTest(unittest.TestCase):
         from pathlib import Path
         import tempfile,json
         from unittest.mock import patch
-        from piu_timeline.play.beat_timing import apply,current
+        from piu_timeline.play.beats.timing import apply,current
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);metadata=root/'metadata.json';metadata.write_text(json.dumps({'regions':[]}))
             timing=root/'timing.ucs';timing.write_text(':Format=1\n:Mode=Single\n:BPM=120\n:Beat=4\n:Split=4\n'+'.....\n'*32)
             missing={'status':'unavailable','reason':'verified_song_alignment_missing','ucs_index':'CS999','metadata_path':str(metadata)}
             ready={'status':'available','timing':str(timing),'song_start_seconds':10,'alignment_uncertainty_seconds':0}
             data={'start_seconds':10,'end_seconds':20,'notes':[{'status':'estimated','lane':0,'points':[[10,100]],'target_seconds':10.25,'prediction_uncertainty_seconds':.001}]}
-            with patch('piu_timeline.play.beat_timing.reference',side_effect=[missing,ready]),patch('piu_timeline.charts.audio.prepare_alignment') as align:
+            with patch('piu_timeline.play.beats.timing.reference',side_effect=[missing,ready]),patch('piu_timeline.charts.audio.prepare_alignment') as align:
                 result=apply(data,root)
             align.assert_called_once()
             self.assertEqual(result['beat_timing']['status'],'restored')
             self.assertEqual(result['beat_timing']['reference_preparation']['status'],'prepared')
-            with patch('piu_timeline.play.beat_timing.reference',return_value=ready),patch('piu_timeline.charts.audio.prepare_alignment',side_effect=AssertionError('Current checks must not read audio')):
+            with patch('piu_timeline.play.beats.timing.reference',return_value=ready),patch('piu_timeline.charts.audio.prepare_alignment',side_effect=AssertionError('Current checks must not read audio')):
                 self.assertTrue(current(result,root))
-            with patch('piu_timeline.play.beat_timing.reference',return_value=missing),patch('piu_timeline.charts.audio.prepare_alignment',side_effect=ValueError('Independent audio windows disagree')):
+            with patch('piu_timeline.play.beats.timing.reference',return_value=missing),patch('piu_timeline.charts.audio.prepare_alignment',side_effect=ValueError('Independent audio windows disagree')):
                 failure=apply(data,root)
             self.assertEqual(failure['beat_timing']['status'],'unavailable')
             self.assertEqual(failure['beat_timing']['warnings'][0]['failure_detail'],'Independent audio windows disagree')
