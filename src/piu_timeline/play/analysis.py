@@ -31,7 +31,7 @@ from piu_timeline.play.counter_pixels import READER_FORMAT
 from piu_timeline.play.beats.timing import FORMAT as BEAT_TIMING_FORMAT, current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':4,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT,'object_roles':OBJECT_FORMAT}
+TIMING_FORMAT = {'schema':1,'counter_revision':5,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT,'object_roles':OBJECT_FORMAT}
 FRAME_OBSERVATION_VERSION = 4
 
 

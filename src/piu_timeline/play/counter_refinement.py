@@ -10,26 +10,31 @@ def refine_events(events, observations):
         before,after = event['before'],event['after']
         lo,hi = event['lower_seconds'],event['upper_seconds']
         confirmation = event.get('confirmation_seconds')
-        if (not 2 <= event['delta'] <= 10 or not 0 < hi-lo <= .1+TIME_EPSILON
+        if (not 2 <= event['delta'] <= 10 or not 0 < hi-lo
                 or confirmation is None or not 0 <= confirmation-hi <= .075+TIME_EPSILON):
             result.append(event);continue
         reads = [r for r in observations if lo <= r['playback_seconds'] <= hi]
-        if not reads or any(not before <= r['value'] <= after for r in reads):
+        if (not reads or reads[0]['playback_seconds']!=lo or reads[-1]['playback_seconds']!=hi
+                or any(not before <= r['value'] <= after for r in reads)):
             result.append(event);continue
         if any(a['value'] > b['value'] for a,b in zip(reads,reads[1:])):
             result.append(event);continue
         states = {value:[r for r in reads if r['value']==value] for value in range(before,after+1)}
         if (not states[before] or not states[after]
                 or any(not states[value] or any(r.get('confidence',0) < .9
-                       or r.get('read_mode') != 'independent_template' for r in states[value])
+                       or r.get('read_mode') not in ('independent_template','contrast_template') for r in states[value])
                        for value in range(before+1,after))):
+            result.append(event);continue
+        pairs=[(states[value][-1],states[value+1][0])for value in range(before,after)]
+        if any(not 0 < new['playback_seconds']-old['playback_seconds'] <= .1+TIME_EPSILON for old,new in pairs):
             result.append(event);continue
         proof = {'before':before,'after':after,'lower_seconds':lo,'upper_seconds':hi,
                  'confirmation_seconds':confirmation,
+                 'original_status':event.get('status'),'original_reason':event.get('reason'),
                  'intermediate_observations':[dict(r) for r in reads if before < r['value'] < after]}
-        for value in range(before,after):
-            old,new = states[value][-1],states[value+1][0]
+        for value,(old,new)in zip(range(before,after),pairs,strict=True):
             result.append({**event,'before':value,'after':value+1,'delta':1,
+                           'status':'candidate','reason':None,
                            'lower_seconds':old['playback_seconds'],'upper_seconds':new['playback_seconds'],
                            'source_pts_seconds':[old.get('source_pts_seconds'),new.get('source_pts_seconds')],
                            'refinement_method':'independently_observed_intermediate_counter',

@@ -14,6 +14,22 @@ def tracker(middle=40,confidence=.94,mode='independent_template',finish=1000.05)
 
 
 class CounterRefinementTest(unittest.TestCase):
+    def test_long_parent_uses_only_independently_observed_bounded_substeps(self):
+        for mode in ('independent_template','contrast_template'):
+            with self.subTest(mode=mode):
+                counter=ComboTracker()
+                for t,value in [(0,5),(.017,5),(.033,5),(.116,6),(.149,7),(.166,7)]:
+                    counter.update(t,value,.94,mode,10+t)
+                self.assertEqual(counter.events[0]['status'],'excluded')
+                result=refine_events(counter.events,counter.observations)
+                self.assertEqual([(r['lower_seconds'],r['upper_seconds'])for r in result],[(.033,.116),(.116,.149)])
+                self.assertTrue(all(r['status']=='candidate'and r['reason']is None for r in result))
+                self.assertEqual(result[0]['aggregate_origin']['original_reason'],'combo_jump_or_observation_gap')
+                self.assertEqual(result[1]['source_pts_seconds'],[10.116,10.149])
+                # A real unobserved gap stays failed even if the total increment is known.
+                reads=[{**r,'playback_seconds':.14}if r['value']==6 else r for r in counter.observations]
+                self.assertEqual(refine_events(counter.events,reads),counter.events)
+
     def test_one_frame_independent_state_between_confirmed_neighbors_keeps_native_brackets(self):
         counter=tracker();events=refine_events(counter.events,counter.observations)
         self.assertEqual([(e['before'],e['after']) for e in events],[(39,40),(40,41)])

@@ -293,6 +293,12 @@ legacy analyses acquire this small region once when needed. Source, geometry,
 frame count and original timestamps are validated independently of digit reads.
 Changing an association rule never invalidates this pixel cache.
 
+A counter burst can be split only when every intervening value is independently
+read with high confidence in the native pixels. Validate each resulting transition
+against the ordinary capture-gap limit; a longer parent interval alone does not
+invalidate short, fully observed substeps. A slow or absent substep, contextual
+digit guess, reversal or unconfirmed ending keeps the original unresolved event.
+
 Faded combo glyphs may fall below a fixed white threshold. When ordinary reads
 fail, the reader measures neutral-pixel contrast with Otsu separation and tests
 both that mask and a threshold halfway toward the usual white threshold. Both
