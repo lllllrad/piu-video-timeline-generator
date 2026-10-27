@@ -61,6 +61,22 @@ at least half a lane spacing of observed approach motion. Identical shapes are
 deduplicated; stationary repeats and isolated color noise do not supply new
 poses. Each pose retains its source PTS and supporting frames. The same rule
 applies to clear receptor-band references when full-frame features are absent.
+
+Retain each pose's continuous native-feature anchor and its rounded crop center.
+The head's fractional position inside that crop is `anchor - round(anchor)`.
+Translate this fractional phase to the predicted frame position before selecting
+the floor/ceiling image rows; retain nominal alignment as well. These possible
+centers differ by at most one vertical feature pixel from nominal. Horizontal
+centers remain fixed by lane geometry. This accounts for integer crop sampling,
+not an expanded target-time budget or a change to acquired pixels. The majority
+silhouette has no individual source phase and keeps nominal alignment.
+
+Presence can use a qualified shape at one of its possible centers. Absence must
+reject every shape at every possible center, with sufficient visible coverage
+and no white-effect ambiguity at any center. Record the selected comparison's
+vertical offset in feature pixels without changing the predicted head position
+or its native timestamp.
+
 Follow the expected location using corroborated peer displacement when available,
 or the supported local velocity. This channel depends on motion identity;
 it does not consult combo values, judgment words or receptor-onset decisions.

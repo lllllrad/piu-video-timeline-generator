@@ -214,7 +214,7 @@ class ReportTest(unittest.TestCase):
                            'notes':[{'note':0,'id':'processing:0','status':'disappeared_near_receptor',
                                      'reason':'verified_head_then_clear_absence','range':[9.98,10.02],
                                      'template_evidence':{'poses':[{'source_pts_seconds':99.5}]},
-                                     'samples':[{'time':9.98,'state':'present','score':.9,'template_pose':0},
+                                     'samples':[{'time':9.98,'state':'present','score':.9,'template_pose':0,'template_vertical_offset_pixels':1},
                                                 {'time':10,'state':'unknown','score':None,'unknown_reason':'white_effect'},
                                                 {'time':10.02,'state':'absent','score':.01}]},
                                     {'note':1,'id':'processing:1','status':'unresolved',
@@ -228,6 +228,7 @@ class ReportTest(unittest.TestCase):
         self.assertIn('80.0',result['rows'][0])
         self.assertIn('body 50.0…80.0 px / tail clipped',result['rows'][0])
         self.assertIn('shape 0 / reference PTS 99.500000',result['rows'][0])
+        self.assertIn('vertical offset 1 feature px',result['rows'][0])
         self.assertIn('unknown / ? / white_effect',result['rows'][1])
         self.assertEqual(result['seekTime'],10)
         self.assertIn('insufficient_clear_approach',result['secondNoteSummary'])

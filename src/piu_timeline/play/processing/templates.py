@@ -8,7 +8,7 @@ from piu_timeline.play.pixel_cache import FORMAT as NATIVE_FORMAT,read_chunks,so
 from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.processing.poses import FORMAT as POSE_FORMAT,references
 
-FORMAT={'schema':1,'revision':2,'minimum_frames':3,'minimum_height_spacing':1.4,
+FORMAT={'schema':1,'revision':3,'minimum_frames':3,'minimum_height_spacing':1.4,
         'radius_spacing':.45,'maximum_white_fraction':.45,'color_fraction_range':[.12,.85],
         'poses':POSE_FORMAT}
 
@@ -59,7 +59,7 @@ def learn(data,directory,times,pts):
                     or hud_regions(layout,lane,y,radius,width,height)):continue
             color=planes['processing_'+layout['lanes'][lane]['color']][top:bottom,left:right]
             white=planes['white'][top:bottom,left:right]
-            if acceptable(color,white):examples[index].append((source_pts,y,color.copy()))
+            if acceptable(color,white):examples[index].append((source_pts,observed_y*scale,color.copy()))
     if count!=len(times):raise ValueError('Processing template native frame count differs from receptor pixels')
     result={}
     for index,values in examples.items():
