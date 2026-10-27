@@ -153,7 +153,8 @@ Pending and confirmed recognized effects apply immediately; `rejected` disables
 application without deleting evidence. A visibility modifier classifies the corroborated pre-receptor losses as
 `visibility_modified`, not consumption, and retains the raw samples. Timing and
 type warnings remain active. No check exemption is generated. Unknown effect
-kinds display a missing-handler warning.
+kinds produce `chart_effect_handler_missing` in the report and bounded warning
+queue. Timing exclusions cannot suppress a missing interpreter.
 A `suspected_multi_increment` effect records an integer `combo_increment` (2-10);
 it changes counter interpretation only in its song interval, never result quotas
 or independently recognized judgment grades. Reports show the provisional status

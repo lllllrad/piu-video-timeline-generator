@@ -8,7 +8,7 @@ from piu_timeline.play.processing import processing_support
 from piu_timeline.play.tracking import associate
 
 
-FORMAT = {'schema':1, 'revision':4}
+FORMAT = {'schema':1, 'revision':5}
 
 
 def active_effects(data, kind):

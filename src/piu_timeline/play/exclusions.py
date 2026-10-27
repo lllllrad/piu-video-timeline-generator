@@ -75,6 +75,16 @@ def recognition_diagnostics(data, ranges):
         warnings.append({'reason':'unsupported_visual_profile','lane':0,'observed_points':0,
                          'visible_start_seconds':data['start_seconds'],'visible_end_seconds':data['end_seconds'],
                          'source_review':support})
+    policy=data.get('chart_policy',{})
+    effects={e['id']:e for e in policy.get('gimmick_candidates',[])}
+    for identifier in policy.get('unsupported_gimmicks',[]):
+        effect=effects[identifier]
+        # A missing interpreter is a configuration failure, not an uncertain
+        # input that a timing exception can account for.
+        warnings.append({'reason':'chart_effect_handler_missing','check':'chart_effect','lane':0,
+                         'observed_points':0,'gimmick_candidate':identifier,'effect_kind':effect['kind'],
+                         'visible_start_seconds':effect['playback_start_seconds'],
+                         'visible_end_seconds':effect['playback_end_seconds']})
     for record in data.get('timing_reconstruction',{}).get('warnings',[]):
         add(record,'timing_reconstruction')
     for record in data.get('beat_timing',{}).get('warnings',[]):

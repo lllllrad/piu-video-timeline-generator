@@ -82,6 +82,26 @@ class ExclusionWarningTest(unittest.TestCase):
         self.assertEqual(result['warnings'], [])
         self.assertEqual(len(result['chart_exceptions']), 2)
 
+    def test_unknown_active_effect_reaches_warning_queue_despite_timing_exception(self):
+        from piu_timeline.play.gimmicks import apply_gimmicks
+        effect={'id':'art','kind':'unimplemented_art','review_status':'pending',
+                'playback_start_seconds':10.,'playback_end_seconds':12.}
+        region={'id':'timing','playback_start_seconds':9.,'playback_end_seconds':13.,
+                'processing':'exclude_timing','check_exceptions':['timing_evidence']}
+        data={'notes':[],'chart_policy':{'gimmick_candidates':[effect],'regions':[region]}}
+        original=deepcopy(data)
+        result=recognition_diagnostics(apply_gimmicks(data),{'notes':{}})
+        self.assertEqual(data,original)
+        self.assertEqual(result['counts'],{'chart_effect_handler_missing':1})
+        warning=result['warnings'][0]
+        self.assertEqual((warning['gimmick_candidate'],warning['effect_kind']),('art','unimplemented_art'))
+        self.assertEqual((warning['visible_start_seconds'],warning['visible_end_seconds']),(10.,12.))
+        self.assertEqual(result['chart_exceptions'],[])
+        effect['review_status']='confirmed'
+        self.assertEqual(len(recognition_diagnostics(apply_gimmicks(data),{'notes':{}})['warnings']),1)
+        effect['review_status']='rejected'
+        self.assertEqual(recognition_diagnostics(apply_gimmicks(data),{'notes':{}})['warnings'],[])
+
     def test_persistent_pixel_gap_accounts_for_a_false_hold_candidate_only_when_both_caps_remain(self):
         connection={'decision':'disconnected_caps','head_note':0,'tail_note':1,
                     'visible_start_seconds':10.,'visible_end_seconds':10.2,
