@@ -6,39 +6,12 @@ from piu_timeline.play.frames import TIME_EPSILON
 from piu_timeline.play.channels import receptor_evidence
 from piu_timeline.play.receptors import onset_overlaps
 from piu_timeline.play.candidates import target_offsets,target_in_window
+from piu_timeline.play.holds.input_risk import native_body_risk_available,hold_overlap
 
 
 def bracket(match):
     return (match.get('observation_lower_seconds', match.get('combo_lower_seconds')),
             match.get('observation_upper_seconds', match.get('combo_upper_seconds')))
-
-
-def native_body_risk_available(data):
-    """A complete image detector supplies receptor-local risk, not warning spans."""
-    from piu_timeline.play.skins.held import FORMAT
-    skin=data.get('skin_detector',{})
-    return (skin.get('contract',{}).get('held_body')==FORMAT
-            and skin.get('missing_template_roles')==[] and 'unsupported_intervals'in data)
-
-
-def hold_overlap(data, lo, hi, guard):
-    analysis = data.get('hold_analysis', {})
-    for hold in analysis.get('holds', []):
-        end = hold['end_range'][1] if hold.get('end_range') else hold['last_body_seconds']+.25
-        if hold['start_range'][0]-guard <= hi and end+guard >= lo:
-            return True
-    if any(interval['start_seconds']-guard<=hi and interval['end_seconds']+guard>=lo
-           for interval in data.get('unsupported_intervals',[])):return True
-    for track in analysis.get('unresolved_tracks', []):
-        # These are unrelated image tiles grouped for review, not a connected
-        # body persisting from the first tile to the last. Their actual receptor
-        # risk is measured independently in the native frame observations.
-        if (native_body_risk_available(data)
-                and track.get('failure_detail')=='skin_body_images_without_complete_endpoint_ownership'
-                and track.get('image_evidence')
-                and all(p.get('role')=='hold_body'for p in track['image_evidence'])):continue
-        if track['visible_start_seconds']-guard<=hi and track['visible_end_seconds']+.25+guard>=lo:return True
-    return False
 
 
 def recover_aggregates(data):

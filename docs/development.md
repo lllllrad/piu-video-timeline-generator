@@ -30,6 +30,8 @@ Read the [gameplay visual model](gameplay-visual-model.md) before changing note 
 
 The optional [native cap-clearance model](note-skin-clearance.md) combines matched
 skin images with source-bound background-gap evidence before hold interpretation.
+The [hold input-risk model](hold-input-risk.md) separates approach visibility from
+the intervals in which a hold can contribute recognition ticks.
 
 The package is organized by responsibility. `workflow.py`, `media.py` and
 `storage.py` at the package root provide the public workflow and shared I/O.
