@@ -236,7 +236,8 @@ def apply(data,directory):
     from piu_timeline.play.spacing_checks import spacing_failures
     from piu_timeline.play.beats.recovery import recover
     coordinate_support=prepare({**data,'notes':notes},spacing,include_failed=True)if spacing else None
-    recovered=recover(notes,coordinate_support,sections,origin,phase.get('phase'),ref['alignment_uncertainty_seconds'])
+    recovered=recover(notes,coordinate_support,sections,origin,phase.get('phase'),ref['alignment_uncertainty_seconds'],
+                      groups=result['groups'],phase_range=phase.get('phase_range'))
     result['native_coordinate_recovery']=[{'note':i,**proof}for i,proof in recovered.items()]
     if len(data.get('layout',{}).get('lanes',[]))>=2:
         spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
@@ -269,10 +270,13 @@ def apply(data,directory):
     restored={i for i in recovered if notes[i]['status']=='estimated'}
     reconstruction=dict(data.get('timing_reconstruction',{}))
     if restored:
+        result['warnings']=[w for w in result['warnings']if not(w.get('note')in restored and w['reason']=='beat_timing_reconstruction_failed')]
+        result['status']='failed'if result['warnings']else'restored'
         remaining=[w for w in reconstruction.get('warnings',[])if not(w.get('note')in restored and w['reason']=='shared_timing_reconstruction_failed')]
         reconstruction.update(warnings=remaining,status='failed'if remaining else'restored',
                               failed_notes=len({w['note']for w in remaining}),
-                              restored_notes=reconstruction.get('restored_notes',0)+len(restored))
+                              restored_notes=reconstruction.get('restored_notes',0)+sum(
+                                  recovered[i]['source_failure']=='shared_timing_reconstruction_failed'for i in restored))
     return {**data,'notes':notes,'beat_timing':result,'timing_reconstruction':reconstruction}
 
 

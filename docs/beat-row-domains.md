@@ -131,6 +131,25 @@ processing and input warnings remain. The original failed attempt stays on the
 note under `previous_motion_attempt`. `native_coordinate_recovery` retains all
 qualified block models, original PTS ranges, selected row and failed attempts.
 
+A clock may succeed yet produce a beat assignment contradicted by native
+positions. That rejected assignment can use the same independent recovery, with
+stricter reference selection: exclude the entire tested group and every
+reference whose row required native refinement or recovery. Each remaining row
+must be unique in its original clock interval and stay inside it throughout the
+selected common phase range. Use a fixed window covering the tested group's
+clock intervals plus the ordinary reference radius; references still need the
+same native block and tempo section, and must bracket the whole inferred range.
+
+The rejected clock interval only selects the neighborhood. It cannot veto a
+separately proven native target or be enlarged to accommodate one. Preserve it
+as `rejected_clock_target_range` and retain `rejected_beat_assignment`. Only
+final validated recovery retires the corresponding beat-failure warning;
+unrelated motion, input and visibility warnings remain. An ambiguous beat
+assignment can use the same external references, but must intersect the native
+prediction with its original clock interval before selecting a row. An empty
+intersection or several remaining rows fails explicitly. Other beat failures
+do not qualify for this path.
+
 ## Partial groups at a fixed common phase
 
 A compatible subdivision can give one row to some heads and several rows to
