@@ -9,7 +9,7 @@ FORMAT={'schema':1,'revision':4,'minimum_references':5,'minimum_lanes':2,
         'maximum_native_error_pixels':1.5}
 
 
-def prepare(data,spacing):
+def prepare(data,spacing,include_failed=False):
     """Freeze native support before testing beat candidates, without input evidence."""
     motion=data.get('scroll_motion',{});samples={s['time']:s for s in motion.get('samples',[])}
     observed={r['note']:{s['time']for s in r['observations']if s.get('native_cap_registration_status')!='conflicting'}
@@ -25,7 +25,7 @@ def prepare(data,spacing):
             index=head['note']
             if index not in observed:continue
             note=data['notes'][index]
-            if note['status']!='estimated':continue
+            if note['status']!='estimated'and not(include_failed and note.get('reason')=='shared_timing_reconstruction_failed'):continue
             points=[(t,y)for t,y in note['points']if t in observed[index]and t in samples
                     and samples[t]['chunk']==number and receptor+.85*spacing<y<bottom-.55*spacing]
             if len(points)<4 or points[-1][0]-points[0][0]<.065:continue
@@ -35,7 +35,8 @@ def prepare(data,spacing):
                           'native_points':len(points),'native_maximum_error_pixels':error,
                           'source_pts_range':[samples[points[0][0]]['source_pts'],samples[points[-1][0]]['source_pts']]}
         chunks[number]=heads
-    return {'chunks':chunks,'frames':{t:s['chunk']for t,s in samples.items()},'observed':observed}
+    return {'chunks':chunks,'frames':{t:s['chunk']for t,s in samples.items()},'observed':observed,
+            'reference_notes':{i for i,n in enumerate(data['notes'])if n['status']=='estimated'}}
 
 
 def fit(references):
@@ -67,7 +68,7 @@ def predictions(a,b,notes,interval,support):
         times=sorted(t for t in common if interval[0]<=t<=interval[1]and support['frames'].get(t)==number)
         if len(times)<4 or times[-1]-times[0]<.065:continue
         refs=[{'note':i,'target_seconds':notes[i]['target_seconds'],**head}for i,head in heads.items()
-              if i not in (a,b)and notes[i]['status']=='estimated'
+              if i not in (a,b)and i in support['reference_notes']and notes[i]['status']=='estimated'
               and min(ta,tb)-FORMAT['reference_radius_seconds']<=notes[i]['target_seconds']<=max(ta,tb)+FORMAT['reference_radius_seconds']]
         model=fit(refs)
         if model is None:continue

@@ -46,3 +46,7 @@ identity, source-continuity and distance checks. No song-wide speed fills gaps.
 `fit_method`, `motion_target_phase`, clock model and crossing-frame PTS explain
 the result. Native detections can be refitted without RGB acquisition or OCR.
 Selecting a clock never removes the independent visibility or motion warnings.
+
+[Independent native spacing](beat-row-domains.md#targets-without-a-successful-crossing-clock)
+can separately establish a chart target when a crossing clock fails. That method
+does not restore or substitute a source motion clock.

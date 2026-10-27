@@ -8,11 +8,12 @@ from pathlib import Path
 from piu_timeline.play.beats.coordinates import FORMAT as COORDINATE_FORMAT
 from piu_timeline.play.beats.chords import FORMAT as CHORD_FORMAT
 from piu_timeline.play.beats.domains import FORMAT as DOMAIN_FORMAT
+from piu_timeline.play.beats.recovery import FORMAT as RECOVERY_FORMAT
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
-FORMAT={'schema':1,'revision':10,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
-        'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT,'native_row_domains':DOMAIN_FORMAT}
+FORMAT={'schema':1,'revision':12,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
+        'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT,'native_row_domains':DOMAIN_FORMAT,'native_recovery':RECOVERY_FORMAT}
 
 
 def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0,native_chords=(),native_coordinates=()):
@@ -223,22 +224,46 @@ def apply(data,directory):
                 note.update(target_seconds=target,prediction_uncertainty_seconds=max(
                     note['prediction_uncertainty_seconds']+abs(target-before),ref['alignment_uncertainty_seconds']))
     from piu_timeline.play.spacing_checks import spacing_failures
+    from piu_timeline.play.beats.recovery import recover
+    coordinate_support=prepare({**data,'notes':notes},spacing,include_failed=True)if spacing else None
+    recovered=recover(notes,coordinate_support,sections,origin,phase.get('phase'),ref['alignment_uncertainty_seconds'])
+    result['native_coordinate_recovery']=[{'note':i,**proof}for i,proof in recovered.items()]
     if len(data.get('layout',{}).get('lanes',[]))>=2:
         spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
         result['coordinate_checks']=[]
-        conflicts=spacing_failures(notes,spacing,data.get('scroll_motion'),coordinate_support,result['coordinate_checks'])
+        conflicts=spacing_failures(notes,spacing,data.get('scroll_motion'),coordinate_support,result['coordinate_checks'],
+                                   baseline_indices=coordinate_support.get('reference_notes')if coordinate_support else None)
         for conflict in conflicts:
             index=conflict['note'];conflict.update(reason='beat_grid_conflicts_with_spatial_spacing')
             notes[index].update(status='excluded',reason=conflict['reason'],target_seconds=None,
                                  beat_reconstruction={**notes[index]['beat_reconstruction'],'status':'failed','reason':conflict['reason']})
         result['warnings'].extend(conflicts)
+    chords=prepare_chords({**data,'notes':notes},spacing)if spacing else chords
+    result['native_chords']=chords
     conflicts=chord_conflicts(notes,chords)
     for conflict in conflicts:
         notes[conflict['note']].update(status='excluded',reason=conflict['reason'],target_seconds=None,
                                      beat_reconstruction={**notes[conflict['note']]['beat_reconstruction'],'status':'failed','reason':conflict['reason']})
     result['warnings'].extend(conflicts)
+    for index,proof in recovered.items():
+        if notes[index]['status']!='estimated':continue
+        references=[r for model in proof['models']for r in model['model']['references']]
+        if any(notes[r['note']]['status']!='estimated'or abs(notes[r['note']]['target_seconds']-r['target_seconds'])>1e-8 for r in references):
+            reason='native_coordinate_reference_failed_validation'
+            notes[index].update(status='excluded',reason=reason,target_seconds=None,
+                                beat_reconstruction={**notes[index]['beat_reconstruction'],'status':'failed','reason':reason})
+            points=notes[index]['points']
+            result['warnings'].append({'note':index,'lane':notes[index]['lane'],'reason':reason,'check':'timing_reconstruction',
+                'visible_start_seconds':points[0][0],'visible_end_seconds':points[-1][0],'observed_points':len(points)})
     result['status']='failed' if result['warnings'] else 'restored'
-    return {**data,'notes':notes,'beat_timing':result}
+    restored={i for i in recovered if notes[i]['status']=='estimated'}
+    reconstruction=dict(data.get('timing_reconstruction',{}))
+    if restored:
+        remaining=[w for w in reconstruction.get('warnings',[])if not(w.get('note')in restored and w['reason']=='shared_timing_reconstruction_failed')]
+        reconstruction.update(warnings=remaining,status='failed'if remaining else'restored',
+                              failed_notes=len({w['note']for w in remaining}),
+                              restored_notes=reconstruction.get('restored_notes',0)+len(restored))
+    return {**data,'notes':notes,'beat_timing':result,'timing_reconstruction':reconstruction}
 
 
 def reassociate(data, display_delay_ms):

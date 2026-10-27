@@ -84,6 +84,36 @@ source note identity, coordinate block, model error and each independent
 reference's native support and source PTS range. Failed ambiguous fits also keep
 their remaining row domains and any qualified coordinate constraints.
 
+## Targets without a successful crossing clock
+
+A continuous trajectory can lose its shared crossing clock when peers disappear
+or rendered spacing changes. A failed clock does not erase qualified native
+positions earlier in the approach. Independently timed, already restored beat
+rows can bracket that head in the same registered coordinate block.
+
+Freeze accepted references before recovery. The rejected estimate selects only
+a bounded reference neighborhood; it supplies neither the accepted time nor an
+error interval. Fit offset against reference target time using the ordinary
+five-head, two-lane, three-target, 300-ms and one-pixel requirements. The tested
+head retains its native-support gate. Its entire inferred interval must lie
+inside the reference target span and a single tempo section. Every qualifying
+block must agree. Recovered heads cannot become references in this pass.
+
+Require one natural beat row in the measured interval, at the already selected
+common song phase, with the subdivision also explaining every reference row.
+No surviving row or several survivors remains failure. Preserve the spatial
+interval and alignment uncertainty in the published target range. This proves
+chart timing from relative note placement; it does not measure or fabricate a
+source motion clock, receptor crossing frame or input time.
+
+Final spacing and concurrency validation still apply, including to heads
+without source clocks. A reference that fails final validation invalidates its
+dependent recovery. Only a successful final recovery retires that head's
+`shared_timing_reconstruction_failed` warning; unrelated visibility, motion,
+processing and input warnings remain. The original failed attempt stays on the
+note under `previous_motion_attempt`. `native_coordinate_recovery` retains all
+qualified block models, original PTS ranges, selected row and failed attempts.
+
 ## Partial groups at a fixed common phase
 
 A compatible subdivision can give one row to some heads and several rows to

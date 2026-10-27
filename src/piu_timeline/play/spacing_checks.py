@@ -27,7 +27,7 @@ def registered_gap(first,second,samples,offsets,frames,a,b):
     return float(np.median([gap for _,gap in gaps]))+corrections[1]-corrections[0]
 
 
-def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagnostics=None):
+def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagnostics=None, baseline_indices=None):
     if motion is not None and hasattr(motion,'evidence'):motion=motion.evidence()
     offsets={(record['chunk'],head['note']):head['offset_pixels']
              for record in (motion or {}).get('coordinate_registration',{}).get('chunks',[]) if record.get('status')=='fitted'
@@ -39,27 +39,31 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
         for t,y in note['points']:at[t].append((y,i))
     for time,points in sorted(at.items()):
         points.sort()
-        for (ya,a),(yb,b) in zip(points,points[1:]):
+        neighbors=list(zip(points,points[1:]))
+        if baseline_indices is not None:
+            baseline=[p for p in points if p[1]in baseline_indices]
+            neighbors.extend(pair for pair in zip(baseline,baseline[1:])if pair not in neighbors)
+        for (ya,a),(yb,b) in neighbors:
             if yb-ya>.65*spacing:pairs[(a,b)].append((time,yb-ya))
     failed=[]
     for (a,b),samples in pairs.items():
         if len(samples)<4 or samples[-1][0]-samples[0][0]<.065:continue
         first,second=notes[a],notes[b]
         ca,cb=first.get('motion_clock'),second.get('motion_clock')
-        if not ca or not cb:continue
         gaps=np.array([gap for _,gap in samples]);gap=float(np.median(gaps))
         scatter=float(np.median(abs(gaps-gap)))
         if scatter>1.5:continue
         if motion is None:
-            predicted=((second['target_seconds']-first['target_seconds'])*ca['velocity'] if ca==cb else None)
+            predicted=((second['target_seconds']-first['target_seconds'])*ca['velocity'] if ca and cb and ca==cb else None)
         else:
-            predicted=registered_gap(first,second,samples,offsets,frames,a,b)
+            predicted=registered_gap(first,second,samples,offsets,frames,a,b)if ca and cb else None
         models=predictions(a,b,notes,(samples[0][0],samples[-1][0]),coordinate_support)
         if models:
             # A model is selected by independent reference support, regardless
             # of its verdict. Any supported disagreement must remain a failure.
             predicted=max(models,key=lambda m:abs(m['predicted_gap_pixels']-gap))['predicted_gap_pixels']
             if diagnostics is not None:diagnostics.append({'peer_notes':[a,b],'observed_gap_pixels':gap,'models':models})
+        elif not ca or not cb:continue
         tolerance=max(1.,3*scatter)
         if predicted is not None and abs(predicted-gap)<=tolerance+1e-6:continue
         for index in (a,b):
