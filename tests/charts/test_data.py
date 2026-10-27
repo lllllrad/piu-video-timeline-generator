@@ -43,6 +43,20 @@ def prove_types(source, holds=()):
 
 
 class ChartDataTest(unittest.TestCase):
+    def test_rebuild_preserves_reviewed_facts_and_refuses_a_regression_atomically(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);repo=initialize(root/'repo',Provider());output=root/'video/play/segment-001';output.mkdir(parents=True)
+            result=register(data(),output,repository=repo,song_start=10,client=Provider())
+            chart=Path(result['chart']);metadata_path=chart.with_name('metadata.json')
+            metadata=json.loads(metadata_path.read_text())
+            metadata['row_assertions']=[{'id':'reviewed-tap','start_seconds':.49,'end_seconds':.51,
+                                        'cells':{'0':'X'},'reason':'Reviewed independent tap.'}]
+            metadata_path.write_text(json.dumps(metadata));before=chart.read_bytes(),metadata_path.read_bytes()
+            source=data();source['notes'][0]['target_seconds']=10.75;prove_types(source)
+            with self.assertRaisesRegex(ValueError,'reviewed-tap failed'):
+                register(source,output,repository=repo,song_start=10,client=Provider(),rebuild_draft=True)
+            self.assertEqual((chart.read_bytes(),metadata_path.read_bytes()),before)
+
     def test_hold_caps_unknown_and_conflicting_types_never_become_ucs_taps(self):
         for kinds in (['hold'],['unknown'],['tap','hold'],[]):
             source=data()
@@ -84,7 +98,7 @@ class ChartDataTest(unittest.TestCase):
             self.assertEqual(persisted['revision'], 'updated')
             self.assertEqual(selected['chart'], persisted['chart'])
 
-    def test_constant_tempo_template_can_extend_without_moving_original_rows(self):
+    def test_constant_tempo_template_can_extend_without_retiming_notes(self):
         source = data()
         source['end_seconds'] = 25
         source['notes'].append({'status': 'estimated', 'lane': 4, 'target_seconds': 22,
@@ -98,10 +112,11 @@ class ChartDataTest(unittest.TestCase):
         self.assertTrue(complete['timing_extension']['review_required'])
         self.assertEqual(complete['summary']['placed_taps'], 4)
         grid = list(doc.grid())
-        self.assertIn((0, 1152, 12), grid)
-        self.assertEqual(doc.sections[0].rows[1152], '....X')
-        for si, ri, time in ucs.parse(TEMPLATE).grid():
-            self.assertIn((si, ri*24, time), grid)
+        placed=[(float(t),doc.sections[si].rows[ri])for si,ri,t in grid]
+        self.assertIn((12.,'....X'),placed)
+        self.assertEqual([p['song_seconds']for p in complete['placements']],[.5,1.,1.5,12.])
+        self.assertEqual(complete['timing_extension']['original_last_row_seconds'],3.75)
+        self.assertTrue(all(dict(s.directives)['Split']=='1'for s in doc.sections))
 
     def test_explicit_rebuild_preserves_backup_and_refuses_reviewed_or_edited_chart(self):
         with tempfile.TemporaryDirectory() as temporary:

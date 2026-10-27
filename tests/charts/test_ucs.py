@@ -16,7 +16,7 @@ class UcsTest(unittest.TestCase):
 
     def test_densification_preserves_original_rows_and_changes_lane_width(self):
         doc = parse(TEMPLATE)
-        expanded = doc.expanded(10)
+        expanded = doc.expanded(10,subdivisions=48)
         self.assertEqual(expanded.mode, 'Double')
         self.assertTrue(all(len(row) == 10 for section in expanded.sections for row in section.rows))
         grid = list(expanded.grid())

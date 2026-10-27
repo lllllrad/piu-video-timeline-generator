@@ -5,6 +5,9 @@ from math import lcm
 import re
 
 
+NATURAL_SPLITS=(1,2,3,4,6,8,12,16,24,32,48,64,96,192)
+
+
 @dataclass
 class Section:
     directives: list
@@ -37,7 +40,7 @@ class Document:
                 yield si, ri, time
                 time += step
 
-    def expanded(self, lanes, subdivisions=48):
+    def expanded(self, lanes, subdivisions=1):
         """Preserve section durations when inserting finer empty timing rows."""
         if lanes not in (5, 10) or not 1 <= subdivisions <= 192:
             raise ValueError('Unsupported lane count or subdivision')

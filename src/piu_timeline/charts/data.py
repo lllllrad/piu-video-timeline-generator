@@ -14,8 +14,6 @@ import subprocess
 import unicodedata
 import uuid
 
-import numpy as np
-
 from piu_timeline.charts import ucs
 from piu_timeline.charts.audio import align
 from piu_timeline.charts.official import Client, ROOT, index, write_json, atomic_write
@@ -151,26 +149,19 @@ def draft(template, data, alignment, extend_constant_tempo=False):
             extension = {'basis': 'constant_tempo_catalogue_and_template', 'additional_rows': additional,
                          'original_last_row_seconds': float(original_end), 'extended_last_row_seconds': float(grid[-1][2]),
                          'review_required': True}
-    times = np.array([float(time) for _, _, time in grid])
-    if not np.all(np.diff(times) > 0):
+    if any(b[2]<=a[2] for a,b in zip(grid,grid[1:])):
         raise ValueError('Overlapping UCS timing sections need manual placement')
     origin = alignment['song_start_seconds']
-    if not math.isfinite(origin) or not math.isfinite(alignment['uncertainty_seconds']):
+    alignment_error=alignment['uncertainty_seconds']
+    if not math.isfinite(origin) or not math.isfinite(alignment_error) or not 0<=alignment_error<=.1:
         raise ValueError('Song alignment must be finite')
     holds = {hold['display_note']: hold for hold in view.get('hold_analysis', {}).get('holds', [])}
-    pending, proposals = [], []
-    def cell(target, uncertainty):
+    pending, observed, endpoints = [], [], {}
+    def interval(target, uncertainty):
         if not math.isfinite(target) or not math.isfinite(uncertainty) or not 0 <= uncertainty <= .08:
             raise ValueError('Unbounded visible-note timing')
-        relative = target - origin
-        ri = int(np.searchsorted(times, relative))
-        candidates = [i for i in (ri-1, ri) if 0 <= i < len(times)]
-        selected = min(candidates, key=lambda i: abs(times[i]-relative))
-        residual = float(times[selected]-relative)
-        tolerance = uncertainty + alignment['uncertainty_seconds'] + .012
-        if relative < times[0]-tolerance or relative > times[-1]+tolerance or abs(residual) > tolerance:
-            raise ValueError('Visible note falls outside the official timing grid')
-        return selected, residual
+        error=uncertainty+alignment_error
+        return [target-origin-error,target-origin+error]
     for ni, note in enumerate(view['notes']):
         if note['status'] != 'estimated':
             continue
@@ -185,21 +176,38 @@ def draft(template, data, alignment, extend_constant_tempo=False):
             if not hold and kind != 'tap':
                 raise ValueError('Observed hold cap has no resolved hold geometry' if kind == 'hold'
                                  else 'Note type is unverified')
-            start, residual = cell(note['target_seconds'], note.get('prediction_uncertainty_seconds', .02))
-            end = start
+            uncertainty=note.get('prediction_uncertainty_seconds', .02)
+            head=interval(note['target_seconds'],uncertainty)
+            tail=None
             if hold:
                 if hold['start_censored'] or hold['end_censored'] or not hold['end_range']:
                     raise ValueError('Hold endpoint is censored')
                 end_range = hold['end_range']
-                end, _ = cell(sum(end_range)/2, (end_range[1]-end_range[0])/2)
-                if end <= start:
-                    raise ValueError('Hold endpoints share or reverse a timing row')
-            proposals.append({'note': ni, 'lane': lane, 'start': start, 'end': end,
-                              'kind': 'hold' if hold else 'tap', 'residual_seconds': residual,
-                              'observed_target_range': [note['target_seconds']-note.get('prediction_uncertainty_seconds', .02),
-                                                        note['target_seconds']+note.get('prediction_uncertainty_seconds', .02)]})
+                tail=interval(sum(end_range)/2,(end_range[1]-end_range[0])/2)
+            endpoints[ni,'head']=head
+            if tail is not None:endpoints[ni,'tail']=tail
+            observed.append({'note':ni,'lane':lane,'kind':'hold' if hold else 'tap',
+                             'observed_target_range':[note['target_seconds']-uncertainty,note['target_seconds']+uncertainty],
+                             **({'observed_end_range':hold['end_range']} if hold else {})})
         except ValueError as error:
             pending.append({'note': ni, 'reason': str(error)})
+    from piu_timeline.charts.hold_simplification import simplify
+    observed,endpoints,simplifications=simplify(document,observed,endpoints,view['notes'],origin)
+    from piu_timeline.charts.transcription import transcribe
+    document,grid,rows,failures,transcription=transcribe(document,endpoints)
+    proposals=[]
+    for observation in observed:
+        ni=observation['note'];edges=['head','tail'] if observation['kind']=='hold' else ['head']
+        rejected={edge:failures[ni,edge] for edge in edges if (ni,edge) not in rows}
+        if rejected:
+            pending.append({'note':ni,'reason':'Measure timing reconstruction failed','endpoints':rejected})
+            continue
+        start=rows[ni,'head'];end=rows.get((ni,'tail'),start)
+        if observation['kind']=='hold' and end<=start:
+            pending.append({'note':ni,'reason':'Hold endpoints share or reverse a timing row'})
+            continue
+        target=sum(observation['observed_target_range'])/2-origin
+        proposals.append({**observation,'start':start,'end':end,'residual_seconds':float(grid[start][2])-target})
     occupied = {}
     for pi, proposal in enumerate(proposals):
         for row in range(proposal['start'], proposal['end']+1):
@@ -223,6 +231,7 @@ def draft(template, data, alignment, extend_constant_tempo=False):
     if not placements:
         raise ValueError('No bounded notes can be placed on the official timing grid')
     return document, {'placements': placements, 'unresolved': pending, 'timing_extension': extension,
+                      'transcription':transcription,'hold_simplifications':simplifications,
                       'summary': {'placed_taps': sum(p['kind'] == 'tap' for p in placements),
                                   'placed_holds': sum(p['kind'] == 'hold' for p in placements),
                                   'unresolved_note_heads': len(pending),
@@ -262,8 +271,10 @@ def register(data, output, code=None, repository=None, song_start=None, revision
         if target.exists():
             if not (target / 'chart.ucs').is_file() or not (target / 'metadata.json').is_file():
                 raise ValueError(f'Existing chart directory is incomplete; inspect {target}')
-            ucs.parse((target / 'chart.ucs').read_text())
+            existing_document=ucs.parse((target / 'chart.ucs').read_text())
             if not rebuild_draft:
+                from piu_timeline.charts.assertions import validate as validate_assertions
+                validate_assertions(existing_document,json.loads((target/'metadata.json').read_text()).get('row_assertions',[]))
                 return existing_result()
             old_chart = (target / 'chart.ucs').read_bytes()
             old_metadata = (target / 'metadata.json').read_bytes()
@@ -309,6 +320,8 @@ def register(data, output, code=None, repository=None, song_start=None, revision
             metadata['gimmick_candidates'] = json.loads(previous[1]).get('gimmick_candidates', [])
         elif previous is not None:
             raise ValueError('Chart was removed while rebuilding; retry explicitly')
+        from piu_timeline.charts.assertions import validate as validate_assertions
+        validate_assertions(document,metadata.get('row_assertions',[]))
         timing = repository / 'timing' / f'{resolved}.ucs'
         if not timing.exists():
             atomic_write(timing, template.text().encode())
@@ -373,6 +386,8 @@ def auto_register(data, output, **options):
         result['gimmick_candidates'] = candidates
     if result['status'] != 'disabled':
         print(f'Chart data: {result["status"]}; {result.get("chart", result.get("reason", ""))}', flush=True)
+        if result.get('unresolved_note_heads'):
+            print(f'Warning: UCS draft has {result["unresolved_note_heads"]} unresolved note placements; inspect its metadata.json.',flush=True)
     return result
 
 
@@ -409,7 +424,9 @@ def main():
                 validate_regions(metadata)
                 from piu_timeline.charts.gimmicks import validate_candidates
                 validate_candidates(metadata)
-                ucs.parse(path.with_name('chart.ucs').read_text())
+                document=ucs.parse(path.with_name('chart.ucs').read_text())
+                from piu_timeline.charts.assertions import validate as validate_assertions
+                validate_assertions(document,metadata.get('row_assertions',[]))
                 count += 1
             print(f'Validated {count} charts and their region policies'); return
         if args.command == 'list':

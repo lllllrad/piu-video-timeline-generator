@@ -36,11 +36,20 @@ An exact normalized catalogue title or an explicit alias must identify one code.
 Audio alignment compares 24 frequency bands in three independent reference windows. At least two windows must have strong, unambiguous correlation and agree within 40 ms. Alignment is translation only; mismatched, repeated or missing music stays unresolved. `add --song-start SECONDS` permits an explicit reviewed origin in original local playback seconds. Source size and mtime must match saved observations before automatic audio alignment and remain unchanged afterward.
 
 UCS `Delay` is applied in milliseconds at each section boundary, while `BPM` and `Split` determine
-row duration. Subdivision expansion preserves every original row position and section duration,
-including BPM changes. The draft uses the least common multiple of each original Split and 48; this
-is a fine editable grid, not evidence of the intended musical subdivision. Metadata retains observed
-ranges and placement residuals. Unsupported directives and overlapping timing sections require
-manual handling.
+row duration. Drafts infer a separate split for each measure, also preserving original timing-change
+boundaries and fractional measure phase. They maximize uniquely supported head/tail intervals and
+prefer the smallest natural split on ties. Empty measures use the coarsest split that preserves
+their exact duration. Original BPM, delay and measure-length directives remain intact; blank
+template rows are not evidence of note subdivision.
+
+There is no nearest-row fallback or fixed additive matching allowance. A measured target interval,
+including alignment uncertainty, must contain exactly one final row, and its central residual must
+be at most one quarter of that row's duration. Finer splits therefore tighten the residual limit;
+intervals covering several rows remain unresolved. Final checks include neighboring measures with
+different splits. Failed or partial measures and rejected endpoints are explicit in metadata
+`transcription` and `unresolved`; registration prints an unresolved-placement warning. Holds retain
+their complete head/body/tail meaning across split and tempo changes. Unsupported directives and
+non-increasing grids require manual handling.
 
 Some official skeletons end before their music ends. When both the catalogue and every template
 section declare the same single constant BPM, registration appends timing rows through the last
@@ -193,3 +202,30 @@ zero-speed edges consistent with the configured interval appear under
 Other speed changes, missing notes, type conflicts and timing reconstruction
 failures retain their normal warnings. The report displays the zero multiplier
 and measured duration separately from generic region exceptions.
+
+### Held-state simplification
+
+UCS transcription aims to reproduce similar judgments and the required held
+state, rather than every visible interruption of a rendered hold. Before fitting
+measure grids, adjacent complete same-lane holds may be joined when their full
+bounded gap is at most 120 ms and at most one quarter of the local beat (use the
+stricter bound across a tempo boundary). These are conservative implementation
+limits, not a measured game judgment window. A known tap or any unresolved head
+in the bridge blocks joining; an unbounded same-lane head also blocks it. Long
+gaps, contained duplicates and censored holds are not simplified.
+
+`hold_simplifications` records the policy, every original head/tail interval and
+each bridged gap. Placements retain those source intervals too. Native observations,
+timing evidence and recognition warnings stay unchanged. This transformation does
+not establish identical hold tick counts; tick equivalence remains explicitly
+unverified. Internal decorative endpoints no longer force a finer UCS Split.
+
+### Reviewed chart facts
+
+The separate chart repository may store `row_assertions` in chart metadata.
+Each assertion has a unique `id`, a half-open song-time window (`start_seconds`,
+`end_seconds`), `cells` mapping zero-based lane strings to UCS symbols, and a
+human-readable `reason`. All cells must match one row in the window. Validation
+and draft rebuilding check these facts; a failed rebuild leaves the previous
+chart and metadata intact. Rebuilding preserves reviewed assertions. Recording-
+or song-specific assertions belong in that repository, not this project's tests.

@@ -6,7 +6,9 @@ import math
 import subprocess
 from pathlib import Path
 
-FORMAT={'schema':1,'revision':4,'group_beats':4,'natural_splits':[1,2,3,4,6,8,12,16,24,32,48,64,96,192]}
+from piu_timeline.charts.ucs import NATURAL_SPLITS
+
+FORMAT={'schema':1,'revision':4,'group_beats':4,'natural_splits':list(NATURAL_SPLITS)}
 
 
 def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0):
