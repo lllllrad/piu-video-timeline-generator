@@ -3,7 +3,7 @@ from itertools import combinations
 
 import numpy as np
 
-FORMAT={'schema':1,'revision':1,'minimum_references':5,'minimum_lanes':2,
+FORMAT={'schema':1,'revision':2,'minimum_references':5,'minimum_lanes':2,
         'reference_radius_seconds':.75,'minimum_target_span_seconds':.3,
         'minimum_slope_span_seconds':.15,'maximum_reference_error_pixels':1.,
         'maximum_native_error_pixels':1.5}
@@ -13,7 +13,8 @@ def prepare(data,spacing):
     """Freeze native support before testing beat candidates, without input evidence."""
     motion=data.get('scroll_motion',{});samples={s['time']:s for s in motion.get('samples',[])}
     observed={r['note']:{s['time']for s in r['observations']}
-              for r in data.get('head_registration',{}).get('notes',[])if r['status']=='registered'}
+              for r in data.get('head_registration',{}).get('notes',[])
+              if r['status']=='registered'or r.get('coordinate_method')=='native_cap_measurements'}
     if not observed:return {}
     height=data['analysis_height'];receptor=data['layout']['receptor_y']*height
     bottom=data['layout'].get('note_y_max',.95)*height;chunks={}

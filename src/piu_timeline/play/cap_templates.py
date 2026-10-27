@@ -4,7 +4,7 @@ from collections import defaultdict
 import cv2
 import numpy as np
 
-FORMAT={'schema':1,'revision':3,'minimum_independent_heads':2,'cluster_similarity':.94,
+FORMAT={'schema':1,'revision':4,'minimum_independent_heads':2,'cluster_similarity':.94,
         'maximum_clusters_per_lane':128,'maximum_templates_per_lane':12,
         'minimum_similarity':.90,'different_offset_margin':.04,'distinct_offset_pixels':.75,
         'vertical_search_pixels':4,'horizontal_search_pixels':1,'minimum_truncated_rows':3}
@@ -63,8 +63,9 @@ def match(packed,columns,spacing,patch_shift,templates,note):
     candidates=[];center=(white.shape[0]-1)/2
     sy,sx=FORMAT['vertical_search_pixels'],FORMAT['horizontal_search_pixels']
     for index,template in enumerate(templates):
-        # One identity cannot calibrate its own continuation through a template.
-        if note in template['support']:continue
+        # Both the image and two supporting identities must be external.
+        if (len(set(template['support'])-{note})<FORMAT['minimum_independent_heads']
+                or template.get('reference',{}).get('note')in(None,note)):continue
         x,y,w,h=template['bounds'];left,right=max(0,x-sx),min(white.shape[1],x+w+sx)
         top,bottom=max(0,y-sy),min(white.shape[0],y+h+sy)
         if right-left<w or bottom-top<h:continue
@@ -99,12 +100,14 @@ def augment(data,path,records,fit_offset):
             lookup[round(float(time),6),int(lane)].append(i)
         banks=learn(records,pixels,lookup)
         records=refine_outlines(data,pixels,lookup,banks,records,fit_offset)
-        known={r['note']for r in records};added=[]
+        known={r['note']:r for r in records};added=[]
         spacing,columns=float(pixels['spacing']),int(pixels['columns'])
         for ni,note in enumerate(data['notes']):
-            if ni in known or not banks.get(note['lane']):continue
-            samples=[]
+            if not banks.get(note['lane']):continue
+            samples=list(known.get(ni,{}).get('observations',[]))
+            measured={s['time']for s in samples}
             for time,y in note.get('detected_points',note.get('points',[])):
+                if time in measured:continue
                 options=[i for i in lookup.get((round(time,6),note['lane']),[])if abs(float(pixels['ys'][i])-y)<1e-5]
                 if len(options)!=1:continue
                 i=options[0];shift=round(float(pixels['ys'][i]))-float(pixels['ys'][i])
@@ -114,13 +117,17 @@ def augment(data,path,records,fit_offset):
                                               (pixels['masks'].shape[2],columns),spacing)
                     if bounds is not None:
                         samples.append({'time':time,'source_pts_seconds':float(pixels['pts'][i]),
+                                        'detected_y_pixels':float(pixels['ys'][i]),
                                         'patch_center_shift_pixels':shift,'support_bounds_pixels':bounds,**result})
+            samples.sort(key=lambda s:s['time'])
             fitted=fit_offset(samples)
-            if fitted:added.append({'note':ni,'lane':note['lane'],'method':'independent_cap_templates',**fitted})
+            if fitted:
+                if ni in known:known[ni]={**known[ni],**fitted}
+                else:added.append({'note':ni,'lane':note['lane'],'method':'independent_cap_templates',**fitted})
         metadata=[{'lane':lane,'templates':[{'template':i,'reference':t['reference'],
                     'support':list(t['support'].values()),'observations':t['count']}
                    for i,t in enumerate(ts)]}for lane,ts in banks.items()]
-    return records+added,{'format':FORMAT,'lanes':metadata}
+    return list(known.values())+added,{'format':FORMAT,'lanes':metadata}
 
 
 def refine_outlines(data,pixels,lookup,banks,records,fit_offset):

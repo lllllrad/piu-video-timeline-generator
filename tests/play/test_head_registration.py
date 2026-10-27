@@ -1,12 +1,13 @@
 """Registration uses visible cap geometry, never beat or input targets."""
 import json
+from copy import deepcopy
 from pathlib import Path
 import tempfile
 import unittest
 
 import numpy as np
 
-from piu_timeline.play.head_registration import patch_offset,fit_offset,measure
+from piu_timeline.play.head_registration import patch_offset,fit_offset,measure,project_coordinates
 from piu_timeline.play.screen_regions import visible_cap_bounds
 
 
@@ -20,6 +21,44 @@ def patch():
 
 
 class HeadRegistrationTest(unittest.TestCase):
+    def test_each_measured_frame_recovers_its_canonical_center_instead_of_a_median_shift(self):
+        from piu_timeline.play.tracking import Track,fit_track
+        times=[i*.02 for i in range(20)];offsets=[-.5,-1.5]*10
+        actual=[[t,110-100*t]for t in times]
+        raw=[[t,y-offset]for (t,y),offset in zip(actual,offsets,strict=True)]
+        samples=[{'time':t,'source_pts_seconds':t+50,'detected_y_pixels':y,'offset_pixels':offset}
+                 for (t,y),offset in zip(raw,offsets,strict=True)]
+        record=fit_offset(samples);before=deepcopy((raw,record))
+        self.assertEqual(record['status'],'registered')
+        canonical=project_coordinates(raw,record)
+        self.assertEqual(canonical,actual)
+        self.assertEqual((raw,record),before)
+        target=fit_track(Track(0,canonical),50,20)
+        self.assertAlmostEqual(target['target_seconds'],.6)
+        self.assertAlmostEqual(target['velocity_pixels_per_second'],-100)
+        missing={**record,'observations':samples[:-1]}
+        self.assertEqual(project_coordinates(raw,missing)[-1],[times[-1],raw[-1][1]+record['offset_pixels']])
+
+    def test_unstable_global_offset_has_measured_positions_without_unverified_gap_corrections(self):
+        samples=[{'time':i*.02,'source_pts_seconds':i*.02+50,'detected_y_pixels':100-i,
+                  'offset_pixels':-1. if i<7 else 3.}for i in range(8)]
+        record=fit_offset(samples);self.assertEqual(record['status'],'unresolved')
+        raw=[[s['time'],s['detected_y_pixels']]for s in samples]+[[.2,90]]
+        canonical=project_coordinates(raw,record)
+        self.assertEqual(canonical[-2],[.14,96])
+        self.assertEqual(canonical[-1],[.2,90])
+        self.assertEqual(record['status'],'unresolved')
+
+    def test_coordinate_measurements_cannot_change_native_identity_or_invent_frames(self):
+        record={'status':'registered','offset_pixels':-1.,'observations':[
+            {'time':1.,'detected_y_pixels':100.,'offset_pixels':-1.}]}
+        for kind in ('position','frame','duplicate'):
+            changed=deepcopy(record)
+            if kind=='position':changed['observations'][0]['detected_y_pixels']=103
+            elif kind=='frame':changed['observations'][0]['time']=2
+            else:changed['observations']*=2
+            with self.subTest(kind=kind),self.assertRaises(ValueError):project_coordinates([[1.,100.]],changed)
+
     def test_complete_cap_outside_hud_uses_measured_bounds_and_keeps_background_margin(self):
         data={'analysis_width':400,'analysis_height':400,'layout':{'receptor_y':.1,
               'lanes':[{'x':.3},{'x':.38},{'x':.5}],

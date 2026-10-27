@@ -1,10 +1,12 @@
 """Connected-cap coordinates need independent references and a unique match."""
 import unittest
 from copy import deepcopy
+from pathlib import Path
+import tempfile
 
 import numpy as np
 
-from piu_timeline.play.cap_templates import learn,match,sums,refine_outlines
+from piu_timeline.play.cap_templates import learn,match,sums,refine_outlines,augment
 from piu_timeline.play.head_registration import fit_offset
 from tests.play.test_head_registration import patch
 
@@ -12,10 +14,37 @@ from tests.play.test_head_registration import patch
 def reference():
     white=patch()[1]
     return {'image':white[32:66,15:50].copy(),'bounds':[15,32,35,34],
+            'reference':{'note':0},
             'support':{0:{'note':0},1:{'note':1}}}
 
 
 class CapTemplateTest(unittest.TestCase):
+    def test_templates_measure_missing_frames_of_already_calibrated_heads(self):
+        times=[i*.02 for i in range(10)];records=[];notes=[];pixels=[];ts=[];ys=[]
+        for ni,y in enumerate((150.,220.,290.)):
+            samples=[{'time':t,'source_pts_seconds':t+20,'detected_y_pixels':y,
+                      'offset_pixels':-1.,'patch_center_shift_pixels':0.,
+                      'outer_bounds_in_patch':[15,32,35,34]}for t in times[:8 if ni==2 else 10]]
+            records.append({'note':ni,'lane':0,**fit_offset(samples)})
+            notes.append({'lane':0,'points':[[t,y]for t in times]})
+            for t in times:pixels.append(np.packbits(patch(),axis=-1));ts.append(t);ys.append(y)
+        data={'analysis_width':400,'analysis_height':400,'layout':{
+            'receptor_y':.1,'lanes':[{'x':.3}]},'notes':notes}
+        before=deepcopy((data,records))
+        with tempfile.TemporaryDirectory()as tmp:
+            path=Path(tmp)/'appearance.npz'
+            np.savez_compressed(path,masks=pixels,times=ts,pts=np.array(ts)+20,
+                                lanes=np.zeros(30,dtype=int),ys=ys,spacing=34,columns=65)
+            result,templates=augment(data,path,records,fit_offset)
+        self.assertEqual((data,records),before)
+        target=next(r for r in result if r['note']==2)
+        self.assertEqual(len(target['observations']),10)
+        self.assertEqual(target['observations'][-1]['source_pts_seconds'],20.18)
+        self.assertEqual(target['observations'][-1]['detected_y_pixels'],290.)
+        ti=target['observations'][-1]['template'];reference=templates['lanes'][0]['templates'][ti]
+        self.assertNotEqual(reference['reference']['note'],2)
+        self.assertGreaterEqual(len({s['note']for s in reference['support']}-{2}),2)
+
     def refinement(self):
         times=np.arange(10)*.02
         pixels={'masks':np.array([np.packbits(patch(),axis=-1)]*10),'columns':65,
@@ -48,7 +77,7 @@ class CapTemplateTest(unittest.TestCase):
         for case in ('self','effect','hud','pts','real_shift','shifted_box'):
             with self.subTest(case=case):
                 data,pixels,lookup,banks,records=self.refinement()
-                if case=='self':banks[0][0]['support'][2]={'note':2}
+                if case=='self':banks[0][0]['reference']={'note':2}
                 elif case=='hud':data['layout'].update(combo_roi=[.2,.3,.3,.2])
                 elif case=='pts':pixels['pts'][-1]+=1
                 elif case=='effect':
@@ -70,6 +99,15 @@ class CapTemplateTest(unittest.TestCase):
         self.assertNotIn('kind',result)
         # The caller retains fractional-to-integer patch conversion.
         self.assertEqual(match(np.packbits(masks,axis=-1),65,34,-.5,[reference()],2)['offset_pixels'],-1.5)
+
+    def test_target_membership_does_not_remove_other_independent_template_evidence(self):
+        template=reference();template['support'][2]={'note':2}
+        packed=np.packbits(patch(),axis=-1)
+        self.assertIsNotNone(match(packed,65,34,0,[template],2))
+        template['reference']={'note':2}
+        self.assertIsNone(match(packed,65,34,0,[template],2))
+        template['reference']={'note':0};template['support'].pop(1)
+        self.assertIsNone(match(packed,65,34,0,[template],2))
 
     def test_self_reference_effect_and_clipped_cap_are_not_evidence(self):
         packed=np.packbits(patch(),axis=-1)

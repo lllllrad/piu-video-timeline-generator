@@ -21,6 +21,16 @@ def fixture():
 
 
 class BeatCoordinateTest(unittest.TestCase):
+    def test_measured_native_centers_do_not_need_a_constant_outline_offset(self):
+        data=fixture()
+        for record in data['head_registration']['notes']:
+            record.update(status='unresolved',coordinate_method='native_cap_measurements')
+        support=prepare(data,40)
+        self.assertEqual(spacing_failures(data['notes'],40,data['scroll_motion'],support),[])
+        # Real positional disagreement still invalidates the measured anchor.
+        t,y=data['notes'][4]['points'][0];data['notes'][4]['points'][0]=(t,y+3)
+        self.assertEqual(predictions(4,5,data['notes'],(.5,.68),prepare(data,40)),[])
+
     def test_independent_heads_validate_pixel_spacing_despite_local_clock_bias(self):
         data=fixture();original=deepcopy(data);motion=data['scroll_motion'];notes=data['notes']
         old=spacing_failures(notes,40,motion)

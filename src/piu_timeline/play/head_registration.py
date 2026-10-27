@@ -8,7 +8,8 @@ import numpy as np
 from piu_timeline.play.note_types import cap_envelope, shape
 from piu_timeline.play.cap_templates import FORMAT as TEMPLATE_FORMAT
 
-FORMAT={'schema':1,'revision':6,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':7,'minimum_frames':8,'minimum_span_seconds':.12,
+        'coordinate_projection':'per_frame_with_stable_offset_fallback',
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
         'maximum_offset_spacing':.1,'coordinate_uncertainty_pixels':1.,'cap_templates':TEMPLATE_FORMAT}
 
@@ -78,6 +79,7 @@ def measure(data,path):
     records,templates=augment(data,path,records,fit_offset)
     warnings=[]
     for record in records:
+        record['coordinate_method']='native_cap_measurements'
         uncertain=record['status']=='unresolved'
         samples=record['observations']if uncertain else record['conflicting_observations']
         if not samples:continue
@@ -100,20 +102,25 @@ def apply(data,directory,display_delay_ms=0):
     if path is None:return {**data,'head_registration':{'format':FORMAT,'notes':[],'status':'unavailable'}}
     registration=measure(data,path)
     (directory/'head-registration.json').write_text(json.dumps(registration)+'\n')
-    accepted={r['note']:r for r in registration['notes']if r['status']=='registered'}
-    if not accepted:return {**data,'head_registration':registration}
+    measured={r['note']:r for r in registration['notes']}
+    if not measured:return {**data,'head_registration':registration}
     from piu_timeline.play.tracking import Track,fit_track
     from piu_timeline.play.shared_timing import restore
     width,height=data['analysis_width'],data['analysis_height']
     spacing=float(np.median(np.diff([l['x']*width for l in data['layout']['lanes']])))
     tracks=[];notes=[]
     for i,original in enumerate(data['notes']):
-        raw=original.get('detected_points',original['points']);record=accepted.get(i)
-        points=[[t,y+record['offset_pixels']]for t,y in raw]if record else raw
+        raw=original.get('detected_points',original['points']);record=measured.get(i)
+        points=project_coordinates(raw,record)if record else raw
         track=Track(original['lane'],points)
         track.registration_uncertainty_pixels=record['coordinate_uncertainty_pixels']if record else 0
         note=fit_track(track,data['layout']['receptor_y']*height,spacing,layout=data['layout'])
-        if record:note.update(detected_points=raw,head_registration={k:v for k,v in record.items()if k not in ('observations','conflicting_observations')})
+        if record:
+            note.update(detected_points=raw,head_registration={
+                **{k:v for k,v in record.items()if k not in ('observations','conflicting_observations')},
+                'measured_frames':len(record['observations']),
+                'unmeasured_frames':len(raw)-len(record['observations']),
+                'unmeasured_coordinate_basis':'stable_constant_offset'if record['status']=='registered'else'original_detection'})
         for key in ('tracking_method','source_track_fragments'):
             if key in original:note[key]=original[key]
         tracks.append(track);notes.append(note)
@@ -128,3 +135,18 @@ def apply(data,directory,display_delay_ms=0):
     tracker=SimpleNamespace(finish=lambda:notes,motion=motion,timing_reconstruction=timing,unsupported_intervals=data['unsupported_intervals'])
     updated=resolve_timing(tracker,SimpleNamespace(events=events,observations=[]),display_delay_ms)
     return {**data,**updated,'head_registration':registration}
+
+
+def project_coordinates(raw,record):
+    """Use each observed canonical center; infer an offset only if stable."""
+    samples={s['time']:s for s in record['observations']}
+    if len(samples)!=len(record['observations']):raise ValueError('Duplicate native cap measurements')
+    fallback=record['offset_pixels']if record['status']=='registered'else 0
+    points=[]
+    for time,y in raw:
+        sample=samples.get(time)
+        if sample and abs(sample['detected_y_pixels']-y)>1e-5:
+            raise ValueError('Native cap measurement differs from original detection')
+        points.append([time,y+(sample['offset_pixels']if sample else fallback)])
+    if set(samples)-{t for t,y in raw}:raise ValueError('Native cap measurement has no original frame')
+    return points
