@@ -1,8 +1,10 @@
 """Apply a selected RGB image bank while preserving source counter observations."""
 import json
+import math
 from pathlib import Path
 import shutil
 from itertools import zip_longest
+from contextlib import closing, nullcontext
 
 from piu_timeline.play.frames import decode_frames
 from piu_timeline.play.skins.bank import load_bank, ROLES
@@ -53,18 +55,35 @@ def refresh(data, output, path):
     if not backup.exists():
         shutil.copy2(trace, backup)
     target = output / 'frames.skin-build.jsonl'
-    decoded = decode_frames(data['media'], data['start_seconds'], data['end_seconds'],
-                            data['game_roi'], data['analysis_width'])
-    decoded=classified_frames(decoded,bank,data['layout'],data['analysis_width'],data['analysis_height'])
-    count = 0
-    with trace.open() as source, target.open('w') as stream:
-        for line, frame in zip_longest(source, decoded):
-            if line is None or frame is None:
+    from piu_timeline.play.skins.reuse import reusable_groups, group, merge_observations
+    reused=reusable_groups(data,bank)
+    selected={**bank,'templates':[t for t in bank['templates']if group(t)not in reused]}
+    if reused:print('Reusing unchanged skin image groups: '+', '.join(sorted(reused)),flush=True)
+    decoded=None
+    if selected['templates']:
+        source=decode_frames(data['media'], data['start_seconds'], data['end_seconds'],
+                             data['game_roi'], data['analysis_width'])
+        decoded=classified_frames(source,selected,data['layout'],data['analysis_width'],data['analysis_height'])
+    count,last = 0,None
+    lifetime=closing(decoded)if decoded is not None else nullcontext()
+    with trace.open() as source, target.open('w') as stream, lifetime:
+        paired=zip_longest(source,decoded)if decoded is not None else((line,None)for line in source)
+        for line, frame in paired:
+            if line is None or decoded is not None and frame is None:
                 raise ValueError('Skin image replay differs from native frame count')
             native = json.loads(line)
-            pts, time, _, observations = frame
+            stamp=(native['source_pts_seconds'],native['playback_seconds'])
+            if not all(math.isfinite(t)for t in stamp)or last is not None and any(a<=b for a,b in zip(stamp,last)):
+                raise ValueError('Skin replay source timestamps must be finite and increasing')
+            last=stamp
+            if reused and 'skin_observations'not in native:
+                raise ValueError('Reusable skin groups have no native image observations')
+            if decoded is None:
+                pts,time=native['source_pts_seconds'],native['playback_seconds'];observations=[]
+            else:pts, time, _, observations = frame
             if abs(pts - native['source_pts_seconds']) > 1e-6 or abs(time - native['playback_seconds']) > 1e-6:
                 raise ValueError('Skin image replay differs from original PTS')
+            observations=merge_observations(native,observations,reused)
             native.update(notes=[o for o in observations if o['role'] != 'hold_body'],
                           skin_observations=observations,
                           possible_hold_or_dense_stack=any(o['role'] == 'hold_body' for o in observations))
