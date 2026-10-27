@@ -144,6 +144,8 @@ For each retained hold, record its observed body interval, linked head/tail iden
 
 ## What indicates input or a judgment
 
+A hold is one continuous held-state requirement. Its leading cap (often drawn like a note head) is a skin-dependent visual boundary, not an additional tap. A panel already held before that boundary can satisfy the hold; no new press onset at the cap is required. A separate tap at the boundary requires independent visible chart evidence and must not be inferred from the cap artwork. Ordinary UCS uses one `M`/`H`/`W` interval, without an extra `X` for its cap.
+
 The game accepts an ongoing hold state while the panel remains held. Hold ticks and repeated combo/judgment updates are not repeated presses. A lit receptor during a body can support ongoing recognition. Its disappearance does not identify the physical release time.
 
 A tap's evidence may include a lane-local receptor transition and a corresponding combo or judgment refresh. A persistent lit receptor cannot independently support several repeated taps. A whole-screen flash is not ten simultaneous inputs. Unknown or obscured samples must remain unknown. The relevant transition may occur in a neighboring frame; all evidence need not coexist in one image.

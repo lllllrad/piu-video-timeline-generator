@@ -93,7 +93,10 @@ def chart_projection(data):
         diagnostics=project_types(data,notes,[])
         return {**data,'notes':notes,'note_type_diagnostics':diagnostics}
     notes = [dict(note) for note in data['notes']]
-    suppressed = {index for hold in holds for index in hold['covered_notes']}
+    # Accepted caps are boundaries of one held interval, even when a cap's
+    # estimated crossing fell outside the body's covered-note time envelope.
+    suppressed = {index for hold in holds for index in
+                  [*hold['covered_notes'],hold.get('head_note'),hold.get('tail_note')] if index is not None}
     from piu_timeline.play.holds.roles import observed_tail_roles
     tail_roles=[r for r in observed_tail_roles(data) if r['tail_note']not in suppressed]
     pending_tails={r['tail_note']for r in tail_roles}
@@ -106,6 +109,10 @@ def chart_projection(data):
     projected = []
     for original in holds:
         hold = dict(original)
+        hold['covered_notes']=sorted(set(hold['covered_notes'])|{
+            index for index in (hold.get('head_note'),hold.get('tail_note')) if index is not None})
+        hold['input_requirement']='held_state'
+        hold['requires_head_press']=False
         start = hold['start_range']
         target = hold_start(hold)
         head = hold['head_note']
@@ -118,6 +125,7 @@ def chart_projection(data):
                 for field in ('timing_reconstruction','beat_reconstruction'):
                     if field in data['notes'][observed]:notes[head][field]=dict(data['notes'][observed][field])
         notes[head].update(status='estimated', reason=None, note_type='hold', hold_id=hold['id'],
+                           input_requirement='held_state',requires_head_press=False,
                            target_seconds=target,
                            prediction_uncertainty_seconds=0 if hold['start_censored'] else (start[1]-start[0])/2)
         if notes[head].get('timing_reconstruction',{}).get('status')=='failed' or notes[head].get('beat_reconstruction',{}).get('status')=='failed':
@@ -136,7 +144,7 @@ def presentation(data):
     if not data.get('hold_analysis'):return view
     notes=view['notes'];holds=data['hold_analysis'].get('holds',[])
     projected=view['hold_analysis']['holds'];tail_roles=view['hold_analysis']['observed_tail_roles']
-    suppressed={index for hold in holds for index in hold['covered_notes']}|{r['tail_note']for r in tail_roles}
+    suppressed={index for hold in projected for index in hold['covered_notes']}|{r['tail_note']for r in tail_roles}
     def during_hold(lo, hi):
         return any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2) + .04
                    and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds'])

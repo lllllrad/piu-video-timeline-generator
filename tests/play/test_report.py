@@ -187,7 +187,7 @@ class ReportTest(unittest.TestCase):
         self.assertIn('HOLD', result['initialRows'][0][0])
         self.assertEqual(result['initialRows'][0][3], 'Sustained state; no repeated presses')
         self.assertIn('physical release unknown', result['initialRows'][0][4])
-        self.assertIn('Holding is sufficient', ' '.join(result['details'][0]))
+        self.assertIn('Holding before the visual start is sufficient', ' '.join(result['details'][0]))
         hold.update(start_range=[8, 10.02], start_censored=True, head_note=None)
         result = self.report_runtime(notes, [], hold_analysis={'holds': [hold]})
         self.assertIn('already visible / uncertain', result['initialRows'][0][1])

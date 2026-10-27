@@ -75,6 +75,7 @@ def timing_ranges(data):
             result[index] = with_policy({**record, 'status': 'hold_state' if ranges else 'hold_unresolved',
                              'input_ranges': ranges, 'target_range': hold['start_range'],
                              'end_range': hold['end_range'], 'reason': 'sustained_state_not_repeated_presses',
+                             'input_requirement':'held_state','requires_head_press':False,
                              'input_kind': 'sustained_recognition', 'press_range': None, 'release_range': None}, note)
             continue
         match = matches.get(index)

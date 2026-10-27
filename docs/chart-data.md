@@ -244,3 +244,11 @@ failed motion/beat reconstruction, an ambiguous UCS row or unresolved type may
 still be omitted. Inspect the source recognition warnings, draft `unresolved`
 placements and `summary.excluded_observations`; do not interpret absence from an
 unreviewed UCS draft as proof that the screen contained no note.
+
+A hold's head/tail identities identify visual interval boundaries, not separate
+notes requiring press/release events. Accepted cap identities are owned by that
+one hold even when their estimated crossings fall outside the body's initial
+covered-note envelope. Export one `M`/`H`/`W` interval; never add an `X` just
+because a skin draws its leading cap like a tap. A separate tap requires its
+own independent observation. The model records `input_requirement: held_state`
+and `requires_head_press: false`; recognition can begin with a preheld panel.
