@@ -5,11 +5,12 @@ import json
 import math
 import subprocess
 from pathlib import Path
+from piu_timeline.play.beat_coordinates import FORMAT as COORDINATE_FORMAT
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
-FORMAT={'schema':1,'revision':5,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
-        'phase_selection':'native_spacing_constrained'}
+FORMAT={'schema':1,'revision':6,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
+        'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT}
 
 
 def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0):
@@ -85,7 +86,7 @@ def prepare_reference(data,directory):
     return {'status':'prepared','method':'reference_audio_translation'}
 
 
-def spacing_supported_notes(notes,groups,fits,spacing,motion):
+def spacing_supported_notes(notes,groups,fits,spacing,motion,coordinate_support=None):
     """Score a candidate using the same native spacing constraints as its output."""
     from piu_timeline.play.spacing_checks import spacing_failures
     candidate=[dict(note)for note in notes]
@@ -93,7 +94,7 @@ def spacing_supported_notes(notes,groups,fits,spacing,motion):
         for j,index in enumerate(group['notes']):
             if fit['status']=='restored':candidate[index]['target_seconds']=fit['targets'][j]
             else:candidate[index]['status']='excluded'
-    rejected={w['note']for w in spacing_failures(candidate,spacing,motion)}
+    rejected={w['note']for w in spacing_failures(candidate,spacing,motion,coordinate_support)}
     return tuple(i for i,note in enumerate(candidate)if note['status']=='estimated'and i not in rejected)
 
 
@@ -155,7 +156,9 @@ def apply(data,directory):
     spacing=None
     if len(data.get('layout',{}).get('lanes',[]))>=2:
         spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
-    validate=(lambda fits:spacing_supported_notes(notes,proposals,fits,spacing,data.get('scroll_motion')))if spacing else None
+    from piu_timeline.play.beat_coordinates import prepare
+    coordinate_support=prepare(data,spacing)if spacing else None
+    validate=(lambda fits:spacing_supported_notes(notes,proposals,fits,spacing,data.get('scroll_motion'),coordinate_support))if spacing else None
     phase=fit_phase(proposals,ref['alignment_uncertainty_seconds'],consistent_notes=validate)
     result.update(song_phase_range=phase.get('phase_range'),song_phase_correction_seconds=phase.get('phase'),
                   phase_resolution_seconds=phase.get('resolution_seconds'),
@@ -182,7 +185,8 @@ def apply(data,directory):
     from piu_timeline.play.spacing_checks import spacing_failures
     if len(data.get('layout',{}).get('lanes',[]))>=2:
         spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
-        conflicts=spacing_failures(notes,spacing,data.get('scroll_motion'))
+        result['coordinate_checks']=[]
+        conflicts=spacing_failures(notes,spacing,data.get('scroll_motion'),coordinate_support,result['coordinate_checks'])
         for conflict in conflicts:
             index=conflict['note'];conflict.update(reason='beat_grid_conflicts_with_spatial_spacing')
             notes[index].update(status='excluded',reason=conflict['reason'],target_seconds=None,

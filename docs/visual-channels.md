@@ -278,3 +278,26 @@ targets and measured popup/input intervals are unchanged. This projection does
 not replace the acquisition sidecar. Explained stationary records remain
 inspectable alongside their original motion warnings; unsupported motion and
 unrelated recognition failures still warn.
+
+## A clipped confirmation after clear disappearance
+
+A fast note can have one fully visible clear-absence frame after its last visible
+head, followed by a comparison window slightly outside the image. Cropping the
+real intersection can corroborate that first absence when at least 80% of both
+the window area and the expected colored foreground remain observable. Never
+pad unseen pixels as background or move the expected center to fit the image.
+Retain the visible area/foreground fractions and original confirmation PTS.
+
+A partial window supplies confirmation only. It cannot establish the first clear
+absence, a last-present sample or a passed-receptor conclusion. At least three
+full present observations and one full clear absence are still required. Keep
+all existing color-overlap, white-core/bloom, HUD, competing-head, source-cadence
+and receptor-position checks. Low coverage, loss of the foreground, black/cut
+frames, flashes or truncated recording cannot confirm absence. The reported
+transition stays bounded by the last full presence and first full clear absence;
+the later partial observation never narrows that range. This is processing
+information, not proof of a successful grade or a physical switch press.
+A strong partial match that may show the head still present refutes the proposed
+disappearance instead of being counted as absence or silently ignored. Keep it
+as `partial_head_present`; further absence cannot confirm an earlier transition
+across that possible reappearance.

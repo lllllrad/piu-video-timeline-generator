@@ -360,6 +360,14 @@ converted back into displacement with each head's own supported clock and applie
 to its registered offset. Missing common offset support is an explicit
 `shared_spacing_model_unavailable` failure. The native pixel tolerance is unchanged.
 
+Independent calibrated heads can establish a rhythm-to-coordinate relation
+without inheriting each media clock's capture bias. Exclude the tested pair
+from its references, verify every reference, and interpolate only inside their
+supported range. This uses the unchanged native pixel-gap gate and retains
+both passing and failed proofs. See [independent beat coordinate checks](play-analysis.md#independent-beat-coordinate-checks)
+for the validation contract; input observations and existing chart notes never
+supply this coordinate relation.
+
 Two native coordinate blocks can transfer a target without extending an old clock
 through new motion. At least two independent head identities must have four
 observations over 65 ms on both sides, position errors at most 1.5 pixels, and
@@ -477,23 +485,7 @@ phase-search resolution, source timing uncertainty and pixel gates.
 
 ### A clipped confirmation after clear disappearance
 
-A fast note can have one fully visible clear-absence frame after its last visible
-head, followed by a comparison window slightly outside the image. Cropping the
-real intersection can corroborate that first absence when at least 80% of both
-the window area and the expected colored foreground remain observable. Never
-pad unseen pixels as background or move the expected center to fit the image.
-Retain the visible area/foreground fractions and original confirmation PTS.
-
-A partial window supplies confirmation only. It cannot establish the first clear
-absence, a last-present sample or a passed-receptor conclusion. At least three
-full present observations and one full clear absence are still required. Keep
-all existing color-overlap, white-core/bloom, HUD, competing-head, source-cadence
-and receptor-position checks. Low coverage, loss of the foreground, black/cut
-frames, flashes or truncated recording cannot confirm absence. The reported
-transition stays bounded by the last full presence and first full clear absence;
-the later partial observation never narrows that range. This is processing
-information, not proof of a successful grade or a physical switch press.
-A strong partial match that may show the head still present refutes the proposed
-disappearance instead of being counted as absence or silently ignored. Keep it
-as `partial_head_present`; further absence cannot confirm an earlier transition
-across that possible reappearance.
+Only a sufficiently visible partial window can confirm an earlier full clear
+absence; it never supplies the transition timestamp. See the [processing
+confirmation contract](visual-channels.md#a-clipped-confirmation-after-clear-disappearance)
+for coverage, reappearance and source-cadence requirements.

@@ -2,6 +2,7 @@
 from collections import defaultdict
 
 import numpy as np
+from piu_timeline.play.beat_coordinates import predictions
 
 
 def registered_gap(first,second,samples,offsets,frames,a,b):
@@ -26,7 +27,7 @@ def registered_gap(first,second,samples,offsets,frames,a,b):
     return float(np.median([gap for _,gap in gaps]))+corrections[1]-corrections[0]
 
 
-def spacing_failures(notes, spacing, motion=None):
+def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagnostics=None):
     if motion is not None and hasattr(motion,'evidence'):motion=motion.evidence()
     offsets={(record['chunk'],head['note']):head['offset_pixels']
              for record in (motion or {}).get('coordinate_registration',{}).get('chunks',[]) if record.get('status')=='fitted'
@@ -53,6 +54,12 @@ def spacing_failures(notes, spacing, motion=None):
             predicted=((second['target_seconds']-first['target_seconds'])*ca['velocity'] if ca==cb else None)
         else:
             predicted=registered_gap(first,second,samples,offsets,frames,a,b)
+        models=predictions(a,b,notes,(samples[0][0],samples[-1][0]),coordinate_support)
+        if models:
+            # A model is selected by independent reference support, regardless
+            # of its verdict. Any supported disagreement must remain a failure.
+            predicted=max(models,key=lambda m:abs(m['predicted_gap_pixels']-gap))['predicted_gap_pixels']
+            if diagnostics is not None:diagnostics.append({'peer_notes':[a,b],'observed_gap_pixels':gap,'models':models})
         tolerance=max(1.,3*scatter)
         if predicted is not None and abs(predicted-gap)<=tolerance+1e-6:continue
         for index in (a,b):
@@ -60,5 +67,5 @@ def spacing_failures(notes, spacing, motion=None):
                            'check':'timing_reconstruction','visible_start_seconds':samples[0][0],
                            'visible_end_seconds':samples[-1][0],'observed_points':len(samples),
                            'peer_notes':[a,b],'observed_gap_pixels':gap,'reconstructed_gap_pixels':predicted,
-                           'tolerance_pixels':tolerance})
+                           'tolerance_pixels':tolerance,**({'independent_coordinate_models':models}if models else {})})
     return failed
