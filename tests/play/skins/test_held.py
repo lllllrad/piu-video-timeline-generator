@@ -36,6 +36,12 @@ class ReceptorBodyTest(unittest.TestCase):
             endpoint={'lane':0,'role':'hold_end','template_role':'hold_end','template':'hold_end',
                       'classification_status':'full_pattern','bounds_pixels':[10,10,30,45],'alternatives':[]}
             self.assertTrue(candidate([endpoint]))
+            tile={'lane':0,'role':'hold_body','template':'hold_body','classification_status':'full_pattern',
+                  'bounds_pixels':[10,20,18,32],'alternatives':[]}
+            connection=candidate.explain([endpoint,tile])
+            self.assertTrue(any(c['kind']=='cap_connection'and c['image_indices']==[0]for c in connection))
+            self.assertTrue(any(c['kind']=='body_run'for c in connection))
+            self.assertEqual(candidate.explain([endpoint,tile]),connection)
             failed=deepcopy(endpoint);failed.update(role='unknown',classification_status='cap_only')
             self.assertFalse(candidate([failed]))
             distant=deepcopy(endpoint);distant['bounds_pixels']=[10,100,30,135]
