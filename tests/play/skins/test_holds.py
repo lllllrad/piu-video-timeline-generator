@@ -41,15 +41,39 @@ class ImageHoldTest(unittest.TestCase):
         self.assertEqual(warnings,[])
         self.assertEqual((data,native,receptors),original)
 
-    def test_one_uncovered_frame_or_a_conflicting_tap_image_prevents_complete_hold(self):
-        for case in ('body_gap','tap_conflict','failed_clock'):
+    def test_unknown_context_keeps_positive_endpoints_without_erasing_real_role_conflicts(self):
+        data,native,receptors=scenario()
+        for index in (2,6):
+            native[index]['skin_observations'][0]['role']='unknown'
+            native[index]['skin_observations'][1]['role']='unknown'
+        warnings=[]
+        holds=reconstruct_images(data,receptors,native,warnings)
+        self.assertEqual(len(holds),1)
+        self.assertEqual(len(holds[0]['image_connection_evidence']),8)
+        self.assertEqual(warnings[0]['failure_detail'],
+                         'known_hold_image_connection_not_observed_in_clear_frames')
+        self.assertEqual(warnings[0]['observed_points'],2)
+        # A complete, contradictory image still prevents endpoint ownership.
+        native[4]['skin_observations'][0]['role']='hold_end'
+        self.assertEqual(reconstruct_images(data,receptors,native,[]),[])
+
+    def test_conflicting_role_or_failed_clock_prevents_complete_hold(self):
+        for case in ('tap_conflict','failed_clock'):
             data,native,receptors=scenario()
-            if case=='body_gap':native[3]['skin_observations'].pop()
-            elif case=='tap_conflict':native[3]['skin_observations'][1]['role']='tap'
+            if case=='tap_conflict':native[3]['skin_observations'][1]['role']='tap'
             else:data['notes'][0]['status']='excluded'
             warnings=[]
             self.assertEqual(reconstruct_images(data,receptors,native,warnings),[])
             self.assertTrue(warnings)
+
+    def test_missing_body_match_is_a_warning_and_never_supplies_connection_proof(self):
+        data,native,receptors=scenario();native[3]['skin_observations'].pop()
+        warnings=[];holds=reconstruct_images(data,receptors,native,warnings)
+        self.assertEqual(len(holds),1)
+        self.assertEqual(len(holds[0]['image_connection_evidence']),9)
+        self.assertEqual(warnings[0]['image_evidence'],[{'time':.06,'source_pts':30.06}])
+        for frame in native:frame['skin_observations']=frame['skin_observations'][:2]
+        self.assertEqual(reconstruct_images(data,receptors,native,[]),[])
 
     def test_a_tail_image_needs_no_tap_or_input_at_its_cap_and_conflicts_stay_explicit(self):
         data,native,_=scenario();data['visual_channels']={'note_types':observe(data,native)}

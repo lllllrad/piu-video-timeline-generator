@@ -6,6 +6,8 @@ from piu_timeline.play.holds.state import recognition_segments, recognition_wind
 from piu_timeline.play.skins.observations import observe
 
 
+FORMAT = {'schema': 1, 'revision': 1, 'method': 'independent_image_hold_proof'}
+
 def covered(lo, hi, boxes):
     cursor = lo
     for a, b in sorted(boxes):
@@ -19,7 +21,7 @@ def covered(lo, hi, boxes):
 
 def reconstruct_images(data, receptor_frames, native, diagnostics):
     records = observe(data, native)['notes']
-    roles = {r['note']: {o['role'] for o in r['observations']} for r in records}
+    roles = {r['note']: {o['role'] for o in r['observations']} - {'unknown'} for r in records}
     by_time = {f['playback_seconds']: f for f in native}
     width = data['analysis_width']
     spacing = (data['layout']['lanes'][1]['x'] - data['layout']['lanes'][0]['x']) * width
@@ -33,7 +35,7 @@ def reconstruct_images(data, receptor_frames, native, diagnostics):
                     or last['status'] != 'estimated' or last['target_seconds'] <= first['target_seconds']):
                 continue
             after = dict(last['points'])
-            proof, contradicted = [], False
+            proof, missing = [], []
             for time in sorted(before.keys() & after.keys()):
                 a, b = before[time], after[time]
                 if b <= a:
@@ -50,16 +52,16 @@ def reconstruct_images(data, receptor_frames, native, diagnostics):
                     from piu_timeline.play.screen_regions import occluders_at_bounds
                     bounds = [center-.25*spacing, a, center+.25*spacing, b]
                     if not occluders_at_bounds(data['layout'],bounds,width,data['analysis_height']):
-                        contradicted = True
-            if (contradicted or len(proof) < 4 or proof[-1]['time'] - proof[0]['time'] < .065
+                        missing.append({'time': time, 'source_pts': frame['source_pts_seconds']})
+            if (len(proof) < 4 or proof[-1]['time'] - proof[0]['time'] < .065
                     or proof[0]['head_y'] - proof[-1]['head_y'] < .5 * spacing):
                 continue
             gaps = [p['tail_y'] - p['head_y'] for p in proof]
             if max(gaps) - min(gaps) > 2:
                 continue
-            proposals.append((head, tail, proof)); heads[head].add(tail); tails[tail].add(head)
+            proposals.append((head, tail, proof, missing)); heads[head].add(tail); tails[tail].add(head)
     holds, represented = [], set()
-    for head, tail, proof in proposals:
+    for head, tail, proof, missing in proposals:
         if len(heads[head]) != 1 or len(tails[tail]) != 1:
             continue
         first, last = data['notes'][head], data['notes'][tail]
@@ -76,6 +78,13 @@ def reconstruct_images(data, receptor_frames, native, diagnostics):
                       'component_evidence': {str(i): {'kind': 'registered_cap',
                           'source_pts_seconds': [p['source_pts'] for p in proof]} for i in (head, tail)}})
         represented.update((head, tail))
+        if missing:
+            diagnostics.append({'note': head, 'lane': first['lane'], 'reason': 'unresolved_hold_geometry',
+                                'failure_detail': 'known_hold_image_connection_not_observed_in_clear_frames',
+                                'hold': holds[-1]['id'], 'tail_note': tail,
+                                'visible_start_seconds': missing[0]['time'],
+                                'visible_end_seconds': missing[-1]['time'],
+                                'observed_points': len(missing), 'image_evidence': missing})
     for record in records:
         index = record['note']
         if index in represented or not roles[index] & {'hold_start', 'hold_end'}:

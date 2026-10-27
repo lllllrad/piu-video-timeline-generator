@@ -70,7 +70,9 @@ def augment_holds(data, output):
                    'object_roles':fingerprint(data.get('object_interpretation',{}).get('effects',[])),
                    'hud_events': fingerprint({key: data.get(key, []) for key in ('combo_events', 'judgment_events')})}
     if data.get('skin_detector'):
+        from piu_timeline.play.skins.holds import FORMAT as IMAGE_HOLD_FORMAT
         association['skin_images'] = data['skin_detector']['contract']
+        association['image_hold_format'] = IMAGE_HOLD_FORMAT
     path = output / 'holds.json'
     if path.is_file():
         saved = json.loads(path.read_text())

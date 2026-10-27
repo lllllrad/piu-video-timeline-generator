@@ -68,8 +68,16 @@ A complete end image supplies a tail role without inventing a tap or a press at
 that location. It remains a warning when complete hold geometry is unresolved.
 For image-based holds, start/end identities and directly matched body tiles must
 cover the intervening image interval in at least four frames spanning 65 ms and
-half a lane spacing of motion. Clear uncovered frames, varying endpoint
-separation, contradictory roles and competing ownership prevent reconstruction.
+half a lane spacing of motion. Varying endpoint separation, contradictory roles and competing ownership
+prevent reconstruction. A missing image match is not a positive observation of
+a physical gap. Clear frames without sufficient connection support supply no
+proof and remain explicit warnings, even when other frames uniquely establish
+the held interval. If the independent positive frames are insufficient, the
+whole interval remains unresolved.
+Frames with unknown cap context do not erase positive endpoint identities.
+They supply no endpoint coverage proof; the remaining complete images must
+independently satisfy the same geometry requirements. A contradictory complete
+role still prevents ownership.
 Legacy lane-color components cannot create a hold for a selected image skin.
 Receptor observations attach held-state evidence only after geometry exists.
 
