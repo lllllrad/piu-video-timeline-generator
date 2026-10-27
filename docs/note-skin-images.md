@@ -76,6 +76,16 @@ Body diagnostics likewise retain exact frame/lane/anchor references instead of
 copying every native alternative. The original comparisons remain unchanged in
 the native trace. Conflicting tap/hold observations remain conflicts.
 
+Native image-anchor records also feed independent spacing validation. Each
+trajectory point must identify one positive cap comparison at the same source
+frame, lane and measured row, under the acquired bank identity. Missing or
+inconsistent provenance fails explicitly. These are measured template anchors,
+not an inferred outline offset or a claim of absolute game-engine calibration.
+Independent coordinate models retain their existing reference-count, lane,
+source-support and pixel-residual requirements. Absolute registration remains
+unverified for UCS export. Cross-template chord calibration is not supplied by
+these records.
+
 A complete end image supplies a tail role without inventing a tap or a press at
 that location. It remains a warning when complete hold geometry is unresolved.
 Image-based holds require positive start/end identities and connected body

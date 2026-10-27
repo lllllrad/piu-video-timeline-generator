@@ -125,8 +125,11 @@ def measure(data,path):
 def apply(data,directory,display_delay_ms=0):
     """Register derived coordinates while keeping every original detection/PTS."""
     if data.get('skin_detector'):
-        return {**data,'head_registration':{'format':FORMAT,'notes':[],
-                'status':'skin_image_anchors','skin_contract':data['skin_detector']['contract']}}
+        from piu_timeline.play.skins.coordinates import measure as measure_images
+        with (directory/'frames.jsonl').open()as stream:
+            registration=measure_images(data,(json.loads(line)for line in stream))
+        (directory/'head-registration.json').write_text(json.dumps(registration)+'\n')
+        return {**data,'head_registration':registration}
     from piu_timeline.play.appearance import acquire
     if not data.get('media',{}).get('video_streams'):
         return {**data,'head_registration':{'format':FORMAT,'notes':[],'status':'unavailable'}}
