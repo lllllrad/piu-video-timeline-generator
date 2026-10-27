@@ -15,6 +15,7 @@ from piu_timeline.play.spacing_checks import CLOCK_CONVERSION_FORMAT
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
 FORMAT={'schema':1,'revision':15,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
+        'unsupported_rows':'retain_independently_unique_neighbors',
         'reference_validation':'before_and_after_native_recovery','clock_conversion':CLOCK_CONVERSION_FORMAT,
         'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT,'native_row_domains':DOMAIN_FORMAT,'native_recovery':RECOVERY_FORMAT}
 
@@ -22,6 +23,8 @@ FORMAT={'schema':1,'revision':15,'group_beats':4,'natural_splits':list(NATURAL_S
 def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0,native_chords=(),native_coordinates=()):
     """Choose the smallest explanatory split, never an arbitrarily fine nearest row."""
     incompatible=None;partial=None
+    def support(result):
+        return sum(t is not None for t in result.get('targets',())), -len(result.get('unsupported_indices',()))
     for split in splits or FORMAT['natural_splits']:
         step=60/(bpm*split)
         options=[]
@@ -29,14 +32,16 @@ def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty
             lo=math.ceil((time-error-phase_uncertainty-origin)/step-1e-8)
             hi=math.floor((time+error+phase_uncertainty-origin)/step+1e-8)
             options.append((lo,hi))
-        if any(lo>hi for lo,hi in options):continue
+        unsupported_indices=[i for i,(lo,hi)in enumerate(options)if lo>hi]
+        unsupported=bool(unsupported_indices)
+        if unsupported and phase_uncertainty:continue
         from piu_timeline.play.beats.chords import constrain
         original_options=options
         options,proofs=constrain(options,step,native_chords)
-        if any(lo>hi for lo,hi in options):incompatible='native_chord_domains_incompatible';continue
+        if any(lo>hi for lo,hi in options)and not unsupported:incompatible='native_chord_domains_incompatible';continue
         from piu_timeline.play.beats.domains import constrain as constrain_coordinates
         options,coordinate_proofs=constrain_coordinates(options,step,origin,native_coordinates)
-        if any(lo>hi for lo,hi in options):incompatible='native_coordinate_domains_incompatible'
+        if any(lo>hi for lo,hi in options)and not unsupported:incompatible='native_coordinate_domains_incompatible'
         if all(lo>hi for lo,hi in options):continue
         rows=[lo if lo==hi else None for lo,hi in options]
         known=[(time,row)for time,row in zip(targets,rows)if row is not None]
@@ -45,17 +50,20 @@ def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty
                      **({'native_coordinate_constraints':coordinate_proofs}if coordinate_proofs else {}),
                      **({'unconstrained_row_domains':original_options}if proofs or coordinate_proofs else {})}
         if any(row is None for row in rows):
-            result={'status':'failed','reason':'native_coordinate_domains_incompatible'if any(lo>hi for lo,hi in options)else'ambiguous_beat_rows',
-                    'split':split,'row_domains':options,**constraints}
+            reason=('no_natural_beat_subdivision'if unsupported else
+                    'native_coordinate_domains_incompatible'if any(lo>hi for lo,hi in options)else'ambiguous_beat_rows')
+            result={'status':'failed','reason':reason,
+                    'split':split,'row_domains':options,**constraints,
+                    **({'unsupported_indices':unsupported_indices}if unsupported else {})}
             # A fixed common phase can establish some rows without resolving
             # every other head. Unknown phase requires the common-phase search.
             if known and phase_uncertainty==0:
                 result.update(status='partial',rows=rows,targets=[origin+r*step if r is not None else None for r in rows],
                               phase_range=[0,0],unresolved_indices=[i for i,row in enumerate(rows)if row is None])
             if any(lo>hi for lo,hi in options)and result['status']=='partial':
-                if partial is None or len(known)>sum(t is not None for t in partial['targets']):partial=result
+                if partial is None or support(result)>support(partial):partial=result
                 continue
-            if partial and sum(t is not None for t in partial['targets'])>len(known):return partial
+            if partial and support(partial)>support(result):return partial
             return result
         exact=[origin+row*step for row in rows]
         phase_lo=max([-phase_uncertainty]+[t-e-g for t,e,g in zip(targets,uncertainties,exact)])

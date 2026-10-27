@@ -50,7 +50,8 @@ class BeatGridTest(unittest.TestCase):
                 result=apply(data,root)
                 self.assertEqual(result['beat_timing']['status'],'failed')
                 self.assertTrue(result['beat_timing']['warnings'])
-                self.assertTrue(all(n['status']=='excluded' and n['target_seconds'] is None for n in result['notes']))
+                self.assertEqual([n['target_seconds']for n in result['notes']],[10,None,10.25])
+                self.assertEqual({w['note']for w in result['beat_timing']['warnings']},{1})
 
     def test_one_common_phase_is_required_instead_of_moving_each_note_independently(self):
         result=fit_grid([10.01,10.135],[.001,.001],120,10,phase_uncertainty=.02)

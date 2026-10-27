@@ -176,6 +176,15 @@ its remaining domains. It cannot silently select one of those rows or increase
 Split merely to hide ambiguity. A group with no unique assignments remains
 failed. Contradictory domains and unsupported subdivisions still fail.
 
+The same isolation applies when a head's measured time interval contains no row
+at a candidate Split. Retain unique neighbors while testing finer natural
+subdivisions. A finer complete fit can explain a genuine mixed rhythm; a finer
+ambiguous fit cannot replace a partial fit with more independently unique
+heads. For equal unique support, prefer a fit whose source intervals admit
+more rows before geometric validation, then the smaller Split. Preserve empty
+domains and `unsupported_indices`; the unsupported head remains an explicit
+failure with its original time interval. No tolerance or row domain is widened.
+
 The common-phase search counts only unique assignments and validates them with
 the ordinary spacing and chord checks. Winning phases must agree on those
 assignments and supported identities; the chosen midpoint is checked again.

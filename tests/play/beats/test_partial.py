@@ -12,6 +12,19 @@ from tests.play.beats.test_spatial_phase import scenario as spatial_scenario
 
 
 class PartialBeatTest(unittest.TestCase):
+    def test_unsupported_clock_row_cannot_force_unique_neighbors_onto_an_ambiguous_finer_grid(self):
+        targets=[1+i*.125+.02 for i in range(12)]
+        errors=[.03]*12
+        targets.insert(6,1+.625+1/12);errors.insert(6,.01)
+        result=fit_grid(targets,errors,120,1)
+        self.assertEqual(result['status'],'partial')
+        self.assertEqual(result['split'],4)
+        self.assertEqual(result['unresolved_indices'],[6])
+        self.assertIsNone(result['targets'][6])
+        self.assertEqual([t for t in result['targets']if t is not None],[1+i*.125 for i in range(12)])
+        self.assertGreater(result['row_domains'][6][0],result['row_domains'][6][1])
+        self.assertEqual(result['reason'],'no_natural_beat_subdivision')
+
     def test_common_phase_keeps_unique_rows_without_choosing_an_ambiguous_neighbor(self):
         group={'targets':[10,10.125,10.25,10.375],'errors':[.001,.001,.14,.001],
                'bpm':120,'origin':10}
