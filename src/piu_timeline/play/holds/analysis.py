@@ -69,6 +69,8 @@ def augment_holds(data, output):
     association = {'format': ASSOCIATION_FORMAT, 'notes': fingerprint(data['notes']),
                    'object_roles':fingerprint(data.get('object_interpretation',{}).get('effects',[])),
                    'hud_events': fingerprint({key: data.get(key, []) for key in ('combo_events', 'judgment_events')})}
+    if data.get('skin_detector'):
+        association['skin_images'] = data['skin_detector']['contract']
     path = output / 'holds.json'
     if path.is_file():
         saved = json.loads(path.read_text())
@@ -87,7 +89,12 @@ def augment_holds(data, output):
     from piu_timeline.play.receptors import observations, reject_common_flashes
     frames = reject_common_flashes(frames, observations(data, output, frames))
     unresolved = []
-    holds = reconstruct(data, frames, unresolved)
+    if data.get('skin_detector'):
+        from piu_timeline.play.skins.holds import reconstruct_images
+        native = [json.loads(line) for line in (output/'frames.jsonl').open()]
+        holds = reconstruct_images(data, frames, native, unresolved)
+    else:
+        holds = reconstruct(data, frames, unresolved)
     result = {'feature_contract': contract, 'association_contract': association, 'holds': holds,
               'decorative_body_observations':art,
               'unresolved_tracks': unresolved, 'receptor_runs': receptor_runs(frames),

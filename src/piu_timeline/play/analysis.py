@@ -12,7 +12,7 @@ import uuid
 import cv2
 import numpy as np
 
-from piu_timeline.storage import read_analysis_header as cache_header
+from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, find_saved_observations
 from piu_timeline.vision.ocr import ocr_images
 from piu_timeline.play.frames import decode_frames, crop_region, TIME_EPSILON
 from piu_timeline.play.tracking import NoteTracker, DigitReader, ComboTracker, associate
@@ -32,7 +32,6 @@ from piu_timeline.play.beats.timing import FORMAT as BEAT_TIMING_FORMAT, current
 VERSION = 18
 TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT,'object_roles':OBJECT_FORMAT}
 FRAME_OBSERVATION_VERSION = 4
-NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 
 
 
@@ -147,12 +146,23 @@ def refresh_counter_observations(cached, output, replace_font=False):
     return {'combo_readable_fraction':known/count,'refreshed_counter_only':True}
 
 
-def refit_saved(cached, previous, output, segment, display_delay_ms):
+def refit_saved(cached, previous, output, segment, display_delay_ms, note_skin=None):
     """Rerun trajectories and row alignment using identical source observations."""
     shutil.copytree(previous, output)
     from piu_timeline.storage import relocate_evidence
     relocate_evidence(output,output,source=previous)
     cached=json.loads((output/'analysis.json').read_text())
+    from piu_timeline.play.skins.replay import detector_contract, refresh
+    if cached.get('skin_detector', {}).get('contract') != detector_contract(note_skin):
+        if note_skin is None:
+            outline = output / 'frames.outline.jsonl'
+            if not outline.is_file():
+                raise ValueError('Original contour observations are unavailable for detector reset')
+            shutil.copy2(outline, output / 'frames.jsonl')
+            shutil.copy2(outline, output / 'frames.base.jsonl')
+            cached.pop('skin_detector', None)
+        else:
+            cached['skin_detector'] = refresh(cached, output, note_skin)
     refreshed = {}
     from piu_timeline.play.fonts import refresh_reader
     replaced_font = refresh_reader(cached, output, LOCAL_DATA)
@@ -195,7 +205,7 @@ def refit_saved(cached, previous, output, segment, display_delay_ms):
 
 
 def analyze_play(document, segment, output, player=None, layout=None, start=None, duration=None,
-                 width=650, display_delay_ms=0):
+                 width=650, display_delay_ms=0, note_skin=None):
     record, roi = document['media'], tuple(document['game_roi'])
     source = Path(record['path'])
     before = source.stat()
@@ -228,6 +238,9 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     (output / 'evidence').mkdir(exist_ok=True)
     digits, bootstrap = bootstrap_digits(record, roi, start, end, layout, output / 'evidence', width=width)
     combo, tracker, times = ComboTracker(), None, []
+    from piu_timeline.play.skins.bank import load_bank
+    from piu_timeline.play.skins.replay import detector_metadata
+    skin_bank = load_bank(note_skin) if note_skin is not None else None
     observed, known, previous_mask, previous_read = 0, 0, None, (None, 0.0)
     last_adapted = None
     from piu_timeline.play.counter_pixels import CounterPixelWriter
@@ -236,7 +249,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     with (output / 'frames.jsonl').open('w') as trace:
         for pts, playback, image in decode_frames(record, start, end, roi, width):
             if tracker is None:
-                tracker = NoteTracker(layout, image.shape[1], image.shape[0])
+                tracker = NoteTracker(layout, image.shape[1], image.shape[0], skin_bank=skin_bank)
             notes = tracker.detect(image)
             tracker.update(playback, notes, pts)
             crop = crop_region(image, layout['combo_roi'])
@@ -255,7 +268,8 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                 last_adapted = value
             times.append(playback); observed += 1; known += value is not None
             trace.write(json.dumps({'source_pts_seconds': pts, 'playback_seconds': playback,
-                                    'notes': notes, 'possible_hold_or_dense_stack': tracker.hold_candidate, 'combo': value, 'combo_confidence': confidence, 'combo_read_mode': digits.last_mode}) + '\n')
+                                    'notes': notes, **({'skin_observations':tracker.skin_observations} if skin_bank else {}),
+                                    'possible_hold_or_dense_stack': tracker.hold_candidate, 'combo': value, 'combo_confidence': confidence, 'combo_read_mode': digits.last_mode}) + '\n')
             if observed % 300 == 0:
                 print(f'  {observed} native frames, {playback-start:.1f}/{end-start:.1f}s, combo readable {known/observed:.0%}', flush=True)
     if not times:
@@ -279,6 +293,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
         raise ValueError('Source changed during play analysis')
     interval = float(np.median(np.diff(times))) if len(times) > 1 else None
     return {'schema_version': 1, 'play_analysis_version': VERSION, 'media': record,
+            **({'skin_detector':detector_metadata(note_skin, skin_bank)} if skin_bank else {}),
             'participant_slots': sorted(segment.get('players',{})), 'song': segment.get('song'), 'chart': segment.get('chart'), 'player': player,
             'chart_identity': segment.get('chart_identity'),
             'start_seconds': start, 'end_seconds': end, 'game_roi': list(roi), 'layout': layout,
@@ -300,38 +315,6 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                             'No missed press is inferred from a combo reset or an unreadable counter.']}
 
 
-def observation_settings_match(cached, document, segment, start, end, options):
-    chart=segment.get('chart') or ''
-    lanes=10 if re.match(r'^(?:HD|D)\d',chart) else 5 if re.match(r'^(?:S\d|VERY HARD )',chart) else None
-    return (cached.get('media')==document.get('media') and cached.get('start_seconds')==start
-            and cached.get('end_seconds')==end and cached.get('game_roi')==document.get('game_roi')
-            and cached.get('analysis_width')==options.get('width',650)
-            and cached.get('player')==options.get('player')
-            and cached.get('participant_slots',[])==sorted(segment.get('players',{}))
-            and (lanes is None or len(cached.get('layout',{}).get('lanes',[]))==lanes)
-            and (options.get('layout') is None or cached.get('layout')==options['layout']))
-
-
-def find_saved_observations(root, final, document, segment, start, end, options):
-    # Backups are immutable snapshots, so another segment can reuse them safely
-    # while the numbered presentation directories are being updated.
-    paths=[p for p in root.glob('segment-*.previous-*/analysis.json') if p.parent!=final]
-    for path in sorted(paths,key=lambda p:p.stat().st_mtime_ns,reverse=True):
-        try:
-            cached=cache_header(path)
-            if (observation_settings_match(cached,document,segment,start,end,options)
-                    and (path.parent/'frames.jsonl').is_file()
-                    and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT):
-                cached=json.loads(path.read_text())
-                if (observation_settings_match(cached,document,segment,start,end,options)
-                        and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
-                        and all(key in cached for key in ('layout','analysis_height','frame_count'))):
-                    return cached,path.parent
-        except (OSError,ValueError):
-            continue
-    return None
-
-
 def run(source, segment_number=1, force=False, **options):
     from piu_timeline.play.fonts import cache_current as digit_cache_current
     directory = LOCAL_DATA / source_id(source)
@@ -342,6 +325,11 @@ def run(source, segment_number=1, force=False, **options):
     segments = document.get('segments', [])
     if not 1 <= segment_number <= len(segments):
         raise ValueError(f'--segment must be between 1 and {len(segments)}')
+    from piu_timeline.play.skins.replay import selected_bank, detector_contract
+    note_skin = selected_bank(directory, segment_number, options.get('note_skin'))
+    if note_skin is not None:
+        options['note_skin'] = note_skin
+    skin_contract = detector_contract(note_skin)
     root = directory / 'play'; root.mkdir(exist_ok=True)
     with (root / f'.segment-{segment_number:03}.lock').open('a') as lock:
         try:
@@ -365,6 +353,7 @@ def run(source, segment_number=1, force=False, **options):
                          and all(key in cached for key in ('layout','analysis_height','frame_count'))
                          and (final / 'frames.jsonl').is_file())
             if (same_source and same_settings and cached.get('play_analysis_version') == VERSION
+                    and cached.get('skin_detector',{}).get('contract') == skin_contract
                     and cached.get('timing_format') == TIMING_FORMAT and beat_current(cached,final) and objects_current(cached,final)
                     and cached.get('song')==segments[segment_number-1].get('song')
                     and cached.get('chart')==segments[segment_number-1].get('chart')
@@ -401,7 +390,7 @@ def run(source, segment_number=1, force=False, **options):
                 can_refit=(stat.st_size,stat.st_mtime_ns)==(cached['media']['size_bytes'],cached['media']['mtime_ns'])
         pending = root / f'segment-{segment_number:03}.build-{uuid.uuid4().hex[:8]}'
         if can_refit:
-            result = refit_saved(cached, donor, pending, segments[segment_number-1], options.get('display_delay_ms',0))
+            result = refit_saved(cached, donor, pending, segments[segment_number-1], options.get('display_delay_ms',0), note_skin=note_skin)
         else:
             result = analyze_play(document, segments[segment_number-1], pending, **options)
         result['segment_number']=segment_number
@@ -469,6 +458,7 @@ def main():
     selection.add_argument('--all', action='store_true', help='Analyze every saved play and write an HTML index')
     parser.add_argument('--player', choices=('p1', 'p2'))
     parser.add_argument('--layout', type=Path)
+    parser.add_argument('--note-skin', type=Path, help='Local RGB note-skin bank manifest')
     parser.add_argument('--start', type=float, help='Absolute local playback seconds inside the segment')
     parser.add_argument('--duration', type=float)
     parser.add_argument('--width', type=int, default=650)
@@ -485,7 +475,8 @@ def main():
     try:
         options = dict(force=args.force, player=args.player,
                        layout=json.loads(args.layout.read_text()) if args.layout else None,
-                       start=args.start, duration=args.duration, width=args.width, display_delay_ms=args.display_delay_ms)
+                       start=args.start, duration=args.duration, width=args.width, display_delay_ms=args.display_delay_ms,
+                       **({'note_skin':args.note_skin} if args.note_skin else {}))
         if args.all:
             run_all(args.source, **options)
         else:

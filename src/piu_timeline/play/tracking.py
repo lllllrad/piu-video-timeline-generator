@@ -16,15 +16,24 @@ class Track:
 
 
 class NoteTracker:
-    def __init__(self, layout, width, height):
+    def __init__(self, layout, width, height, skin_bank=None):
         self.layout, self.width, self.height = layout, width, height
         self.spacing = float(np.median(np.diff([lane['x'] * width for lane in layout['lanes']])))
         self.active, self.finished = [], []
         self.hold_candidate, self.unsupported_intervals = False, []
         from piu_timeline.play.motion import ScrollMotion
         self.motion = ScrollMotion(height, self.spacing)
+        self.skin_detector = None
+        self.skin_observations = []
+        if skin_bank is not None:
+            from piu_timeline.play.skins.detector import SkinDetector
+            self.skin_detector = SkinDetector(skin_bank, layout, width, height)
 
     def detect(self, rgb):
+        if self.skin_detector is not None:
+            self.skin_observations = self.skin_detector.detect(rgb)
+            self.hold_candidate = any(o['role'] == 'hold_body' for o in self.skin_observations)
+            return [o for o in self.skin_observations if o['role'] != 'hold_body']
         hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
         h, s, v = cv2.split(hsv)
         colors = {'blue': (h >= 85) & (h <= 130),

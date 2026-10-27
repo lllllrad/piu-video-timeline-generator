@@ -3,6 +3,9 @@ from collections import defaultdict
 
 
 def observed_tail_roles(data):
+    if data.get('skin_detector'):
+        from piu_timeline.play.skins.observations import tail_roles
+        return tail_roles(data)
     types={r['note']:{o['kind']for o in r.get('observations',[])}-{'unknown'}
            for r in data.get('visual_channels',{}).get('note_types',{}).get('notes',[])}
     pairs=defaultdict(list);heads=defaultdict(set);tails=defaultdict(set)

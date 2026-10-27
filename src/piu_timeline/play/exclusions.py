@@ -76,6 +76,14 @@ def recognition_diagnostics(data, ranges):
                          'visible_start_seconds':data['start_seconds'],'visible_end_seconds':data['end_seconds'],
                          'source_review':support})
     policy=data.get('chart_policy',{})
+    if data.get('skin_detector') and not data['skin_detector'].get('registration_reviewed'):
+        warnings.append({'reason':'skin_registration_unverified','lane':0,'observed_points':0,
+                         'visible_start_seconds':data['start_seconds'],'visible_end_seconds':data['end_seconds'],
+                         'skin_contract':data['skin_detector']['contract']})
+    if data.get('skin_detector',{}).get('missing_template_roles'):
+        warnings.append({'reason':'skin_template_coverage_incomplete','lane':0,'observed_points':0,
+                         'visible_start_seconds':data['start_seconds'],'visible_end_seconds':data['end_seconds'],
+                         'missing_template_roles':data['skin_detector']['missing_template_roles']})
     warnings.extend(data.get('object_interpretation',{}).get('warnings',[]))
     effects={e['id']:e for e in policy.get('gimmick_candidates',[])}
     for identifier in policy.get('unsupported_gimmicks',[]):

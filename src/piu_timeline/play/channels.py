@@ -81,10 +81,14 @@ def collect(data, directory, frames):
     if not words:
         words = [{} for _ in native]
     from piu_timeline.play.appearance import acquire
-    appearance = acquire(data,directory,native)
     from piu_timeline.play.object_roles import filter_frames
     interpreted=filter_frames(data,frames,bodies=True)
-    types = observe_appearance(data,appearance,interpreted) if appearance else observe_types(data,pixel_path,interpreted)
+    if data.get('skin_detector'):
+        from piu_timeline.play.skins.observations import observe
+        types = observe(data, native)
+    else:
+        appearance = acquire(data,directory,native)
+        types = observe_appearance(data,appearance,interpreted) if appearance else observe_types(data,pixel_path,interpreted)
     return {'format': CHANNEL_FORMAT,
             'layers': layer_manifest(directory),
             'timeline': {'frames': [[f['playback_seconds'],f['source_pts_seconds']] for f in native]},

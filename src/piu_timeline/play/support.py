@@ -26,6 +26,8 @@ def visual_support(data):
 
 
 def require_chart_geometry(data):
+    if data.get('skin_detector') and not data['skin_detector'].get('registration_reviewed'):
+        raise ValueError('Image skin registration anchors are not yet calibrated for UCS export')
     support=visual_support(data)
     if support and not support['chart_geometry']:
         reasons='; '.join(item['reason'] for item in support['regions'] if not item['chart_geometry'])
