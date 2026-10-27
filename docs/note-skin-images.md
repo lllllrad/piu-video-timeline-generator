@@ -42,10 +42,14 @@ sampling. An anchor is an explicit registration convention, not automatically
 the center of an arrow-shaped bounding box. Distinctive short, flat or bracket
 tails need their own anchor calibration.
 
-The detector rejects compared support pixels intersecting documented HUD
-rectangles. Transparent padding and pixels outside the declared comparison
-regions do not make an otherwise clear cap or connection hidden. Every supported
-pixel still has to be outside HUD; both cap and connection checks remain mandatory.
+Documented HUD rectangles identify areas that can hide a note; they include
+transparent space and do not establish pixel occlusion. A positive image match
+inside such an area remains evidence under the same per-region RGB limits,
+with `hud_region_overlap` retained for review. A mismatching connection cannot
+be assumed present behind HUD. It leaves the cap role unknown. Missing patterns
+inside a potential occluder remain distinct from clear unexplained losses.
+Transparent padding and pixels outside comparison regions do not contribute
+image support or establish overlap.
 The lower search limit applies to note anchors. Surrounding image context can
 extend beyond that limit while remaining inside the original game image; it is
 still subject to HUD support checks. A fully visible template must not be

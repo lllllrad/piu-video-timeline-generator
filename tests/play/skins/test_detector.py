@@ -98,7 +98,7 @@ class SkinDetectorTest(unittest.TestCase):
             data['visual_channels']={'note_types':records}
             self.assertEqual(tail_roles(data),[])
 
-    def test_transparent_padding_cannot_hide_clear_cap_and_connection_pixels(self):
+    def test_potential_hud_rectangles_do_not_erase_positive_images_but_covered_pixels_fail(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);items,_=examples(root);bank=load_bank(root/'bank.json')
             layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1,'color':'blue'}for i in range(5)]}
@@ -110,7 +110,14 @@ class SkinDetectorTest(unittest.TestCase):
             for rect in ([.08,.30,.04,.04],[.05,.35,.1,.05]):
                 with patch('piu_timeline.play.skins.detector.note_occluders',return_value=[{'id':'hud','rect':rect}]):
                     blocked=SkinDetector(bank,layout,200,300).detect(image)
-                self.assertFalse(any(o['role']=='hold_end'and abs(o['y']*300-115)<1e-6 for o in blocked))
+                matches=[o for o in blocked if o['role']=='hold_end'and abs(o['y']*300-115)<1e-6]
+                self.assertEqual(len(matches),1)
+                self.assertTrue(matches[0]['hud_region_overlap'])
+                covered=image.copy();x,y,w,h=rect
+                covered[round(y*300):round((y+h)*300),round(x*200):round((x+w)*200)]=255
+                with patch('piu_timeline.play.skins.detector.note_occluders',return_value=[{'id':'hud','rect':rect}]):
+                    hidden=SkinDetector(bank,layout,200,300).detect(covered)
+                self.assertFalse(any(o['role']=='hold_end'and abs(o['y']*300-115)<1e-6 for o in hidden))
             support=np.zeros((10,10),dtype=bool);support[4,4]=True
             with patch('piu_timeline.play.skins.detector.note_occluders',return_value=[{'id':'hud','rect':[.145,.145,.001,.001]}]):
                 self.assertTrue(occluded_support({},support,10,10,100,100))

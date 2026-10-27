@@ -5,7 +5,7 @@ import math
 
 from piu_timeline.play.screen_regions import note_occluders
 
-FORMAT = {'schema': 1, 'revision': 4, 'method': 'lane_masked_rgb_regions',
+FORMAT = {'schema': 1, 'revision': 5, 'method': 'lane_masked_rgb_regions',
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor'}
 
 
@@ -92,14 +92,11 @@ class SkinDetector:
                         continue
                     bounds = [left + int(col), top + int(row), left + int(col) + w, top + int(row) + h]
                     hidden=occluded_support(self.layout,template['support'],bounds[0],bounds[1],self.width,self.height)
-                    position_support=template['cap_support']if 'cap'in errors else template['support']
-                    if occluded_support(self.layout,position_support,bounds[0],bounds[1],self.width,self.height):
-                        continue
-                    cap_only='cap'in errors and (hidden or scores[row,col]>1
+                    cap_only='cap'in errors and (not np.isfinite(scores[row,col]) or scores[row,col]>1
                                 or template['role']=='tap' and not template['tap_clearance'])
                     candidates.append({'lane': lane, 'x': x / self.width, 'y': y / self.height,
                                        'role': 'unknown'if cap_only else template['role'], 'template': template['id'],
-                                       'template_role':template['role'],
+                                       'template_role':template['role'], 'hud_region_overlap':hidden,
                                        'classification_status':'cap_only'if cap_only else'full_pattern',
                                        **({'reason':'skin_tap_clearance_unresolved'if template['role']=='tap'
                                            else'skin_image_connection_unresolved'}if cap_only else{}),
