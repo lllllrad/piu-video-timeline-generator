@@ -84,3 +84,13 @@ class BeatCoordinateTest(unittest.TestCase):
             if kind=='one_time':
                 for r in changed:r['target_seconds']=1
             self.assertIsNone(fit(changed),kind)
+
+    def test_conflicting_source_coordinates_cannot_count_as_native_pair_support(self):
+        data=fixture();record=data['head_registration']['notes'][4]
+        record['observations'][0]['native_cap_registration_status']='conflicting'
+        support=prepare(data,40)
+        models=predictions(4,5,data['notes'],(.5,.68),support)
+        self.assertTrue(models)
+        self.assertTrue(all(model['coobserved_points']==9 for model in models))
+        for sample in record['observations']:sample['native_cap_registration_status']='conflicting'
+        self.assertEqual(predictions(4,5,data['notes'],(.5,.68),prepare(data,40)),[])

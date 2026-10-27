@@ -3,7 +3,7 @@ from itertools import combinations
 
 import numpy as np
 
-FORMAT={'schema':1,'revision':3,'minimum_references':5,'minimum_lanes':2,
+FORMAT={'schema':1,'revision':4,'minimum_references':5,'minimum_lanes':2,
         'reference_radius_seconds':.75,'minimum_target_span_seconds':.3,
         'minimum_slope_span_seconds':.15,'maximum_reference_error_pixels':1.,
         'maximum_native_error_pixels':1.5}
@@ -12,7 +12,7 @@ FORMAT={'schema':1,'revision':3,'minimum_references':5,'minimum_lanes':2,
 def prepare(data,spacing):
     """Freeze native support before testing beat candidates, without input evidence."""
     motion=data.get('scroll_motion',{});samples={s['time']:s for s in motion.get('samples',[])}
-    observed={r['note']:{s['time']for s in r['observations']}
+    observed={r['note']:{s['time']for s in r['observations']if s.get('native_cap_registration_status')!='conflicting'}
               for r in data.get('head_registration',{}).get('notes',[])
               if r['status']=='registered'or r.get('coordinate_method')in('native_cap_measurements','native_image_anchors')}
     if not observed:return {}
@@ -35,7 +35,7 @@ def prepare(data,spacing):
                           'native_points':len(points),'native_maximum_error_pixels':error,
                           'source_pts_range':[samples[points[0][0]]['source_pts'],samples[points[-1][0]]['source_pts']]}
         chunks[number]=heads
-    return {'chunks':chunks,'frames':{t:s['chunk']for t,s in samples.items()}}
+    return {'chunks':chunks,'frames':{t:s['chunk']for t,s in samples.items()},'observed':observed}
 
 
 def fit(references):
@@ -59,7 +59,8 @@ def predictions(a,b,notes,interval,support):
     """Leave the tested pair out and interpolate only inside independent anchors."""
     if not support:return []
     ta,tb=notes[a]['target_seconds'],notes[b]['target_seconds']
-    common=dict(notes[a]['points']).keys()&dict(notes[b]['points']).keys()
+    common=(dict(notes[a]['points']).keys()&dict(notes[b]['points']).keys()
+            &support['observed'].get(a,set())&support['observed'].get(b,set()))
     models=[]
     for number,heads in support['chunks'].items():
         if a not in heads or b not in heads:continue

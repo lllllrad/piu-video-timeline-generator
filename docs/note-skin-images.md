@@ -104,6 +104,16 @@ certificate. Runtime validation needs the saved proof and immutable references,
 without decoding source video. Metadata-only certification can reuse unchanged
 cap/body acquisition groups.
 
+The representative detection keeps its original image identity and coordinate.
+A positively matched registered alternative can supply a coordinate proof only
+at exactly that same native row. The sample records its actual reference,
+comparison index and cap error; failed context does not erase positive cap
+pixels. A nearby row cannot transfer calibration. All positively matched
+registered coordinate intervals must intersect. Mutually contradictory
+comparisons produce an explicit per-track warning and do not supply chord or
+independent coordinate-model support; raw detections and comparisons remain.
+Pair support counts use only jointly qualified source-frame measurements.
+
 Coordinates retain registration only for the reference that actually supplied
 the positive cap measurement. Uncertainty is converted through the actual
 vertical reference scale with a one-analysis-pixel raster floor. Cross-template

@@ -4,8 +4,9 @@ from itertools import combinations
 
 import numpy as np
 from piu_timeline.play.skins.anchors import FORMAT as ANCHOR_FORMAT
+from piu_timeline.play.skins.coordinates import FORMAT as IMAGE_COORDINATE_FORMAT
 
-FORMAT={'schema':1,'revision':4,'image_support':'qualified_native_centers_or_identical_cap_reference','native_cap_registration':ANCHOR_FORMAT,'minimum_frames':4,'minimum_span_seconds':.065,
+FORMAT={'schema':1,'revision':5,'image_support':'qualified_native_centers_or_identical_cap_reference','native_cap_registration':ANCHOR_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'minimum_frames':4,'minimum_span_seconds':.065,
         'maximum_gap_pixels':1.,'maximum_motion_residual_pixels':1.5,
         'minimum_displacement_spacing':.8,'coordinate_error_pixels':1.}
 
@@ -19,6 +20,7 @@ def prepare(data,spacing):
                 or record.get('coordinate_uncertainty_pixels',float('inf'))>FORMAT['coordinate_error_pixels']):continue
         index=record['note'];note=data['notes'][index];points=dict(note['points'])
         for sample in record['observations']:
+            if image and sample.get('native_cap_registration_status')=='conflicting':continue
             time=sample['time']
             if time not in points:continue
             model=('calibrated',None)
@@ -34,7 +36,8 @@ def prepare(data,spacing):
                         raise ValueError('Image chord has an unsupported native anchor registration')
                 if uncertainty is None or uncertainty>FORMAT['coordinate_error_pixels']:
                     model=('image_reference',sample['cap_reference_sha256'])if sample.get('cap_reference_sha256')else('image_template',sample['template'])
-            at[time].append((index,note['lane'],points[time],sample['source_pts_seconds'],model,sample.get('template')if image else None))
+            reference=sample.get('native_cap_reference_template',sample.get('template'))if image else None
+            at[time].append((index,note['lane'],points[time],sample['source_pts_seconds'],model,reference))
     pairs=defaultdict(list)
     for time,points in sorted(at.items()):
         if max(p[3]for p in points)-min(p[3]for p in points)>1e-6:

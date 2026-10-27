@@ -44,6 +44,21 @@ def register(root,rgb,name='registered'):
         return register_anchors(root/'bank.json',root/'analysis.json',root/'head-registration.json',root/name)
 
 
+def chord_trace(path):
+    from tests.play.beats.test_chords import fixture as chord_fixture
+    bank=load_bank(path);data=chord_fixture();data['analysis_width']=200
+    data['layout']['lanes']=[{'x':.05+i*.1}for i in range(10)]
+    data['notes']=data['notes'][:2];data.pop('head_registration')
+    data['notes'][0]['lane']=0;data['notes'][1]['lane']=5
+    data['skin_detector']=detector_metadata(path);frames=[]
+    for time,y in data['notes'][0]['points']:
+        frames.append({'playback_seconds':time,'source_pts_seconds':50+time,'skin_observations':[
+            {'lane':lane,'x':data['layout']['lanes'][lane]['x'],'y':y/data['analysis_height'],
+             'role':role,'template':role,'skin':bank['skin'],'classification_status':'full_pattern',
+             'region_errors':{'cap':0.}}for lane,role in ((0,'tap'),(5,'hold_start'))]})
+    return data,frames
+
+
 class AnchorRegistrationTest(unittest.TestCase):
     def test_actual_pixels_and_native_centers_certify_only_caps_and_reuse_all_image_groups(self):
         with tempfile.TemporaryDirectory()as temporary:
@@ -104,22 +119,11 @@ class AnchorRegistrationTest(unittest.TestCase):
                 with self.subTest(kind=kind),self.assertRaises(ValueError):load_bank(path)
 
     def test_registered_reference_coordinates_enable_cross_template_chords_without_absolute_calibration(self):
-        from tests.play.beats.test_chords import fixture as chord_fixture
         from piu_timeline.play.beats.chords import prepare
         from piu_timeline.play.skins.coordinates import measure
         with tempfile.TemporaryDirectory()as temporary:
-            root=Path(temporary);rgb,_,_=fixture(root);path=register(root,rgb);bank=load_bank(path)
-            data=chord_fixture();data['analysis_width']=200
-            data['layout']['lanes']=[{'x':.05+i*.1}for i in range(10)]
-            data['notes']=data['notes'][:2];data.pop('head_registration')
-            data['notes'][0]['lane']=0;data['notes'][1]['lane']=5
-            data['skin_detector']=detector_metadata(path);frames=[]
-            for (time,y),(_,other)in zip(data['notes'][0]['points'],data['notes'][1]['points'],strict=True):
-                self.assertEqual(y,other)
-                frames.append({'playback_seconds':time,'source_pts_seconds':50+time,'skin_observations':[
-                    {'lane':lane,'x':data['layout']['lanes'][lane]['x'],'y':y/data['analysis_height'],
-                     'role':role,'template':role,'skin':bank['skin'],'classification_status':'full_pattern',
-                     'region_errors':{'cap':0.}}for lane,role in ((0,'tap'),(5,'hold_start'))]})
+            root=Path(temporary);rgb,_,_=fixture(root);path=register(root,rgb)
+            data,frames=chord_trace(path)
             data['head_registration']=measure(data,frames)
             self.assertEqual(data['head_registration']['absolute_registration'],'unverified')
             proofs=prepare(data,40)
@@ -142,6 +146,57 @@ class AnchorRegistrationTest(unittest.TestCase):
             sample['native_cap_coordinate_uncertainty_pixels']=.1
             sample['native_cap_reference_scale_y']=1.
             with self.assertRaises(ValueError):prepare(data,40)
+
+    def test_coincident_registered_alternative_supplies_its_own_coordinate_proof(self):
+        from piu_timeline.play.beats.chords import prepare
+        from piu_timeline.play.skins.coordinates import measure
+        from piu_timeline.play.exclusions import recognition_diagnostics
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);rgb,_,_=fixture(root);path=register(root,rgb)
+            document=json.loads(path.read_text())
+            next(t for t in document['templates']if t['id']=='hold_start').pop('native_anchor_registration')
+            path.write_text(json.dumps(document));data,frames=chord_trace(path)
+            for frame in frames:
+                image=frame['skin_observations'][1]
+                alternative={**image,'template':'tap','role':'unknown','classification_status':'cap_only',
+                             'region_errors':{'cap':.0001}}
+                image['alternatives']=[alternative]
+            original=deepcopy(frames);data['head_registration']=measure(data,frames)
+            sample=data['head_registration']['notes'][1]['observations'][0]
+            self.assertEqual(sample['template'],'hold_start')
+            self.assertEqual(sample['native_cap_reference_template'],'tap')
+            self.assertEqual(sample['native_cap_comparison_index'],1)
+            self.assertEqual(sample['native_cap_reference_error'],.0001)
+            self.assertEqual(prepare(data,40)[0]['registered_image_templates'],['tap'])
+            self.assertEqual(data['head_registration']['warnings'],[])
+            self.assertEqual(frames,original)
+            for case in ('failed_cap','different_row','conflicting_row','registered_primary_conflict'):
+                changed=deepcopy(original)
+                for frame in changed:
+                    image=frame['skin_observations'][1];alt=image['alternatives'][0]
+                    if case=='failed_cap':alt['region_errors']['cap']=.1
+                    elif case=='different_row':alt['y']+=.5/data['analysis_height']
+                    elif case=='conflicting_row':
+                        image['alternatives'].append({**alt,'template':'hold_end','y':alt['y']+3/data['analysis_height']})
+                    else:
+                        first=frame['skin_observations'][0]
+                        first['alternatives']=[{**first,'template':'hold_end','y':first['y']+3/data['analysis_height']}]
+                actual=measure(data,changed);index=0 if case=='registered_primary_conflict'else 1
+                measured=actual['notes'][index]['observations'][0]
+                with self.subTest(case=case):
+                    self.assertNotIn('native_cap_coordinate_uncertainty_pixels',measured)
+                    self.assertEqual(prepare({**data,'head_registration':actual},40),[])
+                    if 'conflict'in case:
+                        self.assertEqual(actual['status'],'failed')
+                        self.assertEqual(measured['native_cap_registration_status'],'conflicting')
+                        warning=actual['warnings'][0]
+                        self.assertEqual(warning['note'],index)
+                        self.assertEqual(warning['observed_points'],9)
+                        self.assertEqual(warning['source_pts_seconds'][0],50.6)
+                        reviewed={**data,'head_registration':actual,'start_seconds':.5,'end_seconds':1.2}
+                        warnings=recognition_diagnostics(reviewed,{'notes':{}})['warnings']
+                        self.assertTrue(any(w['reason']=='conflicting_registered_image_anchors'for w in warnings))
+                    else:self.assertEqual(actual['warnings'],[])
 
     def test_mismatched_source_artifact_or_media_fails_before_creating_a_bank(self):
         for kind in ('artifact','media'):
