@@ -42,6 +42,43 @@ def examples(root):
 
 
 class SkinDetectorTest(unittest.TestCase):
+    def test_short_hold_shoulders_distinguish_touching_caps_from_disconnected_taps(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            rng=np.random.default_rng(39)
+            cap=rng.integers(60,180,(20,20,3),dtype='uint8')
+            stencil=np.ones((20,20),dtype=bool)
+            stencil[:4,:6]=False;stencil[:4,14:]=False
+            stencil[-4:,:6]=False;stencil[-4:,14:]=False
+            body=np.array([225,180,40],dtype='uint8')
+            positive=np.zeros((40,20,3),dtype='uint8')
+            for top in (0,20):positive[top:top+20][stencil]=cap[stencil]
+            positive[16:24,2:5]=body;positive[16:24,15:18]=body
+            entries=[]
+            for role,start,anchor,capbox,connection in (
+                    ('hold_start',0,[10,10],[0,0,20,20],[0,20,20,24]),
+                    ('hold_end',16,[10,14],[0,4,20,24],[0,0,20,4])):
+                alpha=np.zeros((24,20),dtype='uint8')
+                y0=capbox[1];alpha[y0:y0+20]=stencil*255
+                _,a,_,b=connection;alpha[a:b,2:5]=255;alpha[a:b,15:18]=255
+                cv2.imwrite(str(root/(role+'.png')),np.dstack([positive[start:start+24,:,::-1],alpha]))
+                entries.append({'id':role,'role':role,'lane_kind':0,'image':role+'.png',
+                    'anchor_pixels':anchor,'regions':[{'name':'cap','box':capbox,'maximum_error':.001},
+                                                     {'name':'connection','box':connection,'maximum_error':.001}]})
+            (root/'bank.json').write_text(json.dumps({'schema':1,'skin':'synthetic-shoulders',
+                                                    'spacing_pixels':20,'templates':entries}))
+            detector=SkinDetector(load_bank(root/'bank.json'),
+                                  {'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]},200,300)
+            image=np.zeros((300,200,3),dtype='uint8');image[80:120,10:30]=positive
+            roles={o['role']for o in detector.detect(image)}
+            self.assertEqual(roles,{'hold_start','hold_end'})
+            # Keep identical cap spacing and pixels, removing only the connector.
+            for top in (80,100):
+                image[top:top+20,10:30]=0
+                image[top:top+20,10:30][stencil]=cap[stencil]
+            roles={o['role']for o in detector.detect(image)}
+            self.assertEqual(roles,{'unknown'})
+
     def test_qualified_body_rows_do_not_require_a_vertical_error_minimum(self):
         from piu_timeline.play.skins.coverage import reference_rows,image_spans
         from piu_timeline.play.skins.holds import covered

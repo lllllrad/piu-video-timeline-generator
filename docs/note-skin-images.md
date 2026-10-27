@@ -29,6 +29,12 @@ Additional references can compare the nearest visible body rows instead, using
 the same independent cap and connection limits. A failed longer window is not
 a positive gap; an actual gap must still fail the shorter connection pattern.
 The observed start and end bound one held interval, including in these cases.
+When caps nearly touch, even the nearest central connector rows can contain
+the opposite cap's border. Review the exposed body shoulders beside that cap's
+corners instead. A source-derived masked connection region can compare those
+shoulders while excluding the opposite cap's center. Validate such references
+on other held intervals and on disconnected caps at similar spacing. Cap
+proximity alone supplies no connection evidence; thresholds remain unchanged.
 The default error limit is 0.015 in RGB values normalized to 0..1; a bank may
 require a stricter limit. This is an appearance metric, not a timing allowance.
 
@@ -84,7 +90,7 @@ latency or absolute UCS calibration.
 Create a new bank with individually verified references:
 
 ```sh
-sh scripts/run.sh .venv/bin/python -m piu_timeline.play.skins register-anchors \
+mise exec -- python -m piu_timeline.play.skins register-anchors \
   .local/cache/note-skins/example/bank.json \
   --analysis .local/data/SOURCE/play/segment-001/analysis.json \
   --registration .local/data/SOURCE/play/segment-001/head-registration.json \
@@ -234,10 +240,22 @@ source timestamps, image comparisons or the actual hold-geometry requirements.
 
 ## Commands
 
+Inspect actual reference masks and comparison regions:
+
+```sh
+mise exec -- python -m piu_timeline.play.skins review-bank \
+  .local/cache/note-skins/example/bank.json --lane-kind 2 \
+  --output .local/cache/play-diagnostics/example-reference-regions.html
+```
+
+The page shows each template at four times its native size, with its original
+alpha mask, exact comparison-region boxes and anchor. A source-frame annotation
+box around a detected position does not describe the template's size or support.
+
 Build a bank from reviewed source-image rectangles:
 
 ```sh
-sh scripts/run.sh .venv/bin/python -m piu_timeline.play.skins build \
+mise exec -- python -m piu_timeline.play.skins build \
   .local/tools/skin-reference-spec.json --output .local/cache/note-skins/example
 ```
 
@@ -253,7 +271,7 @@ recording-specific reference specifications stay outside Git.
 Inspect a short source interval without changing its report:
 
 ```sh
-sh scripts/run.sh .venv/bin/python -m piu_timeline.play.skins scan SOURCE \
+mise exec -- python -m piu_timeline.play.skins scan SOURCE \
   --segment 1 --bank .local/cache/note-skins/example/bank.json \
   --start 120 --duration 3 --output .local/reports/image-review/observations.json
 ```

@@ -11,6 +11,7 @@ from piu_timeline.play.skins.build import build
 from piu_timeline.play.skins.calibration import register_anchors
 from piu_timeline.play.skins.detector import FORMAT as DETECTOR_FORMAT
 from piu_timeline.play.skins.pipeline import classified_frames
+from piu_timeline.play.skins.review import review_bank
 from piu_timeline.workflow import LOCAL_DATA, source_id
 
 
@@ -57,6 +58,10 @@ def main():
     anchors.add_argument('--analysis', type=Path, required=True)
     anchors.add_argument('--registration', type=Path, required=True)
     anchors.add_argument('--output', type=Path, required=True)
+    references = commands.add_parser('review-bank')
+    references.add_argument('bank', type=Path)
+    references.add_argument('--output', type=Path, required=True)
+    references.add_argument('--lane-kind', type=int, choices=range(5))
     review = commands.add_parser('scan')
     review.add_argument('source')
     review.add_argument('--segment', type=int, required=True)
@@ -69,6 +74,8 @@ def main():
         print(build(args.specification, args.output))
     elif args.command == 'register-anchors':
         print(register_anchors(args.bank,args.analysis,args.registration,args.output))
+    elif args.command == 'review-bank':
+        print(review_bank(args.bank,args.output,args.lane_kind))
     else:
         scan(args.source, args.segment, args.bank, args.output, args.start, args.duration)
 
