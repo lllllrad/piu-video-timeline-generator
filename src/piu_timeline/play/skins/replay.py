@@ -1,5 +1,6 @@
 """Apply a selected RGB image bank while preserving source counter observations."""
 import json
+from hashlib import sha256
 import math
 from pathlib import Path
 import shutil
@@ -29,9 +30,7 @@ def detector_metadata(path, bank=None):
                                        for lane in range(5) for role in ROLES if (lane, role) not in represented]}
 
 
-def selected_bank(directory, segment, explicit=None):
-    if explicit is not None:
-        return str(Path(explicit).resolve())
+def selected_profile(directory,segment):
     path = directory / 'note-skins.json'
     if not path.is_file():
         return None
@@ -41,9 +40,41 @@ def selected_bank(directory, segment, explicit=None):
     matches = [p for p in document['profiles'] if segment in p['segments']]
     if len(matches) > 1:
         raise ValueError('More than one note skin is selected for this play')
-    if not matches:
-        return None
-    return str((path.parent / matches[0]['bank']).resolve())
+    return matches[0]if matches else None
+
+
+def selected_bank(directory, segment, explicit=None):
+    if explicit is not None:return str(Path(explicit).resolve())
+    profile=selected_profile(directory,segment)
+    return str((directory/profile['bank']).resolve())if profile else None
+
+
+def configuration_signature(directory,segment):
+    """Retry failed work when selected configuration or reference bytes change."""
+    path=directory/'note-skins.json'
+    try:
+        profile=selected_profile(directory,segment)
+        bank=selected_bank(directory,segment)
+        return {'profile':profile,'bank_path':bank,'detector':detector_contract(bank)}
+    except (OSError,ValueError,KeyError)as error:
+        try:digest=sha256(path.read_bytes()).hexdigest()
+        except OSError:digest=None
+        return {'profile_sha256':digest,'error':type(error).__name__+': '+str(error)}
+
+
+def configuration_current(data,directory,segment):
+    """Check persisted selection independently of acquired frame observations."""
+    bank=selected_bank(directory,segment)
+    if data.get('skin_detector',{}).get('contract')!=detector_contract(bank):return False
+    if bank is not None and data['skin_detector'].get('bank_path')!=bank:return False
+    profile=selected_profile(directory,segment)
+    clearance=profile.get('role_clearance')if profile else None
+    saved=data.get('skin_role_evidence')
+    if clearance is None:return saved is None
+    from piu_timeline.play.skins.clearance import FORMAT as CLEARANCE_FORMAT
+    contract=(saved or{}).get('contract',{})
+    return (contract.get('profile')==clearance and contract.get('format')==CLEARANCE_FORMAT
+            and contract.get('skin')==data['skin_detector']['contract'])
 
 
 def refresh(data, output, path):

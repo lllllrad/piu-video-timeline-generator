@@ -12,6 +12,34 @@ from piu_timeline.play.judgments import cache_contracts
 
 
 class PlayCacheTest(unittest.TestCase):
+    def test_identical_bank_relocation_updates_saved_path_without_refitting(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);source=root/'recording.mkv';source.write_bytes(b'original')
+            stat=source.stat();media={'path':str(source),'size_bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns}
+            segment={'start_seconds':1,'end_seconds':2,'song':'Example','chart':'S1','players':{}}
+            directory=root/'data/id';(directory/'analysis').mkdir(parents=True)
+            roi=[0,0,320,180]
+            (directory/'analysis/analysis.json').write_text(json.dumps({'media':media,'game_roi':roi,'segments':[segment]}))
+            final=directory/'play/segment-001';final.mkdir(parents=True)
+            contract={'bank':'unchanged-reference-bytes'};relocated=str(root/'new/bank.json')
+            saved={**segment,'media':media,'game_roi':roi,'analysis_width':650,'player':None,'participant_slots':[],
+                   'play_analysis_version':play.VERSION,'timing_format':play.TIMING_FORMAT,
+                   'layout':{'lanes':[{'x':.1+.2*i}for i in range(5)],'combo_roi':[.4,.5,.2,.1]},
+                   'skin_detector':{'contract':contract,'bank_path':str(root/'old/bank.json')}}
+            from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT,reference
+            saved['beat_timing']={'contract':{'format':BEAT_FORMAT,'reference':reference(saved,final)}}
+            saved['judgment_cache']=cache_contracts(saved,[])
+            (final/'analysis.json').write_text(json.dumps(saved))
+            with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
+                    patch('piu_timeline.play.skins.replay.detector_contract',return_value=contract), \
+                    patch.object(play,'refit_saved',side_effect=AssertionError('identical bank needs no refit')), \
+                    patch.object(play,'analyze_play',side_effect=AssertionError('must not reacquire')):
+                play.run('id',note_skin=relocated)
+            updated=json.loads((final/'analysis.json').read_text())
+            self.assertEqual(updated['skin_detector']['bank_path'],relocated)
+            self.assertEqual(updated['skin_detector']['contract'],contract)
+            self.assertEqual(source.read_bytes(),b'original')
+
     def setUp(self):
         repository=tempfile.TemporaryDirectory()
         self.addCleanup(repository.cleanup)

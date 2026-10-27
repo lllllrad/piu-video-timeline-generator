@@ -190,7 +190,10 @@ Independent play commands run concurrently. `--jobs` defaults to half the
 available CPU affinity, capped at eight processes; `--jobs 1` requests serial
 execution. The coordinator writes progress, including all active plays; each
 child keeps its own log and segment lock. Busy segment locks are deferred. Failures do not block other plays, and an
-unchanged failed input is not retried until its analysis or metadata changes.
+unchanged failed input is not retried until its analysis, metadata, selected skin profile or
+reference-bank content changes. Source `note-skins.json` profiles are authoritative for automatic
+replay, including profile removal; persist a skin selection there to reuse it across maintenance
+runs. A one-off `--note-skin` argument does not update those profiles.
 `--sources` preserves explicit source priority. Progress, logs and a JSON/HTML
 summary go under `.local/runs/`; `--run-dir` selects a destination there.
 

@@ -58,6 +58,9 @@ def current(path):
     if not visibility.is_file() or json.loads(visibility.read_text()).get('format') != VISIBILITY_FORMAT:
         return False
     data = json.loads(path.read_text())
+    from piu_timeline.play.skins.replay import configuration_current
+    if not configuration_current(data,path.parent.parent.parent,int(path.parent.name.removeprefix('segment-'))):
+        return False
     from piu_timeline.play.object_roles import current as objects_current
     if not objects_current(data,path.parent):return False
     from piu_timeline.play.support import visual_support
@@ -223,6 +226,8 @@ class Replay:
                     record.update(status='busy', detail='Deferred: another analyzer owns this segment.'); continue
                 signature = [file_signature(p)
                              for p in (path, directory.parent.parent/'analysis/analysis.json')]
+                from piu_timeline.play.skins.replay import configuration_signature
+                signature.append(configuration_signature(directory.parent.parent,number))
                 try:
                     if current(path):
                         record.update(status='current', detail='Artifact contracts are current.')

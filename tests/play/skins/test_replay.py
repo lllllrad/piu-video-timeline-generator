@@ -7,11 +7,37 @@ from unittest.mock import patch
 
 import numpy as np
 
-from piu_timeline.play.skins.replay import refresh, selected_bank
+from piu_timeline.play.skins.replay import refresh,selected_bank,configuration_current,detector_metadata
 from tests.play.skins.test_detector import examples
 
 
 class SkinReplayTest(unittest.TestCase):
+    def test_configuration_changes_invalidate_selection_without_decoding(self):
+        import cv2
+        from piu_timeline.play.skins.clearance import FORMAT as CLEARANCE_FORMAT
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);bank=root/'bank';bank.mkdir();examples(bank)
+            path=root/'note-skins.json';profile={'segments':[1],'bank':'bank/bank.json'}
+            data={};self.assertTrue(configuration_current(data,root,1))
+            path.write_text(json.dumps({'schema':1,'profiles':[profile]}))
+            self.assertFalse(configuration_current(data,root,1))
+            data['skin_detector']=detector_metadata(bank/'bank.json')
+            self.assertTrue(configuration_current(data,root,1))
+            image=bank/'tap.png';original=image.read_bytes()
+            pixels=cv2.imread(str(image),cv2.IMREAD_UNCHANGED);pixels[15,10,0]+=1
+            cv2.imwrite(str(image),pixels)
+            self.assertFalse(configuration_current(data,root,1))
+            image.write_bytes(original)
+            clearance={'model':'phoenix_chromatic_gap','skin':'synthetic'}
+            profile['role_clearance']=clearance;path.write_text(json.dumps({'schema':1,'profiles':[profile]}))
+            self.assertFalse(configuration_current(data,root,1))
+            data['skin_role_evidence']={'contract':{'format':CLEARANCE_FORMAT,'profile':clearance,
+                                                   'skin':data['skin_detector']['contract']}}
+            self.assertTrue(configuration_current(data,root,1))
+            path.unlink();self.assertFalse(configuration_current(data,root,1))
+            data.pop('skin_detector');data.pop('skin_role_evidence')
+            self.assertTrue(configuration_current(data,root,1))
+
     def setUp(self):
         environment=patch.dict('os.environ',{'PIU_SKIN_JOBS':'1'})
         environment.start();self.addCleanup(environment.stop)

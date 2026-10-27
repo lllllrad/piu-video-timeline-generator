@@ -162,6 +162,7 @@ def refit_saved(cached, previous, output, segment, display_delay_ms, note_skin=N
             shutil.copy2(outline, output / 'frames.jsonl')
             shutil.copy2(outline, output / 'frames.base.jsonl')
             cached.pop('skin_detector', None)
+            cached.pop('skin_role_evidence',None)
         else:
             cached['skin_detector'] = refresh(cached, output, note_skin)
     refreshed = {}
@@ -373,18 +374,16 @@ def run(source, segment_number=1, force=False, **options):
                          or judgment_observations_current(cached,root,final))):
                 from piu_timeline.play.report import write_report
                 from piu_timeline.play.holds.analysis import augment_holds
-                previous_judgments = cached.get('judgment_cache')
+                refresh_fields=('judgment_cache','hold_analysis','visual_channels','association_view_format',
+                                'matches','conflicted_matches','coverage','skin_detector')
+                previous_refresh={k:cached.get(k)for k in refresh_fields}
                 if not judgments_current:
                     cached = augment_judgments(cached,final)
-                previous_holds = cached.get('hold_analysis')
-                previous_channels = cached.get('visual_channels')
-                association_fields=('association_view_format','matches','conflicted_matches','coverage')
-                previous_associations={k:cached.get(k)for k in association_fields}
+                if note_skin is not None:
+                    cached['skin_detector']={**cached['skin_detector'],'bank_path':note_skin}
                 cached = augment_holds(cached, final)
                 write_report(cached, final / 'report.html', final)
-                if (cached.get('judgment_cache') != previous_judgments or cached.get('hold_analysis') != previous_holds
-                        or cached.get('visual_channels') != previous_channels
-                        or {k:cached.get(k)for k in association_fields}!=previous_associations):
+                if {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
                     updated = final / 'analysis.refresh-build.json'
                     updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
                     updated.replace(previous)

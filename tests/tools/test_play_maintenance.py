@@ -48,6 +48,17 @@ def play(root, source='source', number=1, stale=False):
 
 
 class ReplayTest(unittest.TestCase):
+    def test_declared_skin_profile_is_not_skipped_as_current(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);path,_=play(root);source=path.parent.parent.parent
+            native=path.with_name('frames.jsonl').read_bytes()
+            self.assertTrue(current(path))
+            profile=source/'note-skins.json'
+            profile.write_text(json.dumps({'schema':1,'profiles':[{'segments':[1],'bank':'images/bank.json'}]}))
+            with patch('piu_timeline.play.skins.replay.detector_contract',return_value={'bank':'new-source-bank'}):
+                self.assertFalse(current(path))
+            self.assertEqual(path.with_name('frames.jsonl').read_bytes(),native)
+
     def test_current_requires_matching_contracts_artifacts_and_original_media(self):
         with tempfile.TemporaryDirectory() as temp:
             path,data=play(Path(temp))
@@ -164,6 +175,23 @@ class ReplayTest(unittest.TestCase):
             self.assertEqual(runner.records['a/001']['status'],'busy')
             self.assertEqual(runner.records['b/001']['status'],'current')
             self.assertEqual(json.loads((runner.output/'progress.json').read_text())['state'],'deferred')
+
+    def test_failed_replay_retries_when_missing_skin_bank_is_created(self):
+        from tests.play.skins.test_detector import examples
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);path,_=play(root,'a',stale=True)
+            source=path.parent.parent.parent
+            (source/'note-skins.json').write_text(json.dumps({'schema':1,'profiles':[
+                {'segments':[1],'bank':'images/bank.json'}]}))
+            runner=Replay(root,root/'.local/runs/replay')
+            native=path.with_name('frames.jsonl').read_bytes()
+            with patch('piu_timeline.tools.replay.subprocess.run',return_value=subprocess.CompletedProcess([],1))as invoke:
+                self.assertTrue(runner.cycle());self.assertTrue(runner.cycle())
+                invoke.assert_called_once()
+                bank=source/'images';bank.mkdir();examples(bank)
+                self.assertTrue(runner.cycle());self.assertEqual(invoke.call_count,2)
+                self.assertTrue(runner.cycle());self.assertEqual(invoke.call_count,2)
+            self.assertEqual(path.with_name('frames.jsonl').read_bytes(),native)
 
     def test_failure_does_not_block_other_plays_or_retry_unchanged_inputs(self):
         with tempfile.TemporaryDirectory() as temp:

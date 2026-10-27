@@ -7,13 +7,9 @@ from piu_timeline.play.skins.clearance import FORMAT,derive
 
 
 def selected_profile(data,directory):
-    path=directory.parent.parent/'note-skins.json'
-    if not path.is_file():return None
-    document=json.loads(path.read_text())
-    if document.get('schema')!=1:raise ValueError('Unsupported note-skin profile schema')
-    matches=[p for p in document['profiles']if data['segment_number']in p['segments']]
-    if len(matches)>1:raise ValueError('Multiple note-skin profiles for clearance')
-    return matches[0].get('role_clearance')if matches else None
+    from piu_timeline.play.skins.replay import selected_profile as selection
+    profile=selection(directory.parent.parent,data['segment_number'])
+    return profile.get('role_clearance')if profile else None
 
 
 def prepare(data,directory):
