@@ -60,11 +60,11 @@ def reconstruct(data, frames, diagnostics=None):
 
 
 def augment_holds(data, output):
+    from piu_timeline.play.channels import augment_channels,annotate_matches
     # Synthetic/legacy metadata without source stream geometry cannot reacquire
     # pixels; keep it explicit rather than invoking a decoder with invented data.
     if not data.get('media', {}).get('video_streams') or any('color' not in lane for lane in data.get('layout', {}).get('lanes', [])):
-        return data
-    from piu_timeline.play.channels import augment_channels
+        return annotate_matches(data)
     from piu_timeline.play.holds.risk_cache import prepare as prepare_risk
     if data.get('skin_detector'):
         from piu_timeline.play.skins.clearance_cache import prepare
@@ -172,6 +172,8 @@ def chart_projection(data):
 
 def presentation(data):
     """Attach independent recognition evidence to the projected visible chart."""
+    from piu_timeline.play.channels import annotate_matches
+    data=annotate_matches(data)
     view=chart_projection(data)
     if not data.get('hold_analysis'):return view
     notes=view['notes'];holds=data['hold_analysis'].get('holds',[])
@@ -253,6 +255,7 @@ def presentation(data):
         uses_processing = any(m.get(source) == event_index and m['note'] in processing_confirmed for m in matches)
         return 'tap_with_'+('note_disappearance' if uses_processing else 'independent_lane_onset')+'_during_'+suffix
     def events(key):
+        from piu_timeline.play.associations import disputed_refresh
         result = []
         owned = {match.get('combo_event' if key == 'combo_events' else 'judgment_event') for match in matches}
         pre_hold={m.get('judgment_event')for m in matches if m.get('recovery_method')=='strict_judgment_before_accounted_hold'}
@@ -264,6 +267,10 @@ def presentation(data):
                 event.update(status='matched', reason='aggregate_counter_with_exclusive_lane_onsets')
             if key == 'combo_events' and event_index in owned and event.get('reason') == 'possible_hold_or_dense_stack':
                 event.update(status='matched', reason=lane_reason(event_index, key, 'dense_interval'))
+            source='combo'if key=='combo_events'else'judgment'
+            if event_index not in owned and any(disputed_refresh(data,m['note'],[{**event,'source':source,'event':event_index}])
+                                               for m in data.get('conflicted_matches',[])):
+                event.update(status='unresolved',reason='processing_conflicted_association')
             if event.get('label') != 'MISS' and event.get('delta', 1) > 0 and during_hold(event['lower_seconds'], event['upper_seconds']):
                 if event_index in owned:
                     event.update(status='matched', reason=lane_reason(event_index, key, 'hold'))
@@ -292,6 +299,9 @@ def presentation(data):
                          judgment_label_source='post_combo_frames',
                          judgment_observations=[dict(item) for item in proof['observations']],
                          evidence_source=match.get('evidence_source', 'combo')+'+judgment')
+    validated=annotate_matches({**data,'notes':notes,'matches':matches})
+    matches=validated['matches']
+    data={**data,'conflicted_matches':validated['conflicted_matches']}
     coverage = dict(data.get('coverage', {}))
     coverage.update(visible_note_heads=sum(note['status']=='estimated' for note in notes),
                     timed_note_heads=len(matches),
@@ -306,8 +316,7 @@ def presentation(data):
     limitations.append('Long-note recognition is a sustained visual state; neither a separate press per tick nor physical release is measured.')
     from piu_timeline.play.note_types import project_types
     type_diagnostics = project_types(data, notes, projected)
-    from piu_timeline.play.channels import annotate_matches
-    return annotate_matches({**data, 'notes': notes, 'matches': matches, 'limitations': limitations,
+    return {**data, 'notes': notes, 'matches': matches, 'limitations': limitations,
             'excluded_notes': dict(Counter(note.get('reason') for note in notes if note['status'] == 'excluded')),
             'miss_candidates': [candidate for candidate in data.get('miss_candidates', []) if candidate['note'] not in suppressed],
             'combo_events': events('combo_events'), 'judgment_events': labeled['judgment_events'],
@@ -315,4 +324,4 @@ def presentation(data):
             'recovered_pre_hold_notes':pre_hold_recovered,
             'recovered_dense_notes': recovered, 'recovered_lane_supported_notes': lane_recovered,
             'hold_analysis': view['hold_analysis'], 'coverage': coverage,
-            'note_type_diagnostics': type_diagnostics})
+            'note_type_diagnostics': type_diagnostics}

@@ -4,6 +4,7 @@ import math
 import json
 
 from piu_timeline.play.candidates import EARLY_SECONDS, LATE_SECONDS, association_window, intersect_window
+from piu_timeline.play.associations import assignments
 
 
 def counter_frame_ranges(path):
@@ -37,7 +38,7 @@ def timing_ranges(data):
             if policy['suppress_timing']:
                 record.update(status='policy_excluded', reason='chart_region_processing_exception', input_ranges=[])
         return record
-    matches = {match['note']: match for match in data.get('matches', [])}
+    matches = {match['note']: match for match in assignments(data)}
     misses = {candidate['note'] for candidate in data.get('miss_candidates', [])}
     events = []
     for source, key in (('combo', 'combo_events'), ('judgment', 'judgment_events'), ('counter_frames', 'counter_frame_events')):

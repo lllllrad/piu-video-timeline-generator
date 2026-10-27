@@ -2,10 +2,12 @@
 from collections import defaultdict
 
 from piu_timeline.play.judgments import synchronized_refreshes
+from piu_timeline.play.associations import partition
 
 
 def attach_recovered_labels(data):
     """Recover labels only; never move a row or narrow its input bracket."""
+    data=partition(data)
     matches = [dict(match) for match in data['matches']]
     words = [dict(event) for event in data.get('judgment_events', [])]
     counters = [dict(event) for event in data.get('combo_events', [])]

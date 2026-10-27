@@ -149,6 +149,11 @@ class PlayCacheTest(unittest.TestCase):
                 report=play.run('id')
             self.assertEqual(report,final/'report.html')
             self.assertTrue(report.is_file())
+            from piu_timeline.play.associations import FORMAT as ASSOCIATION_VIEW_FORMAT
+            refreshed=json.loads((final/'analysis.json').read_text())
+            self.assertEqual(refreshed['association_view_format'],ASSOCIATION_VIEW_FORMAT)
+            self.assertEqual(refreshed['matches'],[])
+            self.assertEqual(source.read_bytes(),b'original')
 
     def test_word_association_upgrade_does_not_refit_notes_or_rewrite_observations(self):
         with tempfile.TemporaryDirectory() as temporary:

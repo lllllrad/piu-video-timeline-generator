@@ -5,6 +5,7 @@ from statistics import median
 from piu_timeline.play.receptors import onset_overlaps
 from piu_timeline.play.channels import receptor_evidence
 from piu_timeline.play.processing import processing_support, processing_conflicts
+from piu_timeline.play.associations import disputed_refresh,partition
 
 
 EARLY_SECONDS = .25
@@ -33,6 +34,7 @@ def intersect_window(interval, window):
 
 
 def candidates(data, events):
+    data=partition(data)
     notes, matches = data.get('notes', []), data.get('matches', [])
     correction = data.get('display_delay_correction_ms', 0) / 1000
     frame = data.get('median_frame_interval_seconds') or .017
@@ -94,6 +96,8 @@ def candidates(data, events):
         offset = median([(a['lo']+a['hi'])/2-a['target'] for a in nearby]) if nearby else correction
         rows, supports = [], {}
         for index, note in sorted(eligible, key=lambda item: item[1]['target_seconds']):
+            if disputed_refresh(data,index,family['events']):
+                rejected[index].add('refresh_conflicts_with_note_processing');continue
             target, uncertainty = note['target_seconds'], note['prediction_uncertainty_seconds']
             window = association_window(note, correction)
             overlap = intersect_window([lo, hi], window)

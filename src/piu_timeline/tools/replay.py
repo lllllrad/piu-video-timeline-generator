@@ -18,6 +18,7 @@ from piu_timeline.play.analysis import VERSION, TIMING_FORMAT
 from piu_timeline.play.judgments import cache_current as judgment_current
 from piu_timeline.play.holds.analysis import ASSOCIATION_FORMAT, fingerprint
 from piu_timeline.play.holds.features import feature_contract
+from piu_timeline.play.associations import FORMAT as ASSOCIATION_VIEW_FORMAT
 
 
 def write_json(path, data):
@@ -88,6 +89,7 @@ def current(path):
     holds = data.get('hold_analysis', {})
     contract = holds.get('association_contract', {})
     if (data.get('play_analysis_version') != VERSION or data.get('timing_format') != TIMING_FORMAT
+            or data.get('association_view_format')!=ASSOCIATION_VIEW_FORMAT
             or contract.get('format') != ASSOCIATION_FORMAT):
         return False
     if data.get('media', {}).get('video_streams'):

@@ -7,6 +7,7 @@ from piu_timeline.play.channels import receptor_evidence
 from piu_timeline.play.receptors import onset_overlaps
 from piu_timeline.play.candidates import target_offsets,target_in_window
 from piu_timeline.play.holds.input_risk import native_body_risk_available,hold_overlap
+from piu_timeline.play.associations import disputed_refresh,partition
 
 
 def bracket(match):
@@ -15,6 +16,7 @@ def bracket(match):
 
 
 def recover_aggregates(data):
+    data=partition(data)
     notes, original = data.get('notes', []), data.get('matches', [])
     matched = {m['note']: m for m in original}
     missed = {m['note'] for m in data.get('miss_candidates', [])}
@@ -58,6 +60,7 @@ def recover_aggregates(data):
         if len(rows) != count or any(len(row) != 1 for row in rows):
             continue
         group = [row[0] for row in rows]
+        if any(disputed_refresh(data,i,[{**event,'source':'combo','event':ei}])for i in group):continue
         if not any(all(target_in_window(notes[i],lo,hi,offset)for i in group)for offset in offsets):continue
         if any(notes[i]['prediction_uncertainty_seconds'] > .05 for i in group):
             continue

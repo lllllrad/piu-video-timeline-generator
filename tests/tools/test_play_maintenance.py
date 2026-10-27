@@ -11,6 +11,7 @@ from unittest.mock import patch
 from piu_timeline.play.analysis import VERSION, TIMING_FORMAT
 from piu_timeline.play.holds.analysis import ASSOCIATION_FORMAT, fingerprint
 from piu_timeline.play.holds.features import feature_contract
+from piu_timeline.play.associations import FORMAT as ASSOCIATION_VIEW_FORMAT
 from piu_timeline.play.judgments import cache_contracts
 from piu_timeline.tools.replay import Replay, current, discover
 from piu_timeline.tools.audit import review, label_cause
@@ -22,7 +23,8 @@ def play(root, source='source', number=1, stale=False):
     (metadata/'analysis.json').write_text(json.dumps({'segments':[{}]*number}))
     media=directory.parent.parent/'recording.mp4';media.write_bytes(b'original recording')
     stat=media.stat()
-    data={'timing_format':TIMING_FORMAT,'play_analysis_version':0 if stale else VERSION, 'notes':[], 'matches':[],
+    data={'timing_format':TIMING_FORMAT,'association_view_format':ASSOCIATION_VIEW_FORMAT,
+          'play_analysis_version':0 if stale else VERSION, 'notes':[], 'matches':[],
           'combo_events':[], 'judgment_events':[], 'analysis_width':650,
           'media':{'path':str(media),'size_bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns},
           'start_seconds':0, 'end_seconds':1, 'game_roi':[0,0,1300,730], 'layout':{'lanes':[]}}
@@ -50,6 +52,9 @@ class ReplayTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path,data=play(Path(temp))
             self.assertTrue(current(path))
+            data['association_view_format']={};path.write_text(json.dumps(data))
+            self.assertFalse(current(path))
+            data['association_view_format']=ASSOCIATION_VIEW_FORMAT;path.write_text(json.dumps(data))
             path.with_name('recognition-warnings.json').unlink()
             self.assertFalse(current(path))
             path.with_name('recognition-warnings.json').write_text('{}')

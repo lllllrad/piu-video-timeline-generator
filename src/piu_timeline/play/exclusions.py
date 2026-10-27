@@ -149,7 +149,8 @@ def recognition_diagnostics(data, ranges):
             accounted.append({**record, 'represented_by_hold': owners[0]['id']})
         else:
             add(record)
-    matches = {m['note']: m for m in data.get('matches', [])}
+    from piu_timeline.play.associations import assignments
+    matches = {m['note']:m for m in assignments(data)}
     for index, record in ranges.get('notes', {}).items():
         index = int(index)
         note = data['notes'][index]

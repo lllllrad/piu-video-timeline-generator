@@ -43,13 +43,15 @@ class PassageTest(unittest.TestCase):
                'observation_lower_seconds':1.,'observation_upper_seconds':1.017}
         data={'notes':[{'lane':0}],'matches':[match],
               'visual_channels':{'processing':{'notes':[event]},'receptors':{'events':[]}}}
-        original=deepcopy(data);result=annotate_matches(data)['matches'][0]
+        original=deepcopy(data);annotated=annotate_matches(data)
+        self.assertEqual(annotated['matches'],[])
+        result=annotated['conflicted_matches'][0]
         self.assertTrue(result['processing_conflict'])
         self.assertEqual(result['processing_passage_after_refresh'],event['passage_evidence'])
         self.assertEqual([result[k]for k in match],[match[k]for k in match])
         self.assertEqual(data,original)
         # Replaying changed observations removes stale interpretation.
-        data['matches']=[result];event.update(status='unresolved');event.pop('passage_evidence')
+        data=annotated;event.update(status='unresolved');event.pop('passage_evidence')
         refreshed=annotate_matches(data)['matches'][0]
         self.assertNotIn('processing_passage_after_refresh',refreshed)
         self.assertNotIn('processing_conflict',refreshed)

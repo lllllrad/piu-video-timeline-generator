@@ -6,6 +6,7 @@ import json
 from piu_timeline.play.processing import PROCESSING_FORMAT, observe_processing, processing_support, processing_conflicts
 
 from piu_timeline.play.note_types import TYPE_FORMAT, observe_types, observe_appearance
+from piu_timeline.play.associations import assignments,partition
 
 CHANNEL_FORMAT = {'schema': 1, 'revision': 7, 'processing': PROCESSING_FORMAT, 'note_types': TYPE_FORMAT}
 
@@ -175,15 +176,17 @@ def augment_channels(data, directory, frames=None):
 def annotate_matches(data):
     """Make channel provenance available on every match, including conflicts."""
     if not data.get('visual_channels'):
-        return data
+        return partition(data)
     from piu_timeline.play.receptors import onset_overlaps
     guard = 2*(data.get('median_frame_interval_seconds') or .017)
     matches = []
-    for original in data.get('matches', []):
+    for original in assignments(data):
         match = dict(original)
-        match.pop('processing_conflict', None)
-        match.pop('processing_passage_after_refresh',None)
         ni = match['note']
+        observed = next((e for e in processing_evidence(data) if e['note'] == ni), None)
+        if observed is not None:
+            match.pop('processing_conflict',None)
+            match.pop('processing_passage_after_refresh',None)
         refs = ['motion:'+str(ni)]
         for key, prefix in (('combo_event','combo:'), ('judgment_event','judgment:')):
             if match.get(key) is not None:
@@ -196,7 +199,6 @@ def annotate_matches(data):
             if processing_support(data, ni, lo, hi, guard):
                 refs.append('processing:'+str(ni))
         match['visual_evidence'] = refs
-        observed = next((e for e in processing_evidence(data) if e['note'] == ni), None)
         match['processing_status'] = observed['status'] if observed else 'unavailable'
         if observed and observed['status'] == 'disappeared_near_receptor' and lo is not None and hi is not None:
             match['processing_conflict'] = processing_conflicts(data, ni, lo, hi, guard)
@@ -205,4 +207,4 @@ def annotate_matches(data):
             passage=after_refresh(observed,hi,guard)
             if passage:match.update(processing_conflict=True,processing_passage_after_refresh=passage)
         matches.append(match)
-    return {**data, 'matches': matches}
+    return partition({**data,'matches':matches,'conflicted_matches':[]})

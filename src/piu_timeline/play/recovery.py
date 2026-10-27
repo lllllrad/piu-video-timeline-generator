@@ -5,9 +5,11 @@ from piu_timeline.play.candidates import candidates,target_offsets,target_in_win
 from piu_timeline.play.receptors import onset_overlaps
 from piu_timeline.play.channels import receptor_evidence
 from piu_timeline.play.processing import processing_support
+from piu_timeline.play.associations import partition
 
 
 def recover_rows(data):
+    data=partition(data)
     matches = list(data.get('matches', []))
     notes = data.get('notes', [])
     # Legacy/synthetic records without fitted times cannot participate.

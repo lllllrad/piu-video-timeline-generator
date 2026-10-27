@@ -126,11 +126,33 @@ must distinguish successful consumption from failure responses before using
 this warning as a hard association veto.
 
 A processing conflict gives the reported timing range `conflicted` status.
-Retain the assigned refresh and grade in analysis provenance, but do not present
+Retain the assigned refresh and grade in `conflicted_matches`, but do not present
 them as a confirmed input or grade. The original bracket is available with
 candidate connections enabled. A conflicted association cannot provide
 conditional neighboring-row bounds or review ownership anchors. Resolving the
 conflict requires evidence; it never supplies an inferred replacement grade.
+
+`matches` contains only usable associations. Channel annotation partitions the
+assignments before downstream recovery, label attachment and ownership/count
+derivation. All recovery routes reject the same disputed note/refresh pair,
+including an identical bracket from another reader. A different note can still
+own that refresh when independently supported. Missing processing observations
+cannot silently restore a disputed assignment; changed observations can explicitly
+re-evaluate it. Presentation repeats validation before deriving popup ownership
+and final coverage.
+
+`association_view_format` versions this interpretation separately from native
+features, processing shapes and hold geometry. The replay coordinator refreshes
+an older association view, while unchanged observation artifacts remain reusable.
+The public cached-play path persists association-only changes even when no
+pixel, word or hold artifact changed.
+
+The initial counter/word association stage retains source hypotheses from both
+lists in stable chart-time/note order. Its source contract does not change merely
+because later processing quarantines an assignment. This boundary preserves
+native reader reuse without treating a disputed hypothesis as confirmed input.
+Event indices are reader-local: disputed-pair checks also require overlapping
+native brackets, so a reindexed event at another time is not blocked by an old ID.
 
 Repeated loss before the receptor can mark a visibility boundary rather than
 consumption. Require eight independent heads across at least three lanes,

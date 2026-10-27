@@ -378,10 +378,13 @@ def run(source, segment_number=1, force=False, **options):
                     cached = augment_judgments(cached,final)
                 previous_holds = cached.get('hold_analysis')
                 previous_channels = cached.get('visual_channels')
+                association_fields=('association_view_format','matches','conflicted_matches','coverage')
+                previous_associations={k:cached.get(k)for k in association_fields}
                 cached = augment_holds(cached, final)
                 write_report(cached, final / 'report.html', final)
                 if (cached.get('judgment_cache') != previous_judgments or cached.get('hold_analysis') != previous_holds
-                        or cached.get('visual_channels') != previous_channels):
+                        or cached.get('visual_channels') != previous_channels
+                        or {k:cached.get(k)for k in association_fields}!=previous_associations):
                     updated = final / 'analysis.refresh-build.json'
                     updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
                     updated.replace(previous)

@@ -2,6 +2,7 @@
 from piu_timeline.play.frames import TIME_EPSILON
 from piu_timeline.play.tracking import associate
 from piu_timeline.play.holds.input_risk import pre_hold_accounting,cap_extent_spacing,native_body_risk_available
+from piu_timeline.play.associations import disputed_refresh,partition
 
 METHOD='strict_judgment_before_accounted_hold'
 
@@ -12,6 +13,7 @@ def interval(match):
 
 
 def recover(data,notes,matches,suppressed):
+    data=partition({**data,'matches':matches});matches=data['matches']
     if not native_body_risk_available(data):return matches,[]
     assigned={m['note']for m in matches}|{c['note']for c in data.get('miss_candidates',[])}|suppressed
     owned={m.get('judgment_event')for m in matches};guard=2*(data.get('median_frame_interval_seconds')or .017)
@@ -45,6 +47,7 @@ def recover(data,notes,matches,suppressed):
         index=proposal['note'];event_index=proposal['combo_event']
         if event_index not in safe or notes[index].get('type_status')!='tap'or notes[index].get('note_type')=='hold':continue
         event=data['judgment_events'][event_index];target=notes[index]['target_seconds']
+        if disputed_refresh(data,index,[{**event,'source':'judgment','event':event_index}]):continue
         lo,hi=event['lower_seconds'],event['upper_seconds']
         result.append({'note':index,'target_seconds':target,'row_note_count':proposal['row_note_count'],
                        'aggregate_row_count':1,'combo_event':None,'judgment_event':event_index,

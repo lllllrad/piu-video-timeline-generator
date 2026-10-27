@@ -12,6 +12,7 @@ import numpy as np
 from piu_timeline.vision.ocr import ocr_images
 from piu_timeline.play.frames import crop_region, decode_frames, TIME_EPSILON
 from piu_timeline.play.tracking import associate
+from piu_timeline.play.associations import source_assignments
 
 from piu_timeline.play.words import LABELS, feature_map, color_mask, JudgmentReader, JudgmentTracker, EVENT_FORMAT
 
@@ -41,7 +42,7 @@ def cache_contracts(data, models):
     observations={'format':OBSERVATION_FORMAT,'features':feature_contract(data),
                   'templates':fingerprint(fonts)}
     combo_matches=[{key:match.get(key) for key in ('note','combo_event','combo_lower_seconds','combo_upper_seconds')}
-                   for match in data.get('matches',[]) if match.get('combo_event') is not None]
+                   for match in source_assignments(data) if match.get('combo_event') is not None]
     association={'format':ASSOCIATION_FORMAT,'events':EVENT_FORMAT,'observations':fingerprint(observations),
                  'notes':fingerprint(data.get('notes',[])),
                  'combo_events':fingerprint(data.get('combo_events',[])),
@@ -327,7 +328,7 @@ def merge_judgments(data, events, observations=()):
                  and event['lower_seconds']<=interval['end_seconds']+.1
                  for interval in data.get('unsupported_intervals',[])):
             event.update(status='excluded',reason='possible_hold_or_dense_stack')
-    matches = [match for match in data['matches'] if match['combo_event'] is not None]
+    matches = [match for match in source_assignments(data) if match['combo_event'] is not None]
     combo_matches = list(matches)
     by_note = {match['note']:match for match in matches}
     for match in matches:
