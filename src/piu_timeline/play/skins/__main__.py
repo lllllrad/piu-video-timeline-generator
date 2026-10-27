@@ -8,6 +8,7 @@ from piu_timeline.play.frames import decode_frames
 from piu_timeline.play.layout import fixed_layout
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.build import build
+from piu_timeline.play.skins.calibration import register_anchors
 from piu_timeline.play.skins.detector import FORMAT as DETECTOR_FORMAT
 from piu_timeline.play.skins.pipeline import classified_frames
 from piu_timeline.workflow import LOCAL_DATA, source_id
@@ -51,6 +52,11 @@ def main():
     create = commands.add_parser('build')
     create.add_argument('specification', type=Path)
     create.add_argument('--output', type=Path, required=True)
+    anchors = commands.add_parser('register-anchors')
+    anchors.add_argument('bank', type=Path)
+    anchors.add_argument('--analysis', type=Path, required=True)
+    anchors.add_argument('--registration', type=Path, required=True)
+    anchors.add_argument('--output', type=Path, required=True)
     review = commands.add_parser('scan')
     review.add_argument('source')
     review.add_argument('--segment', type=int, required=True)
@@ -61,6 +67,8 @@ def main():
     args = parser.parse_args()
     if args.command == 'build':
         print(build(args.specification, args.output))
+    elif args.command == 'register-anchors':
+        print(register_anchors(args.bank,args.analysis,args.registration,args.output))
     else:
         scan(args.source, args.segment, args.bank, args.output, args.start, args.duration)
 

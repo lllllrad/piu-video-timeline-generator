@@ -1,25 +1,12 @@
 """Retain native reference anchors without claiming absolute game calibration."""
 from collections import defaultdict
-from hashlib import sha256
-import json
 
 import numpy as np
 
 from piu_timeline.play.skins.bank import load_bank
+from piu_timeline.play.skins.anchors import cap_reference, FORMAT as ANCHOR_FORMAT
 
-FORMAT={'schema':1,'revision':2,'method':'native_image_anchors','trace':'frames.jsonl'}
-
-
-def cap_reference(bank,template):
-    """Exact reference/anchor equality survives different context windows."""
-    cap=next(r for r in template['regions']if r['name']=='cap')
-    specification={'spacing_pixels':bank['spacing_pixels'],'lane_kind':template['lane_kind'],
-                   'anchor':template['anchor_pixels'],'shape':template['rgb'].shape,
-                   'cap_box':cap['box'],'cap_maximum_error':cap.get('maximum_error',.015)}
-    fingerprint=sha256(json.dumps(specification,sort_keys=True).encode())
-    # Full image bytes also bound resampling effects at the cap boundary.
-    fingerprint.update(template['rgb'].tobytes());fingerprint.update(template['mask'].tobytes())
-    return fingerprint.hexdigest()
+FORMAT={'schema':1,'revision':3,'method':'native_image_anchors','trace':'frames.jsonl','native_cap_registration':ANCHOR_FORMAT}
 
 
 def measure(data,frames):
@@ -30,6 +17,7 @@ def measure(data,frames):
     for key,t in templates.items():
         if any(r['name']=='cap'for r in t['regions']):identities[key]=cap_reference(bank,t)
     height=data['analysis_height']
+    scale=float(np.median(np.diff([lane['x']*data['analysis_width']for lane in data['layout']['lanes']])))/bank['spacing_pixels']
     expected=defaultdict(list);samples=[[]for _ in data['notes']]
     for index,note in enumerate(data['notes']):
         for time,y in note['points']:expected[time].append((index,note['lane'],y))
@@ -55,10 +43,18 @@ def measure(data,frames):
                     or not np.isfinite(error)or error<0
                     or np.float32(error)/region.get('maximum_error',.015)>1):
                 raise ValueError(f'Image coordinate has no positive cap comparison: note {index}, time {time}')
+            registration={}
+            if image['template']in bank['anchor_registrations']:
+                original_height=template['mask'].shape[0];sy=max(2,round(original_height*scale))/original_height
+                registration={'native_cap_coordinate_uncertainty_pixels':
+                              max(ANCHOR_FORMAT['coordinate_uncertainty_pixels'],
+                                  bank['anchor_registrations'][image['template']]['coordinate_uncertainty_pixels']*sy),
+                              'native_cap_reference_scale_y':sy}
             samples[index].append({'time':time,'source_pts_seconds':pts,'native_y_pixels':y,
                                    'image_anchor':[image['x'],image['y']],'template':image['template'],
                                    'cap_error':error,'cap_reference_sha256':identities[image['template']],
                                    'classification_status':image['classification_status'],
+                                   **registration,
                                    'trace':'frames.jsonl'})
     if expected:raise ValueError('Image coordinate trajectory has no original source frame')
     records=[{'note':i,'lane':note['lane'],'status':'measured','coordinate_method':FORMAT['method'],

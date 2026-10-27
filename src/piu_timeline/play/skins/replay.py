@@ -24,6 +24,7 @@ def detector_metadata(path, bank=None):
     return {'contract': {'bank': bank['contract'], 'detector': FORMAT, 'held_body':HELD_FORMAT},
             'bank_path': str(Path(path).resolve()), 'registration_reviewed': False,
             'reference_images': len(bank['templates']),
+            'registered_native_cap_templates':len(bank['anchor_registrations']),
             'missing_template_roles': [{'lane_kind': lane, 'role': role}
                                        for lane in range(5) for role in ROLES if (lane, role) not in represented]}
 

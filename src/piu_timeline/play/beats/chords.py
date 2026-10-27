@@ -3,8 +3,9 @@ from collections import defaultdict
 from itertools import combinations
 
 import numpy as np
+from piu_timeline.play.skins.anchors import FORMAT as ANCHOR_FORMAT
 
-FORMAT={'schema':1,'revision':3,'image_support':'one_identical_cap_reference','minimum_frames':4,'minimum_span_seconds':.065,
+FORMAT={'schema':1,'revision':4,'image_support':'qualified_native_centers_or_identical_cap_reference','native_cap_registration':ANCHOR_FORMAT,'minimum_frames':4,'minimum_span_seconds':.065,
         'maximum_gap_pixels':1.,'maximum_motion_residual_pixels':1.5,
         'minimum_displacement_spacing':.8,'coordinate_error_pixels':1.}
 
@@ -24,8 +25,16 @@ def prepare(data,spacing):
             if image:
                 if not sample.get('template')or abs(sample['native_y_pixels']-points[time])>1e-5:
                     raise ValueError('Image chord coordinates disagree with native reference anchors')
-                model=('image_reference',sample['cap_reference_sha256'])if sample.get('cap_reference_sha256')else('image_template',sample['template'])
-            at[time].append((index,note['lane'],points[time],sample['source_pts_seconds'],model,sample.get('template')))
+                uncertainty=sample.get('native_cap_coordinate_uncertainty_pixels')
+                if uncertainty is not None:
+                    scale=sample.get('native_cap_reference_scale_y')
+                    if (data['head_registration'].get('format',{}).get('native_cap_registration')!=ANCHOR_FORMAT
+                            or any(type(v)not in(int,float)or not np.isfinite(v)or v<=0 for v in (uncertainty,scale))
+                            or abs(uncertainty-max(ANCHOR_FORMAT['coordinate_uncertainty_pixels'],ANCHOR_FORMAT['coordinate_uncertainty_pixels']*scale))>1e-9):
+                        raise ValueError('Image chord has an unsupported native anchor registration')
+                if uncertainty is None or uncertainty>FORMAT['coordinate_error_pixels']:
+                    model=('image_reference',sample['cap_reference_sha256'])if sample.get('cap_reference_sha256')else('image_template',sample['template'])
+            at[time].append((index,note['lane'],points[time],sample['source_pts_seconds'],model,sample.get('template')if image else None))
     pairs=defaultdict(list)
     for time,points in sorted(at.items()):
         if max(p[3]for p in points)-min(p[3]for p in points)>1e-6:
@@ -47,9 +56,12 @@ def prepare(data,spacing):
                 or error>FORMAT['maximum_motion_residual_pixels']):continue
         lower=(displacement-2*FORMAT['coordinate_error_pixels'])/float(time[-1])
         if lower<=0:continue
+        image_templates=sorted({name for s in samples for name in s[4:]if name is not None})
         result.append({'peer_notes':[a,b],'observed_points':len(samples),'maximum_gap_pixels':gap,
                        **({'measurement_basis':'shared_image_reference','reference_identity':model[1],
-                           'reference_templates':sorted({name for s in samples for name in s[4:]})}if model[0]in('image_reference','image_template')else{}),
+                           'reference_templates':image_templates}if model[0]in('image_reference','image_template')else{}),
+                       **({'measurement_basis':'source_bound_native_cap_centers','registered_image_templates':image_templates}
+                          if model[0]=='calibrated'and image_templates else{}),
                        'visible_start_seconds':samples[0][0],'visible_end_seconds':samples[-1][0],
                        'source_pts_seconds':[s[3]for s in samples],
                        'minimum_velocity_pixels_per_second':lower,'maximum_motion_residual_pixels':error})

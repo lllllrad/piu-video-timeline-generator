@@ -74,5 +74,8 @@ def load_bank(path):
                           'tap_clearance':entry['role']=='tap' and bool(clearance)})
     if not templates:
         raise ValueError('Skin bank contains no image templates')
-    return {'skin': document['skin'], 'spacing_pixels': spacing, 'templates': templates,
-            'contract': {'format': FORMAT, 'sha256': fingerprint.hexdigest(), 'skin': document['skin']}}
+    bank={'skin': document['skin'], 'spacing_pixels': spacing, 'templates': templates,
+          'contract': {'format': FORMAT, 'sha256': fingerprint.hexdigest(), 'skin': document['skin']}}
+    from piu_timeline.play.skins.anchors import registered_anchors
+    bank['anchor_registrations']=registered_anchors(bank)
+    return bank

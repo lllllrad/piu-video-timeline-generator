@@ -69,6 +69,51 @@ ownership. Competing start/end patterns remain unknown. No input effect establis
 image role. Unsupported transparency, background overlap, clipping and
 unrepresented animation phases can still produce missing or ambiguous matches.
 
+## Source-bound native cap centers
+
+A reference can carry `native_anchor_registration` for its vertical native cap
+center. This registers the same geometric convention as independent native cap
+measurements. It does not establish the game-engine target anchor, capture
+latency or absolute UCS calibration.
+
+Create a new bank with individually verified references:
+
+```sh
+sh scripts/run.sh .venv/bin/python -m piu_timeline.play.skins register-anchors \
+  .local/cache/note-skins/example/bank.json \
+  --analysis .local/data/SOURCE/play/segment-001/analysis.json \
+  --registration .local/data/SOURCE/play/segment-001/head-registration.json \
+  --output .local/cache/note-skins/example-registered
+```
+
+The source analysis must embed the supplied independent native measurement
+artifact under the current measurement contract. Source media identity, ROI,
+note lane, original detection, PTS, reference crop and measured center must
+agree. A missing frame measurement cannot borrow a neighboring track offset.
+The command decodes only bounded reference-frame windows, checks exact RGB at
+every supported cap pixel and preserves original timestamps. Each certificate
+binds the reference pixels/mask/anchor, source identity, source frame hash and
+measurement-artifact hash. Output directories are never overwritten. Other
+references stay unregistered with explicit reasons in
+`anchor-registration-report.json`; their image patterns remain available.
+
+Native-scale dimensions must remain unchanged after the detector's declared
+spacing transform; rounded lane-coordinate storage cannot silently resample a
+reference. A changed image, mask, anchor or source declaration invalidates its
+certificate. Runtime validation needs the saved proof and immutable references,
+without decoding source video. Metadata-only certification can reuse unchanged
+cap/body acquisition groups.
+
+Coordinates retain registration only for the reference that actually supplied
+the positive cap measurement. Uncertainty is converted through the actual
+vertical reference scale with a one-analysis-pixel raster floor. Cross-template
+concurrency uses these centers only within the existing one-pixel coordinate
+budget and all ordinary gap, motion, duration and PTS checks. Larger scaled
+uncertainty cannot widen that budget; unregistered references retain the
+identical-reference constraint. Complete chord proofs list the registered
+image references they used. The bank-wide absolute registration warning and
+UCS export gate remain in force.
+
 ## Data flow
 
 `frames.jsonl` retains each native image observation, including original source
