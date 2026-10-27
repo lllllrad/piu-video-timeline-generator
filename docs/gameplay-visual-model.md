@@ -218,7 +218,12 @@ that method cannot silently replace failed shared support among visible peers.
 A linear shared clock must explain displacement within capture/position noise.
 Its target must lie inside the native crossing bracket expanded only by the
 measured capture cadence and positional error. A long-window average outside
-that envelope is rejected. Repeated native co-observations also constrain
+that envelope is rejected. After rejecting a whole-block clock, also test the
+native observations within 500 ms of the measured crossing. This local clock
+must meet the same sample-count, duration, residual, velocity-consistency and
+crossing-envelope gates. Retain a rejected block clock alongside a successful
+local fit; never substitute an unverified interpolation. Motion discontinuity
+warnings remain independent of clock selection. Repeated native co-observations also constrain
 relative note spacing in pixels. Incompatible shared clocks or predicted gaps
 beyond measured spatial scatter produce reconstruction failure, regardless of
 successful combo or grade association. Failed trajectories retain their source

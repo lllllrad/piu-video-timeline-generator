@@ -120,16 +120,23 @@ class ScrollMotion:
         if sample['chunk'] not in self.clocks:
             self.clocks[sample['chunk']] = self._clock(chunk)
         clock = self.clocks[sample['chunk']]
-        if clock is None:
-            local = [item for item in chunk if abs(item['time']-interpolated) <= .5]
-            clock = self._clock(local)
         cadence = float(np.median(np.diff([item['time'] for item in chunk[max(0,index-8):index+8]])))
         capture_error=cadence/2
+        rejected_clock=None
         if clock:
             proposed = clock['origin']+(phase-clock['intercept'])/clock['velocity']
             capture_error = cadence/2+phase_error/clock['velocity']
             if not before['time']-capture_error <= proposed <= after['time']+capture_error:
+                rejected_clock={'clock':clock,'target_seconds':float(proposed)}
                 clock = None
+        if clock is None:
+            local = [item for item in chunk if abs(item['time']-interpolated) <= .5]
+            clock = self._clock(local)
+            if clock:
+                proposed = clock['origin']+(phase-clock['intercept'])/clock['velocity']
+                capture_error = cadence/2+phase_error/clock['velocity']
+                if not before['time']-capture_error <= proposed <= after['time']+capture_error:
+                    clock = None
         if clock is None and getattr(self,'strict_clock',False):
             return None
         if clock:
@@ -143,6 +150,7 @@ class ScrollMotion:
             method = 'shared_scroll_interpolation'
         return {'target_seconds': float(time), 'prediction_uncertainty_seconds': float(uncertainty),
                 'fit_method': method, 'motion_clock': clock,
+                **({'rejected_chunk_clock':rejected_clock} if rejected_clock else {}),
                 'crossing_source_pts_seconds': [before['source_pts'], after['source_pts']],
                 'crossing_frame_seconds': [before['time'], after['time']],
                 'crossing_capture_range':[before['time']-capture_error,after['time']+capture_error]}
