@@ -65,7 +65,7 @@ and browser code live in `play/report.html`, `play/report.css` and
 These resources are included in built Python wheels.
 
 `play/channels.py` exposes the four retained visual evidence channels and match
-provenance; `play/processing.py` observes head persistence and disappearance at
+provenance; `play/processing/` observes head persistence and disappearance at
 receptors independently of HUD values. See [visual channels](visual-channels.md)
 for artifacts, count units, uncertainty and association rules.
 

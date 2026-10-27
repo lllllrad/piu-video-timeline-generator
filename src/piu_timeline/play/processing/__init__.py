@@ -5,7 +5,7 @@ import json
 
 import cv2
 import numpy as np
-from piu_timeline.play.processing_templates import FORMAT as TEMPLATE_FORMAT,hud_regions,acceptable,learn
+from piu_timeline.play.processing.templates import FORMAT as TEMPLATE_FORMAT,hud_regions,acceptable,learn
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
@@ -133,7 +133,7 @@ def observe_processing(data, path):
     radius = max(2, round(.45*spacing))
     # Cap identity is resolved before interpreting a disappearance as a tap.
     components = {n for h in data.get('hold_analysis', {}).get('holds', []) for n in h['covered_notes']}
-    from piu_timeline.play.processing_motion import observed_path
+    from piu_timeline.play.processing.motion import observed_path
     paths = [observed_path(note, data, receptor, spacing, scale) for note in data.get('notes', [])]
     learned=learn(data,path.parent,times,pts)
     result = []

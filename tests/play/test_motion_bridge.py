@@ -44,7 +44,7 @@ class MotionBridgeTest(unittest.TestCase):
             with self.subTest(kind=kind):self.assertIsNone(motion.crossing(motion.at_time[.45],144,.75))
 
     def test_processing_pixels_follow_the_transferred_phase_and_velocity(self):
-        from piu_timeline.play.processing_motion import observed_path
+        from piu_timeline.play.processing.motion import observed_path
         motion=fixture(2);result=motion.crossing(motion.at_time[.45],144,.75)
         note={**result,'lane':0,'points':[(t,40+240*(.6-t))for t in (.2,.3,.4,.45)],
               'motion_target_phase':144,'motion_chunk':0,'velocity_pixels_per_second':-240,

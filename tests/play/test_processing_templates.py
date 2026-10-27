@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 from piu_timeline.play.processing import ReceptorPixels,observe_processing
-from piu_timeline.play.processing_templates import learn,hud_regions
+from piu_timeline.play.processing.templates import learn,hud_regions
 from piu_timeline.play.pixel_cache import native_measurements,source_contract
 
 

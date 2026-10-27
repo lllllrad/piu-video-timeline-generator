@@ -118,7 +118,7 @@ rules regenerates this metadata from compatible native masks, without decoding
 source media or changing the original frame observations.
 
 `play/channels.py` supplies common receptor access, frame alignment checks,
-channel collection and match provenance. `play/processing.py` supplies native
+channel collection and match provenance. `play/processing/` supplies native
 spatial measurements and bounded disappearance support. Acquisition and
 association contracts are separate; compatible pixels can be reinterpreted
 without decoding or OCR. Legacy caches without spatial masks require one

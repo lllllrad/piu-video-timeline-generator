@@ -4,7 +4,7 @@ import unittest
 
 from piu_timeline.charts.gimmicks import validate_candidates
 from piu_timeline.play.gimmicks import apply_gimmicks
-from piu_timeline.play.processing_motion import observed_path
+from piu_timeline.play.processing.motion import observed_path
 from piu_timeline.play.scroll_pauses import classify_warnings, moving_time
 
 
