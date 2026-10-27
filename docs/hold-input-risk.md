@@ -79,3 +79,9 @@ artifact contract. Timing evidence never supplies this geometric ownership.
 The report shows proximity causes, owners and approach states inside the moving
 note channel. This is a derived interpretation of native images, not an
 additional independent input signal.
+
+Lane-supported row recovery uses the same strict target-time window for both
+nominal display correction and observed local offset before comparing refresh
+alternatives. A distant candidate from the wider review window cannot veto a
+refresh it could never replace. Multiple temporally plausible refreshes remain
+alternatives even if only one has independently confirmed lane evidence.

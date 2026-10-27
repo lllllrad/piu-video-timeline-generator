@@ -48,6 +48,10 @@ def recover_rows(data):
         # Each note needs one refresh family with a unique row decision. Two
         # disjoint possible refreshes remain alternatives even with lane light.
         options = [option for option in options if option['alternative_rows'] == 1 and option['aggregate_row_capacity'] == 1]
+        # Review candidates use a wider window. Discard refreshes which cannot
+        # satisfy either existing timing hypothesis before testing ambiguity.
+        options = [option for option in options if any(target_in_window(notes[ni],option['lower_seconds'],
+                   option['upper_seconds'],offset)for offset in target_offsets(data,option['ranking_offset_seconds']))]
         if not options:
             continue
         lower = min(option['upper_seconds'] for option in options)

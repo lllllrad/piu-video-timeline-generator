@@ -88,3 +88,21 @@ class RowRecoveryTest(unittest.TestCase):
         data = evidence()
         data['combo_events'].append({'delta': 1, 'lower_seconds': 1.055, 'upper_seconds': 1.065})
         self.assertEqual(recover_rows(data)[1], [])
+
+    def test_distant_review_candidates_cannot_veto_a_strictly_timed_refresh(self):
+        data=evidence();original=deepcopy(data)
+        # A later refresh is in the broad review window and shares persistent
+        # receptor light, but cannot match this target under the strict budget.
+        data['hold_analysis']['receptor_runs'][1]['end_seconds']=1.3
+        data['combo_events'].append({'delta':1,'lower_seconds':1.18,'upper_seconds':1.2})
+        matches,recovered=recover_rows(data)
+        self.assertEqual(recovered,[0])
+        self.assertEqual(matches[0]['combo_event'],0)
+        self.assertEqual(matches[0]['observation_upper_seconds'],1.04)
+        self.assertEqual(data['notes'],original['notes'])
+        # The later refresh remains a real alternative if an independently
+        # observed local offset places this target there.
+        data['notes'].append({**data['notes'][0],'target_seconds':1.5,'lane':1})
+        data['matches']=[{'note':1,'target_seconds':1.5,'combo_event':2,
+                         'observation_lower_seconds':1.68,'observation_upper_seconds':1.7}]
+        self.assertEqual(recover_rows(data)[1],[])
