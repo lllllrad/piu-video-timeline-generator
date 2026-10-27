@@ -44,14 +44,23 @@ class TranscriptionTest(unittest.TestCase):
         fine=next(t for t in first['tested_splits']if t['split']==48)
         self.assertEqual(fine['unique_endpoints'],0)
 
-    def test_residual_tolerance_shrinks_with_row_duration_even_at_document_edge(self):
+    def test_residual_tolerance_is_independent_of_row_duration_even_at_document_edge(self):
         points={(0,'head'):[-.001,.009]}
         coarse=transcribe(template(split=1,rows=4),points)
         fine=transcribe(template(split=48,rows=1),points)
         self.assertIn((0,'head'),coarse[2])
-        self.assertNotIn((0,'head'),fine[2])
-        self.assertIn((0,'head'),fine[3])
-        self.assertEqual(fine[4]['measures'][0]['status'],'failed')
+        self.assertIn((0,'head'),fine[2])
+        self.assertEqual(fine[3],{})
+        self.assertEqual(fine[4]['measures'][0]['status'],'restored')
+
+    def test_short_absolute_limit_rejects_even_a_unique_coarse_row(self):
+        for bpm in (60,120,240):
+            source=ucs.parse(f':Format=1\n:Mode=Single\n:BPM={bpm}\n:Delay=0\n:Beat=4\n:Split=1\n'+4*'.....\n')
+            for center,accepted in ((.012,True),(.0121,False)):
+                # Only time zero lies inside this interval, regardless of resolution.
+                _,_,rows,failed,_=transcribe(source,{(0,'head'):[-.001,2*center+.001]})
+                self.assertEqual((0,'head')in rows,accepted)
+                self.assertEqual((0,'head')in failed,not accepted)
 
     def test_jitter_on_both_sides_of_a_measure_boundary_is_one_chord(self):
         _,grid,rows,failed,_=transcribe(template(),intervals([1.999,2.001],.005))

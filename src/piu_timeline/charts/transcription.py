@@ -7,8 +7,8 @@ import math
 from piu_timeline.charts.ucs import Document, Section, NATURAL_SPLITS
 
 
-FORMAT={'schema':1,'revision':1,'method':'per_measure_unique_intervals',
-        'natural_splits':list(NATURAL_SPLITS),'maximum_row_residual_fraction':.25}
+FORMAT={'schema':1,'revision':2,'method':'per_measure_unique_intervals',
+        'natural_splits':list(NATURAL_SPLITS),'maximum_row_residual_seconds':.012}
 EPSILON=1e-8
 
 
@@ -64,7 +64,7 @@ def transcribe(document, endpoints):
             matches={};rejected={}
             for key,(lower,upper) in groups[index]:
                 rows=choices(span,split,lower,upper,following)
-                if len(rows)==1 and abs(sum((lower,upper))/2-rows[0][0])<=float(step)*FORMAT['maximum_row_residual_fraction']+EPSILON:
+                if len(rows)==1 and abs(sum((lower,upper))/2-rows[0][0])<=FORMAT['maximum_row_residual_seconds']+EPSILON:
                     matches[key]=rows[0]
                 else:
                     rejected[key]='Ambiguous rows at selected measure Split' if len(rows)>1 else 'No bounded row at selected measure Split'
@@ -91,9 +91,7 @@ def transcribe(document, endpoints):
     accepted={}
     for key,(time,row,index) in assigned.items():
         lower,upper=endpoints[key];lo=bisect_left(times,lower-EPSILON);hi=bisect_right(times,upper+EPSILON)
-        gaps=[abs(times[row]-times[j])for j in (row-1,row+1)if 0<=j<len(times)]
-        period=min([fits[grid[row][0]]['row_duration_seconds']]+gaps)
-        if hi-lo!=1 or lo!=row or abs(sum((lower,upper))/2-time)>period*FORMAT['maximum_row_residual_fraction']+EPSILON:
+        if hi-lo!=1 or lo!=row or abs(sum((lower,upper))/2-time)>FORMAT['maximum_row_residual_seconds']+EPSILON:
             failures[key]='Chart interval is ambiguous or outside tolerance across measure grids'
             fits[index]['post_grid_unresolved_endpoints']=fits[index].get('post_grid_unresolved_endpoints',0)+1
             fits[index]['status']='partial'

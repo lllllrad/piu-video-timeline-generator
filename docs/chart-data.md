@@ -44,7 +44,8 @@ template rows are not evidence of note subdivision.
 
 There is no nearest-row fallback or fixed additive matching allowance. A measured target interval,
 including alignment uncertainty, must contain exactly one final row, and its central residual must
-be at most one quarter of that row's duration. Finer splits therefore tighten the residual limit;
+be at most 12 ms, independently of Split, BPM or row duration. Split controls the grid's
+resolution, not the allowed timing error. This limit does not expand the measured interval;
 intervals covering several rows remain unresolved. Final checks include neighboring measures with
 different splits. Failed or partial measures and rejected endpoints are explicit in metadata
 `transcription` and `unresolved`; registration prints an unresolved-placement warning. Holds retain
