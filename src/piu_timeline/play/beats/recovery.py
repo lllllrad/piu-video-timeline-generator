@@ -6,6 +6,7 @@ from piu_timeline.play.beats.coordinates import fit, FORMAT as COORDINATE_FORMAT
 
 FORMAT={'schema':1,'revision':4,'method':'native_coordinates_with_frozen_beat_references',
         'rejected_beat_references':'unique_source_clock_rows_outside_tested_group',
+        'unsupported_clock_rows':'unique_source_clock_neighbors',
         'measurement_limits':COORDINATE_FORMAT,'natural_splits':list(NATURAL_SPLITS)}
 
 
@@ -33,6 +34,13 @@ def candidate_window(note,notes,groups):
         seed=note.get('timing_reconstruction',{}).get('unaccepted_previous_estimate',{}).get('target_seconds')
         return (seed,[seed-radius,seed+radius],set())if seed is not None and math.isfinite(seed)else None
     beat=note.get('beat_reconstruction',{})
+    if (note.get('reason')=='beat_timing_reconstruction_failed'
+            and beat.get('reason')=='no_natural_beat_subdivision'and'group_index'in beat):
+        group=groups[beat['group_index']]
+        unsupported=group.get('unsupported_indices',())if group['status']=='partial'else()
+        omitted={group['notes'][j]for j in unsupported}if unsupported else set(group['notes'])
+        seed=sum(note['video_target_range'])/2
+        return seed,[seed-radius,seed+radius],omitted
     rejected_domain=(note.get('reason')=='beat_timing_reconstruction_failed'and
                      beat.get('reason')in('native_coordinate_domains_incompatible','ambiguous_beat_rows'))
     rejected_geometry=note.get('reason')in('beat_grid_conflicts_with_spatial_spacing','beat_grid_conflicts_with_native_chord')

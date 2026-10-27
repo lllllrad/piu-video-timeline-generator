@@ -185,6 +185,17 @@ more rows before geometric validation, then the smaller Split. Preserve empty
 domains and `unsupported_indices`; the unsupported head remains an explicit
 failure with its original time interval. No tolerance or row domain is widened.
 
+An unsupported source-clock row may subsequently be recovered from independent
+native geometry. In a partial group, other heads whose original clock intervals
+uniquely prove their rows can remain frozen references. Exclude every unsupported
+head, and do not promote recovered or native-refined neighbors into that source
+reference set. A fully failed group still excludes its entire cohort. Recovery
+retains the ordinary reference-count, lane, temporal-bracketing, native-error
+and unique-natural-row requirements, followed by spacing and chord validation.
+The rejected clock range is preserved as provenance; it only selects the
+reference neighborhood. Ambiguous source-clock domains retain their separate
+failure reason and their existing clock-range constraint.
+
 The common-phase search counts only unique assignments and validates them with
 the ordinary spacing and chord checks. Winning phases must agree on those
 assignments and supported identities; the chosen midpoint is checked again.

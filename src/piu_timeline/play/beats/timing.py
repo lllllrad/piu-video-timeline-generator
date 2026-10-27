@@ -229,7 +229,8 @@ def apply(data,directory):
             failure=fit.get('reason')
             if not accepted and fit['status']=='partial':
                 lo,hi=fit['row_domains'][j]
-                failure='native_coordinate_domains_incompatible'if lo>hi else'ambiguous_beat_rows'
+                failure=('no_natural_beat_subdivision'if j in fit.get('unsupported_indices',())else
+                         'native_coordinate_domains_incompatible'if lo>hi else'ambiguous_beat_rows')
             note['beat_reconstruction']={'status':'restored'if accepted else'failed',
                 'group_index':len(result['groups'])-1,**{k:fit[k]for k in ('split','phase_range')if k in fit},
                 **({'reason':failure}if not accepted else{})}
