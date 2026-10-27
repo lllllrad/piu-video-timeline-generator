@@ -10,6 +10,16 @@ from piu_timeline.play.report import write_report
 
 
 class ReportTest(unittest.TestCase):
+    def test_processing_conflict_is_review_only_and_not_a_confirmed_grade(self):
+        notes=[{'status':'estimated','lane':0,'target_seconds':10,'prediction_uncertainty_seconds':.01}]
+        matches=[{'note':0,'target_seconds':10,'observation_lower_seconds':10.02,
+                  'observation_upper_seconds':10.04,'judgment_label':'PERFECT','processing_conflict':True}]
+        result=self.report_runtime(notes,matches)
+        self.assertEqual(result['initialInputs'],[None])
+        self.assertNotIn('PERFECT',' '.join(result['initialRows'][0]))
+        self.assertIn('Conflicting refresh',result['initialRows'][0][4])
+        self.assertEqual(result['defaultCandidateConnections'],0)
+        self.assertEqual(result['optionalCandidateConnections'],1)
 
 
     def test_embedded_data_and_title_cannot_break_out_of_html(self):

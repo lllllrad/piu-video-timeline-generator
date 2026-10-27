@@ -16,6 +16,15 @@ def match(index, target, lo, hi):
 
 
 class TimingRangeTest(unittest.TestCase):
+    def test_processing_conflict_retains_raw_bracket_without_confirming_input_or_bounding_neighbors(self):
+        assigned={**match(0,9,9.01,9.02),'processing_conflict':True}
+        data={'notes':[note(9),note(10),note(11)],'matches':[assigned,match(2,11,11.01,11.02)]}
+        records=timing_ranges(data)['notes']
+        self.assertEqual(records[0]['status'],'conflicted')
+        self.assertEqual(records[0]['observed_input_range'],[9.01,9.02])
+        self.assertEqual(records[0]['input_ranges'],[])
+        self.assertNotEqual(records[1]['status'],'bounded')
+
     def test_delayed_nearby_processing_retains_disjoint_alternatives(self):
         data = {'notes': [note(10)], 'combo_events': [
             {'delta': 1, 'lower_seconds': 10.12, 'upper_seconds': 10.14, 'reason': 'ambiguous'},

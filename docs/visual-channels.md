@@ -106,10 +106,31 @@ shape interval may lie between the last presence and first absence; the
 whole interval remains the bracket. It is never narrowed to an assumed
 moment inside an occlusion. The bracket is at most 75 ms, confirmation is
 within 150 ms, and capture gaps over 50 ms break support. A head observed
-again invalidates the earlier disappearance. At least two clear observations
-more than 0.65 lane spacings above the receptor establish passage instead.
+again invalidates the earlier disappearance. Two positive observations more
+than 0.65 lane spacings above the receptor establish passage instead, provided
+they continue upward within a 50 ms capture gap. A sufficiently visible partial
+shape can corroborate passage: its score must still be at least 0.65 and both
+area and foreground coverage at least 80%. This is positive evidence of continued
+visibility, not a disappearance, successful judgment or physical press.
 Screen cuts, long flashes, competing heads and unsupported motion remain
 unresolved. The raw samples retain scores and unknown reasons for review.
+
+Passage retains its original frame/PTS pair independently of an assigned popup.
+If both passing observations occur more than the existing 75 ms review guard
+after that refresh, report a processing/refresh conflict with the passage proof.
+This is an ordering warning, not a calibrated engine-latency rule. It does not
+discard the observed refresh, manufacture a replacement input or assign MISS.
+In particular, a hold's popup can coincide with a nearby unprocessed tap; a
+short timing fit alone does not establish ownership. Judgment-specific handling
+must distinguish successful consumption from failure responses before using
+this warning as a hard association veto.
+
+A processing conflict gives the reported timing range `conflicted` status.
+Retain the assigned refresh and grade in analysis provenance, but do not present
+them as a confirmed input or grade. The original bracket is available with
+candidate connections enabled. A conflicted association cannot provide
+conditional neighboring-row bounds or review ownership anchors. Resolving the
+conflict requires evidence; it never supplies an inferred replacement grade.
 
 Repeated loss before the receptor can mark a visibility boundary rather than
 consumption. Require eight independent heads across at least three lanes,

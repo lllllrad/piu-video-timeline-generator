@@ -56,8 +56,9 @@ def timing_ranges(data):
                                **({'source_pts_seconds': event['source_pts_seconds']} if 'source_pts_seconds' in event else {})})
     holds = {hold['id']: hold for hold in data.get('hold_analysis', {}).get('holds', [])}
     from piu_timeline.play.candidates import candidates
-    constrained, rejected = candidates(data, events)
-    ordered = sorted(matches.values(), key=lambda match: match['target_seconds'])
+    trusted=[m for m in matches.values()if not m.get('processing_conflict')]
+    constrained, rejected = candidates({**data,'matches':trusted}, events)
+    ordered = sorted(trusted, key=lambda match: match['target_seconds'])
     def bracket(match):
         return (match.get('observation_lower_seconds', match.get('combo_lower_seconds')),
                 match.get('observation_upper_seconds', match.get('combo_upper_seconds')))
@@ -87,6 +88,9 @@ def timing_ranges(data):
                 record.update(status='matched' if clipped else 'unknown', input_ranges=[clipped] if clipped else [],
                               observed_input_range=[lo, hi],
                               reason='matched_display_refresh' if clipped else 'outside_association_window')
+                if match.get('processing_conflict'):
+                    record.update(status='conflicted',input_ranges=[],reason='assigned_refresh_conflicts_with_note_processing',
+                                  processing_passage=match.get('processing_passage_after_refresh'))
         if 'status' not in record:
             if index in misses or match and match.get('judgment_label') == 'MISS':
                 record.update(status='possible_miss', reason='possible_miss_has_no_press_timestamp')

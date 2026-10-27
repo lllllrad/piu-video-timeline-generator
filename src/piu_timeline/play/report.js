@@ -85,6 +85,7 @@ const targetRange=note=>Number.isFinite(note.target_seconds)&&Number.isFinite(no
 const inputIntervals=(m,index=m?.note)=>{
 const record=rangeByNote[index]||{},note=data.notes[index];
 const ranges=record.status==='matched'&&record.observed_input_range?[record.observed_input_range]
+ :record.status==='conflicted'&&$('candidates').checked&&record.observed_input_range?[record.observed_input_range]
  :record.status==='possible'?(record.alternatives||[]).map(event=>[event.lower_seconds,event.upper_seconds])
  :record.status==='bounded'&&record.neighbor_observation_range?[record.neighbor_observation_range]:record.input_ranges||[];
 const shifted=ranges.map(range=>range.map(t=>t-Number(delay.value)/1000));
@@ -320,7 +321,7 @@ $('comparisonDetails').replaceChildren();
 renderEvidence(selectedNote);
 const note=data.notes[selectedNote];
 if(!note){label(root,'No supported target ranges to compare.',p,70);return}
-const match=matchByNote.get(selectedNote)?.match,hold=holdFor(note),target=hold?[hold.start_censored?hold.start_range[1]:hold.start_range[0],hold.end_range?.[1]??hold.last_body_seconds]:targetRange(note),input=hold||match||rangeByNote[selectedNote]?.status==='possible'&&$('candidates').checked?inputRange(match,selectedNote):null,delta=difference(target,input);
+const match=matchByNote.get(selectedNote)?.match,hold=holdFor(note),target=hold?[hold.start_censored?hold.start_range[1]:hold.start_range[0],hold.end_range?.[1]??hold.last_body_seconds]:targetRange(note),input=hold||match||['possible','conflicted'].includes(rangeByNote[selectedNote]?.status)&&$('candidates').checked?inputRange(match,selectedNote):null,delta=difference(target,input);
 const extent=Math.max(100,...[...(target||[]),...(input||[])].map(t=>Math.abs(1000*(t-note.target_seconds))))*1.15;
 const x=t=>center+1000*(t-note.target_seconds)/extent*(right-p)/2;
 for(const ms of [-extent,0,extent]){const px=center+ms/extent*(right-p)/2;line(root,px,15,px,135,'#314448');label(root,ms.toFixed(1)+' ms',px-25,160)}
@@ -350,7 +351,10 @@ text('p','Input − target: '+(differences.map(formatDifference).join(' ∪ ')||
 if(rangeByNote[selectedNote]?.rejected_candidates?.length)text('p','Rejected nearby refreshes: '+rangeByNote[selectedNote].rejected_candidates.map(reason=>reason.replaceAll('_',' ')).join('; '),$('comparisonDetails'));
 const aggregateCapacity=Math.max(1,...(rangeByNote[selectedNote]?.alternatives||[]).map(event=>event.aggregate_row_capacity||1));if(aggregateCapacity>1)text('p','Counter evidence advances up to '+aggregateCapacity+' judged rows in one observation bracket. The aggregate bracket is shared; individual input times are unresolved.',$('comparisonDetails'));
 const alternativeRows=Math.max(1,...(rangeByNote[selectedNote]?.alternatives||[]).map(event=>event.alternative_rows||1));if(alternativeRows>1)text('p','One refresh remains compatible with '+alternativeRows+' neighboring rows within source-frame and fitting uncertainty. These are alternatives, not separate input assignments.',$('comparisonDetails'));
-if(!match)text('p',rangeByNote[selectedNote]?.status==='possible'?'Possible refresh ranges only: association is unresolved. Separate intervals are alternatives, not a continuous input window.':rangeByNote[selectedNote]?.status==='bounded'?'Conditional bounds from neighboring processed rows. A press is not established; chart-row input order is assumed.':'Input unknown: '+(rangeByNote[selectedNote]?.reason||'no matched evidence').replaceAll('_',' '),$('comparisonDetails'));
+if(!match)text('p',
+rangeByNote[selectedNote]?.status==='conflicted'?'Assigned refresh conflicts with observed note processing. Its original bracket remains a review candidate.':
+rangeByNote[selectedNote]?.status==='possible'?'Possible refresh ranges only: association is unresolved. Separate intervals are alternatives, not a continuous input window.':
+rangeByNote[selectedNote]?.status==='bounded'?'Conditional bounds from neighboring processed rows. A press is not established; chart-row input order is assumed.':'Input unknown: '+(rangeByNote[selectedNote]?.reason||'no matched evidence').replaceAll('_',' '),$('comparisonDetails'));
 if(match?.aggregate_row_count>1)text('p','Aggregate refresh bracket shared by several rows; individual press times are unresolved.',$('comparisonDetails'));
 }
 function table(){
@@ -375,7 +379,8 @@ text('td',m?
     +(m.aggregate_row_count>1?' (aggregate row bracket)':m.row_note_count>1?' (shared chord bracket)':'')
   :rangeByNote[index]?.status==='policy_excluded'?'Timing excluded by chart policy / '+(rangeByNote[index].chart_policy?.reasons||[]).join('; ')
   :possibleMiss?'Possible MISS / no press timestamp'
-  :rangeByNote[index]?.status==='possible'?'Possible refresh ranges / association unresolved'
+ :rangeByNote[index]?.status==='conflicted'?'Conflicting refresh / association unconfirmed'
+ :rangeByNote[index]?.status==='possible'?'Possible refresh ranges / association unresolved'
   :rangeByNote[index]?.status==='bounded'?'Conditional bounds between processed rows / press unconfirmed'
   :'Input unknown / '+(rangeByNote[index]?.reason||'no_nearby_positive_refresh').replaceAll('_',' '),row);
 row.onclick=()=>seek(note.target_seconds,linked?.index??-1,index);

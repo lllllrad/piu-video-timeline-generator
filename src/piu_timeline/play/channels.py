@@ -182,6 +182,7 @@ def annotate_matches(data):
     for original in data.get('matches', []):
         match = dict(original)
         match.pop('processing_conflict', None)
+        match.pop('processing_passage_after_refresh',None)
         ni = match['note']
         refs = ['motion:'+str(ni)]
         for key, prefix in (('combo_event','combo:'), ('judgment_event','judgment:')):
@@ -199,5 +200,9 @@ def annotate_matches(data):
         match['processing_status'] = observed['status'] if observed else 'unavailable'
         if observed and observed['status'] == 'disappeared_near_receptor' and lo is not None and hi is not None:
             match['processing_conflict'] = processing_conflicts(data, ni, lo, hi, guard)
+        if observed and hi is not None:
+            from piu_timeline.play.processing.passage import after_refresh
+            passage=after_refresh(observed,hi,guard)
+            if passage:match.update(processing_conflict=True,processing_passage_after_refresh=passage)
         matches.append(match)
     return {**data, 'matches': matches}

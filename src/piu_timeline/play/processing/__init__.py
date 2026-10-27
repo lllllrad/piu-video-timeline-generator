@@ -9,7 +9,7 @@ from piu_timeline.play.processing.poses import overlap,compare
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
-PROCESSING_FORMAT = {'schema': 1, 'revision': 7,'partial_confirmation_minimum_coverage':.8,
+PROCESSING_FORMAT = {'schema': 1, 'revision': 8,'partial_confirmation_minimum_coverage':.8,
                      'templates':TEMPLATE_FORMAT}
 
 
@@ -76,10 +76,12 @@ def visible_template(mask,template,y,radius):
 def transition(samples, receptor, spacing):
     """A disappearance is a visual event, never a successful judgment by itself."""
     present = [s for s in samples if s['state'] == 'present']
+    from piu_timeline.play.processing.passage import evidence
+    passage=evidence(samples,receptor,spacing,PROCESSING_FORMAT['partial_confirmation_minimum_coverage'])
+    if passage:
+        return {'status':'passed_target','reason':'head_observed_beyond_receptor','passage_evidence':passage}
     if not present:
         return {'status': 'unresolved', 'reason': 'no_verified_head_template'}
-    if sum(s['y'] < receptor-.65*spacing for s in present) >= 2:
-        return {'status': 'passed_target', 'reason': 'head_observed_beyond_receptor'}
     last = present[-1]
     after = [s for s in samples if s['time'] > last['time']]
     absent = [s for s in after if s['state'] == 'absent'and not s.get('confirmation_only')]

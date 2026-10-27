@@ -150,7 +150,7 @@ A hold is one continuous held-state requirement. Its leading cap (often drawn li
 
 The game accepts an ongoing hold state while the panel remains held. Hold ticks and repeated combo/judgment updates are not repeated presses. A lit receptor during a body can support ongoing recognition. Its disappearance does not identify the physical release time.
 
-A tap's evidence may include a lane-local receptor transition and a corresponding combo or judgment refresh. A persistent lit receptor cannot independently support several repeated taps. A whole-screen flash is not ten simultaneous inputs. Unknown or obscured samples must remain unknown. The relevant transition may occur in a neighboring frame; all evidence need not coexist in one image.
+A tap's evidence may include a lane-local receptor transition and a corresponding combo or judgment refresh. A persistent lit receptor cannot independently support several repeated taps. A whole-screen flash is not ten simultaneous inputs. Unknown or obscured samples must remain unknown. The relevant transition may occur in a neighboring frame; all evidence need not coexist in one image. See [visual channels](visual-channels.md#observing-note-processing) for continued-passage evidence.
 
 A weak hold response can be corroborated by a lane-local brightness pulse and a positive HUD refresh while independent neighboring frames establish that hold. Requiring the body to be detected again in the pulse frame would discard valid occlusion evidence. Use the certain interior of the established hold for this additional support; a pulse, HUD refresh or guessed body alone cannot create a hold.
 
