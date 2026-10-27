@@ -11,7 +11,7 @@ from piu_timeline.play.beats.domains import FORMAT as DOMAIN_FORMAT
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
-FORMAT={'schema':1,'revision':7,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
+FORMAT={'schema':1,'revision':8,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
         'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT,'native_row_domains':DOMAIN_FORMAT}
 
 
@@ -33,19 +33,26 @@ def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty
         from piu_timeline.play.beats.domains import constrain as constrain_coordinates
         options,coordinate_proofs=constrain_coordinates(options,step,origin,native_coordinates)
         if any(lo>hi for lo,hi in options):incompatible='native_coordinate_domains_incompatible';continue
-        if any(hi>lo for lo,hi in options):
-            return {'status':'failed','reason':'ambiguous_beat_rows','split':split,'row_domains':options,
-                    **({'native_coordinate_constraints':coordinate_proofs}if coordinate_proofs else {})}
-        rows=[lo for lo,hi in options]
-        if any(b-a>.025 and rb<=ra for a,b,ra,rb in zip(targets,targets[1:],rows,rows[1:])):continue
+        rows=[lo if lo==hi else None for lo,hi in options]
+        known=[(time,row)for time,row in zip(targets,rows)if row is not None]
+        if any(b-a>.025 and rb<=ra for (a,ra),(b,rb)in zip(known,known[1:])):continue
+        constraints={**({'native_chord_constraints':proofs}if proofs else {}),
+                     **({'native_coordinate_constraints':coordinate_proofs}if coordinate_proofs else {}),
+                     **({'unconstrained_row_domains':original_options}if proofs or coordinate_proofs else {})}
+        if any(row is None for row in rows):
+            result={'status':'failed','reason':'ambiguous_beat_rows','split':split,'row_domains':options,**constraints}
+            # A fixed common phase can establish some rows without resolving
+            # every other head. Unknown phase requires the common-phase search.
+            if known and phase_uncertainty==0:
+                result.update(status='partial',rows=rows,targets=[origin+r*step if r is not None else None for r in rows],
+                              phase_range=[0,0],unresolved_indices=[i for i,row in enumerate(rows)if row is None])
+            return result
         exact=[origin+row*step for row in rows]
         phase_lo=max([-phase_uncertainty]+[t-e-g for t,e,g in zip(targets,uncertainties,exact)])
         phase_hi=min([phase_uncertainty]+[t+e-g for t,e,g in zip(targets,uncertainties,exact)])
         if phase_lo>phase_hi+1e-8:continue
         return {'status':'restored','split':split,'rows':rows,'targets':exact,'phase_range':[phase_lo,phase_hi],
-                **({'native_chord_constraints':proofs}if proofs else {}),
-                **({'native_coordinate_constraints':coordinate_proofs}if coordinate_proofs else {}),
-                **({'unconstrained_row_domains':original_options}if proofs or coordinate_proofs else {})}
+                **constraints}
     return {'status':'failed','reason':incompatible or'no_natural_beat_subdivision'}
 
 
@@ -106,7 +113,8 @@ def spacing_supported_notes(notes,groups,fits,spacing,motion,coordinate_support=
     candidate=[dict(note)for note in notes]
     for group,fit in zip(groups,fits,strict=True):
         for j,index in enumerate(group['notes']):
-            if fit['status']=='restored':candidate[index]['target_seconds']=fit['targets'][j]
+            if fit['status']in('restored','partial')and fit['targets'][j]is not None:
+                candidate[index]['target_seconds']=fit['targets'][j]
             else:candidate[index]['status']='excluded'
     rejected={w['note']for w in spacing_failures(candidate,spacing,motion,coordinate_support)}
     from piu_timeline.play.beats.chords import conflicts
@@ -198,8 +206,11 @@ def apply(data,directory):
             note=notes[index]
             before=note['target_seconds']
             note['video_target_range']=[before-note['prediction_uncertainty_seconds'],before+note['prediction_uncertainty_seconds']]
-            note['beat_reconstruction']={k:v for k,v in fit.items() if k not in ('rows','targets')}
-            if fit['status']=='failed':
+            accepted=fit['status']in('restored','partial')and fit['targets'][j]is not None
+            note['beat_reconstruction']={'status':'restored'if accepted else'failed',
+                'group_index':len(result['groups'])-1,**{k:fit[k]for k in ('split','phase_range')if k in fit},
+                **({'reason':fit['reason']}if not accepted else{})}
+            if not accepted:
                 pts=note.get('points',[])
                 result['warnings'].append({'note':index,'lane':note['lane'],'reason':'beat_timing_reconstruction_failed',
                     'check':'timing_reconstruction','failure_detail':fit['reason'],'observed_points':len(pts),
@@ -218,12 +229,12 @@ def apply(data,directory):
         for conflict in conflicts:
             index=conflict['note'];conflict.update(reason='beat_grid_conflicts_with_spatial_spacing')
             notes[index].update(status='excluded',reason=conflict['reason'],target_seconds=None,
-                                 beat_reconstruction={'status':'failed','reason':conflict['reason']})
+                                 beat_reconstruction={**notes[index]['beat_reconstruction'],'status':'failed','reason':conflict['reason']})
         result['warnings'].extend(conflicts)
     conflicts=chord_conflicts(notes,chords)
     for conflict in conflicts:
         notes[conflict['note']].update(status='excluded',reason=conflict['reason'],target_seconds=None,
-                                     beat_reconstruction={'status':'failed','reason':conflict['reason']})
+                                     beat_reconstruction={**notes[conflict['note']]['beat_reconstruction'],'status':'failed','reason':conflict['reason']})
     result['warnings'].extend(conflicts)
     result['status']='failed' if result['warnings'] else 'restored'
     return {**data,'notes':notes,'beat_timing':result}

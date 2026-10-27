@@ -22,9 +22,11 @@ class BeatGridTest(unittest.TestCase):
         unsupported=fit_grid([10.137],[.000001],120,10)
         self.assertEqual(unsupported['reason'],'no_natural_beat_subdivision')
 
-    def test_increasing_split_cannot_collapse_distinct_rows(self):
+    def test_unresolved_row_is_not_collapsed_onto_an_independent_known_row(self):
         result=fit_grid([10.01,10.11],[.12,.12],120,10)
-        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['status'],'partial')
+        self.assertEqual(result['rows'],[0,None])
+        self.assertEqual(result['targets'],[10,None])
 
     def test_reference_application_keeps_video_ranges_and_marks_ambiguous_notes_failed(self):
         from pathlib import Path

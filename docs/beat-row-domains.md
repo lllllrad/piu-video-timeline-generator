@@ -75,3 +75,25 @@ result quotas or existing chart notes supply these row constraints.
 source note identity, coordinate block, model error and each independent
 reference's native support and source PTS range. Failed ambiguous fits also keep
 their remaining row domains and any qualified coordinate constraints.
+
+## Partial groups at a fixed common phase
+
+A compatible subdivision can give one row to some heads and several rows to
+another. Keep the unique assignments and mark the unresolved head as failed.
+A group records `status: partial`, null rows/targets for unresolved heads and
+its remaining domains. It cannot silently select one of those rows or increase
+Split merely to hide ambiguity. A group with no unique assignments remains
+failed. Contradictory domains and unsupported subdivisions still fail.
+
+The common-phase search counts only unique assignments and validates them with
+the ordinary spacing and chord checks. Winning phases must agree on those
+assignments and supported identities; the chosen midpoint is checked again.
+Each partial fit uses one fixed common phase. Unknown phase cannot independently
+move a head or bypass the common-phase search.
+
+Per-note reconstruction records its own success/failure and references the
+shared beat-group record by `group_index`. A failed head keeps its original
+video range, a null accepted target and an explicit reconstruction warning.
+The analysis remains failed while any such warning survives. Independent unique
+neighbors can still supply geometry and input associations, subject to all
+ordinary checks; unresolved heads cannot participate in those accepted matches.

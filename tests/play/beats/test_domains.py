@@ -58,7 +58,9 @@ class NativeRowDomainTest(unittest.TestCase):
             result=fit_grid(targets,errors,120,1,splits=[192]if case=='fine_ambiguous'else None,
                             native_coordinates=blocks)
             with self.subTest(case=case):
-                self.assertEqual(result['status'],'failed')
+                self.assertEqual(result['status'],'partial')
+                self.assertIsNone(result['rows'][0 if case=='extrapolation'else 4])
+                self.assertIsNone(result['targets'][0 if case=='extrapolation'else 4])
                 self.assertEqual(result['reason'],'ambiguous_beat_rows')
 
     def test_geometry_can_refute_a_coarse_split_without_forcing_its_nearest_row(self):
