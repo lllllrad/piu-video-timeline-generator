@@ -141,7 +141,7 @@ class SkinDetectorTest(unittest.TestCase):
                 found=tracker.detect(image)
             self.assertEqual([(r['role'],round(r['y']*300,6))for r in found],
                              [('tap',60),('hold_start',130),('hold_end',220)])
-            self.assertTrue(tracker.hold_candidate)
+            self.assertFalse(tracker.hold_candidate)
             self.assertTrue(all('connection'in r['region_errors']for r in found if r['role']!='tap'))
             # Identical cap pixels cannot make the connected end an extra tap.
             self.assertEqual(sum(abs(r['y']*300-220)<2 for r in found),1)

@@ -251,11 +251,11 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
         decoded=decode_frames(record,start,end,roi,width)
         for pts, playback, image, skin_observations in classified_frames(decoded,skin_bank,layout,width,round(width*roi[3]/roi[2])):
             if tracker is None:
-                tracker = NoteTracker(layout, image.shape[1], image.shape[0])
+                tracker = NoteTracker(layout, image.shape[1], image.shape[0],skin_bank=skin_bank)
             if skin_observations is None:notes = tracker.detect(image)
             else:
                 tracker.skin_observations=skin_observations
-                tracker.hold_candidate=any(o['role']=='hold_body'for o in skin_observations)
+                tracker.hold_candidate=tracker.body_at_receptor(skin_observations)
                 notes=[o for o in skin_observations if o['role']!='hold_body']
             tracker.update(playback, notes, pts)
             crop = crop_region(image, layout['combo_roi'])

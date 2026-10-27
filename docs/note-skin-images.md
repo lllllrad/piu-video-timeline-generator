@@ -130,6 +130,22 @@ local storage is experimental; it is not a complete validated skin catalogue.
 Per-note random skins and downward travel are outside this workflow's current
 scope. They require separate skin selection or motion models.
 
+## Receptor-local hold ambiguity
+
+A body image anywhere in the field does not imply hold ticks at the receptors.
+Popup-ownership deferral requires connected positive hold-image support starting
+within 0.75 lane spacings below the receptor and spanning at least 1.25 spacings,
+or a verified endpoint connection intersecting a band extending 0.25 lane spacings on each side
+of the receptor. A distant body tile, a short disconnected patch or a failed connection
+cannot establish that local ambiguity. All of those image observations remain
+in the native trace and geometry diagnostics.
+
+This is a candidate for possible hold-related judgments, not evidence of a
+button press or a complete held interval. Its interpretation has a separate
+contract component. Updating it reuses unchanged cap/body image acquisition
+and recomputes the frame flag without RGB decoding. It does not change the
+source timestamps, image comparisons or the actual hold-geometry requirements.
+
 ## Commands
 
 Build a bank from reviewed source-image rectangles:

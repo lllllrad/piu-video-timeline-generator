@@ -30,7 +30,8 @@ class ImageReuseTest(unittest.TestCase):
             old_bank,new_bank=load_bank(old/'bank.json'),load_bank(new/'bank.json')
             previous=SkinDetector(old_bank,layout,200,300).detect(rgb)
             frames=[{'source_pts_seconds':31.,'playback_seconds':1.,'combo':42,
-                     'notes':[o for o in previous if o['role']!='hold_body'],'skin_observations':previous}]
+                     'notes':[o for o in previous if o['role']!='hold_body'],'skin_observations':previous,
+                     'possible_hold_or_dense_stack':True}]
             trace=''.join(json.dumps(f)+'\n'for f in frames);(root/'frames.jsonl').write_text(trace)
             data={'media':{'path':str(source),'size_bytes':source.stat().st_size,'mtime_ns':source.stat().st_mtime_ns},
                   'skin_detector':detector_metadata(old/'bank.json'),'layout':layout,
@@ -48,6 +49,7 @@ class ImageReuseTest(unittest.TestCase):
             self.assertEqual(actual['skin_observations'],expected)
             self.assertEqual(actual['notes'],frames[0]['notes'])
             self.assertEqual(actual['combo'],42)
+            self.assertFalse(actual['possible_hold_or_dense_stack'])
             manifest=json.loads((new/'bank.json').read_text());manifest['source_annotation']='reviewed pixels unchanged'
             (new/'bank.json').write_text(json.dumps(manifest))
             self.assertEqual(reusable_groups(data,load_bank(new/'bank.json')),set()) # old path changed; cannot prove old references
@@ -67,7 +69,7 @@ class ImageReuseTest(unittest.TestCase):
             root=Path(temporary);examples(root);media=root/'source';media.write_bytes(b'original')
             data={'media':{'path':str(media),'size_bytes':media.stat().st_size,'mtime_ns':media.stat().st_mtime_ns},
                   'skin_detector':detector_metadata(root/'bank.json'),'analysis_width':200,'analysis_height':300,
-                  'layout':{},'start_seconds':1.,'end_seconds':2.,'frame_count':2}
+                  'layout':{'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]},'start_seconds':1.,'end_seconds':2.,'frame_count':2}
             native={'source_pts_seconds':31.,'playback_seconds':1.,'skin_observations':[],'notes':[]}
             for case in ('missing_images','duplicate_pts','nonfinite_pts'):
                 first=deepcopy(native);second=deepcopy(native)
@@ -83,6 +85,8 @@ class ImageReuseTest(unittest.TestCase):
             root=Path(temporary);examples(root);bank=load_bank(root/'bank.json')
             data={'skin_detector':detector_metadata(root/'bank.json')}
             self.assertEqual(reusable_groups(data,bank),{'caps','body'})
+            interpretation=deepcopy(data);interpretation['skin_detector']['contract']['held_body']={}
+            self.assertEqual(reusable_groups(interpretation,bank),{'caps','body'})
             changed=deepcopy(data);changed['skin_detector']['contract']['detector']={}
             self.assertEqual(reusable_groups(changed,bank),set())
             changed=deepcopy(data);changed['skin_detector']['contract']['bank']={}
