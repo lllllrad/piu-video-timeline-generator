@@ -3,9 +3,11 @@ import json
 from pathlib import Path
 
 import numpy as np
+from piu_timeline.play.object_boundaries import FORMAT as BOUNDARY_FORMAT
+from piu_timeline.play.frames import TIME_EPSILON
 
 KIND='decorative_note_art'
-FORMAT={'schema':1,'revision':2,'cap_radius_spacing':.5}
+FORMAT={'schema':1,'revision':3,'cap_radius_spacing':.5,'boundary_frames':BOUNDARY_FORMAT}
 
 
 def reference(data,directory):
@@ -49,7 +51,11 @@ def ownership(bounds,time,candidates):
         x,y,w,h=effect['game_image_bounds'];left,top,right,bottom=bounds
         intersects=left<x+w and x<right and top<y+h and y<bottom
         if not intersects or not lo-error<=time<=hi+error:continue
-        if lo+error<=time<hi-error and x<=left and right<=x+w and y<=top and bottom<=y+h:
+        role=next((r['role']for r in effect.get('source_frame_roles',[])
+                   if abs(time-r['playback_seconds'])<=TIME_EPSILON),None)
+        if role=='ordinary_candidate':continue
+        certain=lo+error<=time<hi-error or role=='decorative_art'
+        if certain and x<=left and right<=x+w and y<=top and bottom<=y+h:
             owners.append(effect['id'])
         else:ambiguous.append(effect['id'])
     return owners,ambiguous
@@ -98,6 +104,8 @@ def apply(data,directory,display_delay_ms=0):
                 for e in policy['gimmick_candidates']if e['kind']==KIND and e['review_status']!='rejected']
     with (directory/'frames.jsonl').open()as stream:frames=[json.loads(line)for line in stream]
     if len(frames)!=data['frame_count']:raise ValueError('Object-role source frame count differs')
+    from piu_timeline.play.object_boundaries import prepare as prepare_boundaries
+    candidates=[prepare_boundaries(data,directory,e,frames)for e in candidates]
     for frame in frames:
         for index,note in enumerate(frame['notes']):
             owners,ambiguous=ownership(cap_bounds(data,note),frame['playback_seconds'],candidates)

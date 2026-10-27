@@ -32,6 +32,22 @@ candidate and emits `decorative_art_boundary_ambiguous`. Objects outside the
 scope retain their ordinary interpretation. Generic timing exceptions cannot
 hide these role warnings.
 
+Source observations can resolve an uncertain temporal boundary for one
+recording. An evidence record may contain `object_role_frames`, with original
+`playback_seconds`, `source_pts_seconds` and a role for each annotated frame.
+`ordinary_candidate` records that this artwork is absent; it keeps the native
+candidate without establishing note type, processing or input. `decorative_art`
+identifies artwork in that frame, still requiring full spatial containment.
+
+These annotations require source ID, segment number, player (including an
+explicit null), media byte size and mtime. Each time/PTS pair must match exactly
+one retained native frame and lie within the uncertain start or end band.
+Changed media, missing/duplicate frames and out-of-band annotations fail
+explicitly. Another recording or player retains ordinary alignment uncertainty.
+The interpreted effect retains the matched native frame index and provenance
+under `source_frame_roles`. Raw times are never rounded or rewritten.
+The report links each annotated boundary frame for direct source review.
+
 Replay the remaining native candidates through the normal tracker, coordinate
 registration, shared displacement and beat reconstruction. A mixed original
 track can therefore split at its actual retained observations. Decorative

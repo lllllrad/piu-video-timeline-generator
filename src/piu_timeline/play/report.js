@@ -61,6 +61,11 @@ if(data.chart_policy){
       jump.onclick=()=>seek(observation.playback_seconds);
     }shown=Math.min(shown+80,observations.length);more.hidden=shown>=observations.length;};
     more.onclick=show;review.addEventListener('toggle',()=>{if(review.open&&!shown)show()});
+    for(const effect of artwork.effects||[])for(const frame of effect.source_frame_roles||[]){
+      const row=text('p','Observed boundary / '+effect.id+' / '+frame.role+' / ',review);
+      const jump=text('button',fmt(frame.playback_seconds)+' / PTS '+frame.source_pts_seconds.toFixed(6),row);
+      jump.onclick=()=>seek(frame.playback_seconds);
+    }
   }
   for(const region of data.chart_policy.regions||[]){
     const item=document.createElement('p');item.textContent=region.id+' / song '+fmt(region.start_seconds)+' … '+fmt(region.end_seconds)+' / '+region.processing+' / '+region.reason+(region.check_exceptions.length?' / check exceptions: '+region.check_exceptions.join(', '):'')+(region.details?' / '+region.details:'');

@@ -33,6 +33,21 @@ def validate_candidates(metadata):
                     or not (0<=bounds[0]<bounds[0]+bounds[2]<=1 and 0<=bounds[1]<bounds[1]+bounds[3]<=1)
                     or isinstance(error,bool) or not isinstance(error,(int,float)) or not math.isfinite(error) or not 0<=error<=.1):
                 raise ValueError('Decorative artwork requires non-playable semantics, a scope without playable notes, normalized bounds and bounded time uncertainty')
+            for proof in record.get('evidence',[]):
+                if not isinstance(proof,dict) or 'object_role_frames'not in proof:continue
+                frames=proof['object_role_frames']
+                if (not isinstance(proof.get('source_id'),str) or not proof['source_id']
+                        or 'player'not in proof or proof['player']is not None and not isinstance(proof['player'],str)
+                        or any(type(proof.get(k))is not int or proof[k]<1 for k in
+                               ('segment_number','media_size_bytes','media_mtime_ns'))
+                        or not isinstance(frames,list) or not frames):
+                    raise ValueError('Artwork boundary frames require recording identity and a nonempty frame list')
+                for frame in frames:
+                    if (not isinstance(frame,dict) or frame.get('role')not in ('ordinary_candidate','decorative_art')
+                            or any(isinstance(frame.get(k),bool)or not isinstance(frame.get(k),(int,float))
+                                   or not math.isfinite(frame[k])for k in ('playback_seconds','source_pts_seconds'))
+                            or frame['playback_seconds']<0):
+                        raise ValueError('Artwork boundary roles require finite original playback time and source PTS')
         if record['kind'] == 'suspected_multi_increment' and (type(increment) is not int or not 2 <= increment <= 10):
             raise ValueError('Multi-increment effects require an integer combo_increment from 2 to 10')
         if record['kind']=='scroll_pause':
