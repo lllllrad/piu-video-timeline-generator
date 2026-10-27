@@ -63,6 +63,8 @@ coordinate interval, using the reference model's actual maximum residual plus
 the existing 1.5-pixel native support limit. Models can remove candidate rows,
 never add one or enlarge a time interval. Every qualified block constrains the
 result; conflicting evidence cannot be bypassed by selecting a favorable block.
+Singleton row domains receive the same check: one possible row is not proof
+that its time agrees with the independently observed native position.
 At each candidate song phase, freeze unique rows from the initial independent
 group fits before comparing neighboring groups. Newly resolved heads are not
 reused as training anchors within this operation. A reference must retain its
@@ -73,10 +75,18 @@ reference models constrain the domain separately. An incompatible combined
 model cannot erase a valid local constraint; two qualified but contradictory
 models fail rather than selecting the preferred one.
 
+Also fit the frozen neighboring heads alone over the tested beat group's time
+span plus the ordinary reference radius on either side. This independently
+bracketed model does not use the group's own row assignments as training data.
+It can refute a locally consistent but shifted group. It keeps the same source
+coordinate block, tempo, reference-count, residual and native-error requirements.
+
 One surviving row resolves the ambiguity. Multiple survivors remain explicitly
-ambiguous; no survivor refutes the subdivision. A finer natural Split can be
-tested after a refuted coarse Split, with all ordinary time and geometry limits
-preserved. Final spacing and chord checks still apply. No input observations,
+ambiguous; no survivor refutes that head's assignment. Retain other confirmed
+heads as a partial fit while testing a finer natural Split. A fully supported
+finer fit can restore the refuted head; finer ambiguity cannot erase more
+confirmed rows from the coarser partial fit. All ordinary time and geometry
+limits remain. Final spacing and chord checks still apply. No input observations,
 result quotas or existing chart notes supply these row constraints.
 
 `native_coordinate_constraints` retains the original and allowed row domains,

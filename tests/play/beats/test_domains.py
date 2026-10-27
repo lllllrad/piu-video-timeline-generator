@@ -30,7 +30,7 @@ class NativeRowDomainTest(unittest.TestCase):
         self.assertTrue(all(n['status']=='estimated'for n in result['notes']))
         group=result['beat_timing']['groups'][0]
         self.assertEqual(group['split'],4)
-        proof=group['native_coordinate_constraints'][0]
+        proof=next(p for p in group['native_coordinate_constraints']if p['index']==4)
         self.assertEqual(proof['index'],4)
         self.assertEqual(proof['original_domain'],[3,5])
         self.assertEqual(proof['allowed_domain'],[4,4])
@@ -58,6 +58,12 @@ class NativeRowDomainTest(unittest.TestCase):
             result=fit_grid(targets,errors,120,1,splits=[192]if case=='fine_ambiguous'else None,
                             native_coordinates=blocks)
             with self.subTest(case=case):
+                if case=='bad_reference':
+                    self.assertEqual(result['status'],'partial')
+                    self.assertEqual(result['reason'],'native_coordinate_domains_incompatible')
+                    self.assertIsNone(result['targets'][2])
+                    self.assertIsNone(result['targets'][4])
+                    continue
                 self.assertEqual(result['status'],'partial')
                 self.assertIsNone(result['rows'][0 if case=='extrapolation'else 4])
                 self.assertIsNone(result['targets'][0 if case=='extrapolation'else 4])
@@ -75,3 +81,16 @@ class NativeRowDomainTest(unittest.TestCase):
         self.assertEqual(result['status'],'restored')
         self.assertEqual(result['split'],8)
         self.assertEqual(result['targets'][4],1.5625)
+
+    def test_a_unique_time_row_still_has_to_agree_with_independent_native_positions(self):
+        data=scenario();data['notes'][4]['prediction_uncertainty_seconds']=.001
+        data['notes'][4]['points']=[(t,y+15)for t,y in data['notes'][4]['points']]
+        data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'][4]['offset_pixels']+=15
+        support=prepare(data,40)
+        result=fit_grid([n['target_seconds']for n in data['notes']],
+                        [n['prediction_uncertainty_seconds']for n in data['notes']],120,1,
+                        native_coordinates=[{'chunk':c,'heads':h}for c,h in support['chunks'].items()])
+        self.assertEqual(result['status'],'partial')
+        self.assertEqual(result['reason'],'native_coordinate_domains_incompatible')
+        self.assertIsNone(result['targets'][4])
+        self.assertTrue(all(t is not None for i,t in enumerate(result['targets'])if i!=4))

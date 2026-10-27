@@ -27,6 +27,23 @@ def scenario():
 
 
 class NeighborReferenceTest(unittest.TestCase):
+    def test_neighbor_only_model_refutes_a_shifted_local_cohort_without_erasing_a_correct_head(self):
+        targets=[1+i*.125 for i in range(6)]+[.625,.75,.875,1.75,1.875,2]
+        heads={i:{'offset':240*(t+(.125 if 1<=i<=5 else 0)),'lane':i%3,'native_note':i}
+               for i,t in enumerate(targets)}
+        groups=[]
+        for ids in (list(range(6)),list(range(6,9)),list(range(9,12))):
+            group={'notes':ids,'targets':[targets[i]for i in ids],'errors':[.001]*len(ids),'bpm':120,'origin':0}
+            if ids[0]==0:
+                group['native_coordinates']=[{'chunk':0,'heads':{i:heads[i]for i in ids},
+                                              'neighbor_heads':{i:h for i,h in heads.items()if i not in ids}}]
+            groups.append(group)
+        result=fit_phase(groups,0);fit=result['fits'][0]
+        self.assertEqual(fit['status'],'partial')
+        self.assertEqual(fit['targets'],[1,None,None,None,None,None])
+        proofs=[p for p in fit['native_coordinate_constraints']if p['index']==1]
+        self.assertTrue(any({r['note']for r in p['model']['references']}==set(range(6,12))for p in proofs))
+
     def test_incompatible_neighbors_cannot_erase_an_existing_local_coordinate_constraint(self):
         data=local_scenario();heads=prepare(data,40)['chunks'][0]
         group={'notes':list(range(9)),'targets':[n['target_seconds']for n in data['notes']],
@@ -77,7 +94,7 @@ class NeighborReferenceTest(unittest.TestCase):
             groups=scenario()
             if case=='unmeasured':groups[0]['native_coordinates'][0]['neighbor_heads']={}
             elif case=='other_tempo':groups[1]['bpm']=240
-            elif case=='ambiguous':groups[1]['errors']=[.13]*4
+            elif case=='ambiguous':groups[1]['errors']=[.51]*4
             elif case=='contradictory':groups[0]['native_coordinates'][0]['neighbor_heads'][5]['offset']+=8
             else:
                 groups[0]['native_coordinates'][0]['heads'][3]['offset']=1250

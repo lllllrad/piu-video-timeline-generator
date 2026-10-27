@@ -2,6 +2,7 @@
 import math
 
 from piu_timeline.play.beats.timing import fit_grid
+from piu_timeline.play.beats.coordinates import FORMAT as COORDINATE_FORMAT
 
 
 def signature(fits):
@@ -28,7 +29,11 @@ def fit_groups(groups, phase):
             references=[{'note':i,'target_seconds':unique[i][0],**head}
                         for i,head in block.get('neighbor_heads',{}).items()
                         if i in unique and unique[i][1]==group['bpm']]
-            if references:blocks.append({**block,'references':references})
+            if references:
+                blocks.append({**block,'references':references})
+                radius=COORDINATE_FORMAT['reference_radius_seconds']
+                blocks.append({**block,'references':references,'neighbors_only':True,
+                               'reference_window':[min(group['targets'])-radius,max(group['targets'])+radius]})
         results.append(run(group,blocks))
     # A reference which changed or failed during the second pass cannot prove
     # another group. Propagate invalidation without promoting recovered rows.

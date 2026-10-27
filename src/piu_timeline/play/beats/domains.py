@@ -3,26 +3,27 @@ import math
 
 from piu_timeline.play.beats.coordinates import fit, FORMAT as COORDINATE_FORMAT
 
-FORMAT = {'schema': 1, 'revision': 2, 'references': 'frozen_unique_rows_in_shared_native_block',
-          'measurement_limits': COORDINATE_FORMAT}
+FORMAT = {'schema': 1, 'revision': 3, 'references': 'frozen_unique_rows_in_shared_native_block',
+          'neighbor_reference_window':'beat_group_span_plus_radius','measurement_limits': COORDINATE_FORMAT}
 
 
 def constrain(options, step, origin, blocks):
     """Intersect existing domains; image geometry cannot add a candidate row."""
     result = list(options);proofs = []
     for index, (lo, hi) in enumerate(options):
-        if lo >= hi:
+        if lo > hi:
             continue
         for block in blocks:
             heads = block['heads']
             if index not in heads:
                 continue
             radius = COORDINATE_FORMAT['reference_radius_seconds']
+            window=block.get('reference_window',[origin+lo*step-radius,origin+hi*step+radius])
             references = [dict(r) for r in block.get('references',())
-                          if origin+lo*step-radius <= r['target_seconds'] <= origin+hi*step+radius]
+                          if window[0] <= r['target_seconds'] <= window[1]]
             for peer, head in heads.items():
                 a,b = options[peer]
-                if peer == index or a != b:
+                if peer == index or a != b or block.get('neighbors_only'):
                     continue
                 target = origin+a*step
                 if origin+lo*step-radius <= target <= origin+hi*step+radius:
