@@ -1,9 +1,11 @@
 """Connected-cap coordinates need independent references and a unique match."""
 import unittest
+from copy import deepcopy
 
 import numpy as np
 
-from piu_timeline.play.cap_templates import learn,match,sums
+from piu_timeline.play.cap_templates import learn,match,sums,refine_outlines
+from piu_timeline.play.head_registration import fit_offset
 from tests.play.test_head_registration import patch
 
 
@@ -14,6 +16,51 @@ def reference():
 
 
 class CapTemplateTest(unittest.TestCase):
+    def refinement(self):
+        times=np.arange(10)*.02
+        pixels={'masks':np.array([np.packbits(patch(),axis=-1)]*10),'columns':65,
+                'spacing':34,'times':times,'pts':times+20,'ys':np.full(10,150.)}
+        samples=[{'time':float(t),'source_pts_seconds':float(t+20),'detected_y_pixels':150.,
+                  'offset_pixels':-1. if i<9 else 2.,'patch_center_shift_pixels':0.,
+                  'outer_bounds_in_patch':[15,32,35,34]if i<9 else [15,38,35,28]}
+                 for i,t in enumerate(times)]
+        record={'note':2,'lane':0,**fit_offset(samples)}
+        data={'analysis_width':400,'analysis_height':400,
+              'layout':{'receptor_y':.1,'lanes':[{'x':.3}]}}
+        lookup={(round(float(t),6),0):[i]for i,t in enumerate(times)}
+        return data,pixels,lookup,{0:[reference()]},[record]
+
+    def test_independent_whole_cap_corrects_truncated_contour_without_discarding_frames(self):
+        data,pixels,lookup,banks,records=self.refinement();before=deepcopy(records)
+        self.assertEqual(records[0]['status'],'unresolved')
+        result=refine_outlines(data,pixels,lookup,banks,records,fit_offset)[0]
+        self.assertEqual(records,before)
+        self.assertEqual(result['status'],'registered')
+        self.assertEqual(len(result['observations']),10)
+        corrected=result['observations'][-1]
+        self.assertEqual(corrected['offset_pixels'],-1.)
+        self.assertEqual(corrected['outline_observation'],before[0]['observations'][-1])
+        self.assertEqual(corrected['source_pts_seconds'],20.18)
+        self.assertEqual(corrected['outer_bounds_in_patch'],[15,32,35,34])
+        self.assertNotIn('target_seconds',corrected)
+
+    def test_uncertain_self_referenced_hidden_or_mismatched_pixels_do_not_erase_conflicts(self):
+        for case in ('self','effect','hud','pts','real_shift','shifted_box'):
+            with self.subTest(case=case):
+                data,pixels,lookup,banks,records=self.refinement()
+                if case=='self':banks[0][0]['support'][2]={'note':2}
+                elif case=='hud':data['layout'].update(combo_roi=[.2,.3,.3,.2])
+                elif case=='pts':pixels['pts'][-1]+=1
+                elif case=='effect':
+                    masks=patch();masks[1]=True;pixels['masks'][-1]=np.packbits(masks,axis=-1)
+                elif case=='shifted_box':records[0]['observations'][-1]['outer_bounds_in_patch']=[15,35,35,34]
+                else:
+                    pixels['masks'][-1]=np.packbits(np.roll(patch(),3,axis=1),axis=-1)
+                result=refine_outlines(data,pixels,lookup,banks,records,fit_offset)[0]
+                self.assertEqual(result['status'],'unresolved')
+                self.assertEqual(len(result['observations']),10)
+                self.assertEqual(len(result['conflicting_observations']),1)
+
     def test_connected_body_does_not_move_matching_cap_or_create_a_tap_label(self):
         masks=patch();masks[0,:32,20:45]=True;masks[3,:32,20:45]=True
         result=match(np.packbits(masks,axis=-1),65,34,0,[reference()],2)

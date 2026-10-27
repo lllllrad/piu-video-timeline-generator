@@ -455,9 +455,18 @@ Search bounded native translations, require Dice similarity at least 0.90, and
 reject a competing registration more than 0.75 pixels away unless its similarity
 is at least 0.04 lower. Clip/padding validity and lane-color support still apply.
 The measured offsets must pass the same repeated-frame stability gates as direct
-silhouette measurements. Failed direct registrations are not replaced with a
-more convenient template result. Templates provide coordinates only: matching a
-glyph does not classify a tap or hold, establish body ownership or prove input.
+silhouette measurements. Before fitting, independently learned complete-cap
+templates can also check an isolated outline's measured box. Compression or
+nearby artwork can leave a plausible but truncated white contour whose box does
+not enclose the full glyph. The existing unique template-matching gates must
+prove a complete cap box containing the measured box and at least three pixels
+taller; a merely shifted or differently sized alternative is insufficient.
+Use that complete cap's coordinate and preserve the original outline measurement
+in `outline_observation`. The full matched cap must stay outside HUD, clipping and receptor effects; an
+independent template does not need isolated background margins. Keep every
+source frame in the fit. Missing or ambiguous template proof never removes a
+contradiction, and remaining offset instability still warns. Templates provide coordinates only:
+matching a glyph does not classify a tap or hold, establish body ownership or prove input.
 
 A neighboring-head spacing check selects a pair when the heads are adjacent in
 height. Its common coordinate proof may use every frame where those same two

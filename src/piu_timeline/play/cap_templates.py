@@ -4,10 +4,10 @@ from collections import defaultdict
 import cv2
 import numpy as np
 
-FORMAT={'schema':1,'revision':2,'minimum_independent_heads':2,'cluster_similarity':.94,
+FORMAT={'schema':1,'revision':3,'minimum_independent_heads':2,'cluster_similarity':.94,
         'maximum_clusters_per_lane':128,'maximum_templates_per_lane':12,
         'minimum_similarity':.90,'different_offset_margin':.04,'distinct_offset_pixels':.75,
-        'vertical_search_pixels':4,'horizontal_search_pixels':1}
+        'vertical_search_pixels':4,'horizontal_search_pixels':1,'minimum_truncated_rows':3}
 
 
 def dice(first,second):
@@ -97,7 +97,9 @@ def augment(data,path,records,fit_offset):
         lookup=defaultdict(list)
         for i,(time,lane)in enumerate(zip(pixels['times'],pixels['lanes'],strict=True)):
             lookup[round(float(time),6),int(lane)].append(i)
-        banks=learn(records,pixels,lookup);known={r['note']for r in records};added=[]
+        banks=learn(records,pixels,lookup)
+        records=refine_outlines(data,pixels,lookup,banks,records,fit_offset)
+        known={r['note']for r in records};added=[]
         spacing,columns=float(pixels['spacing']),int(pixels['columns'])
         for ni,note in enumerate(data['notes']):
             if ni in known or not banks.get(note['lane']):continue
@@ -119,3 +121,40 @@ def augment(data,path,records,fit_offset):
                     'support':list(t['support'].values()),'observations':t['count']}
                    for i,t in enumerate(ts)]}for lane,ts in banks.items()]
     return records+added,{'format':FORMAT,'lanes':metadata}
+
+
+def refine_outlines(data,pixels,lookup,banks,records,fit_offset):
+    """A truncated inner contour need not bound the complete canonical cap."""
+    from piu_timeline.play.screen_regions import visible_cap_bounds
+    spacing,columns=float(pixels['spacing']),int(pixels['columns']);result=[]
+    for record in records:
+        samples=[];changed=False
+        for sample in record['observations']:
+            options=[i for i in lookup.get((round(sample['time'],6),record['lane']),[])
+                     if abs(float(pixels['pts'][i])-sample['source_pts_seconds'])<1e-6
+                     and abs(float(pixels['ys'][i])-sample['detected_y_pixels'])<1e-5]
+            proof=None
+            if len(options)==1:
+                i=options[0]
+                proof=match(pixels['masks'][i],columns,spacing,sample['patch_center_shift_pixels'],
+                            banks.get(record['lane'],[]),record['note'])
+            if proof and truncated_outline(sample['outer_bounds_in_patch'],proof['outer_bounds_in_patch']):
+                bounds=visible_cap_bounds(data,record['lane'],sample['detected_y_pixels'],
+                    proof['outer_bounds_in_patch'],(pixels['masks'].shape[2],columns),spacing)
+                if bounds is not None:
+                    sample={**sample,**proof,'support_bounds_pixels':bounds,
+                            'outline_observation':dict(sample),'method':'independent_cap_template'}
+                    changed=True
+            samples.append(sample)
+        if changed:
+            fitted=fit_offset(samples)
+            record={**record,**fitted,'coordinate_method':'isolated_caps_with_independent_templates'}
+        result.append(record)
+    return result
+
+
+def truncated_outline(outline,canonical):
+    """The observed small box must be contained, not merely shifted elsewhere."""
+    x,y,w,h=outline;cx,cy,cw,ch=canonical
+    return (ch-h>=FORMAT['minimum_truncated_rows'] and cx<=x and cy<=y
+            and x+w<=cx+cw and y+h<=cy+ch)

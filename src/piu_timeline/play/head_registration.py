@@ -8,7 +8,7 @@ import numpy as np
 from piu_timeline.play.note_types import cap_envelope, shape
 from piu_timeline.play.cap_templates import FORMAT as TEMPLATE_FORMAT
 
-FORMAT={'schema':1,'revision':5,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':6,'minimum_frames':8,'minimum_span_seconds':.12,
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
         'maximum_offset_spacing':.1,'coordinate_uncertainty_pixels':1.,'cap_templates':TEMPLATE_FORMAT}
 
