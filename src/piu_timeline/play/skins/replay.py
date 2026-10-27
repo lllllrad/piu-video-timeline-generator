@@ -15,7 +15,8 @@ def detector_contract(path):
 
 def detector_metadata(path, bank=None):
     bank = bank or load_bank(path)
-    represented = {(t['lane_kind'], t['role']) for t in bank['templates']}
+    represented = {(t['lane_kind'], t['role']) for t in bank['templates']
+                   if t['role']!='tap' or t['tap_clearance']}
     return {'contract': {'bank': bank['contract'], 'detector': FORMAT},
             'bank_path': str(Path(path).resolve()), 'registration_reviewed': False,
             'reference_images': len(bank['templates']),

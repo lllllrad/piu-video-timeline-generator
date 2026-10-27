@@ -16,7 +16,7 @@ class SkinReplayTest(unittest.TestCase):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);bank=root/'bank';bank.mkdir();items,_=examples(bank)
             media=root/'source.mkv';media.write_bytes(b'unchanged source')
-            image=np.zeros((300,200,3),dtype='uint8');image[50:70,10:30]=items[0][1]
+            image=np.zeros((300,200,3),dtype='uint8');image[40:80,10:30]=items[0][1]
             frames=[{'source_pts_seconds':t+30,'playback_seconds':t,'notes':[],
                      'combo':i+4,'combo_confidence':.95}for i,t in enumerate((1.,1.02))]
             trace=''.join(json.dumps(f)+'\n'for f in frames)

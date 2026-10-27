@@ -5,7 +5,7 @@ import math
 
 from piu_timeline.play.screen_regions import note_occluders
 
-FORMAT = {'schema': 1, 'revision': 2, 'method': 'lane_masked_rgb_regions',
+FORMAT = {'schema': 1, 'revision': 3, 'method': 'lane_masked_rgb_regions',
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25}
 
 
@@ -33,6 +33,7 @@ class SkinDetector:
             mask = cv2.resize(original['mask'].astype('uint8'), size, interpolation=cv2.INTER_NEAREST)
             regions = []
             support = np.zeros(mask.shape, dtype=bool)
+            cap_support = np.zeros(mask.shape, dtype=bool)
             for region in original['regions']:
                 x0, y0, x1, y1 = region['box']
                 box = round(x0 * sx), round(y0 * sy), round(x1 * sx), round(y1 * sy)
@@ -40,9 +41,11 @@ class SkinDetector:
                     raise ValueError('Skin image region vanishes at the analysis scale')
                 regions.append({**region, 'box': box})
                 support[box[1]:box[3],box[0]:box[2]] |= mask[box[1]:box[3],box[0]:box[2]].astype(bool)
+                if region['name']=='cap':
+                    cap_support[box[1]:box[3],box[0]:box[2]] |= mask[box[1]:box[3],box[0]:box[2]].astype(bool)
             self.templates.append({**original, 'rgb': rgb, 'mask': mask,
                                    'anchor': [original['anchor_pixels'][0] * sx, original['anchor_pixels'][1] * sy],
-                                   'regions': regions, 'support': support})
+                                   'regions': regions, 'support': support,'cap_support':cap_support})
 
     def detect(self, rgb):
         if rgb.shape != (self.height, self.width, 3):
@@ -75,18 +78,30 @@ class SkinDetector:
                     errors[region['name']] = error
                     normalized = error / region.get('maximum_error', .015)
                     scores = normalized if scores is None else np.maximum(scores, normalized)
-                allowed = np.isfinite(scores) & (scores <= 1)
+                proposal_scores=scores
+                if 'cap'in errors:
+                    cap=next(r for r in template['regions']if r['name']=='cap')
+                    proposal_scores=errors['cap']/cap.get('maximum_error',.015)
+                allowed = np.isfinite(proposal_scores) & (proposal_scores <= 1)
                 # Keep local image minima; the contour detector is never called.
-                minima = cv2.erode(scores.astype('float32'), np.ones((3, 3), dtype='uint8'))
-                rows, cols = np.nonzero(allowed & (scores <= minima + 1e-7))
+                minima = cv2.erode(proposal_scores.astype('float32'), np.ones((3, 3), dtype='uint8'))
+                rows, cols = np.nonzero(allowed & (proposal_scores <= minima + 1e-7))
                 for row, col in zip(rows, cols, strict=True):
                     x, y = left + col + ax, top + row + ay
                     bounds = [left + int(col), top + int(row), left + int(col) + w, top + int(row) + h]
-                    if occluded_support(self.layout,template['support'],bounds[0],bounds[1],self.width,self.height):
+                    hidden=occluded_support(self.layout,template['support'],bounds[0],bounds[1],self.width,self.height)
+                    position_support=template['cap_support']if 'cap'in errors else template['support']
+                    if occluded_support(self.layout,position_support,bounds[0],bounds[1],self.width,self.height):
                         continue
+                    cap_only='cap'in errors and (hidden or scores[row,col]>1
+                                or template['role']=='tap' and not template['tap_clearance'])
                     candidates.append({'lane': lane, 'x': x / self.width, 'y': y / self.height,
-                                       'role': template['role'], 'template': template['id'],
-                                       'quality': float(1 - scores[row, col]),
+                                       'role': 'unknown'if cap_only else template['role'], 'template': template['id'],
+                                       'template_role':template['role'],
+                                       'classification_status':'cap_only'if cap_only else'full_pattern',
+                                       **({'reason':'skin_tap_clearance_unresolved'if template['role']=='tap'
+                                           else'skin_image_connection_unresolved'}if cap_only else{}),
+                                       'quality': float(1 - (proposal_scores[row,col]if cap_only else scores[row, col])),
                                        'region_errors': {name: float(values[row, col]) for name, values in errors.items()},
                                        'bounds_pixels': bounds, 'method': 'skin_image', 'skin': self.bank['skin']})
         return self.resolve(candidates)
@@ -101,15 +116,17 @@ class SkinDetector:
                 retained.append({**candidate, 'alternatives': []})
                 continue
             current = peers[0]
-            proof = {k: candidate[k] for k in ('role', 'template', 'quality', 'region_errors')}
+            fields=('role','template_role','classification_status','template','quality','region_errors',
+                    'x','y','bounds_pixels')
+            proof = {k: candidate[k] for k in fields}
             current['alternatives'].append(proof)
-            endpoints = {r['role'] for r in [current, candidate]} & {'hold_start', 'hold_end'}
-            if len(endpoints) > 1:
-                current.update(role='unknown', reason='competing_hold_endpoint_images')
-            elif endpoints and current['role'] == 'tap':
-                # A complete endpoint image includes its own cap AND connection.
-                # A cap-only tap match cannot erase that additional evidence.
-                alternatives = [{k: current[k] for k in ('role', 'template', 'quality', 'region_errors')},
+            full={r['template_role']for r in (current,candidate)if r['classification_status']=='full_pattern'}
+            full.update(current.get('conflicting_roles',[]))
+            if len(full)>1:
+                current.update(role='unknown',classification_status='conflict',
+                               reason='contradictory_skin_role_images',conflicting_roles=sorted(full))
+            elif current['classification_status']=='cap_only' and candidate['classification_status']=='full_pattern':
+                alternatives = [{k: current[k] for k in fields},
                                 *[r for r in current['alternatives'] if r is not proof]]
-                current.update(candidate, alternatives=alternatives)
+                current.clear();current.update(candidate, alternatives=alternatives)
         return sorted(retained, key=lambda r: (r['lane'], r['y']))

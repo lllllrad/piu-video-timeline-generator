@@ -18,11 +18,17 @@ def observe(data, native):
                 continue
             image = matches[0]
             role = image['role']
-            observations.append({'kind': 'tap' if role == 'tap' else 'hold' if role in ('hold_start', 'hold_end') else 'unknown',
-                                 'role': role, 'reason': 'skin_image_' + role, 'source_note': index,
+            for observed_role in image.get('conflicting_roles',[role]):
+                proof=next((p for p in [image,*image.get('alternatives',[])]
+                            if p.get('template_role',p['role'])==observed_role
+                            and p.get('classification_status','full_pattern')in('full_pattern','conflict')),image)
+                observations.append({'kind': 'tap' if observed_role == 'tap' else 'hold' if observed_role in ('hold_start', 'hold_end') else 'unknown',
+                                 'role': observed_role, 'reason': image.get('reason','skin_image_' + role), 'source_note': index,
                                  'playback_seconds': time, 'source_pts_seconds': frame['source_pts_seconds'],
-                                 'trace': 'frames.jsonl', 'template': image['template'], 'skin': image['skin'],
-                                 'region_errors': image['region_errors'], 'bounds_pixels': image['bounds_pixels']})
+                                 'trace': 'frames.jsonl', 'template': proof['template'], 'skin': image['skin'],
+                                 'region_errors': proof['region_errors'], 'bounds_pixels': proof.get('bounds_pixels',image['bounds_pixels']),
+                                 'image_anchor':[proof.get('x',image.get('x')),proof.get('y',image.get('y'))],
+                                 'image_alternatives':image.get('alternatives',[])})
         kinds = {o['kind'] for o in observations} - {'unknown'}
         records.append({'note': index, 'status': 'conflict' if len(kinds) > 1 else next(iter(kinds)) if kinds else 'unknown',
                         'observations': observations})
@@ -36,13 +42,15 @@ def tail_roles(data):
     result = []
     for record in data.get('visual_channels', {}).get('note_types', {}).get('notes', []):
         observations = record['observations']
-        if not observations or {o.get('role') for o in observations} != {'hold_end'}:
+        roles={o.get('role')for o in observations}-{'unknown'}
+        if not observations or roles != {'hold_end'}:
             continue
+        supported=[o for o in observations if o.get('role')=='hold_end']
         index = record['note']
         result.append({'tail_note': index, 'head_note': None, 'lane': data['notes'][index]['lane'],
                        'status': 'observed_image_tail_timing_unresolved',
-                       'visible_start_seconds': min(o['playback_seconds'] for o in observations),
-                       'visible_end_seconds': max(o['playback_seconds'] for o in observations),
-                       'source_pts_seconds': [o['source_pts_seconds'] for o in observations],
-                       'image_evidence': observations})
+                       'visible_start_seconds': min(o['playback_seconds'] for o in supported),
+                       'visible_end_seconds': max(o['playback_seconds'] for o in supported),
+                       'source_pts_seconds': [o['source_pts_seconds'] for o in supported],
+                       'image_evidence': supported})
     return result

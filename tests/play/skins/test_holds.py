@@ -56,6 +56,11 @@ class ImageHoldTest(unittest.TestCase):
         roles=tail_roles(data)
         self.assertEqual([r['tail_note']for r in roles],[1])
         self.assertTrue(roles[0]['image_evidence'])
+        native[1]['skin_observations'][1]['role']='unknown'
+        data['visual_channels']['note_types']=observe(data,native)
+        partial=tail_roles(data)
+        self.assertEqual([r['tail_note']for r in partial],[1])
+        self.assertEqual(len(partial[0]['image_evidence']),9)
         native[0]['skin_observations'][1]['role']='tap'
         data['visual_channels']['note_types']=observe(data,native)
         self.assertEqual(tail_roles(data),[])

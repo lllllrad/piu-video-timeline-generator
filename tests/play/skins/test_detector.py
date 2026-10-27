@@ -20,7 +20,9 @@ def examples(root):
     body = np.full((12, 8, 3), [25, 140, 210], dtype='uint8')
     start = np.zeros((35, 20, 3), dtype='uint8'); start[:20] = cap; start[20:, 6:14] = body[0]
     end = np.zeros((35, 20, 3), dtype='uint8'); end[15:] = cap; end[:15, 6:14] = body[0]
-    items = [('tap', cap, [10, 10], [{'name':'cap','box':[0,0,20,20]}]),
+    tap=np.pad(cap,((10,10),(0,0),(0,0)))
+    items = [('tap', tap, [10, 20], [{'name':'cap','box':[0,10,20,30]},
+              {'name':'clear_above','box':[6,0,14,8]},{'name':'clear_below','box':[6,32,14,40]}]),
              ('hold_start', start, [10, 10], [{'name':'cap','box':[0,0,20,20]}, {'name':'connection','box':[6,22,14,35]}]),
              ('hold_end', end, [10, 25], [{'name':'cap','box':[0,15,20,35]}, {'name':'connection','box':[6,0,14,12]}]),
              ('hold_body', body, [4, 6], [{'name':'body','box':[0,0,8,12]}])]
@@ -40,6 +42,51 @@ def examples(root):
 
 
 class SkinDetectorTest(unittest.TestCase):
+    def test_cap_only_reference_or_changed_context_keeps_position_without_asserting_a_tap(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);items,manifest=examples(root)
+            manifest['templates']=manifest['templates'][:1]
+            layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1,'color':'blue'}for i in range(5)]}
+            for case in ('missing_clearance','changed_background'):
+                spec=deepcopy(manifest)
+                image=np.zeros((300,200,3),dtype='uint8');image[40:80,10:30]=items[0][1]
+                if case=='missing_clearance':spec['templates'][0]['regions']=spec['templates'][0]['regions'][:1]
+                else:image[40:48,16:24]=[25,140,210]
+                (root/'bank.json').write_text(json.dumps(spec))
+                result=SkinDetector(load_bank(root/'bank.json'),layout,200,300).detect(image)
+                at_cap=[r for r in result if abs(r['y']*300-60)<1e-6]
+                with self.subTest(case=case):
+                    self.assertEqual(len(at_cap),1)
+                    self.assertEqual(at_cap[0]['role'],'unknown')
+                    self.assertEqual(at_cap[0]['classification_status'],'cap_only')
+                    self.assertEqual(at_cap[0]['reason'],'skin_tap_clearance_unresolved')
+
+    def test_contradictory_complete_tap_and_end_references_remain_a_type_conflict(self):
+        from piu_timeline.play.skins.observations import observe,tail_roles
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);items,manifest=examples(root)
+            reference=np.pad(items[2][1],((0,10),(0,0),(0,0)))
+            cv2.imwrite(str(root/'tap.png'),np.dstack([reference[:,:,::-1],np.full(reference.shape[:2],255,dtype='uint8')]))
+            manifest['templates'][0].update(anchor_pixels=[10,25],regions=[
+                {'name':'cap','box':[0,15,20,35],'maximum_error':.001},
+                {'name':'clear_above','box':[6,0,14,12],'maximum_error':.001},
+                {'name':'clear_below','box':[6,37,14,45],'maximum_error':.001}])
+            (root/'bank.json').write_text(json.dumps(manifest))
+            layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1,'color':'blue'}for i in range(5)]}
+            image=np.zeros((300,200,3),dtype='uint8');image[90:125,10:30]=items[2][1]
+            found=SkinDetector(load_bank(root/'bank.json'),layout,200,300).detect(image)
+            end=next(o for o in found if abs(o['y']*300-115)<1e-6 and o['role']!='hold_body')
+            self.assertEqual(end['role'],'unknown')
+            self.assertEqual(set(end['conflicting_roles']),{'tap','hold_end'})
+            data={'analysis_width':200,'analysis_height':300,'skin_detector':{'contract':{}},
+                  'notes':[{'lane':0,'points':[[1.,115.]]}]}
+            records=observe(data,[{'playback_seconds':1.,'source_pts_seconds':31.,'skin_observations':[end]}])
+            self.assertEqual(records['notes'][0]['status'],'conflict')
+            self.assertEqual({o['role']:o['template']for o in records['notes'][0]['observations']},
+                             {'tap':'tap','hold_end':'hold_end'})
+            data['visual_channels']={'note_types':records}
+            self.assertEqual(tail_roles(data),[])
+
     def test_transparent_padding_cannot_hide_clear_cap_and_connection_pixels(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);items,_=examples(root);bank=load_bank(root/'bank.json')

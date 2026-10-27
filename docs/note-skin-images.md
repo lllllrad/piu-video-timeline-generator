@@ -27,6 +27,14 @@ A large matching cap cannot average away a contradictory small connection.
 The default error limit is 0.015 in RGB values normalized to 0..1; a bank may
 require a stricter limit. This is an appearance metric, not a timing allowance.
 
+A confirmed tap additionally requires `clear_above` and `clear_below` image
+regions outside the cap. A cap-only reference still locates candidates, but
+cannot distinguish a tap from a hold boundary. Missing, hidden or mismatching
+context therefore retains the position with `role: unknown` and
+`classification_status: cap_only`. Failed connection comparisons on endpoint
+images work the same way. Unknown context does not assert a tap or a background
+gap. Its reason and all region comparisons remain in the source observation.
+
 Scale references using measured lane spacing. Preserve horizontal and vertical
 image transforms separately. The builder resizes the complete source image
 before cropping: resizing an odd-origin crop independently changes pixel
@@ -40,8 +48,11 @@ regions do not make an otherwise clear cap or connection hidden. Every supported
 pixel still has to be outside HUD; both cap and connection checks remain mandatory.
 Local image minima supply candidate positions. Nearby matches from the same
 role are deduplicated. A complete end pattern has additional connection evidence
-that a cap-only tap match lacks; retain the end and both image comparisons.
-Competing start/end patterns remain unknown. No input effect establishes an
+that a cap-only candidate lacks; retain the end and both image comparisons.
+Contradictory complete tap/hold patterns remain a type conflict, including both
+source-frame interpretations. Unknown frames do not erase a positively observed
+tail role, while an actual tap or competing start observation prevents automatic
+ownership. Competing start/end patterns remain unknown. No input effect establishes an
 image role. Unsupported transparency, background overlap, clipping and
 unrepresented animation phases can still produce missing or ambiguous matches.
 

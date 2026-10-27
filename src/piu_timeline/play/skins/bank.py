@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 
 ROLES = ('tap', 'hold_start', 'hold_body', 'hold_end')
-FORMAT = {'schema': 1, 'revision': 1, 'measurement': 'masked_rgb_regions'}
+FORMAT = {'schema': 1, 'revision': 2, 'measurement': 'masked_rgb_regions'}
 
 
 def finite_number(value):
@@ -62,8 +62,16 @@ def load_bank(path):
             if ((entry['role'] == 'hold_start' and connection[1] <= anchor[1])
                     or (entry['role'] == 'hold_end' and connection[3] > anchor[1])):
                 raise ValueError('Hold start connection must be below its anchor; hold end connection must be above')
+        clearance={'clear_above','clear_below'} & names
+        if entry['role']=='tap' and clearance:
+            if clearance!={'clear_above','clear_below'}:
+                raise ValueError('A tap needs both upper and lower clearance regions')
+            boxes={r['name']:r['box']for r in regions}
+            if boxes['clear_above'][3]>boxes['cap'][1] or boxes['clear_below'][1]<boxes['cap'][3]:
+                raise ValueError('Tap clearance regions must be outside the cap image')
         fingerprint.update(image_path.read_bytes())
-        templates.append({**entry, 'rgb': rgb, 'mask': mask, 'regions': regions})
+        templates.append({**entry, 'rgb': rgb, 'mask': mask, 'regions': regions,
+                          'tap_clearance':entry['role']=='tap' and bool(clearance)})
     if not templates:
         raise ValueError('Skin bank contains no image templates')
     return {'skin': document['skin'], 'spacing_pixels': spacing, 'templates': templates,
