@@ -6,7 +6,7 @@ from piu_timeline.play.holds.state import recognition_segments, recognition_wind
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 6, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 7, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -71,6 +71,28 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
             if max(gaps) - min(gaps) > 2:
                 continue
             proposals.append((head, tail, proof, missing)); heads[head].add(tail); tails[tail].add(head)
+    from piu_timeline.play.skins.temporal import temporal_pairs
+    existing={(head,tail):(proof,missing)for head,tail,proof,missing in proposals}
+    temporal=temporal_pairs(data,native,roles,references,cap_references)
+    for pair in temporal['pairs']:
+        head,tail=pair['head'],pair['tail']
+        if (head,tail)in existing:
+            proof,missing=existing[head,tail];times={p['time']for p in pair['proof']}
+            proof[:]=sorted([*[p for p in proof if p['time']not in times],*pair['proof']],key=lambda p:p['time'])
+            missing.extend(pair['missing'])
+        else:proposals.append((head,tail,pair['proof'],pair['missing']))
+        heads[head].add(tail);tails[tail].add(head)
+    refuted={(p['head'],p['tail'])for p in temporal['refuted']}
+    proposals=[p for p in proposals if p[:2]not in refuted]
+    heads,tails=defaultdict(set),defaultdict(set)
+    for head,tail,_,_ in proposals:heads[head].add(tail);tails[tail].add(head)
+    for pair in temporal['refuted']:
+        evidence=pair['evidence'];head=pair['head']
+        diagnostics.append({'note':head,'lane':data['notes'][head]['lane'],'reason':'unresolved_hold_geometry',
+                            'failure_detail':'skin_hold_interior_note_conflict','tail_note':pair['tail'],
+                            'visible_start_seconds':min(p['time']for p in evidence),
+                            'visible_end_seconds':max(p['time']for p in evidence),
+                            'observed_points':len({p['time']for p in evidence}),'image_evidence':evidence})
     holds, represented = [], set()
     for head, tail, proof, missing in proposals:
         if len(heads[head]) != 1 or len(tails[tail]) != 1:
@@ -83,11 +105,13 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                       'head_observation_note': head, 'tail_observation_note': tail,
                       'covered_notes': [head, tail], 'start_range': bounds(first), 'end_range': bounds(last),
                       'start_censored': False, 'end_censored': False, 'last_body_seconds': proof[-1]['time'],
-                      'body_frames': len(proof), 'body_evidence': 'skin_start_body_end_images',
+                      'body_frames': len({p['time']for p in proof}),
+                      'body_evidence': 'skin_temporal_image_regions'if any('covered_bounds_pixels'in p for p in proof)else'skin_start_body_end_images',
                       'source_pts_range': [proof[0]['source_pts'], proof[-1]['source_pts']],
                       'image_connection_evidence': proof,
                       'component_evidence': {str(i): {'kind': 'registered_cap',
-                          'source_pts_seconds': [p['source_pts'] for p in proof]} for i in (head, tail)}})
+                          'source_pts_seconds': sorted({p['source_pts'] for p in proof
+                              if ('head_y'if i==head else'tail_y')in p})} for i in (head, tail)}})
         represented.update((head, tail))
         if missing:
             diagnostics.append({'note': head, 'lane': first['lane'], 'reason': 'unresolved_hold_geometry',
@@ -95,7 +119,7 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                                 'hold': holds[-1]['id'], 'tail_note': tail,
                                 'visible_start_seconds': missing[0]['time'],
                                 'visible_end_seconds': missing[-1]['time'],
-                                'observed_points': len(missing), 'image_evidence': missing})
+                                'observed_points': len({p['time']for p in missing}), 'image_evidence': missing})
     for record in records:
         index = record['note']
         if index in represented or not roles[index] & {'hold_start', 'hold_end'}:
@@ -109,7 +133,8 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
     accounted = defaultdict(list)
     for hold in holds:
         for point in hold['image_connection_evidence']:
-            accounted[hold['lane'], point['time']].append((point['head_y'],point['tail_y']))
+            accounted[hold['lane'], point['time']].append(
+                point['covered_bounds_pixels']if 'covered_bounds_pixels'in point else(point['head_y'],point['tail_y']))
     pending_bodies = defaultdict(list)
     for frame in native:
         for image in frame.get('skin_observations', []):

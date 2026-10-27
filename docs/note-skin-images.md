@@ -78,9 +78,24 @@ the native trace. Conflicting tap/hold observations remain conflicts.
 
 A complete end image supplies a tail role without inventing a tap or a press at
 that location. It remains a warning when complete hold geometry is unresolved.
-For image-based holds, start/end identities and directly matched body tiles must
-cover the intervening image interval in at least four frames spanning 65 ms and
-half a lane spacing of motion. Coverage uses rows with actual compared alpha
+Image-based holds require positive start/end identities and connected body
+image evidence. Short intervals can have complete coverage in at least four
+frames spanning 65 ms and half a lane spacing of motion. A long interval can
+instead connect positive image regions through consecutive source frames;
+its start and end need not be visible together. This path requires body-tile
+support in at least four distinct frames spanning 65 ms, and a measured cap
+approach of at least half a lane spacing.
+
+Temporal edges use registered frame displacement, or agreeing observations of
+identified caps. Missing motion, failed coordinate registration, a source-frame
+gap over 50 ms, competing endpoint identities or a positive tap inside the body
+prevent that connection. No fixed scroll speed, interpolated image or input
+label supplies body evidence. Regions retain source PTS, measured row bounds
+and graph edges. Their bounds describe positive compared rows, not a filled
+interval in every frame. Previously positive rows that lose clear support stay
+warnings; only documented foreground HUD footprints can explain those losses.
+
+ Coverage uses rows with actual compared alpha
 support in the acquired reference bank, preserving unsupported internal gaps.
 A template canvas rectangle cannot bridge padding or uncompared rows. The bank
 identity must match the native observations; changed references fail explicitly.

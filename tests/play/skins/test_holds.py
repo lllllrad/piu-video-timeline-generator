@@ -57,7 +57,8 @@ class ImageHoldTest(unittest.TestCase):
         warnings=[]
         holds=reconstruct_images(data,receptors,native,warnings)
         self.assertEqual(len(holds),1)
-        self.assertEqual(len(holds[0]['image_connection_evidence']),8)
+        evidence=holds[0]['image_connection_evidence']
+        self.assertEqual(sum('head_y'in p and 'tail_y'in p for p in evidence),8)
         self.assertEqual(warnings[0]['failure_detail'],
                          'known_hold_image_connection_not_observed_in_clear_frames')
         self.assertEqual(warnings[0]['observed_points'],2)
@@ -78,8 +79,11 @@ class ImageHoldTest(unittest.TestCase):
         data,native,receptors=scenario();native[3]['skin_observations'].pop()
         warnings=[];holds=reconstruct_images(data,receptors,native,warnings)
         self.assertEqual(len(holds),1)
-        self.assertEqual(len(holds[0]['image_connection_evidence']),9)
-        self.assertEqual(warnings[0]['image_evidence'],[{'time':.06,'source_pts':30.06}])
+        from piu_timeline.play.skins.holds import covered
+        at_missing=[p['covered_bounds_pixels']for p in holds[0]['image_connection_evidence']if p['time']==.06]
+        self.assertFalse(covered(94,154,at_missing))
+        self.assertEqual(warnings[0]['observed_points'],1)
+        self.assertTrue(all(p['time']==.06 and p['source_pts']==30.06 for p in warnings[0]['image_evidence']))
         for frame in native:frame['skin_observations']=frame['skin_observations'][:2]
         self.assertEqual(reconstruct_images(data,receptors,native,[]),[])
 
@@ -127,7 +131,7 @@ class ImageHoldTest(unittest.TestCase):
             body=deepcopy(frame['skin_observations'][-1]);body['y']+=.4
             body['bounds_pixels']=[body['bounds_pixels'][0],body['bounds_pixels'][1]+120,
                                    body['bounds_pixels'][2],body['bounds_pixels'][3]+120]
-            body['alternatives']=[{'template':'native_only_detail','role':'hold_body','classification_status':'full_pattern'}]
+            body['alternatives']=[{**deepcopy(body),'classification_status':'full_pattern','marker':'native_only_detail'}]
             frame['skin_observations'].append(body)
         warnings=[];holds=reconstruct_images(data,receptors,native,warnings)
         self.assertEqual(len(holds),1)
@@ -137,7 +141,16 @@ class ImageHoldTest(unittest.TestCase):
         self.assertTrue(all(p['y']>.65 for p in warnings[0]['image_evidence']))
         self.assertTrue(all(p['trace']=='frames.jsonl'and 'alternatives'not in p
                             for p in warnings[0]['image_evidence']))
-        self.assertEqual(native[0]['skin_observations'][-1]['alternatives'][0]['template'],'native_only_detail')
+        self.assertEqual(native[0]['skin_observations'][-1]['alternatives'][0]['marker'],'native_only_detail')
+
+    def test_interior_tap_refutes_a_common_frame_proposal_as_well_as_temporal_connections(self):
+        data,native,receptors=scenario();image=deepcopy(native[3]['skin_observations'][0])
+        image.update(role='tap',template='tap',y=124/300,bounds_pixels=[10,114,30,134])
+        native[3]['skin_observations'].append(image)
+        data['notes'].append({'lane':0,'points':[[.06,124]],'status':'excluded','target_seconds':None})
+        warnings=[]
+        self.assertEqual(reconstruct_images(data,receptors,native,warnings),[])
+        self.assertTrue(any(w['failure_detail']=='skin_hold_interior_note_conflict'for w in warnings))
 
     def test_a_tail_image_needs_no_tap_or_input_at_its_cap_and_conflicts_stay_explicit(self):
         data,native,_=scenario();data['visual_channels']={'note_types':observe(data,native)}
