@@ -49,6 +49,33 @@ class ImageHoldTest(unittest.TestCase):
         self.assertEqual(warnings,[])
         self.assertEqual((data,native,receptors),original)
 
+    def test_dim_receptor_pulse_needs_independent_image_geometry_and_positive_hud_evidence(self):
+        data,native,_=scenario()
+        receptors=[{'playback_seconds':i*.02,'source_pts_seconds':30+i*.02,
+                    'receptor_lit':[False]*5,'receptor_white_fraction':[.1]*5,
+                    'common_receptor_flash':False}for i in range(100)]
+        receptors[50]['receptor_white_fraction'][0]=.5
+        data['judgment_events']=[{'label':'PERFECT','lower_seconds':.99,'upper_seconds':1.01}]
+        holds=reconstruct_images(data,receptors,native,[])
+        self.assertEqual(len(holds),1)
+        support=holds[0]['input']
+        self.assertEqual(support['recognition_envelope'],[1.,1.])
+        self.assertEqual(support['segments'][0]['first_source_pts_seconds'],31.)
+        self.assertEqual(support['segments'][0]['corroborating_updates'][0]['kind'],'judgment_events')
+        self.assertIsNone(support['press_range'])
+        for case in ('miss','common_flash','wrong_lane','outside_hold'):
+            d,r=deepcopy(data),deepcopy(receptors)
+            if case=='miss':d['judgment_events'][0]['label']='MISS'
+            elif case=='common_flash':r[50]['common_receptor_flash']=True
+            elif case=='wrong_lane':r[50]['receptor_white_fraction']=[.1,.5,.1,.1,.1]
+            else:
+                r[50]['receptor_white_fraction'][0]=.1;r[25]['receptor_white_fraction'][0]=.5
+                d['judgment_events'][0].update(lower_seconds=.49,upper_seconds=.51)
+                # Legacy color contact cannot establish an image hold here.
+                r[25]['bodies']=[{'lane':0,'top':0,'bottom':300}]
+            with self.subTest(case=case):
+                self.assertEqual(reconstruct_images(d,r,native,[])[0]['input']['segments'],[])
+
     def test_unknown_context_keeps_positive_endpoints_without_erasing_real_role_conflicts(self):
         data,native,receptors=scenario()
         for index in (2,6):

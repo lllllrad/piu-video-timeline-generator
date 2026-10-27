@@ -143,6 +143,10 @@ Body ownership is limited to the established endpoint interval in each source
 frame. Another body image elsewhere in the same lane and frame remains
 unresolved; a valid hold cannot account for the entire lane.
 Receptor observations attach held-state evidence only after geometry exists.
+A dim lane-local receptor change can use a nearby positive combo/judgment
+update as corroboration inside the certain image-hold interval. Common flashes,
+MISS updates and legacy color-body detections cannot supply that support.
+It remains sustained recognition, without a new press or release timestamp.
 
 New banks currently remain explicitly uncalibrated for UCS export. An image
 location is useful acquisition evidence but does not prove that its anchor

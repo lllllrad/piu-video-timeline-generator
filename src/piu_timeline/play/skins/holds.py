@@ -2,11 +2,11 @@
 from collections import defaultdict
 
 from piu_timeline.play.holds.geometry import HoldGeometry
-from piu_timeline.play.holds.state import recognition_segments, recognition_window
+from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 8, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 9, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -152,6 +152,8 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                                                for t, pts, image in observations]})
     geometry = HoldGeometry.from_analysis(data, 325)
     times = [f['playback_seconds'] for f in receptor_frames]
+    contextual = contextual_hold_support(data, receptor_frames, geometry.receptor, geometry.spacing,
+                                        holds, require_hold_geometry=True)
     for hold in holds:
-        hold['input'] = recognition_segments(receptor_frames, times, hold, {}, recognition_window(data, hold, geometry))
+        hold['input'] = recognition_segments(receptor_frames, times, hold, contextual, recognition_window(data, hold, geometry))
     return holds

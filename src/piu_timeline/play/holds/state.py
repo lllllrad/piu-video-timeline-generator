@@ -31,10 +31,11 @@ def recognition_window(data, hold, geometry):
     return [lower, max(lower, upper)]
 
 
-def contextual_hold_support(data, frames, receptor, spacing, holds=()):
+def contextual_hold_support(data, frames, receptor, spacing, holds=(), *, require_hold_geometry=False):
     """Recover dim hold pulses using local change, body contact and a HUD update.
 
-    These observations support an already reconstructed hold only. They never
+    Image acquisition requires established hold geometry; legacy color-body
+    contact cannot corroborate its receptor evidence. These observations never
     become tap onsets or a physical press/release measurement.
     """
     times = [frame['playback_seconds'] for frame in frames]
@@ -67,7 +68,7 @@ def contextual_hold_support(data, frames, receptor, spacing, holds=()):
             others = [score for li, score in enumerate(values) if li != lane]
             if value-baseline < .16 or value-float(np.median(others)) < .2:
                 continue
-            body_contact = any(body['lane'] == lane and body['top'] <= receptor+.8*spacing
+            body_contact = not require_hold_geometry and any(body['lane'] == lane and body['top'] <= receptor+.8*spacing
                                and body['bottom'] >= receptor+.6*spacing for body in frame['bodies'])
             # Geometry was resolved from neighboring source frames, independently
             # of this pulse. Require the certain interior, not an uncertain cap
