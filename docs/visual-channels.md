@@ -90,6 +90,20 @@ a body disappearing does not measure a release or establish its chart end.
 
 ## Using the channels
 
+Body masks retain the IDs of their original colored connected components,
+before white-border or known-HUD bridging. IDs are local to one native source
+frame, lane and feature trace; they are not stable across frames or recordings.
+Each body also retains its actual foreground bounding box. Accepted holds and
+unresolved body tracks retain every frame's component IDs, bounds, original PTS
+and playback time in `native_component_evidence`.
+
+This provenance distinguishes a duplicate interpretation from a candidate that
+also includes additional cap/body pixels. It does not establish cap ownership
+or suppress unresolved geometry by itself. A time/lane overlap, shared subset
+or similarly moving boundary cannot explain extra foreground. Replaying body
+rules regenerates this metadata from compatible native masks, without decoding
+source media or changing the original frame observations.
+
 `play/channels.py` supplies common receptor access, frame alignment checks,
 channel collection and match provenance. `play/processing.py` supplies native
 spatial measurements and bounded disappearance support. Acquisition and

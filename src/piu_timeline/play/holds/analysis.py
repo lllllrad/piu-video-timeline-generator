@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 32}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 33}
 
 
 def fingerprint(value):
@@ -23,6 +23,9 @@ def reconstruct(data, frames, diagnostics=None):
     continuity = CapContinuity(data, frames, geometry)
     holds = []
     for track in body_tracks(frames, geometry.spacing):
+        native_components=[{'source_pts_seconds':p['pts'],'playback_seconds':p['time'],
+                            'components':p.get('source_components',[]),'bounds':p.get('foreground_bounds')}
+                           for p in track]
         hold = resolve_geometry(data, track, geometry)
         connection = continuity.check(track)
         if connection and connection['decision'] == 'disconnected_caps':
@@ -40,10 +43,12 @@ def reconstruct(data, frames, diagnostics=None):
                 diagnostics.append({'lane': track[0]['lane'], 'reason': 'unresolved_hold_geometry',
                                     'visible_start_seconds': track[0]['time'], 'visible_end_seconds': track[-1]['time'],
                                     'source_pts_range': [track[0]['pts'], track[-1]['pts']],
+                                    'native_component_evidence':native_components,
                                     'cap_continuity': connection,
                                     'cap_evidence': cap_evidence, 'observed_points': len(track)})
             continue
         hold['id'] = len(holds)
+        hold['native_component_evidence']=native_components
         retain_hold(holds, hold)
     contextual = contextual_hold_support(data, frames, geometry.receptor, geometry.spacing, holds)
     for hold in holds:

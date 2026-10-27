@@ -8,7 +8,7 @@ import numpy as np
 
 from piu_timeline.play.frames import decode_frames
 
-FEATURE_FORMAT = {'schema': 1, 'detector_revision': 9, 'width': 325,
+FEATURE_FORMAT = {'schema': 1, 'detector_revision': 10, 'width': 325,
                   'continuity': 'three_row_strong_and_relaxed_color_columns',
                   'processing_pixels': 'lane_color_white_and_visibility_masks_v1'}
 
@@ -86,6 +86,7 @@ def detect_body_masks(planes, layout, connections=None):
         lit.append(float(white[ry1:ry2, rx1:rx2].mean()) > .55)
         mask = planes['body_'+lane['color']][top:bottom, left:right].astype('uint8')
         original_mask = mask.copy()
+        _,source_labels=cv2.connectedComponents(original_mask,connectivity=8)
         if connections is not None:
             relaxed = planes['relaxed_'+lane['color']][top:bottom, left:right]
             connections.append(connector_rows(original_mask, top, spacing, relaxed))
@@ -119,7 +120,10 @@ def detect_body_masks(planes, layout, connections=None):
                 def in_hud(edge):
                     return any(rx*width <= cx <= (rx+rw)*width and ry*height <= edge <= (ry+rh)*height
                                for rx, ry, rw, rh in ui_regions(layout))
+                source_ids=np.unique(source_labels[y:y+h,x:x+w][labels[y:y+h,x:x+w]==component])
                 bodies.append({'lane': index, 'top': float(y + top), 'bottom': float(y + top + h),
+                               'source_components':[int(i)for i in source_ids if i],
+                               'foreground_bounds':[int(left+x),int(top+y),int(left+x+w),int(top+y+h)],
                                'edge_convention': 'connected_color', 'white_cap_bridge': white_bridge,
                                'top_visible': bool(not in_hud(y+top) and y+top > receptor+.3*spacing),
                                'long': bool(h > 1.6 * spacing),
