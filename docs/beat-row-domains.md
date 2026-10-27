@@ -147,8 +147,10 @@ final validated recovery retires the corresponding beat-failure warning;
 unrelated motion, input and visibility warnings remain. An ambiguous beat
 assignment can use the same external references, but must intersect the native
 prediction with its original clock interval before selecting a row. An empty
-intersection or several remaining rows fails explicitly. Other beat failures
-do not qualify for this path.
+intersection or several remaining rows fails explicitly. Spacing and concurrent-cap
+conflicts can also request the independent external-row proof; their entire
+measure is excluded from references and the recovered assignment must pass both
+checks again. Other beat failures do not qualify for this path.
 
 Validate known rows for spacing and concurrency before freezing recovery
 references. A row which already failed either check cannot train recovery.

@@ -26,7 +26,8 @@ def prepare(data,spacing,include_failed=False):
             if index not in observed:continue
             note=data['notes'][index]
             if note['status']!='estimated'and not(include_failed and note.get('reason')in
-                    ('shared_timing_reconstruction_failed','beat_timing_reconstruction_failed')):continue
+                    ('shared_timing_reconstruction_failed','beat_timing_reconstruction_failed',
+                     'beat_grid_conflicts_with_spatial_spacing','beat_grid_conflicts_with_native_chord')):continue
             points=[(t,y)for t,y in note['points']if t in observed[index]and t in samples
                     and samples[t]['chunk']==number and receptor+.85*spacing<y<bottom-.55*spacing]
             if len(points)<4 or points[-1][0]-points[0][0]<.065:continue

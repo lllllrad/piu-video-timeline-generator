@@ -26,6 +26,24 @@ def scenario():
 
 
 class RejectedClockRecoveryTest(unittest.TestCase):
+    def test_spacing_and_chord_failures_require_independent_external_rows(self):
+        for reason in ('beat_grid_conflicts_with_spatial_spacing','beat_grid_conflicts_with_native_chord'):
+            with self.subTest(reason=reason):
+                data,groups=scenario();note=data['notes'][4]
+                note['reason']=reason;note['beat_reconstruction']['reason']=reason
+                support=prepare(data,40,include_failed=True)
+                proof=recover(data['notes'],support,[(0,4,120)],0,0,0,groups,[0,0])[4]
+                self.assertEqual(note['target_seconds'],1.5)
+                self.assertEqual(proof['source_failure'],reason)
+                self.assertEqual(proof['excluded_reference_group'],[3,4,5])
+                self.assertEqual(note['timing_reconstruction']['rejected_beat_assignment']['reason'],reason)
+                data,groups=scenario();note=data['notes'][4]
+                note['reason']=reason;note['beat_reconstruction']['reason']=reason
+                for group in groups[1:]:
+                    group['unconstrained_row_domains']=[[lo,hi+1]for lo,hi in group['unconstrained_row_domains']]
+                recover(data['notes'],prepare(data,40,include_failed=True),[(0,4,120)],0,0,0,groups,[0,0])
+                self.assertEqual(note['status'],'excluded')
+
     def test_an_ambiguous_clock_keeps_its_original_bound_and_uses_native_geometry_to_choose(self):
         data,groups=scenario();note=data['notes'][4]
         note['beat_reconstruction']['reason']='ambiguous_beat_rows';note['video_target_range']=[1.37,1.63]

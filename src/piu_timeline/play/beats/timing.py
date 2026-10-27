@@ -267,7 +267,8 @@ def apply(data,directory):
     restored={i for i in recovered if notes[i]['status']=='estimated'}
     reconstruction=dict(data.get('timing_reconstruction',{}))
     if restored:
-        result['warnings']=[w for w in result['warnings']if not(w.get('note')in restored and w['reason']=='beat_timing_reconstruction_failed')]
+        result['warnings']=[w for w in result['warnings']if not(w.get('note')in restored and
+                            w['reason']==recovered[w['note']]['source_failure'])]
         result['status']='failed'if result['warnings']else'restored'
         remaining=[w for w in reconstruction.get('warnings',[])if not(w.get('note')in restored and w['reason']=='shared_timing_reconstruction_failed')]
         reconstruction.update(warnings=remaining,status='failed'if remaining else'restored',

@@ -4,7 +4,7 @@ import math
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 from piu_timeline.play.beats.coordinates import fit, FORMAT as COORDINATE_FORMAT
 
-FORMAT={'schema':1,'revision':3,'method':'native_coordinates_with_frozen_beat_references',
+FORMAT={'schema':1,'revision':4,'method':'native_coordinates_with_frozen_beat_references',
         'rejected_beat_references':'unique_source_clock_rows_outside_tested_group',
         'measurement_limits':COORDINATE_FORMAT,'natural_splits':list(NATURAL_SPLITS)}
 
@@ -33,8 +33,10 @@ def candidate_window(note,notes,groups):
         seed=note.get('timing_reconstruction',{}).get('unaccepted_previous_estimate',{}).get('target_seconds')
         return (seed,[seed-radius,seed+radius],set())if seed is not None and math.isfinite(seed)else None
     beat=note.get('beat_reconstruction',{})
-    if not(note.get('reason')=='beat_timing_reconstruction_failed'and
-           beat.get('reason')in('native_coordinate_domains_incompatible','ambiguous_beat_rows')and'group_index'in beat):return None
+    rejected_domain=(note.get('reason')=='beat_timing_reconstruction_failed'and
+                     beat.get('reason')in('native_coordinate_domains_incompatible','ambiguous_beat_rows'))
+    rejected_geometry=note.get('reason')in('beat_grid_conflicts_with_spatial_spacing','beat_grid_conflicts_with_native_chord')
+    if not((rejected_domain or rejected_geometry)and'group_index'in beat):return None
     omitted=set(groups[beat['group_index']]['notes'])
     intervals=[notes[i]['video_target_range']for i in omitted]
     seed=sum(note['video_target_range'])/2
@@ -103,7 +105,7 @@ def recover(notes, support, sections, origin, phase, alignment_error,groups=(),p
         note=notes[i];target=result['target_seconds'];lower,upper=result['native_target_range']
         previous=note['timing_reconstruction']
         rejected={'rejected_beat_assignment':note['beat_reconstruction'],
-                  'rejected_clock_target_range':note['video_target_range']}if note.get('reason')=='beat_timing_reconstruction_failed'else {}
+                  'rejected_clock_target_range':note['video_target_range']}if note.get('reason')!='shared_timing_reconstruction_failed'else {}
         note.update(status='estimated',reason=None,target_seconds=target,
                     fit_method='native_beat_coordinate_interpolation',
                     prediction_uncertainty_seconds=max(target-lower,upper-target)+alignment_error,
