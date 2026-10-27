@@ -2,7 +2,7 @@
 import math
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
-from piu_timeline.play.beats.coordinates import fit, FORMAT as COORDINATE_FORMAT
+from piu_timeline.play.beats.coordinates import fit, FORMAT as COORDINATE_FORMAT, RECOVERABLE_MOTION_FAILURES
 
 FORMAT={'schema':1,'revision':4,'method':'native_coordinates_with_frozen_beat_references',
         'rejected_beat_references':'unique_source_clock_rows_outside_tested_group',
@@ -29,7 +29,7 @@ def direct_clock_rows(notes,groups,phase,phase_range):
 def candidate_window(note,notes,groups):
     """An old estimate selects references but never bounds the recovered time."""
     radius=COORDINATE_FORMAT['reference_radius_seconds']
-    if note.get('reason')=='shared_timing_reconstruction_failed':
+    if note.get('reason')in RECOVERABLE_MOTION_FAILURES:
         seed=note.get('timing_reconstruction',{}).get('unaccepted_previous_estimate',{}).get('target_seconds')
         return (seed,[seed-radius,seed+radius],set())if seed is not None and math.isfinite(seed)else None
     beat=note.get('beat_reconstruction',{})
@@ -105,7 +105,7 @@ def recover(notes, support, sections, origin, phase, alignment_error,groups=(),p
         note=notes[i];target=result['target_seconds'];lower,upper=result['native_target_range']
         previous=note['timing_reconstruction']
         rejected={'rejected_beat_assignment':note['beat_reconstruction'],
-                  'rejected_clock_target_range':note['video_target_range']}if note.get('reason')!='shared_timing_reconstruction_failed'else {}
+                  'rejected_clock_target_range':note['video_target_range']}if note.get('reason')not in RECOVERABLE_MOTION_FAILURES else {}
         note.update(status='estimated',reason=None,target_seconds=target,
                     fit_method='native_beat_coordinate_interpolation',
                     prediction_uncertainty_seconds=max(target-lower,upper-target)+alignment_error,

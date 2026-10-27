@@ -3,7 +3,9 @@ from itertools import combinations
 
 import numpy as np
 
-FORMAT={'schema':1,'revision':7,'minimum_references':5,'minimum_lanes':2,
+RECOVERABLE_MOTION_FAILURES=('shared_timing_reconstruction_failed','shared_spacing_reconstruction_conflict')
+
+FORMAT={'schema':1,'revision':8,'minimum_references':5,'minimum_lanes':2,
         'reference_radius_seconds':.75,'minimum_target_span_seconds':.3,
         'minimum_slope_span_seconds':.15,'maximum_reference_error_pixels':1.,
         'maximum_native_error_pixels':1.5}
@@ -26,7 +28,7 @@ def prepare(data,spacing,include_failed=False):
             if index not in observed:continue
             note=data['notes'][index]
             if note['status']!='estimated'and not(include_failed and note.get('reason')in
-                    ('shared_timing_reconstruction_failed','beat_timing_reconstruction_failed',
+                    (*RECOVERABLE_MOTION_FAILURES,'beat_timing_reconstruction_failed',
                      'beat_grid_conflicts_with_spatial_spacing','beat_grid_conflicts_with_native_chord')):continue
             points=[(t,y)for t,y in note['points']if t in observed[index]and t in samples
                     and samples[t]['chunk']==number and receptor+.85*spacing<y<bottom-.55*spacing]

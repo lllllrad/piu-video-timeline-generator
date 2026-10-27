@@ -61,6 +61,14 @@ is valid; retain that median separately as `observed_gap_pixels`, alongside the
 actual `comparison_gap_pixels` and its coordinate basis. Every independently
 supported model must agree, including when different blocks support the pair.
 
+A rejected clock or shared-clock spacing conversion can leave valid native
+positions. Both failures may enter independent beat-coordinate recovery, with
+the rejected time used only to locate a reference window. The failed note
+cannot serve as a reference. Native outliers, missing independent references
+and ambiguous rows still prevent recovery. Only a successfully recovered and
+revalidated note retires its original timing-failure warning; other motion or
+visibility warnings remain.
+
 
 ## Converting beat corrections to pixel gaps
 

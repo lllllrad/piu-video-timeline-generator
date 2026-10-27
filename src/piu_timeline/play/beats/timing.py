@@ -6,6 +6,7 @@ import math
 import subprocess
 from pathlib import Path
 from piu_timeline.play.beats.coordinates import FORMAT as COORDINATE_FORMAT
+from piu_timeline.play.beats.coordinates import RECOVERABLE_MOTION_FAILURES
 from piu_timeline.play.beats.chords import FORMAT as CHORD_FORMAT
 from piu_timeline.play.beats.domains import FORMAT as DOMAIN_FORMAT
 from piu_timeline.play.beats.recovery import FORMAT as RECOVERY_FORMAT
@@ -271,11 +272,12 @@ def apply(data,directory):
         result['warnings']=[w for w in result['warnings']if not(w.get('note')in restored and
                             w['reason']==recovered[w['note']]['source_failure'])]
         result['status']='failed'if result['warnings']else'restored'
-        remaining=[w for w in reconstruction.get('warnings',[])if not(w.get('note')in restored and w['reason']=='shared_timing_reconstruction_failed')]
+        remaining=[w for w in reconstruction.get('warnings',[])if not(w.get('note')in restored and
+                   w['reason']==recovered[w['note']]['source_failure'])]
         reconstruction.update(warnings=remaining,status='failed'if remaining else'restored',
                               failed_notes=len({w['note']for w in remaining}),
                               restored_notes=reconstruction.get('restored_notes',0)+sum(
-                                  recovered[i]['source_failure']=='shared_timing_reconstruction_failed'for i in restored))
+                                  recovered[i]['source_failure']in RECOVERABLE_MOTION_FAILURES for i in restored))
     return {**data,'notes':notes,'beat_timing':result,'timing_reconstruction':reconstruction}
 
 
