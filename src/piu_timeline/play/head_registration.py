@@ -8,7 +8,7 @@ import numpy as np
 from piu_timeline.play.note_types import cap_envelope, shape
 from piu_timeline.play.cap_templates import FORMAT as TEMPLATE_FORMAT
 
-FORMAT={'schema':1,'revision':4,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':5,'minimum_frames':8,'minimum_span_seconds':.12,
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
         'maximum_offset_spacing':.1,'coordinate_uncertainty_pixels':1.,'cap_templates':TEMPLATE_FORMAT}
 
@@ -45,26 +45,24 @@ def fit_offset(samples):
 
 def measure(data,path):
     """Calibrate each observed identity without using timing, grid or input fits."""
-    from piu_timeline.play.holds.features import ui_regions
+    from piu_timeline.play.screen_regions import visible_cap_bounds
     records=[]
     with np.load(path,allow_pickle=False)as saved:
         masks,times,pts,lanes,ys=(saved[k]for k in ('masks','times','pts','lanes','ys'))
         spacing,columns=float(saved['spacing']),int(saved['columns'])
         by=defaultdict(list)
         for i,(time,lane)in enumerate(zip(times,lanes,strict=True)):by[round(float(time),6),int(lane)].append(i)
-        height=data['analysis_height'];receptor=data['layout']['receptor_y']*height
         for ni,note in enumerate(data['notes']):
             samples=[]
             for time,y in note.get('detected_points',note.get('points',[])):
-                if not receptor+1.3*spacing<y<data['layout'].get('note_y_max',.95)*height-.8*spacing:continue
-                x=data['layout']['lanes'][note['lane']]['x']
-                if any(rx<=x<=rx+rw and ry*height-.8*spacing<=y<=(ry+rh)*height+.8*spacing
-                       for rx,ry,rw,rh in ui_regions(data['layout'])):continue
                 options=sorted((abs(float(ys[i])-y),i)for i in by.get((round(time,6),note['lane']),[]))
                 if not options or options[0][0]>1e-5 or len(options)>1 and options[1][0]<1:continue
                 i=options[0][1];anchor=patch_offset(masks[i],columns,spacing)
                 if anchor is not None:
                     offset,box=anchor
+                    bounds=visible_cap_bounds(data,note['lane'],y,box,(masks.shape[2],columns),
+                                              spacing,max(2,round(.15*spacing)))
+                    if bounds is None:continue
                     # Appearance patches are centered on rounded pixel rows;
                     # tracked outline centers retain their fractional row.
                     patch_shift=round(float(ys[i]))-float(ys[i])
@@ -73,7 +71,7 @@ def measure(data,path):
                     samples.append({'time':time,'source_pts_seconds':float(pts[i]),
                                     'detected_y_pixels':float(ys[i]),
                                     'offset_pixels':offset,'patch_center_shift_pixels':patch_shift,
-                                    'outer_bounds_in_patch':box})
+                                    'outer_bounds_in_patch':box,'support_bounds_pixels':bounds})
             fitted=fit_offset(samples)
             if fitted is not None:records.append({'note':ni,'lane':note['lane'],**fitted})
     from piu_timeline.play.cap_templates import augment

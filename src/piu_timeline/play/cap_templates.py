@@ -4,7 +4,7 @@ from collections import defaultdict
 import cv2
 import numpy as np
 
-FORMAT={'schema':1,'revision':1,'minimum_independent_heads':2,'cluster_similarity':.94,
+FORMAT={'schema':1,'revision':2,'minimum_independent_heads':2,'cluster_similarity':.94,
         'maximum_clusters_per_lane':128,'maximum_templates_per_lane':12,
         'minimum_similarity':.90,'different_offset_margin':.04,'distinct_offset_pixels':.75,
         'vertical_search_pixels':4,'horizontal_search_pixels':1}
@@ -91,27 +91,28 @@ def match(packed,columns,spacing,patch_shift,templates,note):
 
 def augment(data,path,records,fit_offset):
     """Templates add coordinate evidence, never note type or chart timing."""
-    from piu_timeline.play.holds.features import ui_regions
+    from piu_timeline.play.screen_regions import visible_cap_bounds
     with np.load(path,allow_pickle=False)as saved:
         pixels={key:saved[key]for key in ('masks','times','pts','lanes','ys','spacing','columns')}
         lookup=defaultdict(list)
         for i,(time,lane)in enumerate(zip(pixels['times'],pixels['lanes'],strict=True)):
             lookup[round(float(time),6),int(lane)].append(i)
         banks=learn(records,pixels,lookup);known={r['note']for r in records};added=[]
-        spacing,columns=float(pixels['spacing']),int(pixels['columns']);height=data['analysis_height']
+        spacing,columns=float(pixels['spacing']),int(pixels['columns'])
         for ni,note in enumerate(data['notes']):
             if ni in known or not banks.get(note['lane']):continue
-            samples=[];x=data['layout']['lanes'][note['lane']]['x']
+            samples=[]
             for time,y in note.get('detected_points',note.get('points',[])):
-                if not data['layout']['receptor_y']*height+1.3*spacing<y<data['layout'].get('note_y_max',.95)*height-.8*spacing:continue
-                if any(rx<=x<=rx+rw and ry*height-.8*spacing<=y<=(ry+rh)*height+.8*spacing
-                       for rx,ry,rw,rh in ui_regions(data['layout'])):continue
                 options=[i for i in lookup.get((round(time,6),note['lane']),[])if abs(float(pixels['ys'][i])-y)<1e-5]
                 if len(options)!=1:continue
                 i=options[0];shift=round(float(pixels['ys'][i]))-float(pixels['ys'][i])
                 result=match(pixels['masks'][i],columns,spacing,shift,banks[note['lane']],ni)
-                if result:samples.append({'time':time,'source_pts_seconds':float(pixels['pts'][i]),
-                                          'patch_center_shift_pixels':shift,**result})
+                if result:
+                    bounds=visible_cap_bounds(data,note['lane'],y,result['outer_bounds_in_patch'],
+                                              (pixels['masks'].shape[2],columns),spacing)
+                    if bounds is not None:
+                        samples.append({'time':time,'source_pts_seconds':float(pixels['pts'][i]),
+                                        'patch_center_shift_pixels':shift,'support_bounds_pixels':bounds,**result})
             fitted=fit_offset(samples)
             if fitted:added.append({'note':ni,'lane':note['lane'],'method':'independent_cap_templates',**fitted})
         metadata=[{'lane':lane,'templates':[{'template':i,'reference':t['reference'],

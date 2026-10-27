@@ -391,6 +391,19 @@ the connected outer silhouette around the same white contour in the retained
 native neighborhood, including its colored rim. Require visible separation on
 both sides and exclude clipped patches and known HUD regions.
 
+Visibility for registration uses the measured outer box in original game-image
+pixels, rather than a center expanded by an assumed cap radius. For an isolated
+cap, also include the same 0.15-spacing vertical background margins used to prove
+its separation. All support must lie inside the scrolling field and below the
+receptor's 0.3-spacing effect band, and must not intersect a named HUD rectangle.
+A center outside a HUD rectangle does not prove that its cap edge is clear.
+Conversely, a broader search rectangle overlapping the HUD cannot invalidate a
+complete cap and its clear margins outside that rectangle. A connected-cap
+template needs its full matched box visible, without the separation margins
+that would deliberately reject a connected body. Retain each support rectangle
+alongside its source PTS. These checks do not change repeated-frame, duration,
+offset stability or independent-template requirements.
+
 An observed identity can supply a constant outline-to-silhouette registration
 offset when at least eight qualified source frames span 120 ms. Current policy
 requires 95% of offsets within one native analysis pixel of their median and a
