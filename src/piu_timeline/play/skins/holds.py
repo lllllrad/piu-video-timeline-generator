@@ -6,7 +6,7 @@ from piu_timeline.play.holds.state import recognition_segments, recognition_wind
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 2, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 3, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -19,7 +19,9 @@ def covered(lo, hi, boxes):
     return False
 
 
-def reconstruct_images(data, receptor_frames, native, diagnostics):
+def reconstruct_images(data, receptor_frames, native, diagnostics, *, references=None):
+    from piu_timeline.play.skins.coverage import reference_rows, image_spans
+    references=reference_rows(data)if references is None else references
     records = observe(data, native)['notes']
     roles = {r['note']: {o['role'] for o in r['observations']} - {'unknown'} for r in records}
     by_time = {f['playback_seconds']: f for f in native}
@@ -42,10 +44,11 @@ def reconstruct_images(data, receptor_frames, native, diagnostics):
                     continue
                 frame = by_time[time]
                 center = data['layout']['lanes'][first['lane']]['x'] * width
-                boxes = [o['bounds_pixels'][1::2] for o in frame.get('skin_observations', [])
+                boxes = [span for o in frame.get('skin_observations', [])
                          if o['lane'] == first['lane'] and o['role'] in ('hold_start', 'hold_body', 'hold_end')
                          and o['bounds_pixels'][0] <= center <= o['bounds_pixels'][2]
-                         and o['bounds_pixels'][1] <= b and o['bounds_pixels'][3] >= a]
+                         and o['bounds_pixels'][1] <= b and o['bounds_pixels'][3] >= a
+                         for span in image_spans(o,references)]
                 if covered(a, b, boxes):
                     proof.append({'time': time, 'source_pts': frame['source_pts_seconds'], 'head_y': a, 'tail_y': b})
                 else:

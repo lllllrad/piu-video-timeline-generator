@@ -68,7 +68,12 @@ A complete end image supplies a tail role without inventing a tap or a press at
 that location. It remains a warning when complete hold geometry is unresolved.
 For image-based holds, start/end identities and directly matched body tiles must
 cover the intervening image interval in at least four frames spanning 65 ms and
-half a lane spacing of motion. Varying endpoint separation, contradictory roles and competing ownership
+half a lane spacing of motion. Coverage uses rows with actual compared alpha
+support in the acquired reference bank, preserving unsupported internal gaps.
+A template canvas rectangle cannot bridge padding or uncompared rows. The bank
+identity must match the native observations; changed references fail explicitly.
+These rows establish image-comparison coverage, rather than a solid foreground
+segmentation. Varying endpoint separation, contradictory roles and competing ownership
 prevent reconstruction. A missing image match is not a positive observation of
 a physical gap. Clear frames without sufficient connection support supply no
 proof and remain explicit warnings, even when other frames uniquely establish

@@ -2,8 +2,15 @@
 from copy import deepcopy
 import unittest
 
-from piu_timeline.play.skins.holds import reconstruct_images
+from piu_timeline.play.skins.holds import reconstruct_images as reconstruct
 from piu_timeline.play.skins.observations import observe, tail_roles
+
+
+REFERENCES={'hold_start':[[0,35]],'hold_end':[[0,35]],'hold_body':[[0,30]]}
+
+
+def reconstruct_images(data,receptors,native,warnings,*,references=REFERENCES):
+    return reconstruct(data,receptors,native,warnings,references=references)
 
 
 def scenario():
@@ -74,6 +81,13 @@ class ImageHoldTest(unittest.TestCase):
         self.assertEqual(warnings[0]['image_evidence'],[{'time':.06,'source_pts':30.06}])
         for frame in native:frame['skin_observations']=frame['skin_observations'][:2]
         self.assertEqual(reconstruct_images(data,receptors,native,[]),[])
+
+    def test_canvas_padding_and_internal_uncompared_rows_cannot_bridge_a_hold(self):
+        for role,rows in [('hold_body',[[0,8],[22,30]]),('hold_start',[[0,20]])]:
+            data,native,receptors=scenario();references={**REFERENCES,role:rows}
+            warnings=[]
+            self.assertEqual(reconstruct_images(data,receptors,native,warnings,references=references),[])
+            self.assertTrue(warnings)
 
     def test_one_hold_does_not_claim_unrelated_body_images_in_the_same_lane_and_frame(self):
         data,native,receptors=scenario()
