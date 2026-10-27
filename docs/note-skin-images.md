@@ -95,8 +95,11 @@ proof and remain explicit warnings, even when other frames uniquely establish
 the held interval. If the independent positive frames are insufficient, the
 whole interval remains unresolved.
 Frames with unknown cap context do not erase positive endpoint identities.
-They supply no endpoint coverage proof; the remaining complete images must
-independently satisfy the same geometry requirements. A contradictory complete
+Their positively compared cap rows can support the known endpoint location;
+failed connection regions supply no coverage. Independent positive body images
+must bridge the cap to the interval. Complete role images in other frames must
+still establish the start/end identities. Without those roles or sufficient
+positive body coverage, the hold remains unresolved. A contradictory complete
 role still prevents ownership.
 Legacy lane-color components cannot create a hold for a selected image skin.
 Body ownership is limited to the established endpoint interval in each source

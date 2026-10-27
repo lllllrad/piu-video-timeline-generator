@@ -6,7 +6,7 @@ from piu_timeline.play.holds.state import recognition_segments, recognition_wind
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 5, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 6, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -19,9 +19,10 @@ def covered(lo, hi, boxes):
     return False
 
 
-def reconstruct_images(data, receptor_frames, native, diagnostics, *, references=None):
+def reconstruct_images(data, receptor_frames, native, diagnostics, *, references=None, cap_references=None):
     from piu_timeline.play.skins.coverage import reference_rows, image_spans
     references=reference_rows(data)if references is None else references
+    cap_references=reference_rows(data,cap_only=True)if cap_references is None else cap_references
     records = observe(data, native)['notes']
     roles = {r['note']: {o['role'] for o in r['observations']} - {'unknown'} for r in records}
     by_time = {f['playback_seconds']: f for f in native}
@@ -49,6 +50,13 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                          and o['bounds_pixels'][0] <= center <= o['bounds_pixels'][2]
                          and o['bounds_pixels'][1] <= b and o['bounds_pixels'][3] >= a
                          for span in image_spans(o,references)]
+                # Use only positively compared cap pixels of known endpoints.
+                # Failed connection regions supply no coverage.
+                boxes.extend(span for o in frame.get('skin_observations', [])
+                             if o['lane']==first['lane'] and o['role']=='unknown'
+                             and o.get('classification_status')=='cap_only'
+                             and min(abs(o['y']*data['analysis_height']-a),abs(o['y']*data['analysis_height']-b))<1e-5
+                             for span in image_spans(o,cap_references))
                 if covered(a, b, boxes):
                     proof.append({'time': time, 'source_pts': frame['source_pts_seconds'], 'head_y': a, 'tail_y': b})
                 else:

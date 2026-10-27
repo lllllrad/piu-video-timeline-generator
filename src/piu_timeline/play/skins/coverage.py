@@ -5,14 +5,15 @@ from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.detector import SkinDetector
 
 
-def reference_rows(data):
+def reference_rows(data, *, cap_only=False):
     bank=load_bank(data['skin_detector']['bank_path'])
     if bank['contract']!=data['skin_detector']['contract']['bank']:
         raise ValueError('Hold image references differ from the acquired observation bank')
     detector=SkinDetector(bank,data['layout'],data['analysis_width'],data['analysis_height'])
     result={}
     for template in detector.templates:
-        rows=np.flatnonzero(template['support'].any(axis=1))
+        support=template['cap_support']if cap_only else template['support']
+        rows=np.flatnonzero(support.any(axis=1))
         runs=[]
         for row in rows:
             row=int(row)

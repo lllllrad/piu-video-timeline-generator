@@ -7,10 +7,11 @@ from piu_timeline.play.skins.observations import observe, tail_roles
 
 
 REFERENCES={'hold_start':[[0,35]],'hold_end':[[0,35]],'hold_body':[[0,30]]}
+CAP_REFERENCES={'hold_start':[[0,20]],'hold_end':[[15,35]],'hold_body':[]}
 
 
 def reconstruct_images(data,receptors,native,warnings,*,references=REFERENCES):
-    return reconstruct(data,receptors,native,warnings,references=references)
+    return reconstruct(data,receptors,native,warnings,references=references,cap_references=CAP_REFERENCES)
 
 
 def scenario():
@@ -105,6 +106,20 @@ class ImageHoldTest(unittest.TestCase):
                 if case=='cap_only':alt['classification_status']='cap_only'
                 else:alt['role']='tap'
             self.assertEqual(reconstruct_images(data,receptors,changed,[],references=references),[])
+
+    def test_known_endpoint_caps_need_positive_body_images_and_a_complete_role_elsewhere(self):
+        data,native,receptors=scenario()
+        for frame in native[1:]:
+            frame['skin_observations'][1].update(role='unknown',classification_status='cap_only')
+        warnings=[];holds=reconstruct_images(data,receptors,native,warnings)
+        self.assertEqual(len(holds),1)
+        self.assertEqual(len(holds[0]['image_connection_evidence']),10)
+        self.assertEqual(warnings,[])
+        no_role=deepcopy(native)
+        no_role[0]['skin_observations'][1].update(role='unknown',classification_status='cap_only')
+        self.assertEqual(reconstruct_images(data,receptors,no_role,[]),[])
+        for frame in native[1:]:frame['skin_observations'].pop()
+        self.assertEqual(reconstruct_images(data,receptors,native,[]),[])
 
     def test_one_hold_does_not_claim_unrelated_body_images_in_the_same_lane_and_frame(self):
         data,native,receptors=scenario()
