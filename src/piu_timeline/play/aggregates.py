@@ -12,17 +12,32 @@ def bracket(match):
             match.get('observation_upper_seconds', match.get('combo_upper_seconds')))
 
 
+def native_body_risk_available(data):
+    """A complete image detector supplies receptor-local risk, not warning spans."""
+    from piu_timeline.play.skins.held import FORMAT
+    skin=data.get('skin_detector',{})
+    return (skin.get('contract',{}).get('held_body')==FORMAT
+            and skin.get('missing_template_roles')==[] and 'unsupported_intervals'in data)
+
+
 def hold_overlap(data, lo, hi, guard):
     analysis = data.get('hold_analysis', {})
     for hold in analysis.get('holds', []):
         end = hold['end_range'][1] if hold.get('end_range') else hold['last_body_seconds']+.25
         if hold['start_range'][0]-guard <= hi and end+guard >= lo:
             return True
-    # Unresolved connected bodies can still generate counter ticks. Their
-    # final visible edge is not a confirmed end at the receptor.
-    return any(track['visible_start_seconds']-guard <= hi
-               and track['visible_end_seconds']+.25+guard >= lo
-               for track in analysis.get('unresolved_tracks', []))
+    if any(interval['start_seconds']-guard<=hi and interval['end_seconds']+guard>=lo
+           for interval in data.get('unsupported_intervals',[])):return True
+    for track in analysis.get('unresolved_tracks', []):
+        # These are unrelated image tiles grouped for review, not a connected
+        # body persisting from the first tile to the last. Their actual receptor
+        # risk is measured independently in the native frame observations.
+        if (native_body_risk_available(data)
+                and track.get('failure_detail')=='skin_body_images_without_complete_endpoint_ownership'
+                and track.get('image_evidence')
+                and all(p.get('role')=='hold_body'for p in track['image_evidence'])):continue
+        if track['visible_start_seconds']-guard<=hi and track['visible_end_seconds']+.25+guard>=lo:return True
+    return False
 
 
 def recover_aggregates(data):
@@ -101,6 +116,7 @@ def recover_aggregates(data):
         for i in group:
             run = runs[proofs[i]]
             common = {'combo_event': ei, 'combo_lower_seconds': lo, 'combo_upper_seconds': hi,
+                      'aggregate_body_risk_basis':'native_receptor_body_regions'if native_body_risk_available(data)else'hold_geometry_and_unresolved_tracks',
                       'aggregate_row_count': event['delta'], 'aggregate_lane_onset_range': run.get('onset_range'),
                       'aggregate_lane_onset_source_pts_seconds': run.get('onset_source_pts_seconds'),
                       'aggregate_evidence_method': 'exclusive_tap_onsets_for_complete_counter_increment'}

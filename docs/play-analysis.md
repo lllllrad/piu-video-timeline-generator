@@ -397,6 +397,18 @@ generated chart drafts or stage-grade quotas as evidence.
 
 Strict counter-to-row alignments that overlap a possible hold/dense interval are retained as deferred matches. A separate lane-local onset can restore a tap association after hold geometry is known. Recovery requires a single counter increment, a visible tap rather than a hold component, an unshared onset and no conflicting matched row at the same refresh. The original counter bracket is preserved. Aggregate jumps and sustained receptor light remain insufficient to recover a press.
 
+A separate aggregate pass requires the complete increment's worth of distinct
+tap rows and an exclusive observed onset on every lane. Each target must fit its
+own timing window; players can compress the input spacing, so the chart row span
+need not equal the counter bracket's span. Every recovered row retains the full
+original aggregate bracket, and a separately read grade is not copied to others.
+Known holds, native receptor-body risk, MISS and competing ownership still block
+this recovery. For a complete current image profile, unowned body-tile warnings
+do not establish a continuous held state between unrelated first/last sightings;
+their receptor risk comes from the native image-region observations. The warnings
+remain visible. Older or incomplete profiles retain conservative unresolved-body
+checks, as do genuine connected-body candidates.
+
 Cache compatibility is checked by artifact format and dependencies, not by a list of analyzer
 releases. Pixel features record their encoding and source/ROI/time/width identity in
 `evidence/judgments/features.json`. Font files declare their binary-mask format. Reader output
