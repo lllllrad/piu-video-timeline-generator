@@ -124,7 +124,7 @@ def layer_manifest(directory):
         'features': ['native-features/manifest.json', 'processing-features.npz',
                      'appearance-features.npz', 'evidence/judgments/features-v3.npz'],
         'frame_observations': ['frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
-        'interpretations': ['object-interpretation.json', 'head-registration.json', 'holds.json', 'visual-channels.json'],
+        'interpretations': ['object-interpretation.json', 'head-registration.json', 'skin-role-evidence.json', 'holds.json', 'visual-channels.json'],
         'associations': ['analysis.json'],
     }
     return {'source': 'analysis.json#/media',
@@ -132,6 +132,7 @@ def layer_manifest(directory):
             'available': {name: (directory/name).is_file() for names in artifacts.values() for name in names},
             'dependencies': {'object_roles':['frames.jsonl','chart-policy.json'],
                              'head_registration':['interpreted_head_trajectory','appearance-features.npz'],
+                             'skin_role_clearance':['matched_cap_images','native-features/manifest.json','note-skins.json'],
                              'processing': ['native_head_trajectory', 'native-features/manifest.json', 'spatial_masks', 'hold_geometry'],
                              'receptor_onsets': ['white_fractions', 'common_flash_filter'],
                              'matches': ['chart_timing', 'popup_events', 'lane_evidence']},
@@ -147,7 +148,7 @@ def augment_channels(data, directory, frames=None):
     inputs = ('frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz','counter-pixels.npz','native-features/manifest.json')
     contract = {'format': CHANNEL_FORMAT,
                 'analysis': fingerprint({key:data.get(key) for key in
-                                         ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion','object_interpretation')}),
+                                         ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion','object_interpretation','skin_role_evidence')}),
                 'traces': {name: [p.stat().st_size, p.stat().st_mtime_ns] if (p:=directory/name).is_file() else None for name in inputs}}
     if data.get('skin_detector'):
         from piu_timeline.play.skins.observations import FORMAT as IMAGE_ROLE_FORMAT

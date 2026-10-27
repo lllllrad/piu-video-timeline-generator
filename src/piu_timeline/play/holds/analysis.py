@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 38}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 39}
 
 
 def fingerprint(value):
@@ -65,6 +65,9 @@ def augment_holds(data, output):
     if not data.get('media', {}).get('video_streams') or any('color' not in lane for lane in data.get('layout', {}).get('lanes', [])):
         return data
     from piu_timeline.play.channels import augment_channels
+    if data.get('skin_detector'):
+        from piu_timeline.play.skins.clearance_cache import prepare
+        data=prepare(data,output)
     contract = feature_contract(data)
     association = {'format': ASSOCIATION_FORMAT, 'notes': fingerprint(data['notes']),
                    'object_roles':fingerprint(data.get('object_interpretation',{}).get('effects',[])),
@@ -73,6 +76,7 @@ def augment_holds(data, output):
         from piu_timeline.play.skins.holds import FORMAT as IMAGE_HOLD_FORMAT
         association['skin_images'] = data['skin_detector']['contract']
         association['image_hold_format'] = IMAGE_HOLD_FORMAT
+        association['skin_role_clearance']=data.get('skin_role_evidence',{}).get('contract')
     path = output / 'holds.json'
     if path.is_file():
         saved = json.loads(path.read_text())

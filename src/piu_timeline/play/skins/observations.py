@@ -2,7 +2,7 @@
 from collections import Counter
 
 
-FORMAT = {'schema': 1, 'revision': 1, 'evidence': 'native_image_trace_references'}
+FORMAT = {'schema': 1, 'revision': 2, 'evidence': 'native_image_trace_references'}
 
 def observe(data, native):
     by_time = {f['playback_seconds']: f for f in native}
@@ -32,10 +32,14 @@ def observe(data, native):
                                  'image_anchor':[proof.get('x',image.get('x')),proof.get('y',image.get('y'))],
                                  'source_image_anchor':[image.get('x'),image.get('y')],
                                  'classification_status':proof.get('classification_status','full_pattern')})
+        for proof in data.get('skin_role_evidence',{}).get('notes',{}).get(str(index),[]):
+            observations.append({**proof,'image_anchor':[proof['image_anchor'][0]/data['analysis_width'],
+                                                        proof['image_anchor'][1]/height]})
         kinds = {o['kind'] for o in observations} - {'unknown'}
         records.append({'note': index, 'status': 'conflict' if len(kinds) > 1 else next(iter(kinds)) if kinds else 'unknown',
                         'observations': observations})
-    return {'format': {'roles':FORMAT,'skin_detector':data['skin_detector']['contract']}, 'available': True, 'notes': records,
+    return {'format': {'roles':FORMAT,'skin_detector':data['skin_detector']['contract'],
+                      'clearance':data.get('skin_role_evidence',{}).get('contract')}, 'available': True, 'notes': records,
             'counts': dict(Counter(r['status'] for r in records)), 'traces': ['frames.jsonl'],
             'pixel_coordinates': {'width': data['analysis_width'], 'height': height, 'origin': 'game_crop_top_left'}}
 

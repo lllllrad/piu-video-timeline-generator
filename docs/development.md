@@ -28,6 +28,9 @@ Codex-only environment generation and optional mise installation are documented 
 
 Read the [gameplay visual model](gameplay-visual-model.md) before changing note geometry or recognition rules. Keep observed game behavior, measurement assumptions and implementation thresholds distinct; passing a test does not establish the visual model.
 
+The optional [native cap-clearance model](note-skin-clearance.md) combines matched
+skin images with source-bound background-gap evidence before hold interpretation.
+
 The package is organized by responsibility. `workflow.py`, `media.py` and
 `storage.py` at the package root provide the public workflow and shared I/O.
 
