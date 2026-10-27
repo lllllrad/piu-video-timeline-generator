@@ -410,3 +410,25 @@ patch offset back into the original image coordinate system by adding
 fractional detection introduces an artificial alternating half-pixel error.
 Keep this patch-origin correction in the measurement record. It does not move
 the original observation, relax a fit gate or change source timestamps.
+
+### Registering a cap attached to a body
+
+A continuous colored body makes a cap's full connected-component bounding box
+unsuitable as its registration box. It does not move the glyph's registration
+point. A compatible skin can instead supply a local white-outline template from
+complete, separated caps in the same lane of the same recording segment.
+
+Templates must be supported by at least two independent observed head identities.
+Cluster only equal-size outer boxes whose aligned white-pixel Dice similarity is
+at least 0.94; keep the original reference pixels and supporting source PTS. Do
+not learn from the connected cap being measured or iterate on inferred templates.
+A body outside the cap box may differ; white pixels inside it must still match.
+A cap with a genuinely different design or an obscured outline remains unsupported.
+
+Search bounded native translations, require Dice similarity at least 0.90, and
+reject a competing registration more than 0.75 pixels away unless its similarity
+is at least 0.04 lower. Clip/padding validity and lane-color support still apply.
+The measured offsets must pass the same repeated-frame stability gates as direct
+silhouette measurements. Failed direct registrations are not replaced with a
+more convenient template result. Templates provide coordinates only: matching a
+glyph does not classify a tap or hold, establish body ownership or prove input.

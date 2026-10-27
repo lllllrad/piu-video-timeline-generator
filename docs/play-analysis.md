@@ -436,3 +436,11 @@ pixel calibrations are fitted into the shared motion model before reassociating
 independently observed combo/judgment events. Compatible native appearance masks
 are reused without decoding or OCR. Changing registration rules invalidates derived
 timing, not native acquisition.
+
+The head-registration artifact also retains independent cap-template references,
+supporting head identities and original PTS. Compatible connected caps may use
+these references to measure coordinates without treating the body's bounding box
+as the cap. Templates are learned from directly measured isolated caps once per
+segment and never from their own inferred matches. Low-similarity and ambiguous
+matches do not supply an offset; existing geometry/type warnings remain. Native
+NPZ arrays are loaded once for this pass rather than decompressed per sample.

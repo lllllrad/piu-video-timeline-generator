@@ -6,10 +6,11 @@ import cv2
 import numpy as np
 
 from piu_timeline.play.note_types import cap_envelope, shape
+from piu_timeline.play.cap_templates import FORMAT as TEMPLATE_FORMAT
 
-FORMAT={'schema':1,'revision':3,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':4,'minimum_frames':8,'minimum_span_seconds':.12,
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
-        'maximum_offset_spacing':.1,'coordinate_uncertainty_pixels':1.}
+        'maximum_offset_spacing':.1,'coordinate_uncertainty_pixels':1.,'cap_templates':TEMPLATE_FORMAT}
 
 
 def patch_offset(packed, columns, spacing):
@@ -70,10 +71,13 @@ def measure(data,path):
                     offset+=patch_shift
                     if abs(offset)>FORMAT['maximum_offset_spacing']*spacing:continue
                     samples.append({'time':time,'source_pts_seconds':float(pts[i]),
+                                    'detected_y_pixels':float(ys[i]),
                                     'offset_pixels':offset,'patch_center_shift_pixels':patch_shift,
                                     'outer_bounds_in_patch':box})
             fitted=fit_offset(samples)
             if fitted is not None:records.append({'note':ni,'lane':note['lane'],**fitted})
+    from piu_timeline.play.cap_templates import augment
+    records,templates=augment(data,path,records,fit_offset)
     warnings=[]
     for record in records:
         uncertain=record['status']=='unresolved'
@@ -85,7 +89,7 @@ def measure(data,path):
                          'visible_start_seconds':samples[0]['time'],'visible_end_seconds':samples[-1]['time'],
                          'source_pts_seconds':[samples[0]['source_pts_seconds'],samples[-1]['source_pts_seconds']],
                          'offset_pixels':record['offset_pixels'],'inlier_fraction':record['inlier_fraction']})
-    return {'format':FORMAT,'trace':'appearance-features.npz','notes':records,'warnings':warnings}
+    return {'format':FORMAT,'trace':'appearance-features.npz','notes':records,'templates':templates,'warnings':warnings}
 
 
 def apply(data,directory,display_delay_ms=0):
