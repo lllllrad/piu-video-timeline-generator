@@ -47,16 +47,19 @@ function renderEvidence(noteIndex){
     const risks=riskFrames.get(time.toFixed(6))||[];
     const riskText=risks.map(c=>'lane '+(c.lane+1)+' proximity '+c.vertical_range_pixels.join('…')+' px / '+c.state+(c.owner_hold!=null?' / hold '+c.owner_hold:' / unowned')).join('; ');
     const word=popup[2]||(popup[4]?'blank':'unknown'),stateText=known(state)+(effect[2]?' (common flash)':'');
+    const pose=processing?.template_evidence?.poses?.[sample?.template_pose];
+    const poseText=sample?.template_pose!=null?' / shape '+sample.template_pose+(pose?' / reference PTS '+Number(pose.source_pts_seconds).toFixed(6):''):'';
+    const processingText=(sample?sample.state+' / '+confidence(sample.score)+' / '+(sample.unknown_reason||'clear'):'unmeasured')+poseText;
     marker(time,45,popup[2]?'#88dfff':'#99a5ae','Combo '+(popup[0]??'unknown')+' / '+word);
     marker(time,105-12*(fraction||0),color(state),stateText+' / white fraction '+confidence(fraction));
     for(const head of heads)marker(time,165+Math.max(-20,Math.min(20,(head[2]*height-receptor)/height*70)),'#ffe476','Head y='+Number(head[2]*height).toFixed(1)+' px / quality '+confidence(head[3]));
     if(risks.length)marker(time,190,risks.every(c=>c.state==='approaching')?'#9cddbe':'#ff8e9b',riskText);
     if(bodies.length)marker(time,212,'#c9acff',bodyText);
-    marker(time,225,color(sample?.state),sample?sample.state+' / '+confidence(sample.score)+' / '+(sample.unknown_reason||'clear'):'unmeasured');
+    marker(time,225,color(sample?.state),processingText);
     const row=document.createElement('tr'),cell=document.createElement('td'),button=document.createElement('button');
     button.textContent=fmt(time)+' / PTS '+pts.toFixed(6);button.onclick=()=>seek(time,-1,noteIndex);cell.appendChild(button);row.appendChild(cell);
     const provenance=popup.length>5?' / '+(popup[5]||'unknown read mode')+(popup[6]?' / recovered':'')+' / baseline '+(popup[7]??'unknown'):'';
-    const values=[(popup[0]??'unknown')+' / '+confidence(popup[1])+provenance,word+' / '+confidence(popup[3]),stateText+' / '+confidence(fraction),(heads.length?heads.map(h=>(h[2]*height).toFixed(1)).join(', '):'No detected head')+(riskText?' / '+riskText:''),(sample?sample.state+' / '+confidence(sample.score)+' / '+(sample.unknown_reason||'clear'):'unmeasured')+(bodyText?' / '+bodyText:'')];
+    const values=[(popup[0]??'unknown')+' / '+confidence(popup[1])+provenance,word+' / '+confidence(popup[3]),stateText+' / '+confidence(fraction),(heads.length?heads.map(h=>(h[2]*height).toFixed(1)).join(', '):'No detected head')+(riskText?' / '+riskText:''),processingText+(bodyText?' / '+bodyText:'')];
     for(const value of values)text('td',value,row);rows.appendChild(row);observations.push({time,pts,values});
   }
   for(const [events,y,stroke] of [[channel.popup.combo_events,30,'#9cddbe'],[channel.popup.judgment_events,60,'#88dfff']]){

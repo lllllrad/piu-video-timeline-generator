@@ -6,9 +6,11 @@ import numpy as np
 
 from piu_timeline.play.pixel_cache import FORMAT as NATIVE_FORMAT,read_chunks,source_contract
 from piu_timeline.play.screen_regions import occluders_at_bounds
+from piu_timeline.play.processing.poses import FORMAT as POSE_FORMAT,references
 
-FORMAT={'schema':1,'revision':1,'minimum_frames':3,'minimum_height_spacing':1.4,
-        'radius_spacing':.45,'maximum_white_fraction':.45,'color_fraction_range':[.12,.85]}
+FORMAT={'schema':1,'revision':2,'minimum_frames':3,'minimum_height_spacing':1.4,
+        'radius_spacing':.45,'maximum_white_fraction':.45,'color_fraction_range':[.12,.85],
+        'poses':POSE_FORMAT}
 
 
 def hud_regions(layout,lane,y,radius,width,height):
@@ -19,6 +21,14 @@ def hud_regions(layout,lane,y,radius,width,height):
 def acceptable(color,white):
     return (FORMAT['color_fraction_range'][0]<color.mean()<FORMAT['color_fraction_range'][1]
             and white.mean()<FORMAT['maximum_white_fraction'])
+
+
+def build(values,spacing,trace):
+    if len(values)<FORMAT['minimum_frames']:return None
+    poses=references(values,spacing)
+    return {'mask':np.mean([mask for _,_,mask in values],axis=0)>=.5,'poses':poses,
+            'evidence':{'trace':trace,'source_pts_seconds':[p for p,_,_ in values],
+                        'frames':len(values),'poses':[p['evidence']for p in poses]}}
 
 
 def learn(data,directory,times,pts):
@@ -49,9 +59,10 @@ def learn(data,directory,times,pts):
                     or hud_regions(layout,lane,y,radius,width,height)):continue
             color=planes['processing_'+layout['lanes'][lane]['color']][top:bottom,left:right]
             white=planes['white'][top:bottom,left:right]
-            if acceptable(color,white):examples[index].append((source_pts,color.copy()))
+            if acceptable(color,white):examples[index].append((source_pts,y,color.copy()))
     if count!=len(times):raise ValueError('Processing template native frame count differs from receptor pixels')
-    return {index:{'mask':np.mean([mask for _,mask in values],axis=0)>=.5,
-                   'evidence':{'trace':'native-features/manifest.json',
-                               'source_pts_seconds':[p for p,_ in values],'frames':len(values)}}
-            for index,values in examples.items()if len(values)>=FORMAT['minimum_frames']}
+    result={}
+    for index,values in examples.items():
+        reference=build(values,spacing,'native-features/manifest.json')
+        if reference is not None:result[index]=reference
+    return result

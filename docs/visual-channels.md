@@ -53,8 +53,15 @@ against the receptor masks. No source decoding or OCR is needed.
 If full-frame masks are unavailable, only clear observations inside the retained
 1.4-2.8-spacing receptor-band approach can supply the template. A hidden window
 never becomes a reference just because there are no other samples.
-The majority silhouette contains repeatedly observed colored pixels. Follow
-its expected location using corroborated peer displacement when available,
+The majority silhouette contains repeatedly observed colored pixels. Animated
+fills can have several shapes whose average does not resemble any actual frame.
+Retain additional same-head native shapes only when each has at least three
+distinct source-PTS supporters with Dice similarity of at least 0.65, spanning
+at least half a lane spacing of observed approach motion. Identical shapes are
+deduplicated; stationary repeats and isolated color noise do not supply new
+poses. Each pose retains its source PTS and supporting frames. The same rule
+applies to clear receptor-band references when full-frame features are absent.
+Follow the expected location using corroborated peer displacement when available,
 or the supported local velocity. This channel depends on motion identity;
 it does not consult combo values, judgment words or receptor-onset decisions.
 
@@ -65,8 +72,11 @@ the sample unknown. This accounts for desaturated bloom beyond the strict
 white threshold; a clearly present colored silhouette is retained.
 
 Compare the moving color silhouette with the observed pixels at each native
-frame. Dice overlap of at least 0.65 supports presence; at most 0.18 supports
-absence. Intermediate matches, white effects, HUD overlap, clipping, missing
+frame. Dice overlap of at least 0.65 with one qualified shape supports presence;
+clear absence requires at most 0.18 with every qualified shape, including the
+majority silhouette. Bloom near any shape retains uncertainty. A cropped frame
+cannot establish absence if any shape lacks the required visible area or
+foreground coverage. Intermediate matches, white effects, HUD overlap, clipping, missing
 screen visibility and competing same-lane heads remain unknown. These are
 implementation thresholds, not measured engine judgment windows.
 HUD checks intersect the actual template window, including its edges; samples

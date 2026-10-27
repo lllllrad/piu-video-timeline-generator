@@ -3,9 +3,9 @@ from bisect import bisect_left
 from collections import Counter
 import json
 
-import cv2
 import numpy as np
-from piu_timeline.play.processing.templates import FORMAT as TEMPLATE_FORMAT,hud_regions,acceptable,learn
+from piu_timeline.play.processing.templates import FORMAT as TEMPLATE_FORMAT,hud_regions,acceptable,learn,build
+from piu_timeline.play.processing.poses import overlap,compare
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
@@ -59,11 +59,6 @@ def patch_at(mask, y, radius):
         return None
     middle = mask.shape[1]//2
     return mask[center-radius:center+radius+1, middle-radius:middle+radius+1]
-
-
-def overlap(template, image):
-    total = int(template.sum())+int(image.sum())
-    return 2*int((template & image).sum())/total if total else 0.
 
 
 def visible_template(mask,template,y,radius):
@@ -148,7 +143,7 @@ def observe_processing(data, path):
             result.append({**record, 'status': 'unresolved', 'reason': 'unsupported_motion'}); continue
         def lane_mask(fi):
             return np.unpackbits(masks[fi, note['lane']], axis=-1)[..., :columns].astype(bool)
-        templates = [];template_pts=[]
+        templates = []
         for time, y in (note.get('points', [])if learned is None else []):
             if not receptor+1.4*spacing <= y*scale <= receptor+2.8*spacing:
                 continue
@@ -160,15 +155,13 @@ def observe_processing(data, path):
             template = patch_at(color, y*scale-top, radius)
             light = patch_at(white, y*scale-top, radius)
             if template is not None and light is not None and acceptable(template,light):
-                templates.append(template);template_pts.append(float(pts[fi]))
+                templates.append((float(pts[fi]),y*scale,template))
         reference=learned.get(index)if learned is not None else None
         if learned is None and len(templates)>=TEMPLATE_FORMAT['minimum_frames']:
-            reference={'mask':np.mean(templates,axis=0)>=.5,
-                       'evidence':{'trace':'processing-features.npz','source_pts_seconds':template_pts,'frames':len(templates)}}
+            reference=build(templates,spacing,'processing-features.npz')
         if reference is None:
             result.append({**record, 'status': 'unresolved', 'reason': 'insufficient_clear_approach'}); continue
-        # Median silhouette retains repeatedly observed pixels and rejects animation noise.
-        template = reference['mask'];record['template_evidence']=reference['evidence']
+        record['template_evidence']=reference['evidence']
         start, end = target-min(.25, 2.8*spacing/-velocity), target+min(.2, 1.2*spacing/-velocity)
         alternatives = [paths[i] for i,other in enumerate(data['notes'])
                         if i != index and other['lane'] == note['lane']]
@@ -178,41 +171,19 @@ def observe_processing(data, path):
             y = path['position'](time)
             if y is None:
                 continue
-            state, score, reason = 'unknown', None, 'partial_shape'
             color, light, visibility = lane_mask(fi)
-            cropped=visible_template(color,template,y-top,radius)
-            if cropped:
-                slices,observed_template,coverage=cropped
-                image,white=color[slices],light[slices]
-            else:image=white=None
+            observation=compare(color,light,reference,y-top,radius,spacing)
             hidden=hud_regions(data['layout'],note['lane'],y,radius,PIXEL_FORMAT['width'],height)
-            if image is None or white is None:
-                reason = 'image_boundary'
-            elif competing:
-                reason = 'competing_head'
+            reason=None
+            if observation['unknown_reason']=='image_boundary':pass
+            elif competing:reason='competing_head'
             elif hidden:
                 reason = 'hud_occlusion'
             elif visibility.mean()<=.015:
                 reason = 'screen_not_visible'
-            elif white.mean()>=.45:
-                reason = 'white_effect'
-            else:
-                score = overlap(observed_template, image)
-                state = 'present' if score>=.65 else 'absent' if score<=.18 else 'unknown'
-                if state == 'absent':
-                    # Bloom can desaturate the colored head outside the strict
-                    # white core. Its neighboring pixels are not clear absence.
-                    halo_radius = max(1, round(.1*spacing))
-                    halo = cv2.dilate(white.astype('uint8'), np.ones((2*halo_radius+1,2*halo_radius+1), dtype='uint8'))
-                    if halo[observed_template].mean() >= .3:
-                        state, reason = 'unknown', 'white_effect'
-                if coverage['area_fraction']<1 and state=='present':
-                    state,reason='unknown','partial_head_present'
-            record['samples'].append({'time': time, 'pts': source_pts, 'y': float(y), 'state': state, 'score': score,
-                                      'unknown_reason': reason if state == 'unknown' else None,
-                                      **({'occluders':hidden}if hidden else {}),
-                                      **({'template_coverage':coverage,'confirmation_only':True}
-                                         if cropped and coverage['area_fraction']<1 else {})})
+            if reason:observation.update(state='unknown',score=None,unknown_reason=reason)
+            record['samples'].append({'time':time,'pts':source_pts,'y':float(y),**observation,
+                                      **({'occluders':hidden}if hidden else {})})
         result.append({**record, **transition(record['samples'], receptor, spacing)})
     from piu_timeline.play.visibility import pre_receptor_losses
     boundaries = pre_receptor_losses(result, receptor, spacing)
