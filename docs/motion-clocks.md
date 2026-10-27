@@ -26,12 +26,20 @@ limit is 8% plus the measured residual-derived uncertainty.
 
 The complete block clock is checked against the actual before/after crossing
 frames. If it fails, a local clock starts within 500 ms on either side of the
-measured crossing. Remove only the most remote outer sample until a clock
-passes, preserving every intervening observation. Every candidate retains the
-same sample-count, duration, slope, residual and native-bracket requirements.
+measured crossing. Test contiguous windows containing both actual crossing
+frames, including windows with the crossing near either end. Each window
+retains every intervening observation and rejects source gaps over 50 ms.
+Every candidate retains the same sample-count, duration, slope, residual and
+native-bracket requirements. The predicted phase at both bracket frames must
+also fit the existing capture-interval and position-error allowance. A phase
+jump inside the bracket cannot become an averaged-away outlier in a longer
+flank. A later pause can therefore leave a separately supported earlier
+crossing intact, without supplying a clock for the pause itself.
 Prefer the qualifying window with the lowest residual, down to the existing
 0.75-pixel positional floor; among equally precise windows use more native
-samples. Retain its bounds, selection method and trimmed-frame count. A distant pause or speed change cannot veto a
+samples. Prefer the nearer center only when precision and support are tied.
+Retain its bounds, selection method, trimmed-frame count and bracket-phase
+errors. A distant pause or speed change cannot veto a
 separately supported neighborhood. A discontinuous or poorly supported crossing
 remains an explicit reconstruction failure. No failed clock silently becomes a
 local per-note estimate or interpolated timing in registered reconstruction.

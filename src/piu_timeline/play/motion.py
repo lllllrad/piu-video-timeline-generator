@@ -6,7 +6,24 @@ import numpy as np
 
 
 LOCAL_CLOCK_FORMAT = {'schema': 1, 'revision': 1, 'selection': 'precision_then_native_support',
-                      'position_floor_pixels': .75, 'maximum_radius_seconds': .5}
+                      'position_floor_pixels': .75, 'maximum_radius_seconds': .5,
+                      'windows':'all_contiguous_bracketing',
+                      'bracket_validation':'phase_within_capture_and_position_error'}
+
+
+def crossing_windows(samples,before,after):
+    """Largest contiguous windows first; keep both actual crossing observations."""
+    indices={s['time']:i for i,s in enumerate(samples)}
+    if before['time']not in indices or after['time']not in indices:return
+    a,b=indices[before['time']],indices[after['time']]
+    breaks=[0]
+    for first,last in zip(samples,samples[1:]):
+        breaks.append(breaks[-1]+int(not 0<last['time']-first['time']<=.05+1e-6))
+    for count in range(len(samples),15,-1):
+        for start in range(max(0,b-count+1),min(a,len(samples)-count)+1):
+            end=start+count-1
+            if samples[end]['time']-samples[start]['time']<.3 or breaks[end]!=breaks[start]:continue
+            yield samples[start:end+1]
 
 
 class ScrollMotion:
@@ -80,24 +97,24 @@ class ScrollMotion:
     def _local_clock(self, chunk, crossing, phase, phase_error, before, after, cadence):
         """Keep a fully observed crossing neighborhood when distant motion differs."""
         local = [item for item in chunk if abs(item['time']-crossing) <= LOCAL_CLOCK_FORMAT['maximum_radius_seconds']]
-        trimmed = 0; best = None
-        while len(local) >= 16 and local[-1]['time']-local[0]['time'] >= .3:
-            clock = self._clock(local)
+        best = None
+        for window in crossing_windows(local,before,after):
+            # Below the positional floor, fewer native observations cannot
+            # improve the precision/support ordering. Still test all ties.
+            if best and best[0][0]<=LOCAL_CLOCK_FORMAT['position_floor_pixels']and len(window)<-best[0][1]:break
+            clock = self._clock(window)
             if clock:
                 proposed = clock['origin']+(phase-clock['intercept'])/clock['velocity']
                 capture_error = cadence/2+phase_error/clock['velocity']
-                if before['time']-capture_error <= proposed <= after['time']+capture_error:
-                    score = (max(LOCAL_CLOCK_FORMAT['position_floor_pixels'],clock['residual']),-len(local))
+                errors=[abs(s['phase']-(clock['intercept']+clock['velocity']*(s['time']-clock['origin'])))for s in(before,after)]
+                limit=capture_error*clock['velocity']
+                if (max(errors)<=limit+1e-6 and before['time']-capture_error <= proposed <= after['time']+capture_error):
+                    score = (max(LOCAL_CLOCK_FORMAT['position_floor_pixels'],clock['residual']),-len(window),
+                             abs((window[0]['time']+window[-1]['time'])/2-crossing),window[0]['time'])
                     if best is None or score < best[0]:
                         best = (score,{**clock, 'selection': LOCAL_CLOCK_FORMAT['selection'],
-                                       'trimmed_outer_frames': trimmed},capture_error)
-            # Remove the most remote sample, never a point inside the window.
-            # The crossing bracket and all intervening source PTS stay intact.
-            if crossing-local[0]['time'] >= local[-1]['time']-crossing:
-                local = local[1:]
-            else:
-                local = local[:-1]
-            trimmed += 1
+                                       'trimmed_outer_frames':len(local)-len(window),
+                                       'bracket_phase_errors_pixels':errors,'bracket_tolerance_pixels':limit},capture_error)
         return (best[1],best[2]) if best else (None,None)
 
     def extrapolated_crossing(self, sample, phase, phase_error):
