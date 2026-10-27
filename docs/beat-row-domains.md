@@ -84,6 +84,13 @@ source note identity, coordinate block, model error and each independent
 reference's native support and source PTS range. Failed ambiguous fits also keep
 their remaining row domains and any qualified coordinate constraints.
 
+When an independently modeled pair has a conflicting gap, compare each head's
+actual native offset with the model separately. Keep a head when every qualified
+model places it within the existing native-plus-reference error bound and only
+its neighbor contradicts that bound. If models refute both heads, disagree on
+which head is wrong, or cannot attribute a relative gap error, both remain
+unresolved. Preserve pair evidence and per-head residuals in the warning.
+
 ## Targets without a successful crossing clock
 
 A continuous trajectory can lose its shared crossing clock when peers disappear

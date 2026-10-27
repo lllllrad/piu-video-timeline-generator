@@ -3,7 +3,7 @@ from itertools import combinations
 
 import numpy as np
 
-FORMAT={'schema':1,'revision':4,'minimum_references':5,'minimum_lanes':2,
+FORMAT={'schema':1,'revision':5,'minimum_references':5,'minimum_lanes':2,
         'reference_radius_seconds':.75,'minimum_target_span_seconds':.3,
         'minimum_slope_span_seconds':.15,'maximum_reference_error_pixels':1.,
         'maximum_native_error_pixels':1.5}
@@ -75,5 +75,6 @@ def predictions(a,b,notes,interval,support):
         lo,hi=model['reference_target_range']
         if not lo<=min(ta,tb)<=max(ta,tb)<=hi:continue
         models.append({'chunk':number,'predicted_gap_pixels':model['velocity_pixels_per_second']*(tb-ta),
+                       'peer_offsets_pixels':[heads[a]['offset'],heads[b]['offset']],
                        'coobserved_points':len(times),'visible_range':[times[0],times[-1]],**model})
     return models

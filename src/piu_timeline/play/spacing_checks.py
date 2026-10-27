@@ -3,6 +3,26 @@ from collections import defaultdict
 
 import numpy as np
 from piu_timeline.play.beats.coordinates import predictions
+from piu_timeline.play.beats.coordinates import FORMAT as COORDINATE_FORMAT
+
+
+def attributed_heads(a,b,notes,models):
+    """Do not exclude an independently confirmed head for its neighbor's error."""
+    if not models:return (a,b),[]
+    rejected=set();proof=[]
+    for model in models:
+        if 'peer_offsets_pixels'not in model:return (a,b),[]
+        errors=[offset-(model['offset_at_origin_pixels']+model['velocity_pixels_per_second']*
+                       (notes[i]['target_seconds']-model['origin_seconds']))
+                for i,offset in zip((a,b),model['peer_offsets_pixels'],strict=True)]
+        tolerance=COORDINATE_FORMAT['maximum_native_error_pixels']+model['maximum_reference_error_pixels']
+        bad=[i for i,error in zip((a,b),errors)if abs(error)>tolerance+1e-6]
+        rejected.update(bad)
+        proof.append({'chunk':model['chunk'],'peer_position_errors_pixels':errors,
+                      'maximum_position_error_pixels':tolerance,'contradicting_notes':bad})
+    # When only the relative gap contradicts the model, neither head has an
+    # independent absolute verdict. Both remain unresolved in that case.
+    return (tuple(i for i in(a,b)if i in rejected)if rejected else(a,b)),proof
 
 
 def registered_gap(first,second,samples,offsets,frames,a,b):
@@ -66,10 +86,12 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
         elif not ca or not cb:continue
         tolerance=max(1.,3*scatter)
         if predicted is not None and abs(predicted-gap)<=tolerance+1e-6:continue
-        for index in (a,b):
+        rejected,attribution=attributed_heads(a,b,notes,models)
+        for index in rejected:
             failed.append({'note':index,'lane':notes[index]['lane'],'reason':'shared_spacing_reconstruction_conflict' if predicted is not None else 'shared_spacing_model_unavailable',
                            'check':'timing_reconstruction','visible_start_seconds':samples[0][0],
                            'visible_end_seconds':samples[-1][0],'observed_points':len(samples),
                            'peer_notes':[a,b],'observed_gap_pixels':gap,'reconstructed_gap_pixels':predicted,
-                           'tolerance_pixels':tolerance,**({'independent_coordinate_models':models}if models else {})})
+                           'tolerance_pixels':tolerance,**({'independent_coordinate_models':models,
+                           'native_position_attribution':attribution}if models else {})})
     return failed
