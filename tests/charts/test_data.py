@@ -25,14 +25,50 @@ class Provider:
 
 
 def data():
-    return {'song': 'CHAOS AGAIN', 'chart': 'S21', 'segment_number': 1,
+    result = {'song': 'CHAOS AGAIN', 'chart': 'S21', 'segment_number': 1,
             'media': {'size_bytes': 123, 'mtime_ns': 456}, 'start_seconds': 10, 'end_seconds': 14,
             'layout': {'lanes': [{}]*5}, 'matches': [], 'combo_events': [], 'judgment_events': [],
             'notes': [{'status': 'estimated', 'lane': lane, 'target_seconds': target,
                        'prediction_uncertainty_seconds': .01} for lane, target in ((0, 10.5), (1, 11), (2, 11.5))]}
+    prove_types(result)
+    return result
+
+
+def prove_types(source, holds=()):
+    source['visual_channels']={'note_types':{'notes':[
+        {'note':i,'observations':[{'kind':'hold' if i in holds else 'tap','reason':'synthetic_visible_shape',
+                                  'playback_seconds':note['target_seconds']-.3,
+                                  'source_pts_seconds':note['target_seconds']+4.7}]}
+        for i,note in enumerate(source['notes'])]}}
 
 
 class ChartDataTest(unittest.TestCase):
+    def test_hold_caps_unknown_and_conflicting_types_never_become_ucs_taps(self):
+        for kinds in (['hold'],['unknown'],['tap','hold'],[]):
+            source=data()
+            observations=source['visual_channels']['note_types']['notes'][0]['observations']
+            observations[:]=[{'kind':kind,'reason':'synthetic_observed_shape',
+                               'playback_seconds':10.1,'source_pts_seconds':15.1} for kind in kinds]
+            original=deepcopy(source)
+            document,evidence=draft(ucs.parse(TEMPLATE),source,{'song_start_seconds':10,'uncertainty_seconds':0})
+            self.assertEqual(source,original)
+            self.assertEqual([p['note'] for p in evidence['placements']],[1,2])
+            self.assertEqual([p['note'] for p in evidence['unresolved']],[0])
+            self.assertNotIn('X', ''.join(row[0] for section in document.sections for row in section.rows))
+        source=data();source.pop('visual_channels')
+        with self.assertRaisesRegex(ValueError,'No bounded notes'):
+            draft(ucs.parse(TEMPLATE),source,{'song_start_seconds':10,'uncertainty_seconds':0})
+
+    def test_complete_hold_does_not_override_a_contradictory_precontact_tap(self):
+        source=data()
+        source['hold_analysis']={'holds':[{'id':0,'lane':1,'start_range':[10.99,11.01],
+            'end_range':[11.99,12.01],'start_censored':False,'end_censored':False,
+            'head_note':1,'covered_notes':[1],'input':{'segments':[]}}]}
+        # The original positive tap observation is before receptor contact.
+        _,evidence=draft(ucs.parse(TEMPLATE),source,{'song_start_seconds':10,'uncertainty_seconds':0})
+        self.assertEqual(evidence['summary']['placed_holds'],0)
+        self.assertEqual(evidence['unresolved'],[{'note':1,'reason':'Contradictory tap and hold observations'}])
+
     def test_explicit_origin_survives_cache_reuse_only_for_same_recording(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); repo = initialize(root/'repo', Provider()); output = root/'video/play/segment-001'
@@ -53,6 +89,7 @@ class ChartDataTest(unittest.TestCase):
         source['end_seconds'] = 25
         source['notes'].append({'status': 'estimated', 'lane': 4, 'target_seconds': 22,
                                 'prediction_uncertainty_seconds': .01})
+        prove_types(source)
         alignment = {'song_start_seconds': 10, 'uncertainty_seconds': 0}
         _, incomplete = draft(ucs.parse(TEMPLATE), source, alignment)
         self.assertEqual(incomplete['summary']['unresolved_note_heads'], 1)
@@ -97,6 +134,7 @@ class ChartDataTest(unittest.TestCase):
         source['hold_analysis'] = {'holds': [{'id': 0, 'lane': 1, 'start_range': [10.99, 11.01], 'end_range': [11.99, 12.01],
                                              'start_censored': False, 'end_censored': False, 'head_note': 1,
                                              'covered_notes': [1], 'input': {'segments': []}}]}
+        prove_types(source,holds={1})
         original = deepcopy(source)
         document, evidence = draft(ucs.parse(TEMPLATE), source, {'song_start_seconds': 10, 'uncertainty_seconds': .01})
         self.assertEqual(source, original)
@@ -117,6 +155,7 @@ class ChartDataTest(unittest.TestCase):
                                              'start_censored': False, 'end_censored': True, 'head_note': 2,
                                              'last_body_seconds': 13, 'covered_notes': [2], 'input': {'segments': []}}]}
         source['notes'].append({'status': 'estimated', 'lane': 3, 'target_seconds': 13, 'prediction_uncertainty_seconds': .01})
+        prove_types(source,holds={2})
         _, evidence = draft(ucs.parse(TEMPLATE), source, {'song_start_seconds': 10, 'uncertainty_seconds': 0})
         self.assertEqual(evidence['summary']['placed_taps'], 1)
         self.assertEqual(evidence['summary']['placed_holds'], 0)

@@ -88,7 +88,10 @@ def presentation(data):
     """Project hold-aware chart/recognition without rewriting native tap evidence."""
     holds = data.get('hold_analysis', {}).get('holds', [])
     if not data.get('hold_analysis'):
-        return data
+        from piu_timeline.play.note_types import project_types
+        notes=[dict(note) for note in data.get('notes',[])]
+        diagnostics=project_types(data,notes,[])
+        return {**data,'notes':notes,'note_type_diagnostics':diagnostics}
     notes = [dict(note) for note in data['notes']]
     suppressed = {index for hold in holds for index in hold['covered_notes']}
     from piu_timeline.play.holds.roles import observed_tail_roles

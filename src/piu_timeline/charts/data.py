@@ -178,9 +178,15 @@ def draft(template, data, alignment, extend_constant_tempo=False):
             lane = note['lane']
             if not isinstance(lane, int) or not 0 <= lane < lanes:
                 raise ValueError('Invalid observed lane')
+            hold = holds.get(ni)
+            kind = note.get('type_status')
+            if kind == 'conflict':
+                raise ValueError('Contradictory tap and hold observations')
+            if not hold and kind != 'tap':
+                raise ValueError('Observed hold cap has no resolved hold geometry' if kind == 'hold'
+                                 else 'Note type is unverified')
             start, residual = cell(note['target_seconds'], note.get('prediction_uncertainty_seconds', .02))
             end = start
-            hold = holds.get(ni)
             if hold:
                 if hold['start_censored'] or hold['end_censored'] or not hold['end_range']:
                     raise ValueError('Hold endpoint is censored')

@@ -54,6 +54,13 @@ rebuilds them.
 
 Detected note geometry supplies chart notes independently of successful input/judgment association, so missed inputs do not remove notes from the draft. Hold-aware projection suppresses hold body/tail detections as separate taps and emits `M`/`H`/`W` cells. Single and Double use five and ten columns respectively. Conflicting same-lane placements, unbounded fits and censored hold endpoints are recorded as unresolved. The template cannot reveal notes absent from the observations.
 
+A UCS tap also requires positive isolated-tap shape evidence. An observed hold cap
+without reconstructed hold geometry, an unknown type, missing type observations,
+or contradictory tap/hold evidence remains an unresolved placement. A failed hold
+reconstruction never falls back to `X`. Reconstructed holds keep their endpoint
+requirements and cannot override a contradictory pre-contact tap observation.
+Legacy analyses without type evidence must be refreshed before exporting taps.
+
 Generated metadata explicitly records `review_status: unreviewed_draft`, source ID/segment, source identity, analysis fingerprint, timing source/hash, alignment evidence and placements. These drafts must not validate the same recording from which they were extracted. A human can edit `chart.ucs` directly and mark metadata reviewed after independent checking. Normalized timing-template hashes identify parsed timing content, not original ZIP bytes.
 
 ## Region processing and automatic-check exceptions
