@@ -3,7 +3,7 @@ from itertools import combinations
 
 import numpy as np
 
-FORMAT={'schema':1,'revision':5,'minimum_references':5,'minimum_lanes':2,
+FORMAT={'schema':1,'revision':6,'minimum_references':5,'minimum_lanes':2,
         'reference_radius_seconds':.75,'minimum_target_span_seconds':.3,
         'minimum_slope_span_seconds':.15,'maximum_reference_error_pixels':1.,
         'maximum_native_error_pixels':1.5}
@@ -71,11 +71,22 @@ def predictions(a,b,notes,interval,support):
         refs=[{'note':i,'target_seconds':notes[i]['target_seconds'],**head}for i,head in heads.items()
               if i not in (a,b)and i in support['reference_notes']and notes[i]['status']=='estimated'
               and min(ta,tb)-FORMAT['reference_radius_seconds']<=notes[i]['target_seconds']<=max(ta,tb)+FORMAT['reference_radius_seconds']]
-        model=fit(refs)
-        if model is None:continue
-        lo,hi=model['reference_target_range']
-        if not lo<=min(ta,tb)<=max(ta,tb)<=hi:continue
-        models.append({'chunk':number,'predicted_gap_pixels':model['velocity_pixels_per_second']*(tb-ta),
-                       'peer_offsets_pixels':[heads[a]['offset'],heads[b]['offset']],
-                       'coobserved_points':len(times),'visible_range':[times[0],times[-1]],**model})
+        reference_sets=[refs]
+        for proof in support.get('recovery_reference_sets',()):
+            if proof['chunk']!=number or proof['note']not in(a,b):continue
+            original=proof['references']
+            if any(r['note']not in support['reference_notes']or notes[r['note']]['status']!='estimated'
+                   or notes[r['note']]['target_seconds']!=r['target_seconds']for r in original):continue
+            reference_sets.append([r for r in original if r['note']not in(a,b)])
+        seen=set()
+        for refs in reference_sets:
+            key=tuple(sorted(r['note']for r in refs))
+            if key in seen:continue
+            seen.add(key);model=fit(refs)
+            if model is None:continue
+            lo,hi=model['reference_target_range']
+            if not lo<=min(ta,tb)<=max(ta,tb)<=hi:continue
+            models.append({'chunk':number,'predicted_gap_pixels':model['velocity_pixels_per_second']*(tb-ta),
+                           'peer_offsets_pixels':[heads[a]['offset'],heads[b]['offset']],
+                           'coobserved_points':len(times),'visible_range':[times[0],times[-1]],**model})
     return models

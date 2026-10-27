@@ -12,7 +12,8 @@ from piu_timeline.play.beats.recovery import FORMAT as RECOVERY_FORMAT
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
-FORMAT={'schema':1,'revision':13,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
+FORMAT={'schema':1,'revision':15,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
+        'reference_validation':'before_and_after_native_recovery',
         'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT,'native_row_domains':DOMAIN_FORMAT,'native_recovery':RECOVERY_FORMAT}
 
 
@@ -177,7 +178,7 @@ def apply(data,directory):
     spacing=None
     if len(data.get('layout',{}).get('lanes',[]))>=2:
         spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
-    from piu_timeline.play.beats.chords import prepare as prepare_chords,conflicts as chord_conflicts
+    from piu_timeline.play.beats.chords import prepare as prepare_chords
     chords=prepare_chords(data,spacing)if spacing else []
     result['native_chords']=chords
     proposals=[]
@@ -233,29 +234,25 @@ def apply(data,directory):
                 target=fit['targets'][j]
                 note.update(target_seconds=target,prediction_uncertainty_seconds=max(
                     note['prediction_uncertainty_seconds']+abs(target-before),ref['alignment_uncertainty_seconds']))
-    from piu_timeline.play.spacing_checks import spacing_failures
     from piu_timeline.play.beats.recovery import recover
+    from piu_timeline.play.beats.validation import validate as validate_notes
+    coordinate_support=prepare({**data,'notes':notes},spacing,include_failed=True)if spacing else None
+    initial_warnings,initial_chords,initial_checks=validate_notes(data,notes,spacing,coordinate_support)
+    result['warnings'].extend(initial_warnings)
     coordinate_support=prepare({**data,'notes':notes},spacing,include_failed=True)if spacing else None
     recovered=recover(notes,coordinate_support,sections,origin,phase.get('phase'),ref['alignment_uncertainty_seconds'],
                       groups=result['groups'],phase_range=phase.get('phase_range'))
     result['native_coordinate_recovery']=[{'note':i,**proof}for i,proof in recovered.items()]
-    if len(data.get('layout',{}).get('lanes',[]))>=2:
-        spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
-        result['coordinate_checks']=[]
-        conflicts=spacing_failures(notes,spacing,data.get('scroll_motion'),coordinate_support,result['coordinate_checks'],
-                                   baseline_indices=coordinate_support.get('reference_notes')if coordinate_support else None)
-        for conflict in conflicts:
-            index=conflict['note'];conflict.update(reason='beat_grid_conflicts_with_spatial_spacing')
-            notes[index].update(status='excluded',reason=conflict['reason'],target_seconds=None,
-                                 beat_reconstruction={**notes[index]['beat_reconstruction'],'status':'failed','reason':conflict['reason']})
-        result['warnings'].extend(conflicts)
-    chords=prepare_chords({**data,'notes':notes},spacing)if spacing else chords
-    result['native_chords']=chords
-    conflicts=chord_conflicts(notes,chords)
-    for conflict in conflicts:
-        notes[conflict['note']].update(status='excluded',reason=conflict['reason'],target_seconds=None,
-                                     beat_reconstruction={**notes[conflict['note']]['beat_reconstruction'],'status':'failed','reason':conflict['reason']})
-    result['warnings'].extend(conflicts)
+    if coordinate_support:
+        coordinate_support['recovery_reference_sets']=[{'note':i,'chunk':model['chunk'],'references':model['model']['references']}
+            for i,proof in recovered.items()if notes[i]['status']=='estimated'for model in proof['models']]
+    final_warnings,final_chords,final_checks=validate_notes(data,notes,spacing,coordinate_support,
+        baseline_indices=coordinate_support.get('reference_notes')if coordinate_support else None,
+        changed_indices={i for i in recovered if notes[i]['status']=='estimated'})
+    result['warnings'].extend(final_warnings)
+    result['coordinate_checks']=[{**c,'stage':stage}for stage,checks in
+                                (('reference_validation',initial_checks),('recovery_validation',final_checks))for c in checks]
+    result['native_chords']=list({tuple(p['peer_notes']):p for p in initial_chords+final_chords}.values())
     for index,proof in recovered.items():
         if notes[index]['status']!='estimated':continue
         references=[r for model in proof['models']for r in model['model']['references']]

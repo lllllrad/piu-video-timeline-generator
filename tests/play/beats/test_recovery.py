@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from piu_timeline.play.beats.coordinates import prepare
+from piu_timeline.play.beats.coordinates import prepare,predictions,FORMAT as COORDINATE_FORMAT
 from piu_timeline.play.beats.recovery import recover,choose_row
 from piu_timeline.play.beats.timing import apply
 from piu_timeline.play.spacing_checks import spacing_failures
@@ -30,6 +30,25 @@ def scenario(failed=(4,)):
 
 
 class NativeTimingRecoveryTest(unittest.TestCase):
+    def test_recovery_references_remain_usable_for_a_gap_with_sparse_local_support(self):
+        data=scenario();support=prepare(data,40,include_failed=True)
+        results=recover(data['notes'],support,[(0,4,120)],0,0,0)
+        refs=results[4]['models'][0]['model']['references']
+        with patch.dict(COORDINATE_FORMAT,reference_radius_seconds=.1):
+            self.assertEqual(predictions(4,5,data['notes'],(.5,.68),support),[])
+            support['recovery_reference_sets']=[{'note':4,'chunk':0,'references':refs}]
+            models=predictions(4,5,data['notes'],(.5,.68),support)
+            self.assertTrue(models)
+            self.assertTrue(all({4,5}.isdisjoint(r['note']for r in m['references'])for m in models))
+            self.assertEqual(spacing_failures(data['notes'],40,data['scroll_motion'],support),[])
+            data['notes'][4]['target_seconds']+=.06
+            failures=spacing_failures(data['notes'],40,data['scroll_motion'],support)
+            self.assertEqual({w['note']for w in failures},{4})
+            # A recovered head cannot be smuggled into a later reference set.
+            support['recovery_reference_sets'][0]['references']=refs+[{
+                'note':4,'target_seconds':data['notes'][4]['target_seconds'],**support['chunks'][0][4]}]
+            self.assertEqual(predictions(4,5,data['notes'],(.5,.68),support),[])
+
     def test_adding_a_head_cannot_hide_a_previous_pair_by_changing_adjacency(self):
         notes,motion,_=spacing_scenario()
         motion['coordinate_registration']['chunks'][0]['head_offsets'][1]['offset_pixels']+=8

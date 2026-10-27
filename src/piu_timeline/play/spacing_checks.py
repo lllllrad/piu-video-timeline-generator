@@ -47,7 +47,7 @@ def registered_gap(first,second,samples,offsets,frames,a,b):
     return float(np.median([gap for _,gap in gaps]))+corrections[1]-corrections[0]
 
 
-def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagnostics=None, baseline_indices=None):
+def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagnostics=None, baseline_indices=None,changed_indices=None):
     if motion is not None and hasattr(motion,'evidence'):motion=motion.evidence()
     offsets={(record['chunk'],head['note']):head['offset_pixels']
              for record in (motion or {}).get('coordinate_registration',{}).get('chunks',[]) if record.get('status')=='fitted'
@@ -67,6 +67,7 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
             if yb-ya>.65*spacing:pairs[(a,b)].append((time,yb-ya))
     failed=[]
     for (a,b),samples in pairs.items():
+        if changed_indices is not None and a not in changed_indices and b not in changed_indices:continue
         if len(samples)<4 or samples[-1][0]-samples[0][0]<.065:continue
         first,second=notes[a],notes[b]
         ca,cb=first.get('motion_clock'),second.get('motion_clock')

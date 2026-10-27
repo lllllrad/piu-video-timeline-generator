@@ -67,8 +67,14 @@ class RejectedClockRecoveryTest(unittest.TestCase):
                 self.assertIsNone(data['notes'][4]['target_seconds'])
 
     def test_full_application_retires_the_rejected_beat_warning_after_independent_validation(self):
+        self.check_application(False)
+
+    def test_invalid_external_rows_are_removed_before_freezing_recovery_references(self):
+        self.check_application(True)
+
+    def check_application(self,unregistered_neighbor):
         data=fixture();times=[s['time']for s in data['scroll_motion']['samples']]
-        targets=[1+i*.125 for i in range(32)]
+        targets=[1.25+i*.125 for i in range(32)]
         data['analysis_width']=400;data['analysis_height']=1400
         data['layout']={'receptor_y':40/1400,'lanes':[{'x':.1+.1*i}for i in range(3)]}
         data['notes']=[{'lane':i%3,'status':'estimated','target_seconds':t,
@@ -78,8 +84,15 @@ class RejectedClockRecoveryTest(unittest.TestCase):
                         'timing_reconstruction':{'status':'restored'}}for i,t in enumerate(targets)]
         data['head_registration']['notes']=[{'note':i,'status':'registered','observations':[{'time':t}for t in times]}for i in range(32)]
         data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets']=[{'note':i,'offset_pixels':40+240*t}for i,t in enumerate(targets)]
+        if unregistered_neighbor:
+            data['notes'].append({'lane':2,'status':'estimated','target_seconds':1.25,
+                'prediction_uncertainty_seconds':.001,'points':[(t,40+240*(.9-t))for t in times],
+                'motion_clock':{'origin':0,'velocity':240,'intercept':0},'motion_target_phase':240*.9,
+                'timing_reconstruction':{'status':'restored'}})
+            data['head_registration']['notes'].append({'note':32,'status':'unresolved','observations':[{'time':t}for t in times]})
+            data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'].append({'note':32,'offset_pixels':40+240*.9})
         data['notes'][12]['target_seconds']+=1/48
-        data['timing_reconstruction']={'status':'failed','restored_notes':32,
+        data['timing_reconstruction']={'status':'failed','restored_notes':len(data['notes']),
                                      'warnings':[{'note':12,'reason':'shared_motion_observation_conflict'}]}
         original=deepcopy(data)
         with tempfile.TemporaryDirectory()as temporary:
@@ -87,9 +100,13 @@ class RejectedClockRecoveryTest(unittest.TestCase):
             timing.write_text(':Format=1\n:Mode=Single\n:BPM=120\n:Delay=0\n:Beat=4\n:Split=4\n'+'.....\n'*64)
             reference={'status':'available','timing':str(timing),'song_start_seconds':0,'alignment_uncertainty_seconds':0}
             with patch('piu_timeline.play.beats.timing.reference',return_value=reference):result=apply(data,root)
-        self.assertEqual(result['notes'][12]['target_seconds'],2.5)
+        self.assertEqual(result['notes'][12]['target_seconds'],2.75)
         self.assertEqual(result['notes'][12]['fit_method'],'native_beat_coordinate_interpolation')
-        self.assertEqual(result['beat_timing']['warnings'],[])
+        if unregistered_neighbor:
+            self.assertEqual(result['notes'][0]['status'],'excluded')
+            proof=next(p for p in result['beat_timing']['native_coordinate_recovery']if p['note']==12)
+            self.assertTrue(all(0 not in[r['note']for r in m['model']['references']]for m in proof['models']))
+        else:self.assertEqual(result['beat_timing']['warnings'],[])
         self.assertEqual(result['timing_reconstruction']['warnings'],original['timing_reconstruction']['warnings'])
-        self.assertEqual(result['timing_reconstruction']['restored_notes'],32)
+        self.assertEqual(result['timing_reconstruction']['restored_notes'],len(data['notes']))
         self.assertEqual(data,original)

@@ -150,6 +150,21 @@ prediction with its original clock interval before selecting a row. An empty
 intersection or several remaining rows fails explicitly. Other beat failures
 do not qualify for this path.
 
+Validate known rows for spacing and concurrency before freezing recovery
+references. A row which already failed either check cannot train recovery.
+After recovery, apply the same checks to pairs involving newly assigned rows;
+unchanged pairs retain their first-stage validation and warnings. Newly
+discovered contradictions still invalidate
+their dependent recoveries; there is no repeated pruning to fit a preferred
+answer. Both validation stages retain their diagnostics.
+
+A recovered head's frozen reference set can also validate its gap to a neighbor
+in the same native block. Remove both tested heads from that set and refit with
+all remaining validated references under the same count, span, error and
+bracketing gates. This preserves independent evidence when a narrower local
+window has too few references. Every other qualifying pair model still applies;
+a favorable recovery model cannot bypass a contradictory one.
+
 ## Partial groups at a fixed common phase
 
 A compatible subdivision can give one row to some heads and several rows to
