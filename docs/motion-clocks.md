@@ -51,6 +51,16 @@ Selecting a clock never removes the independent visibility or motion warnings.
 can separately establish a chart target when a crossing clock fails. That method
 does not restore or substitute a source motion clock.
 
+Independent reference models predict gaps in registered native coordinates.
+Compare those predictions with the tested heads' fitted offsets in the same
+coordinate block. Each head must already pass the native observation-residual
+checks, and the tested pair remains excluded from the independent references.
+The comparison keeps the existing pixel limit. An adjacency-only subset of
+rasterized positions can have a biased median even when the full native fit
+is valid; retain that median separately as `observed_gap_pixels`, alongside the
+actual `comparison_gap_pixels` and its coordinate basis. Every independently
+supported model must agree, including when different blocks support the pair.
+
 
 ## Converting beat corrections to pixel gaps
 

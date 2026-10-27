@@ -3,7 +3,7 @@ from itertools import combinations
 
 import numpy as np
 
-FORMAT={'schema':1,'revision':6,'minimum_references':5,'minimum_lanes':2,
+FORMAT={'schema':1,'revision':7,'minimum_references':5,'minimum_lanes':2,
         'reference_radius_seconds':.75,'minimum_target_span_seconds':.3,
         'minimum_slope_span_seconds':.15,'maximum_reference_error_pixels':1.,
         'maximum_native_error_pixels':1.5}

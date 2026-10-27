@@ -100,11 +100,19 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
         else:
             predicted=registered_gap(first,second,samples,offsets,frames,a,b)if ca and cb else None
         models=predictions(a,b,notes,(samples[0][0],samples[-1][0]),coordinate_support)
+        comparison_gap=gap
         if models:
             # A model is selected by independent reference support, regardless
             # of its verdict. Any supported disagreement must remain a failure.
-            predicted=max(models,key=lambda m:abs(m['predicted_gap_pixels']-gap))['predicted_gap_pixels']
-            if diagnostics is not None:diagnostics.append({'peer_notes':[a,b],'observed_gap_pixels':gap,'models':models})
+            # Its fitted native offsets and independent prediction use the same
+            # coordinate system. A short adjacency-only raster median does not.
+            def measured(model):
+                first_offset,second_offset=model['peer_offsets_pixels']
+                return second_offset-first_offset
+            selected=max(models,key=lambda m:abs(m['predicted_gap_pixels']-measured(m)))
+            predicted=selected['predicted_gap_pixels'];comparison_gap=measured(selected)
+            if diagnostics is not None:diagnostics.append({'peer_notes':[a,b],'observed_gap_pixels':gap,
+                'comparison_gap_pixels':comparison_gap,'comparison_basis':'independent_registered_offsets','models':models})
         elif not ca or not cb:continue
         tolerance=max(1.,3*scatter)
         conversion=clock_conversion(first,second)if motion is not None and predicted is not None and not models else None
@@ -112,13 +120,14 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
         if conversion and diagnostics is not None:
             diagnostics.append({'peer_notes':[a,b],'observed_gap_pixels':gap,
                                 'reconstructed_gap_pixels':predicted,'clock_conversion':conversion})
-        if predicted is not None and abs(predicted-gap)<=comparison+1e-6:continue
+        if predicted is not None and abs(predicted-comparison_gap)<=comparison+1e-6:continue
         rejected,attribution=attributed_heads(a,b,notes,models)
         for index in rejected:
             failed.append({'note':index,'lane':notes[index]['lane'],'reason':'shared_spacing_reconstruction_conflict' if predicted is not None else 'shared_spacing_model_unavailable',
                            'check':'timing_reconstruction','visible_start_seconds':samples[0][0],
                            'visible_end_seconds':samples[-1][0],'observed_points':len(samples),
                            'peer_notes':[a,b],'observed_gap_pixels':gap,'reconstructed_gap_pixels':predicted,
+                           **({'comparison_gap_pixels':comparison_gap,'comparison_basis':'independent_registered_offsets'}if models else {}),
                            'tolerance_pixels':tolerance,**({'clock_conversion':conversion,'comparison_tolerance_pixels':comparison}if conversion else {}),
                            **({'independent_coordinate_models':models,
                            'native_position_attribution':attribution}if models else {})})
