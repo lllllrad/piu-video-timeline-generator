@@ -37,6 +37,36 @@ class BeatChordTest(unittest.TestCase):
         self.assertEqual(constrained['unconstrained_row_domains'],[(32,32),(32,33),(33,33)])
         self.assertEqual(data,before)
 
+    def test_an_identical_image_reference_cancels_shared_anchor_offset_without_absolute_calibration(self):
+        data=fixture()
+        for i,(note,record)in enumerate(zip(data['notes'],data['head_registration']['notes'])):
+            note['lane']=(0,5,6)[i]
+            record.update(status='measured',coordinate_method='native_image_anchors')
+            record.pop('coordinate_uncertainty_pixels')
+            for sample,(time,y)in zip(record['observations'],note['points'],strict=True):
+                sample.update(native_y_pixels=y,template='shared'if i<2 else'other')
+        original=deepcopy(data);proofs=prepare(data,40)
+        self.assertEqual(len(proofs),1)
+        self.assertEqual(proofs[0]['peer_notes'],[0,1])
+        self.assertEqual(proofs[0]['measurement_basis'],'shared_image_reference')
+        self.assertEqual(proofs[0]['template'],'shared')
+        self.assertEqual(data,original)
+        for case in ('different_reference','changing_reference','real_gap','stale_measurement'):
+            changed=deepcopy(data);record=changed['head_registration']['notes'][1]
+            if case=='different_reference':
+                for sample in record['observations']:sample['template']='unreviewed_other_reference'
+            elif case=='changing_reference':
+                for r in changed['head_registration']['notes'][:2]:
+                    for sample in r['observations'][:3]:sample['template']='first_pose'
+            elif case=='real_gap':
+                for point,sample in zip(changed['notes'][1]['points'],record['observations'],strict=True):
+                    point[1]+=2;sample['native_y_pixels']+=2
+            else:record['observations'][0]['native_y_pixels']+=1
+            with self.subTest(case=case):
+                if case=='stale_measurement':
+                    with self.assertRaises(ValueError):prepare(changed,40)
+                else:self.assertEqual(prepare(changed,40),[])
+
     def test_two_remaining_joint_rows_and_unresolvable_pixel_spacing_still_fail(self):
         proof={**prepare(fixture(),40)[0],'indices':[0,1]}
         ambiguous=fit_grid([1.015,1.02],[.03,.03],120,0,splits=[16],native_chords=[proof])

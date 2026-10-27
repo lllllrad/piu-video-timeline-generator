@@ -84,7 +84,11 @@ not an inferred outline offset or a claim of absolute game-engine calibration.
 Independent coordinate models retain their existing reference-count, lane,
 source-support and pixel-residual requirements. Absolute registration remains
 unverified for UCS export. Cross-template chord calibration is not supplied by
-these records.
+these records. Concurrent notes can instead establish a visual chord through
+one identical image reference: its shared anchor offset cancels. Every point
+in that witness uses the same fixed template identity, original source frame
+and existing gap/motion/error limits. Different unreviewed templates or poses
+cannot be pooled to claim calibrated simultaneity.
 
 A complete end image supplies a tail role without inventing a tap or a press at
 that location. It remains a warning when complete hold geometry is unresolved.
