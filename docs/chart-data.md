@@ -252,3 +252,18 @@ covered-note envelope. Export one `M`/`H`/`W` interval; never add an `X` just
 because a skin draws its leading cap like a tap. A separate tap requires its
 own independent observation. The model records `input_requirement: held_state`
 and `requires_head_press: false`; recognition can begin with a preheld panel.
+
+Held-state evidence has a limited role in simplification, after the visible
+chart projection. A retained lane-local `receptor_runs` interval that remains
+lit over the entire uncertain bridge can support joining a gap up to 250 ms
+and half a local beat. Without that continuous observation the stricter
+120 ms / quarter-beat geometry limit still applies. These are transcription
+policy limits, not judgment windows. A wrong-lane run, unknown/unlit interval,
+partial bridge or isolated sample cannot extend the limit. Known or uncertain
+intervening tap candidates remain barriers even when the receptor stays lit.
+
+Each merged gap records whether its basis was bounded chart geometry or
+continuous held state, with the source run index, playback interval and source
+PTS. Such state evidence cannot create a note, move a chart endpoint or select
+its lane/type. Proven body/tail components of the already resolved hold are not
+extra input barriers; an unresolved cap of another possible hold remains one.

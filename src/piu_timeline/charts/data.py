@@ -192,7 +192,8 @@ def draft(template, data, alignment, extend_constant_tempo=False):
         except ValueError as error:
             pending.append({'note': ni, 'reason': str(error)})
     from piu_timeline.charts.hold_simplification import simplify
-    observed,endpoints,simplifications=simplify(document,observed,endpoints,view['notes'],origin)
+    observed,endpoints,simplifications=simplify(document,observed,endpoints,view['notes'],origin,
+                                               view.get('hold_analysis',{}).get('receptor_runs',()))
     from piu_timeline.charts.transcription import transcribe
     document,grid,rows,failures,transcription=transcribe(document,endpoints)
     proposals=[]

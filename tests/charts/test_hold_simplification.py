@@ -21,6 +21,30 @@ def fixtures(gaps=(.04,.04)):
 
 
 class HoldSimplificationTest(unittest.TestCase):
+    def test_continuous_held_state_can_support_a_larger_short_gap_but_never_swallow_a_tap(self):
+        observed,edges,notes=fixtures(gaps=(.2,))
+        run={'lane':0,'lit':True,'frames':30,'start_seconds':10.4,'end_seconds':10.8,
+             'first_source_pts_seconds':30.4,'last_source_pts_seconds':30.8}
+        # Endpoint coordinates are song-relative; input observations use original playback time.
+        result,_,proof=simplify(template(),observed,edges,notes,10,[run])
+        self.assertEqual(len(result),1)
+        gap=proof['merges'][0]['bridged_gaps'][0]
+        self.assertEqual(gap['basis'],'continuous_held_state')
+        self.assertEqual(gap['held_state_evidence']['source_pts_range'],[30.4,30.8])
+        for change in ({'lane':1},{'lit':False},{'lit':None},{'start_seconds':10.51},{'end_seconds':10.69},{'frames':1}):
+            self.assertEqual(len(simplify(template(),observed,edges,notes,10,[{**run,**change}])[0]),2)
+        notes.append({'lane':0,'target_seconds':10.6,'prediction_uncertainty_seconds':.01})
+        self.assertEqual(len(simplify(template(),observed,edges,notes,10,[run])[0]),2)
+
+    def test_proven_hold_components_do_not_block_merging_but_pending_cap_roles_do(self):
+        observed,edges,notes=fixtures(gaps=(.04,))
+        component={'lane':0,'target_seconds':.5,'prediction_uncertainty_seconds':.01,
+                   'note_type':'hold_component','reason':'long_note_body_or_tail'}
+        notes.append(component)
+        self.assertEqual(len(simplify(template(),observed,edges,notes,0)[0]),1)
+        component['reason']='observed_hold_tail_pending_geometry'
+        self.assertEqual(len(simplify(template(),observed,edges,notes,0)[0]),2)
+
     def test_chain_merges_without_mutating_source_and_retains_every_interval(self):
         observed,edges,notes=fixtures();before=deepcopy((observed,edges,notes))
         result,new_edges,proof=simplify(template(),observed,edges,notes,0)

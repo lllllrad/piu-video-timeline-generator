@@ -4,18 +4,32 @@ import math
 from piu_timeline.charts.transcription import measures
 
 
-POLICY={'revision':1,'maximum_gap_seconds':.12,'maximum_gap_beats':.25,
+POLICY={'revision':2,'maximum_gap_seconds':.12,'maximum_gap_beats':.25,
+        'held_state_maximum_gap_seconds':.25,'held_state_maximum_gap_beats':.5,
         'purpose':'similar_judgments_and_continuous_held_state',
         'hold_tick_equivalence':'unverified'}
 
 
-def simplify(document, observations, endpoints, notes, origin):
+def continuous_state(runs, lane, bridge, origin):
+    """Use retained lane-local recognition, never a combo tick or press guess."""
+    for index,run in enumerate(runs):
+        if run.get('lane')!=lane or run.get('lit')is not True or run.get('frames',0)<2:continue
+        start,end=run.get('start_seconds'),run.get('end_seconds')
+        if (any(type(t)not in (int,float)or not math.isfinite(t)for t in (start,end))
+                or not start<end or start>bridge[0]+origin or end<bridge[1]+origin):continue
+        return {'channel':'receptor_runs','run':index,'playback_range':[start,end],
+                'source_pts_range':[run.get('first_source_pts_seconds'),run.get('last_source_pts_seconds')]}
+    return None
+
+
+def simplify(document, observations, endpoints, notes, origin, held_runs=()):
     """Bridge short, bounded same-lane gaps unless another head intervenes."""
     spans=measures(document)
     eligible={item['note'] for item in observations if item['kind']=='hold'}
     blockers={}
     for index,note in enumerate(notes):
         if index in eligible:continue
+        if note.get('note_type')=='hold_component' and note.get('reason')=='long_note_body_or_tail':continue
         target=note.get('target_seconds');error=note.get('prediction_uncertainty_seconds',.02)
         bounded=(type(target)in (int,float)and math.isfinite(target)
                  and type(error)in (int,float)and math.isfinite(error)and 0<=error<=.08)
@@ -33,6 +47,10 @@ def simplify(document, observations, endpoints, notes, origin):
             tempos=[float(s['beat_duration']) for s in spans
                     if float(s['end'])>=bridge[0] and float(s['start'])<=bridge[1]]
             limit=min(POLICY['maximum_gap_seconds'],min(tempos,default=0)*POLICY['maximum_gap_beats'])
+            state=continuous_state(held_runs,item['lane'],bridge,origin)
+            if state:
+                limit=max(limit,min(POLICY['held_state_maximum_gap_seconds'],
+                                    min(tempos,default=0)*POLICY['held_state_maximum_gap_beats']))
             blocked=any(b is None or b[0]<=bridge[1] and b[1]>=bridge[0]
                         for b in blockers.get(item['lane'],[]))
             if (limit>0 and -limit<=lower<=upper<=limit and tail[0]>old_tail[1]
@@ -42,7 +60,9 @@ def simplify(document, observations, endpoints, notes, origin):
                     previous['bridged_gaps']=[]
                 previous['source_hold_intervals'].append(dict(item))
                 previous['bridged_gaps'].append({'song_range':bridge,'gap_range_seconds':[lower,upper],
-                                                  'maximum_gap_seconds':limit})
+                                                  'maximum_gap_seconds':limit,
+                                                  'basis':'continuous_held_state' if state else 'bounded_chart_geometry',
+                                                  'held_state_evidence':state})
                 previous['observed_end_range']=item['observed_end_range']
                 edges[pi,'tail']=tail
                 del edges[ni,'head'];del edges[ni,'tail']
