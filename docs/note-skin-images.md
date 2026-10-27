@@ -24,6 +24,11 @@ Hold-start and hold-end templates must have separate `cap` and `connection`
 regions. A start's connection lies below its anchor; an end's lies above it.
 Every region must independently pass its masked mean squared RGB error limit.
 A large matching cap cannot average away a contradictory small connection.
+For a short hold, the opposite cap can overlap a long connection window.
+Additional references can compare the nearest visible body rows instead, using
+the same independent cap and connection limits. A failed longer window is not
+a positive gap; an actual gap must still fail the shorter connection pattern.
+The observed start and end bound one held interval, including in these cases.
 The default error limit is 0.015 in RGB values normalized to 0..1; a bank may
 require a stricter limit. This is an appearance metric, not a timing allowance.
 
@@ -89,9 +94,8 @@ one identical cap reference: its shared anchor offset cancels. Reference
 identity includes image/mask bytes, cap bounds, scale, lane kind and anchor.
 Context-window variants can share this identity while different cap pixels or
 geometry cannot. Every point in that witness uses the same fixed cap identity,
-original source frame
-and existing gap/motion/error limits. Different unreviewed templates or poses
-cannot be pooled to claim calibrated simultaneity.
+original source frame and existing gap/motion/error limits. Different unreviewed
+templates or poses cannot be pooled to claim calibrated simultaneity.
 
 A complete end image supplies a tail role without inventing a tap or a press at
 that location. It remains a warning when complete hold geometry is unresolved.
@@ -112,8 +116,8 @@ and graph edges. Their bounds describe positive compared rows, not a filled
 interval in every frame. Previously positive rows that lose clear support stay
 warnings; only documented foreground HUD footprints can explain those losses.
 
- Coverage uses rows with actual compared alpha
-support in the acquired reference bank, preserving unsupported internal gaps.
+Coverage uses rows with actual compared alpha support in the acquired reference
+bank, preserving unsupported internal gaps.
 A template canvas rectangle cannot bridge padding or uncompared rows. The bank
 identity must match the native observations; changed references fail explicitly.
 Deduplicated complete image matches retain their own measured row support;

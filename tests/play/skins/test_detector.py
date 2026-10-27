@@ -150,6 +150,37 @@ class SkinDetectorTest(unittest.TestCase):
             changed=detector.detect(image)
             self.assertFalse(any(r['role']=='hold_end'and abs(r['y']*300-220)<2 for r in changed))
 
+    def test_short_connector_references_distinguish_attached_caps_from_a_real_background_gap(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);items,manifest=examples(root)
+            layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+            images=[]
+            for connected in (True,False):
+                rgb=np.zeros((300,200,3),dtype='uint8')
+                rgb[90:110,10:30]=items[1][1][:20]
+                rgb[116:136,10:30]=items[2][1][15:]
+                if connected:rgb[110:116,16:24]=[25,140,210]
+                images.append(rgb)
+            old=SkinDetector(load_bank(root/'bank.json'),layout,200,300)
+            self.assertFalse(any(o['role']in('hold_start','hold_end')for o in old.detect(images[0])))
+            for t in list(manifest['templates']):
+                if t['role']not in('hold_start','hold_end'):continue
+                short=deepcopy(t);short['id']='short-'+t['id']
+                for region in short['regions']:
+                    if region['name']=='connection':
+                        a,b,c,d=region['box']
+                        region['box']=[a,b,c,b+2]if t['role']=='hold_start'else[a,d-2,c,d]
+                manifest['templates'].append(short)
+            (root/'bank.json').write_text(json.dumps(manifest))
+            detector=SkinDetector(load_bank(root/'bank.json'),layout,200,300)
+            connected=detector.detect(images[0])
+            self.assertEqual([(o['role'],round(o['y']*300))for o in connected if o['role']!='hold_body'],
+                             [('hold_start',100),('hold_end',126)])
+            gap=detector.detect(images[1])
+            self.assertFalse(any(o['role']in('hold_start','hold_end')for o in gap))
+            self.assertTrue(any(abs(o['y']*300-100)<1 for o in gap))
+            self.assertTrue(any(abs(o['y']*300-126)<1 for o in gap))
+
     def test_connection_region_cannot_be_omitted_or_placed_on_wrong_side(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);_,manifest=examples(root)
