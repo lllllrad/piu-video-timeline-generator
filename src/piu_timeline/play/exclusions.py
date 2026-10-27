@@ -102,6 +102,8 @@ def recognition_diagnostics(data, ranges):
         add(record,'timing_reconstruction')
     for record in data.get('skin_role_evidence',{}).get('warnings',[]):
         add(record,'note_type_unresolved')
+    for record in data.get('body_risk_evidence',{}).get('warnings',[]):
+        add(record,'note_processing_unresolved')
     for record in data.get('visibility_diagnostics',{}).get('warnings',[]):
         add(record,record['check'])
     for record in data.get('note_type_diagnostics', []):

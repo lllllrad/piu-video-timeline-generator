@@ -204,6 +204,9 @@ class ReportTest(unittest.TestCase):
                           'observations':[[[False],[.1],False],[[None],[.65],True],
                                           [[True],[.9],False],[[False],[.05],False]]},
             'motion': {'detections':2, 'tracks':[{},{}],
+                       'hold_risk':{'frames':[{'playback_seconds':10,'source_pts_seconds':100,'causes':[
+                           {'lane':1,'vertical_range_pixels':[30,65],'state':'approaching','owner_hold':7},
+                           {'lane':2,'vertical_range_pixels':[10,50],'state':'unresolved'}]}]},
                        'observations':[[[0,.5,.4,.88]],[],[],[[0,.5,.3,.9]]]},
             'processing': {'pixel_coordinates':{'width':325,'height':100},
                            'body_observations':[[[0,25,40,True,False,True,.9]],[],[],[]],
@@ -219,6 +222,8 @@ class ReportTest(unittest.TestCase):
         self.assertIn('3 / 0.90',result['rows'][0])
         self.assertIn('GREAT / 0.91',result['rows'][1])
         self.assertIn('unknown (common flash) / 0.65',result['rows'][1])
+        self.assertIn('lane 2 proximity 30…65 px / approaching / hold 7',result['rows'][1])
+        self.assertIn('lane 3 proximity 10…50 px / unresolved / unowned',result['rows'][1])
         self.assertIn('80.0',result['rows'][0])
         self.assertIn('body 50.0…80.0 px / tail clipped',result['rows'][0])
         self.assertIn('unknown / ? / white_effect',result['rows'][1])

@@ -29,7 +29,8 @@ geometry are available, a second pass can reconsider that refresh only when:
   already assigned notes remain unavailable.
 - The image profile provides current receptor-body observations. Every nearby
   risk flag responsible for the initial exclusion fits within a known future
-  hold's measured interval and cap neighborhood.
+  hold's measured interval and cap neighborhood, or has exact native image
+  ownership establishing that the hold is still approaching.
 - All known holds have uncensored image endpoints, repeated body evidence and
   measured endpoint motion. The word precedes every relevant held-state interval.
   A cap neighborhood uses the larger of one lane spacing and the reference
@@ -47,3 +48,34 @@ hold risk. This comparison never shifts the retained native word bracket.
 Recovered matches cite the original judgment event and retain its grade and
 full range; they do not invent receptor onsets or assign an uncertain counter
 refresh. Connection-visibility and processing warnings remain independent.
+
+## Native proximity ownership
+
+The native detector's proximity flag includes long bodies near, but still below,
+the receptor. `body-risk-evidence.json` derives all causes of every positive flag
+from saved `frames.jsonl`; the original flags and acquisition thresholds remain
+unchanged. The derived artifact verifies every native flag, frame count, original
+PTS ordering and the exact grouping of unsupported intervals. Missing or
+inconsistent observations produce an explicit warning.
+
+Each cause can belong to a hold only through a same-frame, same-lane temporal
+image component containing its entire vertical extent. Multiple possible owners
+remain unresolved. An approaching state additionally requires a registered cap
+coordinate, its uncertainty and conservative full cap extent entirely below the
+receptor, a body below the receptor, and positive registered upward displacement.
+An unregistered cap or a stationary/reversed observation cannot establish this
+state.
+
+A popup can precede such an interval only when every cause has one complete
+future hold as owner, each owner's first frame proves approach, and the word is
+outside that hold's measured start and cap neighborhood. Later frames may reach
+the receptor but must keep their exact ownership. Any unowned cause, including
+another lane or another cause in the same frame, retains the veto. Only that
+fully accounted native interval is removed from the proximity veto; known held
+states and other unresolved bodies still block association. The source, skin,
+hold components, coordinate registration and native intervals must match the
+artifact contract. Timing evidence never supplies this geometric ownership.
+
+The report shows proximity causes, owners and approach states inside the moving
+note channel. This is a derived interpretation of native images, not an
+additional independent input signal.

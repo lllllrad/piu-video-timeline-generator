@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 41}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 42}
 
 
 def fingerprint(value):
@@ -65,6 +65,7 @@ def augment_holds(data, output):
     if not data.get('media', {}).get('video_streams') or any('color' not in lane for lane in data.get('layout', {}).get('lanes', [])):
         return data
     from piu_timeline.play.channels import augment_channels
+    from piu_timeline.play.holds.risk_cache import prepare as prepare_risk
     if data.get('skin_detector'):
         from piu_timeline.play.skins.clearance_cache import prepare
         data=prepare(data,output)
@@ -83,7 +84,7 @@ def augment_holds(data, output):
         if (saved.get('feature_contract') == contract and saved.get('association_contract') == association
                 and all((output/name).is_file() for name in
                         ('hold-features.json','hold-frames.jsonl','processing-features.npz'))):
-            return augment_channels({**data, 'hold_analysis': saved}, output)
+            return augment_channels(prepare_risk({**data, 'hold_analysis': saved},output), output)
     acquire_features(data, output)
     with (output / 'hold-frames.jsonl').open() as stream:
         frames = [json.loads(line) for line in stream]
@@ -108,7 +109,7 @@ def augment_holds(data, output):
     pending = path.with_suffix('.build-json')
     pending.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     pending.replace(path)
-    return augment_channels({**data, 'hold_analysis': result}, output, frames)
+    return augment_channels(prepare_risk({**data, 'hold_analysis': result},output), output, frames)
 
 
 def chart_projection(data):

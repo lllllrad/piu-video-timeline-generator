@@ -20,6 +20,12 @@ presses. Receptor onset counts require corroboration, rather than counting
 every bright frame or candidate transition. Unknown lane frames and processing
 failures remain visible in counts and review warnings.
 
+The motion channel also exposes `hold_risk`, a source-bound derivation of every
+native near-receptor body cause. The report lists all lanes' cause bounds and
+exact image-component owners, including unresolved causes, because a hold in
+another lane can make a popup ambiguous. See [hold input risk](hold-input-risk.md)
+for the distinction between an approaching body and a possible held state.
+
 Configured [non-playable artwork](object-roles.md) is interpreted between raw
 observations and track reconstruction. `object-interpretation.json` links each
 separated candidate to its original frame-local detection index and source PTS.

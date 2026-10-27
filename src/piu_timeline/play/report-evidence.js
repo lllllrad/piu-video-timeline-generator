@@ -17,6 +17,7 @@ function renderEvidence(noteIndex){
   const lo=note.target_seconds-span,hi=note.target_seconds+span,x=t=>180+1000*(t-lo)/(hi-lo);
   const root=svgRoot('evidenceTimeline',1200,280),rows=$('evidenceFrames');rows.replaceChildren();
   const processing=channel.processing.notes.find(e=>e.note===noteIndex),states=new Map((processing?.samples||[]).map(s=>[s.time.toFixed(6),s]));
+  const riskFrames=new Map((channel.motion.hold_risk?.frames||[]).map(f=>[f.playback_seconds.toFixed(6),f.causes]));
   const known=state=>state===true?'on':state===false?'off':'unknown';
   const color=state=>state==='present'||state===true?'#9cddbe':state==='absent'||state===false?'#ff8e9b':'#99a5ae';
   const confidence=value=>Number.isFinite(value)?Number(value).toFixed(2):'?';
@@ -43,16 +44,19 @@ function renderEvidence(noteIndex){
     const bodies=(channel.processing.body_observations?.[i]||[]).filter(b=>b[0]===note.lane);
     const bodyText=bodies.map(b=>'body '+Number(b[1]*bodyScale).toFixed(1)+'…'+Number(b[2]*bodyScale).toFixed(1)+' px'+(!b[3]?' / head clipped':'')+(!b[4]?' / tail clipped':'')).join('; ');
     const heads=motion.filter(n=>n[0]===note.lane),state=effect[0][note.lane],fraction=effect[1]?.[note.lane];
+    const risks=riskFrames.get(time.toFixed(6))||[];
+    const riskText=risks.map(c=>'lane '+(c.lane+1)+' proximity '+c.vertical_range_pixels.join('…')+' px / '+c.state+(c.owner_hold!=null?' / hold '+c.owner_hold:' / unowned')).join('; ');
     const word=popup[2]||(popup[4]?'blank':'unknown'),stateText=known(state)+(effect[2]?' (common flash)':'');
     marker(time,45,popup[2]?'#88dfff':'#99a5ae','Combo '+(popup[0]??'unknown')+' / '+word);
     marker(time,105-12*(fraction||0),color(state),stateText+' / white fraction '+confidence(fraction));
     for(const head of heads)marker(time,165+Math.max(-20,Math.min(20,(head[2]*height-receptor)/height*70)),'#ffe476','Head y='+Number(head[2]*height).toFixed(1)+' px / quality '+confidence(head[3]));
+    if(risks.length)marker(time,190,risks.every(c=>c.state==='approaching')?'#9cddbe':'#ff8e9b',riskText);
     if(bodies.length)marker(time,212,'#c9acff',bodyText);
     marker(time,225,color(sample?.state),sample?sample.state+' / '+confidence(sample.score)+' / '+(sample.unknown_reason||'clear'):'unmeasured');
     const row=document.createElement('tr'),cell=document.createElement('td'),button=document.createElement('button');
     button.textContent=fmt(time)+' / PTS '+pts.toFixed(6);button.onclick=()=>seek(time,-1,noteIndex);cell.appendChild(button);row.appendChild(cell);
     const provenance=popup.length>5?' / '+(popup[5]||'unknown read mode')+(popup[6]?' / recovered':'')+' / baseline '+(popup[7]??'unknown'):'';
-    const values=[(popup[0]??'unknown')+' / '+confidence(popup[1])+provenance,word+' / '+confidence(popup[3]),stateText+' / '+confidence(fraction),heads.length?heads.map(h=>(h[2]*height).toFixed(1)).join(', '):'No detected head',(sample?sample.state+' / '+confidence(sample.score)+' / '+(sample.unknown_reason||'clear'):'unmeasured')+(bodyText?' / '+bodyText:'')];
+    const values=[(popup[0]??'unknown')+' / '+confidence(popup[1])+provenance,word+' / '+confidence(popup[3]),stateText+' / '+confidence(fraction),(heads.length?heads.map(h=>(h[2]*height).toFixed(1)).join(', '):'No detected head')+(riskText?' / '+riskText:''),(sample?sample.state+' / '+confidence(sample.score)+' / '+(sample.unknown_reason||'clear'):'unmeasured')+(bodyText?' / '+bodyText:'')];
     for(const value of values)text('td',value,row);rows.appendChild(row);observations.push({time,pts,values});
   }
   for(const [events,y,stroke] of [[channel.popup.combo_events,30,'#9cddbe'],[channel.popup.judgment_events,60,'#88dfff']]){

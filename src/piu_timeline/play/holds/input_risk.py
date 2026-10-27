@@ -16,14 +16,15 @@ def native_body_risk_available(data):
             and skin.get('missing_template_roles')==[] and 'unsupported_intervals'in data)
 
 
-def hold_overlap(data, lo, hi, guard):
+def hold_overlap(data, lo, hi, guard, accounted_native_intervals=()):
     analysis = data.get('hold_analysis', {})
     for hold in analysis.get('holds', []):
         end = hold['end_range'][1] if hold.get('end_range') else hold['last_body_seconds']+.25
         if hold['start_range'][0]-guard <= hi and end+guard >= lo:
             return True
     if any(interval['start_seconds']-guard<=hi and interval['end_seconds']+guard>=lo
-           for interval in data.get('unsupported_intervals',[])):return True
+           for interval in data.get('unsupported_intervals',[])
+           if (interval['start_seconds'],interval['end_seconds'])not in accounted_native_intervals):return True
     for track in analysis.get('unresolved_tracks', []):
         if (native_body_risk_available(data)
                 and track.get('failure_detail')=='known_hold_image_connection_not_observed_in_clear_frames'
@@ -86,15 +87,21 @@ def pre_hold_accounting(data,lo,hi,extent_spacing=1.):
         guards.append((hold,guard))
     relevant=[r for r in data['unsupported_intervals']if r['start_seconds']-.1<=hi and r['end_seconds']+.1>=lo]
     if not relevant:return None
-    records=[];used=set();maximum=0
+    records=[];used=set();maximum=0;accounted=[]
     for interval in relevant:
         owners=[(h,g)for h,g in guards if risk_hi<h['start_range'][0]-g
                 and h['start_range'][0]-g<=interval['start_seconds']
                 and interval['end_seconds']<=h['end_range'][1]+g]
+        from piu_timeline.play.holds.risk_ownership import account_interval
+        geometric=account_interval(data,interval,guards,risk_hi)
+        if geometric is not None:
+            owners=[(h,g)for h,g in guards if h['id']in geometric['holds']]
+            accounted.append((interval['start_seconds'],interval['end_seconds']))
         if not owners:return None
         used.update(h['id']for h,_ in owners);maximum=max(maximum,*(g for _,g in owners))
-        records.append({**interval,'accounted_holds':[h['id']for h,_ in owners]})
-    if hold_overlap(data,risk_lo,risk_hi,maximum):return None
+        records.append({**interval,'accounted_holds':[h['id']for h,_ in owners],
+                        **({'native_image_ownership':geometric}if geometric else {})})
+    if hold_overlap(data,risk_lo,risk_hi,maximum,accounted):return None
     return {'method':'before_accounted_native_hold_regions','holds':sorted(used),
             'maximum_cap_guard_seconds':maximum,'native_risk_intervals':records,
             'risk_time_range':[risk_lo,risk_hi],'display_delay_correction_ms':correction*1000,
