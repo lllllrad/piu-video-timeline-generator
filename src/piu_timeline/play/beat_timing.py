@@ -8,7 +8,8 @@ from pathlib import Path
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
-FORMAT={'schema':1,'revision':4,'group_beats':4,'natural_splits':list(NATURAL_SPLITS)}
+FORMAT={'schema':1,'revision':5,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
+        'phase_selection':'native_spacing_constrained'}
 
 
 def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0):
@@ -84,6 +85,18 @@ def prepare_reference(data,directory):
     return {'status':'prepared','method':'reference_audio_translation'}
 
 
+def spacing_supported_notes(notes,groups,fits,spacing,motion):
+    """Score a candidate using the same native spacing constraints as its output."""
+    from piu_timeline.play.spacing_checks import spacing_failures
+    candidate=[dict(note)for note in notes]
+    for group,fit in zip(groups,fits,strict=True):
+        for j,index in enumerate(group['notes']):
+            if fit['status']=='restored':candidate[index]['target_seconds']=fit['targets'][j]
+            else:candidate[index]['status']='excluded'
+    rejected={w['note']for w in spacing_failures(candidate,spacing,motion)}
+    return tuple(i for i,note in enumerate(candidate)if note['status']=='estimated'and i not in rejected)
+
+
 def apply(data,directory):
     from piu_timeline.charts.ucs import parse, constant_tempo
     preparation=prepare_reference(data,directory)
@@ -139,9 +152,14 @@ def apply(data,directory):
         else:
             lo,hi,bpm=sections[si];group.update(bpm=bpm,origin=origin+lo)
         proposals.append(group)
-    phase=fit_phase(proposals,ref['alignment_uncertainty_seconds'])
+    spacing=None
+    if len(data.get('layout',{}).get('lanes',[]))>=2:
+        spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
+    validate=(lambda fits:spacing_supported_notes(notes,proposals,fits,spacing,data.get('scroll_motion')))if spacing else None
+    phase=fit_phase(proposals,ref['alignment_uncertainty_seconds'],consistent_notes=validate)
     result.update(song_phase_range=phase.get('phase_range'),song_phase_correction_seconds=phase.get('phase'),
-                  phase_resolution_seconds=phase.get('resolution_seconds'))
+                  phase_resolution_seconds=phase.get('resolution_seconds'),
+                  phase_trials=phase.get('phase_trials',[]),phase_consistent_notes=phase.get('consistent_notes'))
     for group,fit in zip(proposals,phase['fits'],strict=True):
         indices=group['notes']
         result['groups'].append({'notes':indices,'section':group['section'],'beat_group':group['beat_group'],**fit})

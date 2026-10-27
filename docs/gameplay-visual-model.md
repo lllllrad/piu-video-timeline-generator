@@ -442,3 +442,17 @@ spanning 65 ms, the observed gap/scatter and the existing pixel tolerance. Do no
 borrow support outside the checked interval or from a block lacking either head.
 Sort source times independently of trajectory storage order before defining that
 interval; processing a short track first must not change the geometry verdict.
+
+The common song phase must explain native inter-head distances as well as timed
+beat rows. Evaluate each bounded audio-phase candidate with the same registered
+spacing check used for the final output. Prefer the candidate with the most
+jointly consistent observed heads, then supported timing targets and simpler
+subdivisions. This uses measured geometry, never grades, input associations or
+an authoritative note count. A candidate that fits many time intervals while
+moving neighboring notes away from their observed separation is not supported.
+
+Record candidate scores and accepted identities. Equal best candidates with
+different row configurations or supported identities remain an explicit phase
+failure. The representative phase must reproduce the winning support set; do not
+average across incompatible spatial solutions. Retain the existing audio bounds,
+phase-search resolution, source timing uncertainty and pixel gates.
