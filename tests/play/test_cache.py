@@ -123,6 +123,10 @@ class PlayCacheTest(unittest.TestCase):
                    'layout':layout,'frame_count':2,'display_delay_correction_ms':0,
                    'judgment_analysis_version':JUDGMENT_VERSION,'judgment_template_labels':[],'judgment_events':[]}
             saved['play_analysis_version']='unrelated application release'
+            saved['conflicted_matches']=[{'note':99,'processing_conflict':True,'combo_event':0,
+                                          'combo_lower_seconds':1.1,'combo_upper_seconds':1.12,
+                                          'target_seconds':1.11,'evidence_source':'combo'}]
+            saved['association_view_format']={'revision':'old-note-identities'}
             from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,final)}}
             saved['judgment_cache']=cache_contracts(saved,[])
@@ -142,6 +146,9 @@ class PlayCacheTest(unittest.TestCase):
             self.assertEqual(result['song'],'Corrected title')
             self.assertEqual(result['chart'],'S2')
             self.assertTrue(result['reused_native_observations'])
+            self.assertEqual(result['conflicted_matches'],[])
+            from piu_timeline.play.associations import FORMAT
+            self.assertEqual(result['association_view_format'],FORMAT)
             self.assertEqual((final/'frames.jsonl').read_text(),trace)
             self.assertEqual((source.stat().st_size,source.stat().st_mtime_ns),(before.st_size,before.st_mtime_ns))
 

@@ -195,6 +195,7 @@ def refit_saved(cached, previous, output, segment, display_delay_ms, note_skin=N
                           frame.get('combo_read_mode'),frame['source_pts_seconds'])
     if count != cached['frame_count']:
         raise ValueError('Saved native-frame observations are incomplete')
+    cached={k:v for k,v in cached.items()if k not in ('conflicted_matches','association_view_format')}
     result = {**cached, **refreshed, **resolve_timing(tracker, combo, display_delay_ms),
               'play_analysis_version': VERSION, 'frame_observation_version': FRAME_OBSERVATION_VERSION,
               'native_frame_format':NATIVE_FRAME_FORMAT,
