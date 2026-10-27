@@ -57,6 +57,14 @@ class ContinuityTest(unittest.TestCase):
         self.assertTrue(result['known_occlusions'])
         self.assertTrue(any(r['reason']=='unexplained_head_disappearance' for r in result['warnings']))
 
+    def test_explicit_judgment_overlap_is_recorded_without_a_missing_frame_warning(self):
+        data,frames=fixture([200-300*t for t in [i/60 for i in range(31)]])
+        data['layout']['judgment_roi']=[.15,.35,.12,.15]
+        del data['notes'][0]['points'][10];frames[10]['notes']=[]
+        result=continuity_diagnostics(data,frames)
+        self.assertEqual(result['warnings'],[])
+        self.assertIn('judgment_word',result['known_occlusions'][0]['regions'])
+
     def test_receptor_boundary_and_end_of_capture_are_accounted_without_claiming_input(self):
         for clipped in (False,True):
             data,frames=fixture([150-300*t for t in [i/60 for i in range(31)]])

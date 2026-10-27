@@ -15,11 +15,14 @@ def overlapping_occluders(layout, lane, center_y, width, height, spacing):
     """A cap footprint must actually intersect a named HUD rectangle."""
     x = layout['lanes'][lane]['x']*width
     half = .5*spacing
-    return [region['id'] for region in note_occluders(layout)
-            if (region['rect'][0]*width < x+half
-                and (region['rect'][0]+region['rect'][2])*width > x-half
-                and region['rect'][1]*height < center_y+half
-                and (region['rect'][1]+region['rect'][3])*height > center_y-half)]
+    return occluders_at_bounds(layout,[x-half,center_y-half,x+half,center_y+half],width,height)
+
+
+def occluders_at_bounds(layout,bounds,width,height):
+    """Intersect an actual pixel rectangle with the documented HUD footprints."""
+    return [region['id']for region in note_occluders(layout)
+            if bounds[0]<(region['rect'][0]+region['rect'][2])*width and region['rect'][0]*width<bounds[2]
+            and bounds[1]<(region['rect'][1]+region['rect'][3])*height and region['rect'][1]*height<bounds[3]]
 
 
 def visible_cap_bounds(data,lane,detected_y,box,patch_shape,spacing,margin=0):
@@ -32,7 +35,5 @@ def visible_cap_bounds(data,lane,detected_y,box,patch_shape,spacing,margin=0):
     if (bounds[0]<0 or bounds[2]>width
             or bounds[1]<layout['receptor_y']*height+.3*spacing
             or bounds[3]>layout.get('note_y_max',.95)*height):return None
-    if any(bounds[0]<(rx+rw)*width and rx*width<bounds[2]
-           and bounds[1]<(ry+rh)*height and ry*height<bounds[3]
-           for rx,ry,rw,rh in (region['rect']for region in note_occluders(layout))):return None
+    if occluders_at_bounds(layout,bounds,width,height):return None
     return bounds

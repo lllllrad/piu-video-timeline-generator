@@ -125,7 +125,7 @@ def layer_manifest(directory):
             'artifacts': artifacts,
             'available': {name: (directory/name).is_file() for names in artifacts.values() for name in names},
             'dependencies': {'head_registration':['native_head_trajectory','appearance-features.npz'],
-                             'processing': ['native_head_trajectory', 'spatial_masks', 'hold_geometry'],
+                             'processing': ['native_head_trajectory', 'native-features/manifest.json', 'spatial_masks', 'hold_geometry'],
                              'receptor_onsets': ['white_fractions', 'common_flash_filter'],
                              'matches': ['chart_timing', 'popup_events', 'lane_evidence']},
             'semantics': {'frames.jsonl': 'Counter recognition may include contextual recovery; baseline is separate.',
@@ -137,7 +137,7 @@ def layer_manifest(directory):
 def augment_channels(data, directory, frames=None):
     """Rebuild associations from retained pixels; invalidate independently of OCR."""
     from piu_timeline.play.holds.analysis import fingerprint
-    inputs = ('frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz','counter-pixels.npz')
+    inputs = ('frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz','counter-pixels.npz','native-features/manifest.json')
     contract = {'format': CHANNEL_FORMAT,
                 'analysis': fingerprint({key:data.get(key) for key in
                                          ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion')}),

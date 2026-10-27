@@ -87,6 +87,10 @@ visibility, fit success and a generic timing exclusion do not remove them.
 Native points, missing-frame counts, original source PTS, predicted positions
 and the position method remain available in `visibility-diagnostics.json` and
 the report's warnings. Explained occlusions and exits are retained separately.
+In particular, a gap overlapping `judgment_word` or `combo_label_and_digits`
+is recorded under `known_occlusions`, not emitted as a missing-head warning.
+This does not turn a hidden frame into a valid shape-learning reference or
+establish an input/processing time after the head leaves the HUD.
 
 Speed changes and stops also warn by default, even when shared motion can
 estimate a target. Compare adjacent four-observation windows with at least

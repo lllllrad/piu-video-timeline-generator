@@ -29,7 +29,17 @@ and playback time; no FPS conversion or per-frame OCR is performed. Spatial
 color support is distinct from the scalar receptor-brightness channel.
 
 For a supported moving head, build a silhouette from at least three actual
-approach observations between 1.4 and 2.8 lane spacings below the receptor.
+clear observations of that same head, at least 1.4 lane spacings below the
+receptor. Use retained full-frame width-325 masks, so the template can be learned
+below the judgment/COMBO regions even when the small receptor band intersects
+them. The complete template window must stay inside the field/source bounds and
+outside every documented HUD rectangle. White contamination and implausible
+color occupancy reject a reference. Preserve the selected source PTS in each
+processing record's `template_evidence`; check all native frame counts and PTS
+against the receptor masks. No source decoding or OCR is needed.
+If full-frame masks are unavailable, only clear observations inside the retained
+1.4-2.8-spacing receptor-band approach can supply the template. A hidden window
+never becomes a reference just because there are no other samples.
 The majority silhouette contains repeatedly observed colored pixels. Follow
 its expected location using corroborated peer displacement when available,
 or the supported local velocity. This channel depends on motion identity;
@@ -46,6 +56,10 @@ frame. Dice overlap of at least 0.65 supports presence; at most 0.18 supports
 absence. Intermediate matches, white effects, HUD overlap, clipping, missing
 screen visibility and competing same-lane heads remain unknown. These are
 implementation thresholds, not measured engine judgment windows.
+HUD checks intersect the actual template window, including its edges; samples
+retain the named `occluders`. A known HUD-covered detection gap is separately
+accounted in continuity diagnostics and does not create a missing-head warning.
+An unobserved processing transition after leaving the HUD can still be unresolved.
 
 A processing candidate requires at least three presence samples followed by
 two clear absence samples near the receptor. A short white-effect or partial

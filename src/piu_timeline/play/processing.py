@@ -5,10 +5,12 @@ import json
 
 import cv2
 import numpy as np
+from piu_timeline.play.processing_templates import FORMAT as TEMPLATE_FORMAT,hud_regions,acceptable,learn
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
-PROCESSING_FORMAT = {'schema': 1, 'revision': 6,'partial_confirmation_minimum_coverage':.8}
+PROCESSING_FORMAT = {'schema': 1, 'revision': 7,'partial_confirmation_minimum_coverage':.8,
+                     'templates':TEMPLATE_FORMAT}
 
 
 class ReceptorPixels:
@@ -133,6 +135,7 @@ def observe_processing(data, path):
     components = {n for h in data.get('hold_analysis', {}).get('holds', []) for n in h['covered_notes']}
     from piu_timeline.play.processing_motion import observed_path
     paths = [observed_path(note, data, receptor, spacing, scale) for note in data.get('notes', [])]
+    learned=learn(data,path.parent,times,pts)
     result = []
     for index, note in enumerate(data.get('notes', [])):
         record = {'note': index, 'lane': note['lane'], 'samples': []}
@@ -145,25 +148,28 @@ def observe_processing(data, path):
             result.append({**record, 'status': 'unresolved', 'reason': 'unsupported_motion'}); continue
         def lane_mask(fi):
             return np.unpackbits(masks[fi, note['lane']], axis=-1)[..., :columns].astype(bool)
-        templates = []
-        for time, y in note.get('points', []):
+        templates = [];template_pts=[]
+        for time, y in (note.get('points', [])if learned is None else []):
             if not receptor+1.4*spacing <= y*scale <= receptor+2.8*spacing:
                 continue
+            if hud_regions(data['layout'],note['lane'],y*scale,radius,PIXEL_FORMAT['width'],height):continue
             fi = bisect_left(times, time-1e-6)
             if fi == len(times) or abs(times[fi]-time)>1e-6:
                 continue
             color, white, _ = lane_mask(fi)
             template = patch_at(color, y*scale-top, radius)
             light = patch_at(white, y*scale-top, radius)
-            if template is not None and light is not None and .12 < template.mean() < .85 and light.mean() < .45:
-                templates.append(template)
-        if len(templates) < 3:
+            if template is not None and light is not None and acceptable(template,light):
+                templates.append(template);template_pts.append(float(pts[fi]))
+        reference=learned.get(index)if learned is not None else None
+        if learned is None and len(templates)>=TEMPLATE_FORMAT['minimum_frames']:
+            reference={'mask':np.mean(templates,axis=0)>=.5,
+                       'evidence':{'trace':'processing-features.npz','source_pts_seconds':template_pts,'frames':len(templates)}}
+        if reference is None:
             result.append({**record, 'status': 'unresolved', 'reason': 'insufficient_clear_approach'}); continue
         # Median silhouette retains repeatedly observed pixels and rejects animation noise.
-        template = np.mean(templates, axis=0)>=.5
+        template = reference['mask'];record['template_evidence']=reference['evidence']
         start, end = target-min(.25, 2.8*spacing/-velocity), target+min(.2, 1.2*spacing/-velocity)
-        from piu_timeline.play.holds.features import ui_regions
-        regions = ui_regions(data['layout'])
         alternatives = [paths[i] for i,other in enumerate(data['notes'])
                         if i != index and other['lane'] == note['lane']]
         competing = any(p['supported'] and abs(p['target']-target)*-velocity < .9*spacing for p in alternatives)
@@ -179,9 +185,7 @@ def observe_processing(data, path):
                 slices,observed_template,coverage=cropped
                 image,white=color[slices],light[slices]
             else:image=white=None
-            x = data['layout']['lanes'][note['lane']]['x']
-            hidden = any(rx <= x <= rx+rw and ry*height-radius <= y <= (ry+rh)*height+radius
-                         for rx,ry,rw,rh in regions)
+            hidden=hud_regions(data['layout'],note['lane'],y,radius,PIXEL_FORMAT['width'],height)
             if image is None or white is None:
                 reason = 'image_boundary'
             elif competing:
@@ -206,6 +210,7 @@ def observe_processing(data, path):
                     state,reason='unknown','partial_head_present'
             record['samples'].append({'time': time, 'pts': source_pts, 'y': float(y), 'state': state, 'score': score,
                                       'unknown_reason': reason if state == 'unknown' else None,
+                                      **({'occluders':hidden}if hidden else {}),
                                       **({'template_coverage':coverage,'confirmation_only':True}
                                          if cropped and coverage['area_fraction']<1 else {})})
         result.append({**record, **transition(record['samples'], receptor, spacing)})
