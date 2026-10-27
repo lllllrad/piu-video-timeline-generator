@@ -79,6 +79,9 @@ They supply no endpoint coverage proof; the remaining complete images must
 independently satisfy the same geometry requirements. A contradictory complete
 role still prevents ownership.
 Legacy lane-color components cannot create a hold for a selected image skin.
+Body ownership is limited to the established endpoint interval in each source
+frame. Another body image elsewhere in the same lane and frame remains
+unresolved; a valid hold cannot account for the entire lane.
 Receptor observations attach held-state evidence only after geometry exists.
 
 New banks currently remain explicitly uncalibrated for UCS export. An image

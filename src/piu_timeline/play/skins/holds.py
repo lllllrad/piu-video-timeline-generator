@@ -6,7 +6,7 @@ from piu_timeline.play.holds.state import recognition_segments, recognition_wind
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 1, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 2, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -95,11 +95,16 @@ def reconstruct_images(data, receptor_frames, native, diagnostics):
                             'visible_start_seconds': min(o['playback_seconds'] for o in observations),
                             'visible_end_seconds': max(o['playback_seconds'] for o in observations),
                             'observed_points': len(observations), 'image_evidence': observations})
-    accounted = {(h['lane'], p['time']) for h in holds for p in h['image_connection_evidence']}
+    accounted = defaultdict(list)
+    for hold in holds:
+        for point in hold['image_connection_evidence']:
+            accounted[hold['lane'], point['time']].append((point['head_y'],point['tail_y']))
     pending_bodies = defaultdict(list)
     for frame in native:
         for image in frame.get('skin_observations', []):
-            if image['role'] == 'hold_body' and (image['lane'], frame['playback_seconds']) not in accounted:
+            owned=any(a <= image['y']*data['analysis_height'] <= b
+                      for a,b in accounted[image['lane'],frame['playback_seconds']])
+            if image['role'] == 'hold_body' and not owned:
                 pending_bodies[image['lane']].append((frame['playback_seconds'], frame['source_pts_seconds'], image))
     for lane, observations in pending_bodies.items():
         diagnostics.append({'lane': lane, 'reason': 'unresolved_hold_geometry',

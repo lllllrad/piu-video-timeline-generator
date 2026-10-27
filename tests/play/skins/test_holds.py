@@ -75,6 +75,20 @@ class ImageHoldTest(unittest.TestCase):
         for frame in native:frame['skin_observations']=frame['skin_observations'][:2]
         self.assertEqual(reconstruct_images(data,receptors,native,[]),[])
 
+    def test_one_hold_does_not_claim_unrelated_body_images_in_the_same_lane_and_frame(self):
+        data,native,receptors=scenario()
+        for frame in native:
+            body=deepcopy(frame['skin_observations'][-1]);body['y']+=.4
+            body['bounds_pixels']=[body['bounds_pixels'][0],body['bounds_pixels'][1]+120,
+                                   body['bounds_pixels'][2],body['bounds_pixels'][3]+120]
+            frame['skin_observations'].append(body)
+        warnings=[];holds=reconstruct_images(data,receptors,native,warnings)
+        self.assertEqual(len(holds),1)
+        self.assertEqual(len(warnings),1)
+        self.assertEqual(warnings[0]['failure_detail'],'skin_body_images_without_complete_endpoint_ownership')
+        self.assertEqual(warnings[0]['observed_points'],10)
+        self.assertTrue(all(p['y']>.65 for p in warnings[0]['image_evidence']))
+
     def test_a_tail_image_needs_no_tap_or_input_at_its_cap_and_conflicts_stay_explicit(self):
         data,native,_=scenario();data['visual_channels']={'note_types':observe(data,native)}
         roles=tail_roles(data)
