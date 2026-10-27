@@ -10,7 +10,7 @@ from piu_timeline.play.beats.coordinates import prepare
 from piu_timeline.play.spacing_checks import spacing_failures
 from piu_timeline.play.head_registration import apply
 from piu_timeline.play.skins.bank import load_bank
-from piu_timeline.play.skins.coordinates import measure
+from piu_timeline.play.skins.coordinates import measure,cap_reference
 from tests.play.beats.test_coordinates import fixture as clock_fixture
 from tests.play.skins.test_detector import examples
 
@@ -54,6 +54,36 @@ class ImageCoordinateTest(unittest.TestCase):
             self.assertEqual((data,frames),original)
             self.assertFalse(measured['skin_detector']['registration_reviewed'])
             self.assertEqual(json.loads((root/'head-registration.json').read_text()),registration)
+
+    def test_context_variants_share_chord_geometry_only_with_identical_cap_sampling(self):
+        from tests.play.beats.test_chords import fixture as chord_fixture
+        from piu_timeline.play.beats.chords import prepare as chords
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);data,frames=fixture(root);bank=load_bank(root/'bank.json')
+            base=bank['templates'][0];context=deepcopy(base);context['id']='short-context'
+            context['regions'][1]['box']=[6,6,14,8]
+            identity=cap_reference(bank,base)
+            self.assertEqual(measure(data,frames)['notes'][0]['observations'][0]['cap_reference_sha256'],identity)
+            joint=chord_fixture();joint['layout']['lanes']=[{'x':.05+.1*i}for i in range(10)]
+            for i,(note,record)in enumerate(zip(joint['notes'],joint['head_registration']['notes'])):
+                note['lane']=(0,5,6)[i];record.update(status='measured',coordinate_method='native_image_anchors')
+                record.pop('coordinate_uncertainty_pixels')
+                for sample,(time,y)in zip(record['observations'],note['points'],strict=True):
+                    sample.update(native_y_pixels=y,template='base'if i==0 else'short-context',
+                                  cap_reference_sha256=identity if i==0 else cap_reference(bank,context)if i==1
+                                  else cap_reference(bank,bank['templates'][1]))
+            proofs=chords(joint,40)
+            self.assertEqual(len(proofs),1)
+            self.assertEqual(proofs[0]['reference_templates'],['base','short-context'])
+            for change in ('anchor','pixels','mask'):
+                different=deepcopy(context)
+                if change=='anchor':different['anchor_pixels'][1]+=1
+                elif change=='pixels':different['rgb'][0,0,0]^=1
+                else:different['mask'][0,0]=not different['mask'][0,0]
+                changed=deepcopy(joint)
+                for sample in changed['head_registration']['notes'][1]['observations']:
+                    sample['cap_reference_sha256']=cap_reference(bank,different)
+                self.assertEqual(chords(changed,40),[],change)
 
     def test_missing_ambiguous_or_failed_cap_provenance_and_changed_bank_fail_explicitly(self):
         with tempfile.TemporaryDirectory()as temporary:

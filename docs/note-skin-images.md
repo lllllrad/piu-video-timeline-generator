@@ -85,8 +85,11 @@ Independent coordinate models retain their existing reference-count, lane,
 source-support and pixel-residual requirements. Absolute registration remains
 unverified for UCS export. Cross-template chord calibration is not supplied by
 these records. Concurrent notes can instead establish a visual chord through
-one identical image reference: its shared anchor offset cancels. Every point
-in that witness uses the same fixed template identity, original source frame
+one identical cap reference: its shared anchor offset cancels. Reference
+identity includes image/mask bytes, cap bounds, scale, lane kind and anchor.
+Context-window variants can share this identity while different cap pixels or
+geometry cannot. Every point in that witness uses the same fixed cap identity,
+original source frame
 and existing gap/motion/error limits. Different unreviewed templates or poses
 cannot be pooled to claim calibrated simultaneity.
 

@@ -45,11 +45,13 @@ class BeatChordTest(unittest.TestCase):
             record.pop('coordinate_uncertainty_pixels')
             for sample,(time,y)in zip(record['observations'],note['points'],strict=True):
                 sample.update(native_y_pixels=y,template='shared'if i<2 else'other')
+        data['layout']['lanes']=[{'x':.05+.1*i}for i in range(10)]
         original=deepcopy(data);proofs=prepare(data,40)
         self.assertEqual(len(proofs),1)
         self.assertEqual(proofs[0]['peer_notes'],[0,1])
         self.assertEqual(proofs[0]['measurement_basis'],'shared_image_reference')
-        self.assertEqual(proofs[0]['template'],'shared')
+        self.assertEqual(proofs[0]['reference_identity'],'shared')
+        self.assertEqual(proofs[0]['reference_templates'],['shared'])
         self.assertEqual(data,original)
         for case in ('different_reference','changing_reference','real_gap','stale_measurement'):
             changed=deepcopy(data);record=changed['head_registration']['notes'][1]
