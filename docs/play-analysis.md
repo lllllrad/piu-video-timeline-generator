@@ -447,6 +447,14 @@ independently observed combo/judgment events. Compatible native appearance masks
 are reused without decoding or OCR. Changing registration rules invalidates derived
 timing, not native acquisition.
 
+Qualified native cap measurements are retained even when too few frames exist
+to fit a constant offset. Such records have `status: measured_only`: measured
+frames use their actual centers, and unmeasured frames keep original detection
+coordinates. The eight-frame/120 ms gate still applies to inferred offsets.
+An eligible trajectory with unmeasured frames retains an explicit
+`head_registration_incomplete` warning. Sparse measurements cannot train the
+stable-offset template bank or remove contradictory observations.
+
 The head-registration artifact also retains independent cap-template references,
 supporting head identities and original PTS. Compatible connected caps may use
 these references to measure coordinates without treating the body's bounding box

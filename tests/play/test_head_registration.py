@@ -7,7 +7,7 @@ import unittest
 
 import numpy as np
 
-from piu_timeline.play.head_registration import patch_offset,fit_offset,measure,project_coordinates
+from piu_timeline.play.head_registration import patch_offset,fit_offset,measure,project_coordinates,retain_measurements
 from piu_timeline.play.screen_regions import visible_cap_bounds
 
 
@@ -21,6 +21,22 @@ def patch():
 
 
 class HeadRegistrationTest(unittest.TestCase):
+    def test_sparse_qualified_images_keep_their_centers_without_inferring_missing_offsets(self):
+        samples=[{'time':i*.02,'source_pts_seconds':i*.02+50,'detected_y_pixels':100-i,
+                  'offset_pixels':1. if i%2 else .5}for i in range(7)]
+        self.assertIsNone(fit_offset(samples))
+        record=retain_measurements(samples)
+        self.assertEqual(record['status'],'measured_only')
+        raw=[[s['time'],s['detected_y_pixels']]for s in samples]+[[.15,90]]
+        canonical=project_coordinates(raw,record)
+        self.assertEqual(canonical[:-1],[[s['time'],s['detected_y_pixels']+s['offset_pixels']]for s in samples])
+        self.assertEqual(canonical[-1],[.15,90])
+        self.assertEqual(record['fallback_failure'],'insufficient_repeated_registration')
+        expanded=samples+[{'time':.14,'source_pts_seconds':50.14,'detected_y_pixels':93,'offset_pixels':1.}]
+        fitted=retain_measurements(expanded)
+        self.assertEqual(fitted['status'],'registered')
+        self.assertIsNone(fitted['fallback_failure'])
+
     def test_each_measured_frame_recovers_its_canonical_center_instead_of_a_median_shift(self):
         from piu_timeline.play.tracking import Track,fit_track
         times=[i*.02 for i in range(20)];offsets=[-.5,-1.5]*10

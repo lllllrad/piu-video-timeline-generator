@@ -8,7 +8,7 @@ import numpy as np
 from piu_timeline.play.note_types import cap_envelope, shape
 from piu_timeline.play.cap_templates import FORMAT as TEMPLATE_FORMAT
 
-FORMAT={'schema':1,'revision':8,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':9,'minimum_frames':8,'minimum_span_seconds':.12,
         'coordinate_projection':'per_frame_with_stable_offset_fallback',
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
         'numeric_epsilon_pixels':1e-9,
@@ -47,6 +47,20 @@ def fit_offset(samples):
             'observations':samples,'conflicting_observations':[s for s,keep in zip(samples,inliers,strict=True)if not keep]}
 
 
+def retain_measurements(samples):
+    """Measured centers do not require a model for unobserved frame offsets."""
+    if not samples:return None
+    fitted=fit_offset(samples)
+    if fitted is not None:return {**fitted,'fallback_failure':None}
+    values=np.array([s['offset_pixels']for s in samples]);offset=float(np.median(values))
+    errors=abs(values-offset)
+    return {'status':'measured_only','offset_pixels':offset,
+            'coordinate_uncertainty_pixels':FORMAT['coordinate_uncertainty_pixels'],
+            'inlier_fraction':float(np.mean(errors<=FORMAT['offset_inlier_pixels']+FORMAT['numeric_epsilon_pixels'])),
+            'median_error_pixels':float(np.median(errors)),'observations':samples,
+            'conflicting_observations':[], 'fallback_failure':'insufficient_repeated_registration'}
+
+
 def measure(data,path):
     """Calibrate each observed identity without using timing, grid or input fits."""
     from piu_timeline.play.screen_regions import visible_cap_bounds
@@ -76,13 +90,26 @@ def measure(data,path):
                                     'detected_y_pixels':float(ys[i]),
                                     'offset_pixels':offset,'patch_center_shift_pixels':patch_shift,
                                     'outer_bounds_in_patch':box,'support_bounds_pixels':bounds})
-            fitted=fit_offset(samples)
+            fitted=retain_measurements(samples)
             if fitted is not None:records.append({'note':ni,'lane':note['lane'],**fitted})
     from piu_timeline.play.cap_templates import augment
-    records,templates=augment(data,path,records,fit_offset)
+    records,templates=augment(data,path,records,retain_measurements)
     warnings=[]
     for record in records:
         record['coordinate_method']='native_cap_measurements'
+        if record['status']=='measured_only':
+            # A short track with every point measured needs no inferred offset.
+            # Other short/noisy tracks already have explicit tracking failures.
+            note=data['notes'][record['note']]
+            points=note.get('detected_points',note.get('points',[]))
+            if (len(points)>len(record['observations']) and len(points)>=4
+                    and points[-1][0]-points[0][0]>=.065):
+                warnings.append({'note':record['note'],'lane':record['lane'],
+                    'reason':'head_registration_incomplete','check':'timing_reconstruction',
+                    'observed_points':len(record['observations']),
+                    'visible_start_seconds':points[0][0],'visible_end_seconds':points[-1][0],
+                    'failure_detail':record['fallback_failure']})
+            continue
         uncertain=record['status']=='unresolved'
         samples=record['observations']if uncertain else record['conflicting_observations']
         if not samples:continue
