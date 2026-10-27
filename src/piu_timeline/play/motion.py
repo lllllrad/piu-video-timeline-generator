@@ -212,7 +212,7 @@ class ScrollMotion:
         if intercept-receptor > (6 if hud else 2.5)*self.spacing:
             return None
         target_phase = float(phase[-1]+(receptor-intercept)/slope)
-        error = max(.75, 2*residual/abs(slope))
+        error = max(.75, 2*residual/abs(slope),getattr(track,'registration_uncertainty_pixels',0))
         result = self.crossing(visible[-1][2], target_phase, error)
         if result is None or not 0 <= result['target_seconds']-visible[-1][0] <= (.65 if hud else .25):
             return None

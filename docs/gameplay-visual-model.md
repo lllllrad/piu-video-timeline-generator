@@ -376,3 +376,29 @@ retains the tail endpoint and its provenance in `observed_tail_roles`, excludes
 it from independent tap matching/UCS placement, and emits
 `observed_hold_tail_pending_geometry`. The unresolved hold geometry warning stays
 active; a tail role does not repair a failed chart time or invent a head time.
+
+## Registering nested outlines consistently
+
+The inner white contour and the outer colored silhouette can have different
+centers, depending on arrow direction and skin. Neither a beat-grid match nor a
+successful input establishes their offset. For a complete isolated cap, measure
+the connected outer silhouette around the same white contour in the retained
+native neighborhood, including its colored rim. Require visible separation on
+both sides and exclude clipped patches and known HUD regions.
+
+An observed identity can supply a constant outline-to-silhouette registration
+offset when at least eight qualified source frames span 120 ms. Current policy
+requires 95% of offsets within one native analysis pixel of their median and a
+median absolute error at most half a pixel. Limit correction magnitude to one
+tenth of lane spacing. These are registration gates, not permission to move a
+head to a beat or change the one-pixel inter-note spacing check. An unstable
+calibration and every measured outlier remain explicit warnings. A calibrated
+track contributes at least one pixel of position uncertainty to its crossing.
+
+Keep all original detection coordinates, frame times and PTS. Derived trajectory
+coordinates use the measured offset, without dropping or inventing observations.
+Visibility gaps and appearance/type joins continue using original detections.
+Connected hold caps, obscured outlines and unsupported shapes do not inherit a
+calibration just because other notes in that lane have one. The calibration
+measures a rendering coordinate convention; it cannot establish note type,
+judgment, press or release.

@@ -25,10 +25,11 @@ from piu_timeline.play.layout import (validate_layout, receptor_centers, locate_
 from piu_timeline.play.fonts import previous_digit_reader, bootstrap_digits
 
 from piu_timeline.play.shared_timing import FORMAT as SHARED_TIMING_FORMAT
+from piu_timeline.play.head_registration import FORMAT as HEAD_REGISTRATION_FORMAT
 from piu_timeline.play.beat_timing import FORMAT as BEAT_TIMING_FORMAT, current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT}
+TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT}
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 
@@ -403,6 +404,8 @@ def run(source, segment_number=1, force=False, **options):
         else:
             result = analyze_play(document, segments[segment_number-1], pending, **options)
         result['segment_number']=segment_number
+        from piu_timeline.play.head_registration import apply as register_heads
+        result=register_heads(result,pending,options.get('display_delay_ms',0))
         result=apply_beats(result,pending)
         result=reassociate_beats(result,options.get('display_delay_ms',0))
         result = augment_judgments(result,pending)

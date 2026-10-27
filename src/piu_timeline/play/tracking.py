@@ -220,7 +220,8 @@ def fit_track(track, receptor_y, spacing, motion=None, layout=None):
             held_since = points[i,0]
         hold_span = max(hold_span, points[i,0]-held_since)
     return {**result, 'status': 'estimated', 'target_seconds': target,
-            'prediction_uncertainty_seconds': max(residual / abs(velocity), (step+hold_span)/2)}
+            'prediction_uncertainty_seconds': max(residual / abs(velocity),
+                getattr(track,'registration_uncertainty_pixels',0)/abs(velocity),(step+hold_span)/2)}
 
 
 def glyphs(rgb, threshold=175):

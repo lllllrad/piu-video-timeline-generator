@@ -22,7 +22,7 @@ def continuity_diagnostics(data, frames):
     peers = {s['time']:s for s in data.get('scroll_motion',{}).get('samples',[])}
     processing = {p['note']:p for p in data.get('visual_channels',{}).get('processing',{}).get('notes',[])}
     for ni,note in enumerate(data.get('notes',[])):
-        points = note.get('points',[])
+        points = note.get('detected_points',note.get('points',[]))
         if not points:
             continue
         # Native source detections are the authority. No fitted target, input

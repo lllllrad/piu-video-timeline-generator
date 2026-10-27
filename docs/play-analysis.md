@@ -427,3 +427,12 @@ provides counts, unassigned events, unresolved samples and source-timestamped
 references for reuse outside the HTML report. Native spatial processing masks
 are cached in `processing-features.npz`; compatible association changes do not
 require decoding or OCR.
+
+Head coordinate registration precedes beat reconstruction. `head-registration.json`
+records per-identity native silhouette offsets, qualified source-frame observations,
+uncertainty and conflicts. `analysis.json` retains `detected_points` for calibrated
+tracks alongside derived `points`; the raw frame traces are unchanged. Stable
+pixel calibrations are fitted into the shared motion model before reassociating
+independently observed combo/judgment events. Compatible native appearance masks
+are reused without decoding or OCR. Changing registration rules invalidates derived
+timing, not native acquisition.
