@@ -330,6 +330,13 @@ Do not use the example as calibration for an arbitrary recording. Inspect the ov
 
 ## Cost, timestamps and evidence
 
+A projected long note always has a reconstructed chart anchor in the same object.
+Body observations whose anchor reconstruction failed remain in
+`hold_analysis.unresolved_holds`, with their native component evidence and explicit
+projection warnings. They do not render as complete chart bodies or contribute to
+the reconstructed long-note count. A censored boundary remains uncertain even when
+its body is observed; input effects cannot supply a missing chart anchor.
+
 At most 32 small counter crops receive English OCR to learn digit templates. Subsequent plays can
 reuse a saved font bank from unchanged source media and inspect up to eight samples, running OCR
 only on samples the bank cannot read. A complete font from another local recording can also be

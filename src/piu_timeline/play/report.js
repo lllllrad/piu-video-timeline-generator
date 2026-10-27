@@ -73,6 +73,7 @@ if(data.chart_policy){
   }
 }
 const holds=data.hold_analysis?.holds||[],holdById=new Map(holds.map(hold=>[hold.id,hold]));
+for(const hold of holds){const note=data.notes[hold.display_note];if(note?.status!=='estimated'||note.note_type!=='hold'||note.hold_id!==hold.id)throw Error('Long note has no reconstructed chart anchor: '+hold.id)}
 const holdFor=note=>note?.note_type==='hold'?holdById.get(note.hold_id):null;
 const possibleMissNotes=new Set((data.miss_candidates||[]).map(candidate=>candidate.note));
 const reviewNotes=data.notes.map((note,index)=>({note,index})).filter(({note})=>note.status==='estimated').sort((a,b)=>a.note.target_seconds-b.note.target_seconds);

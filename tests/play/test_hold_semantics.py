@@ -9,6 +9,25 @@ from tests.play.test_deferred import evidence
 
 
 class HoldSemanticsTest(unittest.TestCase):
+    def test_failed_head_reconstruction_cannot_project_a_body_without_a_chart_anchor(self):
+        source=evidence();hold=source['hold_analysis']['holds'][0]
+        source['notes'][0].update(timing_reconstruction={'status':'failed'})
+        hold.update(start_censored=True,head_note=None,head_observation_note=0,
+                    covered_notes=[],last_body_seconds=10.9)
+        original=deepcopy(source)
+        view=presentation(source)
+        self.assertEqual(view['hold_analysis']['holds'],[])
+        rejected=view['hold_analysis']['unresolved_holds']
+        self.assertEqual(len(rejected),1)
+        self.assertEqual(rejected[0]['projection_failure'],'timing_reconstruction_failed')
+        self.assertEqual(view['notes'][rejected[0]['display_note']]['status'],'excluded')
+        self.assertEqual(view['coverage']['long_notes'],0)
+        self.assertEqual(source,original)
+        from piu_timeline.play.exclusions import recognition_diagnostics
+        warnings=recognition_diagnostics(view,{'notes':{}})['warnings']
+        self.assertTrue(any(w['reason']=='hold_chart_projection_failed'for w in warnings))
+        self.assertTrue(any(w['reason']=='hold_start_unresolved'for w in warnings))
+
     def test_linked_caps_outside_covered_envelope_cannot_become_extra_taps(self):
         source=evidence();hold=source['hold_analysis']['holds'][0]
         hold['covered_notes']=[]

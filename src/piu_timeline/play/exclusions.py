@@ -99,12 +99,16 @@ def recognition_diagnostics(data, ranges):
     for role in data.get('hold_analysis',{}).get('observed_tail_roles',[]):
         add({**role,'note':role['tail_note'],'reason':'observed_hold_tail_pending_geometry',
              'observed_points':len(role['source_pts_seconds'])})
-    holds = data.get('hold_analysis', {}).get('holds', [])
+    holds = [*data.get('hold_analysis', {}).get('holds', []),
+             *data.get('hold_analysis', {}).get('unresolved_holds', [])]
     for hold in holds:
         lo = hold['start_range'][1] if hold['start_censored'] else hold['start_range'][0]
         hi = hold['end_range'][1] if hold['end_range'] else hold['last_body_seconds']
         base = {'hold': hold['id'], 'lane': hold['lane'], 'visible_start_seconds': lo,
                 'visible_end_seconds': max(lo, hi), 'observed_points': hold.get('body_frames', 0)}
+        if hold.get('projection_failure'):
+            add({**base, 'reason': 'hold_chart_projection_failed',
+                 'failure_detail': hold['projection_failure']}, 'timing_reconstruction')
         if hold['start_censored']:
             add({**base, 'reason': 'hold_start_unresolved'})
         if hold['end_censored'] or not hold['end_range']:

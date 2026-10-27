@@ -120,7 +120,7 @@ def chart_projection(data):
     for role in tail_roles:
         notes[role['tail_note']].update(reason='observed_hold_tail_pending_geometry',
                                       hold_cap_role='tail',observed_hold_head=role['head_note'])
-    projected = []
+    projected, unresolved_holds = [], []
     for original in holds:
         hold = dict(original)
         hold['covered_notes']=sorted(set(hold['covered_notes'])|{
@@ -145,11 +145,15 @@ def chart_projection(data):
         if notes[head].get('timing_reconstruction',{}).get('status')=='failed' or notes[head].get('beat_reconstruction',{}).get('status')=='failed':
             notes[head].update(status='excluded',reason='timing_reconstruction_failed')
         hold['display_note'] = head
-        projected.append(hold)
+        if notes[head]['status'] == 'estimated':
+            projected.append(hold)
+        else:
+            unresolved_holds.append({**hold, 'projection_failure': notes[head]['reason']})
     from piu_timeline.play.note_types import project_types
     diagnostics=project_types(data,notes,projected)
     return {**data,'notes':notes,'note_type_diagnostics':diagnostics,
-            'hold_analysis':{**data['hold_analysis'],'holds':projected,'observed_tail_roles':tail_roles}}
+            'hold_analysis':{**data['hold_analysis'],'holds':projected,
+                             'unresolved_holds':unresolved_holds,'observed_tail_roles':tail_roles}}
 
 
 def presentation(data):
@@ -158,7 +162,8 @@ def presentation(data):
     if not data.get('hold_analysis'):return view
     notes=view['notes'];holds=data['hold_analysis'].get('holds',[])
     projected=view['hold_analysis']['holds'];tail_roles=view['hold_analysis']['observed_tail_roles']
-    suppressed={index for hold in projected for index in hold['covered_notes']}|{r['tail_note']for r in tail_roles}
+    suppressed={index for hold in [*projected,*view['hold_analysis']['unresolved_holds']]
+                for index in hold['covered_notes']}|{r['tail_note']for r in tail_roles}
     def during_hold(lo, hi):
         return any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2) + .04
                    and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds'])
@@ -214,7 +219,7 @@ def presentation(data):
     matches, ambiguous, processing_confirmed = [], [], set()
     recovered = []
     for match in input_matches:
-        if match['note'] in suppressed:
+        if match['note'] in suppressed or notes[match['note']]['status'] != 'estimated':
             continue
         lo = match.get('observation_lower_seconds', match.get('combo_lower_seconds'))
         hi = match.get('observation_upper_seconds', match.get('combo_upper_seconds'))
@@ -276,8 +281,8 @@ def presentation(data):
                     judgment_labeled_note_heads=sum(bool(match.get('judgment_label')) for match in matches),
                     unlabeled_timed_note_heads=sum(not match.get('judgment_label') for match in matches),
                     combo_frame_labeled_note_heads=sum(match.get('judgment_label_source') == 'post_combo_frames' for match in matches),
-                    long_notes=len(holds),
-                    sustained_recognition_spans=sum(len(hold['input']['segments']) for hold in holds))
+                    long_notes=len(projected),
+                    sustained_recognition_spans=sum(len(hold['input']['segments']) for hold in projected))
     limitations = [item.replace('Holds, rolls', 'Rolls') for item in data.get('limitations', [])]
     limitations.append('Long-note recognition is a sustained visual state; neither a separate press per tick nor physical release is measured.')
     from piu_timeline.play.note_types import project_types
@@ -289,5 +294,5 @@ def presentation(data):
             'combo_events': events('combo_events'), 'judgment_events': labeled['judgment_events'],
             'hold_tick_ambiguous_notes': [index for index in ambiguous if index not in lane_recovered],
             'recovered_dense_notes': recovered, 'recovered_lane_supported_notes': lane_recovered,
-            'hold_analysis': {**data['hold_analysis'], 'holds': projected,'observed_tail_roles':tail_roles}, 'coverage': coverage,
+            'hold_analysis': view['hold_analysis'], 'coverage': coverage,
             'note_type_diagnostics': type_diagnostics})
