@@ -26,8 +26,8 @@ def reference_rows(data, *, cap_only=False):
 def image_spans(image,references):
     """These are compared image rows, not a claim of solid foreground pixels."""
     patterns=[image]
-    if image.get('role')=='hold_body':
+    if image.get('role')in('hold_start','hold_body','hold_end'):
         patterns.extend(p for p in image.get('alternatives',[])
-                        if p['role']=='hold_body' and p.get('classification_status')=='full_pattern')
+                        if p['role']==image['role'] and p.get('classification_status')=='full_pattern')
     return [(p['bounds_pixels'][1]+a,p['bounds_pixels'][1]+b)
             for p in patterns for a,b in references[p['template']]]

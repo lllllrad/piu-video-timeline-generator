@@ -111,6 +111,23 @@ class ImageHoldTest(unittest.TestCase):
                 else:alt['role']='tap'
             self.assertEqual(reconstruct_images(data,receptors,changed,[],references=references),[])
 
+    def test_positive_endpoint_alternatives_keep_their_connection_pixels(self):
+        data,native,receptors=scenario()
+        references={**REFERENCES,'hold_body':[[0,8]],'extended_start':[[0,48]]}
+        for frame in native:
+            cap=frame['skin_observations'][0];alternative=deepcopy(cap)
+            alternative.update(template='extended_start',classification_status='full_pattern')
+            alternative['bounds_pixels'][3]+=13
+            cap['alternatives']=[alternative]
+        warnings=[]
+        self.assertEqual(len(reconstruct_images(data,receptors,native,warnings,references=references)),1)
+        self.assertEqual(warnings,[])
+        # An unconfirmed connection cannot extend the representative cap.
+        for frame in native:
+            alt=frame['skin_observations'][0]['alternatives'][0]
+            alt.update(role='unknown',classification_status='cap_only')
+        self.assertEqual(reconstruct_images(data,receptors,native,[],references=references),[])
+
     def test_known_endpoint_caps_need_positive_body_images_and_a_complete_role_elsewhere(self):
         data,native,receptors=scenario()
         for frame in native[1:]:

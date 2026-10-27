@@ -113,9 +113,10 @@ warnings; only documented foreground HUD footprints can explain those losses.
 support in the acquired reference bank, preserving unsupported internal gaps.
 A template canvas rectangle cannot bridge padding or uncompared rows. The bank
 identity must match the native observations; changed references fail explicitly.
-Deduplicated complete body-tile matches retain their own measured row support;
-the representative tile does not replace overlapping positive comparisons.
-Unknown patterns and alternative cap roles cannot supply body coverage.
+Deduplicated complete image matches retain their own measured row support;
+the representative cap or body tile does not replace other positive comparisons.
+Only complete alternatives with the same resolved role can extend that support.
+Unknown patterns and opposing roles cannot supply missing connection pixels.
 These rows establish image-comparison coverage, rather than a solid foreground
 segmentation. Varying endpoint separation, contradictory roles and competing ownership
 prevent reconstruction. A missing image match is not a positive observation of
