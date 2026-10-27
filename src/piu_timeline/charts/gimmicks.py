@@ -24,6 +24,15 @@ def validate_candidates(metadata):
                 or not 0 <= start < end or not isinstance(record.get('evidence',[]),list)):
             raise ValueError('Gimmick candidates require finite increasing song times and an evidence list')
         increment = record.get('combo_increment')
+        if record['kind']=='decorative_note_art':
+            bounds=record.get('game_image_bounds');error=record.get('boundary_uncertainty_seconds')
+            if (record.get('note_semantics')!='decorative_non_playable' or record.get('playable_notes_present')is not False
+                    or not isinstance(record.get('display_content'),str) or not record['display_content'].strip()
+                    or not isinstance(bounds,list) or len(bounds)!=4
+                    or any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v)for v in bounds)
+                    or not (0<=bounds[0]<bounds[0]+bounds[2]<=1 and 0<=bounds[1]<bounds[1]+bounds[3]<=1)
+                    or isinstance(error,bool) or not isinstance(error,(int,float)) or not math.isfinite(error) or not 0<=error<=.1):
+                raise ValueError('Decorative artwork requires non-playable semantics, a scope without playable notes, normalized bounds and bounded time uncertainty')
         if record['kind'] == 'suspected_multi_increment' and (type(increment) is not int or not 2 <= increment <= 10):
             raise ValueError('Multi-increment effects require an integer combo_increment from 2 to 10')
         if record['kind']=='scroll_pause':

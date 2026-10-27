@@ -20,6 +20,13 @@ presses. Receptor onset counts require corroboration, rather than counting
 every bright frame or candidate transition. Unknown lane frames and processing
 failures remain visible in counts and review warnings.
 
+Configured [non-playable artwork](object-roles.md) is interpreted between raw
+observations and track reconstruction. `object-interpretation.json` links each
+separated candidate to its original frame-local detection index and source PTS.
+Raw motion and body channel views still expose those candidates; derived note
+tracks, cap types, holds and UCS rows use the interpreted view. A role never
+supplies an input or judgment event.
+
 ## Observing note processing
 
 Tracking expiry is not a processing event. During native hold/receptor pixel

@@ -26,10 +26,11 @@ from piu_timeline.play.fonts import previous_digit_reader, bootstrap_digits
 
 from piu_timeline.play.shared_timing import FORMAT as SHARED_TIMING_FORMAT
 from piu_timeline.play.head_registration import FORMAT as HEAD_REGISTRATION_FORMAT
+from piu_timeline.play.object_roles import FORMAT as OBJECT_FORMAT, current as objects_current, apply as interpret_objects
 from piu_timeline.play.beats.timing import FORMAT as BEAT_TIMING_FORMAT, current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT}
+TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT,'object_roles':OBJECT_FORMAT}
 FRAME_OBSERVATION_VERSION = 4
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 
@@ -364,7 +365,7 @@ def run(source, segment_number=1, force=False, **options):
                          and all(key in cached for key in ('layout','analysis_height','frame_count'))
                          and (final / 'frames.jsonl').is_file())
             if (same_source and same_settings and cached.get('play_analysis_version') == VERSION
-                    and cached.get('timing_format') == TIMING_FORMAT and beat_current(cached,final)
+                    and cached.get('timing_format') == TIMING_FORMAT and beat_current(cached,final) and objects_current(cached,final)
                     and cached.get('song')==segments[segment_number-1].get('song')
                     and cached.get('chart')==segments[segment_number-1].get('chart')
                     and cached.get('chart_identity')==segments[segment_number-1].get('chart_identity')
@@ -404,6 +405,7 @@ def run(source, segment_number=1, force=False, **options):
         else:
             result = analyze_play(document, segments[segment_number-1], pending, **options)
         result['segment_number']=segment_number
+        result=interpret_objects(result,pending,options.get('display_delay_ms',0))
         from piu_timeline.play.head_registration import apply as register_heads
         result=register_heads(result,pending,options.get('display_delay_ms',0))
         result=apply_beats(result,pending)

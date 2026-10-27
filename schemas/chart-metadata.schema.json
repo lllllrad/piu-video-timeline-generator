@@ -152,6 +152,27 @@
               "type": "number",
               "minimum": 0
             }
+          },
+          "note_semantics": {
+            "type": "string"
+          },
+          "playable_notes_present": {
+            "type": "boolean"
+          },
+          "display_content": {
+            "type": "string",
+            "minLength": 1
+          },
+          "game_image_bounds": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "description": "Normalized game-image x, y, width, height; scope must lie entirely in the game image."
           }
         },
         "allOf": [
@@ -216,6 +237,35 @@
               "properties": {
                 "speed_multiplier": {
                   "exclusiveMinimum": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "decorative_note_art"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "note_semantics",
+                "playable_notes_present",
+                "game_image_bounds",
+                "boundary_uncertainty_seconds",
+                "display_content"
+              ],
+              "properties": {
+                "note_semantics": {
+                  "const": "decorative_non_playable"
+                },
+                "playable_notes_present": {
+                  "const": false
                 }
               }
             }

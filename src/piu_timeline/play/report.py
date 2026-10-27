@@ -18,6 +18,7 @@ def write_report(data, path, final_directory=None):
     from piu_timeline.play.holds.analysis import presentation
     from piu_timeline.play.gimmicks import apply_gimmicks
     data = apply_projection(apply_gimmicks(presentation(data),path.parent))
+    path.with_name('object-interpretation.json').write_text(json.dumps(data.get('object_interpretation',{}),ensure_ascii=False,indent=2)+'\n')
     from piu_timeline.play.exclusions import exclusion_diagnostics, recognition_diagnostics
     exclusions = exclusion_diagnostics(native, data)
     data = {**data, 'exclusion_diagnostics': exclusions}

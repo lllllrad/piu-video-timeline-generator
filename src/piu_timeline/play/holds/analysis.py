@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 33}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 34}
 
 
 def fingerprint(value):
@@ -17,6 +17,8 @@ def fingerprint(value):
 
 def reconstruct(data, frames, diagnostics=None):
     """Resolve chart geometry first, then attach independent recognition spans."""
+    from piu_timeline.play.object_roles import filter_frames
+    frames=filter_frames(data,frames,bodies=True)
     geometry = HoldGeometry.from_analysis(data, FEATURE_FORMAT['width'])
     frames = register_caps(data, frames, geometry)
     frame_times = [frame['playback_seconds'] for frame in frames]
@@ -65,6 +67,7 @@ def augment_holds(data, output):
     from piu_timeline.play.channels import augment_channels
     contract = feature_contract(data)
     association = {'format': ASSOCIATION_FORMAT, 'notes': fingerprint(data['notes']),
+                   'object_roles':fingerprint(data.get('object_interpretation',{}).get('effects',[])),
                    'hud_events': fingerprint({key: data.get(key, []) for key in ('combo_events', 'judgment_events')})}
     path = output / 'holds.json'
     if path.is_file():
@@ -76,11 +79,17 @@ def augment_holds(data, output):
     acquire_features(data, output)
     with (output / 'hold-frames.jsonl').open() as stream:
         frames = [json.loads(line) for line in stream]
+    from piu_timeline.play.object_roles import filter_frames
+    interpreted=filter_frames(data,frames,bodies=True)
+    art=[{'source_pts_seconds':raw['source_pts_seconds'],'playback_seconds':raw['playback_seconds'],
+          'observation':body,'role':'decorative_art'}for raw,view in zip(frames,interpreted,strict=True)
+         for body in raw['bodies']if body not in view['bodies']]
     from piu_timeline.play.receptors import observations, reject_common_flashes
     frames = reject_common_flashes(frames, observations(data, output, frames))
     unresolved = []
     holds = reconstruct(data, frames, unresolved)
     result = {'feature_contract': contract, 'association_contract': association, 'holds': holds,
+              'decorative_body_observations':art,
               'unresolved_tracks': unresolved, 'receptor_runs': receptor_runs(frames),
               'semantics': 'Long notes are sustained states. Hold ticks are not independent presses; release is not measured.'}
     pending = path.with_suffix('.build-json')

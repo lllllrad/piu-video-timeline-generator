@@ -155,6 +155,9 @@ application without deleting evidence. A visibility modifier classifies the corr
 type warnings remain active. No check exemption is generated. Unknown effect
 kinds produce `chart_effect_handler_missing` in the report and bounded warning
 queue. Timing exclusions cannot suppress a missing interpreter.
+`decorative_note_art` separates explicitly non-playable objects before note and
+hold reconstruction. See [native object roles](object-roles.md) for its required
+scope, uncertainty and retained observations.
 A `suspected_multi_increment` effect records an integer `combo_increment` (2-10);
 it changes counter interpretation only in its song interval, never result quotas
 or independently recognized judgment grades. Reports show the provisional status

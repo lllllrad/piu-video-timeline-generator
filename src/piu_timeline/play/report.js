@@ -49,6 +49,19 @@ if(data.chart_policy){
     jump.onclick=()=>seek(candidate.playback_start_seconds);
   }
   for(const id of data.chart_policy.unsupported_gimmicks||[])text('p','Warning: no processing handler for '+id,$('chartPolicyDetails'));
+  const artwork=data.object_interpretation;
+  if(artwork?.status==='applied'){
+    const observations=artwork.observations||[];
+    text('p','Separated artwork: '+observations.length+' native head candidates; '+(data.hold_analysis?.decorative_body_observations||[]).length+' body observations. Original channels retain these observations.',$('chartPolicyDetails'));
+    const review=text('details','',$('chartPolicyDetails'));text('summary','Review artwork observations',review);
+    const list=text('div','',review),more=text('button','Show next 80',review);let shown=0;
+    const show=()=>{for(const observation of observations.slice(shown,shown+80)){
+      const row=text('p','',list),lane=data.layout.lanes[observation.lane];
+      const jump=text('button',fmt(observation.playback_seconds)+' / '+(lane.name||observation.lane+1)+' / PTS '+observation.source_pts_seconds.toFixed(6)+' / '+observation.effects.join(', '),row);
+      jump.onclick=()=>seek(observation.playback_seconds);
+    }shown=Math.min(shown+80,observations.length);more.hidden=shown>=observations.length;};
+    more.onclick=show;review.addEventListener('toggle',()=>{if(review.open&&!shown)show()});
+  }
   for(const region of data.chart_policy.regions||[]){
     const item=document.createElement('p');item.textContent=region.id+' / song '+fmt(region.start_seconds)+' … '+fmt(region.end_seconds)+' / '+region.processing+' / '+region.reason+(region.check_exceptions.length?' / check exceptions: '+region.check_exceptions.join(', '):'')+(region.details?' / '+region.details:'');
     const jump=document.createElement('button');jump.textContent='Seek region';jump.onclick=()=>seek(region.playback_start_seconds);item.appendChild(jump);$('chartPolicyDetails').appendChild(item);

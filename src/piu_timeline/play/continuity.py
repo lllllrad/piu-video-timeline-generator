@@ -6,11 +6,13 @@ import numpy as np
 
 from piu_timeline.play.screen_regions import note_occluders, overlapping_occluders
 
-FORMAT = {'schema':1, 'revision':2}
+FORMAT = {'schema':1, 'revision':3}
 
 
 def continuity_diagnostics(data, frames):
     """Inspect internal holes and premature endings, including successful fits."""
+    from piu_timeline.play.object_roles import filter_frames
+    frames=filter_frames(data,frames)
     warnings, occlusions, exits = [],[],[]
     if not frames or not data.get('layout',{}).get('lanes'):
         return {'format':FORMAT,'warnings':[], 'known_occlusions':[], 'accounted_exits':[], 'counts':{}}

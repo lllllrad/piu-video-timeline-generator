@@ -76,6 +76,7 @@ def recognition_diagnostics(data, ranges):
                          'visible_start_seconds':data['start_seconds'],'visible_end_seconds':data['end_seconds'],
                          'source_review':support})
     policy=data.get('chart_policy',{})
+    warnings.extend(data.get('object_interpretation',{}).get('warnings',[]))
     effects={e['id']:e for e in policy.get('gimmick_candidates',[])}
     for identifier in policy.get('unsupported_gimmicks',[]):
         effect=effects[identifier]

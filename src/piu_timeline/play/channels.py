@@ -7,7 +7,7 @@ from piu_timeline.play.processing import PROCESSING_FORMAT, observe_processing, 
 
 from piu_timeline.play.note_types import TYPE_FORMAT, observe_types, observe_appearance
 
-CHANNEL_FORMAT = {'schema': 1, 'revision': 6, 'processing': PROCESSING_FORMAT, 'note_types': TYPE_FORMAT}
+CHANNEL_FORMAT = {'schema': 1, 'revision': 7, 'processing': PROCESSING_FORMAT, 'note_types': TYPE_FORMAT}
 
 
 def receptor_evidence(data):
@@ -82,7 +82,9 @@ def collect(data, directory, frames):
         words = [{} for _ in native]
     from piu_timeline.play.appearance import acquire
     appearance = acquire(data,directory,native)
-    types = observe_appearance(data,appearance,frames) if appearance else observe_types(data,pixel_path,frames)
+    from piu_timeline.play.object_roles import filter_frames
+    interpreted=filter_frames(data,frames,bodies=True)
+    types = observe_appearance(data,appearance,interpreted) if appearance else observe_types(data,pixel_path,interpreted)
     return {'format': CHANNEL_FORMAT,
             'layers': layer_manifest(directory),
             'timeline': {'frames': [[f['playback_seconds'],f['source_pts_seconds']] for f in native]},
@@ -118,13 +120,14 @@ def layer_manifest(directory):
         'features': ['native-features/manifest.json', 'processing-features.npz',
                      'appearance-features.npz', 'evidence/judgments/features-v3.npz'],
         'frame_observations': ['frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
-        'interpretations': ['head-registration.json', 'holds.json', 'visual-channels.json'],
+        'interpretations': ['object-interpretation.json', 'head-registration.json', 'holds.json', 'visual-channels.json'],
         'associations': ['analysis.json'],
     }
     return {'source': 'analysis.json#/media',
             'artifacts': artifacts,
             'available': {name: (directory/name).is_file() for names in artifacts.values() for name in names},
-            'dependencies': {'head_registration':['native_head_trajectory','appearance-features.npz'],
+            'dependencies': {'object_roles':['frames.jsonl','chart-policy.json'],
+                             'head_registration':['interpreted_head_trajectory','appearance-features.npz'],
                              'processing': ['native_head_trajectory', 'native-features/manifest.json', 'spatial_masks', 'hold_geometry'],
                              'receptor_onsets': ['white_fractions', 'common_flash_filter'],
                              'matches': ['chart_timing', 'popup_events', 'lane_evidence']},
@@ -140,7 +143,7 @@ def augment_channels(data, directory, frames=None):
     inputs = ('frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz','counter-pixels.npz','native-features/manifest.json')
     contract = {'format': CHANNEL_FORMAT,
                 'analysis': fingerprint({key:data.get(key) for key in
-                                         ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion')}),
+                                         ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion','object_interpretation')}),
                 'traces': {name: [p.stat().st_size, p.stat().st_mtime_ns] if (p:=directory/name).is_file() else None for name in inputs}}
     path = directory/'visual-channels.json'
     if path.is_file():

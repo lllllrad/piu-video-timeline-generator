@@ -64,6 +64,11 @@ provenance; `play/processing.py` observes head persistence and disappearance at
 receptors independently of HUD values. See [visual channels](visual-channels.md)
 for artifacts, count units, uncertainty and association rules.
 
+`play/object_roles.py` interprets explicitly configured decorative artwork before
+track and motion reconstruction. Its frame-level roles retain raw detection
+identity and source PTS; [object roles](object-roles.md) describes the scope and
+uncertainty contract. Pixel acquisition remains independent of these roles.
+
 - `workflow.py` owns the public `just auto` flow, stable source IDs and `.local/data/` layout.
 - `media.py` prepares YouTube media with yt-dlp or inspects local input.
 - `metadata/analysis.py` detects gameplay, refines boundaries and saves structured evidence.
