@@ -314,6 +314,13 @@ rejected-window reasons stay in `.local/reports/chart-motion/report.json` (or
 an explicit `.local/` output path). Missing acquisition, changed media and
 unsupported alignment fail explicitly; no proposal does not clear warnings.
 
+The source filter includes all completed, registered recordings of a selected
+chart, not only the recording that originally generated its draft. An alternate
+recording needs its own reviewed explicit origin or source/window/reference-bound
+audio alignment cache; the seed recording's origin is never copied. Missing or
+stale alignment fails explicitly without downloading or decoding audio. Each
+proposal retains the actual recording's identity and full alignment evidence.
+
 The estimator compares approximately 300 ms linear displacement windows with
 at least 12 native samples, 70% independent multi-lane support and sufficient
 pixel displacement. Error bounds include fit error and a 1.5-pixel positional

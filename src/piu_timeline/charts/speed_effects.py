@@ -40,6 +40,8 @@ def proposals(measured, metadata, timing_path, source):
             context.update(nominal_bpm_ratio=bpm_after/bpm_before,
                            measured_ratio_divided_by_bpm_ratio=change['speed_multiplier']/(bpm_after/bpm_before))
         proof={'source_id':source['source_id'],'segment_number':source['segment_number'],
+               'media_size_bytes':source.get('media_size_bytes'),'media_mtime_ns':source.get('media_mtime_ns'),
+               'song_alignment':metadata['alignment'],
                'playback_range':[change['start_seconds'],change['end_seconds']],
                'before':before,'after':after,'motion_chunk':change['motion_chunk'],
                'lane_spacing_pixels':change['lane_spacing_pixels'],'ucs_bpm_context':context,
