@@ -19,6 +19,19 @@ def patch():
 
 
 class HeadRegistrationTest(unittest.TestCase):
+    def test_fractional_detection_center_is_not_the_rounded_patch_center(self):
+        with tempfile.TemporaryDirectory()as tmp:
+            path=Path(tmp)/'pixels.npz';times=np.arange(10)*.02+10
+            for y,expected in ((150.5,-1.5),(151.5,-.5)):
+                np.savez_compressed(path,masks=np.array([np.packbits(patch(),axis=-1)]*10),
+                                    times=times,pts=times+30,lanes=np.zeros(10,dtype=int),
+                                    ys=np.full(10,y),spacing=34,columns=65)
+                data={'analysis_height':400,'layout':{'receptor_y':.1,'lanes':[{'x':.3}]},
+                      'notes':[{'lane':0,'points':[[float(t),y]for t in times]}]}
+                fitted=measure(data,path)['notes'][0]
+                self.assertEqual(fitted['offset_pixels'],expected)
+                self.assertEqual(y+expected,round(y)-1)
+
     def test_isolated_crossing_retains_calibration_position_uncertainty(self):
         from piu_timeline.play.tracking import Track,fit_track
         track=Track(0,[[i*.01,80-i]for i in range(20)])

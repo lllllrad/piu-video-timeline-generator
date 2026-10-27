@@ -7,7 +7,7 @@ import numpy as np
 
 from piu_timeline.play.note_types import cap_envelope, shape
 
-FORMAT={'schema':1,'revision':2,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':3,'minimum_frames':8,'minimum_span_seconds':.12,
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
         'maximum_offset_spacing':.1,'coordinate_uncertainty_pixels':1.}
 
@@ -64,8 +64,14 @@ def measure(data,path):
                 i=options[0][1];anchor=patch_offset(masks[i],columns,spacing)
                 if anchor is not None:
                     offset,box=anchor
+                    # Appearance patches are centered on rounded pixel rows;
+                    # tracked outline centers retain their fractional row.
+                    patch_shift=round(float(ys[i]))-float(ys[i])
+                    offset+=patch_shift
+                    if abs(offset)>FORMAT['maximum_offset_spacing']*spacing:continue
                     samples.append({'time':time,'source_pts_seconds':float(pts[i]),
-                                    'offset_pixels':offset,'outer_bounds_in_patch':box})
+                                    'offset_pixels':offset,'patch_center_shift_pixels':patch_shift,
+                                    'outer_bounds_in_patch':box})
             fitted=fit_offset(samples)
             if fitted is not None:records.append({'note':ni,'lane':note['lane'],**fitted})
     warnings=[]

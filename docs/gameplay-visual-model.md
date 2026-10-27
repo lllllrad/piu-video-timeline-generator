@@ -402,3 +402,11 @@ Connected hold caps, obscured outlines and unsupported shapes do not inherit a
 calibration just because other notes in that lane have one. The calibration
 measures a rendering coordinate convention; it cannot establish note type,
 judgment, press or release.
+
+A stored neighborhood's center is an integer pixel row, rounded during cropping.
+The original contour center can lie on a half-pixel row. Convert the measured
+patch offset back into the original image coordinate system by adding
+`round(detected_y) - detected_y`; adding a patch-local offset directly to the
+fractional detection introduces an artificial alternating half-pixel error.
+Keep this patch-origin correction in the measurement record. It does not move
+the original observation, relax a fit gate or change source timestamps.
