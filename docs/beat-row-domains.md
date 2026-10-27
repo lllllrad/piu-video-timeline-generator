@@ -46,3 +46,32 @@ they do not inherit another cap's timestamp or input evidence.
 fits retain `native_chord_constraints` plus `unconstrained_row_domains`.
 Unresolved domains and contradictory assignments remain report warnings. This
 does not suppress motion/visibility warnings or identify a chart gimmick.
+
+## Independent spacing constraints
+
+A broad time interval can also cover several nonconcurrent rows. Within the
+same beat group, use uniquely placed heads as independent anchors in each
+registered coordinate block. A model needs at least five other heads, two
+lanes, three distinct target times and a target span of at least 300 ms.
+Every reference must satisfy the existing one-pixel model residual limit;
+no disagreeing reference is discarded. The tested head needs qualified native
+measurement support and cannot train its own model.
+
+Apply a model only when the entire candidate row domain lies between its
+independent anchors. Intersect the existing row domain with the measured
+coordinate interval, using the reference model's actual maximum residual plus
+the existing 1.5-pixel native support limit. Models can remove candidate rows,
+never add one or enlarge a time interval. Every qualified block constrains the
+result; conflicting evidence cannot be bypassed by selecting a favorable block.
+Newly resolved heads are not reused as training anchors within this operation.
+
+One surviving row resolves the ambiguity. Multiple survivors remain explicitly
+ambiguous; no survivor refutes the subdivision. A finer natural Split can be
+tested after a refuted coarse Split, with all ordinary time and geometry limits
+preserved. Final spacing and chord checks still apply. No input observations,
+result quotas or existing chart notes supply these row constraints.
+
+`native_coordinate_constraints` retains the original and allowed row domains,
+source note identity, coordinate block, model error and each independent
+reference's native support and source PTS range. Failed ambiguous fits also keep
+their remaining row domains and any qualified coordinate constraints.

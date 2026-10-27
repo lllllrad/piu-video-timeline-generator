@@ -7,16 +7,17 @@ import subprocess
 from pathlib import Path
 from piu_timeline.play.beats.coordinates import FORMAT as COORDINATE_FORMAT
 from piu_timeline.play.beats.chords import FORMAT as CHORD_FORMAT
+from piu_timeline.play.beats.domains import FORMAT as DOMAIN_FORMAT
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
 FORMAT={'schema':1,'revision':7,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
-        'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT}
+        'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT,'native_row_domains':DOMAIN_FORMAT}
 
 
-def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0,native_chords=()):
+def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty=0,native_chords=(),native_coordinates=()):
     """Choose the smallest explanatory split, never an arbitrarily fine nearest row."""
-    incompatible=False
+    incompatible=None
     for split in splits or FORMAT['natural_splits']:
         step=60/(bpm*split)
         options=[]
@@ -28,9 +29,13 @@ def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty
         from piu_timeline.play.beats.chords import constrain
         original_options=options
         options,proofs=constrain(options,step,native_chords)
-        if any(lo>hi for lo,hi in options):incompatible=True;continue
+        if any(lo>hi for lo,hi in options):incompatible='native_chord_domains_incompatible';continue
+        from piu_timeline.play.beats.domains import constrain as constrain_coordinates
+        options,coordinate_proofs=constrain_coordinates(options,step,origin,native_coordinates)
+        if any(lo>hi for lo,hi in options):incompatible='native_coordinate_domains_incompatible';continue
         if any(hi>lo for lo,hi in options):
-            return {'status':'failed','reason':'ambiguous_beat_rows','split':split}
+            return {'status':'failed','reason':'ambiguous_beat_rows','split':split,'row_domains':options,
+                    **({'native_coordinate_constraints':coordinate_proofs}if coordinate_proofs else {})}
         rows=[lo for lo,hi in options]
         if any(b-a>.025 and rb<=ra for a,b,ra,rb in zip(targets,targets[1:],rows,rows[1:])):continue
         exact=[origin+row*step for row in rows]
@@ -38,8 +43,10 @@ def fit_grid(targets, uncertainties, bpm, origin, splits=None, phase_uncertainty
         phase_hi=min([phase_uncertainty]+[t+e-g for t,e,g in zip(targets,uncertainties,exact)])
         if phase_lo>phase_hi+1e-8:continue
         return {'status':'restored','split':split,'rows':rows,'targets':exact,'phase_range':[phase_lo,phase_hi],
-                **({'native_chord_constraints':proofs,'unconstrained_row_domains':original_options}if proofs else {})}
-    return {'status':'failed','reason':'native_chord_domains_incompatible'if incompatible else'no_natural_beat_subdivision'}
+                **({'native_chord_constraints':proofs}if proofs else {}),
+                **({'native_coordinate_constraints':coordinate_proofs}if coordinate_proofs else {}),
+                **({'unconstrained_row_domains':original_options}if proofs or coordinate_proofs else {})}
+    return {'status':'failed','reason':incompatible or'no_natural_beat_subdivision'}
 
 
 def reference(data, directory):
@@ -173,6 +180,12 @@ def apply(data,directory):
         proposals.append(group)
     from piu_timeline.play.beats.coordinates import prepare
     coordinate_support=prepare(data,spacing)if spacing else None
+    if coordinate_support:
+        for group in proposals:
+            positions={index:j for j,index in enumerate(group['notes'])}
+            group['native_coordinates']=[{'chunk':number,'heads':{positions[i]:{**head,'native_note':i} for i,head in heads.items()
+                                         if i in positions}}for number,heads in coordinate_support['chunks'].items()
+                                         if sum(i in positions for i in heads)>=DOMAIN_FORMAT['measurement_limits']['minimum_references']+1]
     validate=(lambda fits:spacing_supported_notes(notes,proposals,fits,spacing,data.get('scroll_motion'),coordinate_support,chords))if spacing else None
     phase=fit_phase(proposals,ref['alignment_uncertainty_seconds'],consistent_notes=validate)
     result.update(song_phase_range=phase.get('phase_range'),song_phase_correction_seconds=phase.get('phase'),
