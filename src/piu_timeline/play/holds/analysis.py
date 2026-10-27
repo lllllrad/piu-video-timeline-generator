@@ -84,8 +84,8 @@ def augment_holds(data, output):
     return augment_channels({**data, 'hold_analysis': result}, output, frames)
 
 
-def presentation(data):
-    """Project hold-aware chart/recognition without rewriting native tap evidence."""
+def chart_projection(data):
+    """Project visible chart geometry and types without reading input associations."""
     holds = data.get('hold_analysis', {}).get('holds', [])
     if not data.get('hold_analysis'):
         from piu_timeline.play.note_types import project_types
@@ -124,6 +124,19 @@ def presentation(data):
             notes[head].update(status='excluded',reason='timing_reconstruction_failed')
         hold['display_note'] = head
         projected.append(hold)
+    from piu_timeline.play.note_types import project_types
+    diagnostics=project_types(data,notes,projected)
+    return {**data,'notes':notes,'note_type_diagnostics':diagnostics,
+            'hold_analysis':{**data['hold_analysis'],'holds':projected,'observed_tail_roles':tail_roles}}
+
+
+def presentation(data):
+    """Attach independent recognition evidence to the projected visible chart."""
+    view=chart_projection(data)
+    if not data.get('hold_analysis'):return view
+    notes=view['notes'];holds=data['hold_analysis'].get('holds',[])
+    projected=view['hold_analysis']['holds'];tail_roles=view['hold_analysis']['observed_tail_roles']
+    suppressed={index for hold in holds for index in hold['covered_notes']}|{r['tail_note']for r in tail_roles}
     def during_hold(lo, hi):
         return any(hi >= (hold['start_range'][1] if hold['start_censored'] else sum(hold['start_range'])/2) + .04
                    and lo <= (sum(hold['end_range'])/2 if hold['end_range'] else hold['last_body_seconds'])

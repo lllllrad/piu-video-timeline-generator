@@ -229,3 +229,18 @@ human-readable `reason`. All cells must match one row in the window. Validation
 and draft rebuilding check these facts; a failed rebuild leaves the previous
 chart and metadata intact. Rebuilding preserves reviewed assertions. Recording-
 or song-specific assertions belong in that repository, not this project's tests.
+
+### Visible chart versus played inputs
+
+UCS drafts use `holds.analysis.chart_projection`: visible head motion, bounded
+hold geometry and observed note types. The projection does not read combo or
+judgment matches, button/receptor input associations, successful grades or hold
+press/release estimates. The gameplay report separately attaches those signals
+in `presentation`. Simultaneous visible heads in different lanes are independent
+chart observations and may share a UCS row even if no input evidence exists.
+
+This separation does not make the current draft complete: a visible head with
+failed motion/beat reconstruction, an ambiguous UCS row or unresolved type may
+still be omitted. Inspect the source recognition warnings, draft `unresolved`
+placements and `summary.excluded_observations`; do not interpret absence from an
+unreviewed UCS draft as proof that the screen contained no note.

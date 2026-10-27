@@ -116,8 +116,8 @@ def canonical_chart(data):
 
 def draft(template, data, alignment, extend_constant_tempo=False):
     """Place observed heads/holds, keeping collisions and censored ends unresolved."""
-    from piu_timeline.play.holds.analysis import presentation
-    view = presentation(data)
+    from piu_timeline.play.holds.analysis import chart_projection
+    view = chart_projection(data)
     chart = canonical_chart(view)
     if chart is None:
         raise ValueError('A recognized Single/Double chart and level are required')

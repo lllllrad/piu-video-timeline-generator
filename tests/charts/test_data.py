@@ -43,6 +43,27 @@ def prove_types(source, holds=()):
 
 
 class ChartDataTest(unittest.TestCase):
+    def test_chord_and_hold_transcription_do_not_read_input_or_judgment_associations(self):
+        source=data()
+        source['notes'][1]['target_seconds']=source['notes'][0]['target_seconds']
+        source['hold_analysis']={'holds':[{'id':0,'lane':2,'start_range':[11.49,11.51],
+            'end_range':[12.49,12.51],'start_censored':False,'end_censored':False,
+            'head_note':2,'covered_notes':[2]}]}
+        prove_types(source,holds={2})
+        for field in ('matches','combo_events','judgment_events'):source.pop(field)
+        original=deepcopy(source)
+        document,evidence=draft(ucs.parse(TEMPLATE),source,{'song_start_seconds':10,'uncertainty_seconds':0})
+        chord=next(row for section in document.sections for row in section.rows if row.startswith('XX'))
+        self.assertEqual(chord,'XX...')
+        self.assertEqual(evidence['summary']['placed_holds'],1)
+        changed=deepcopy(source)
+        for field in ('matches','combo_events','judgment_events','deferred_matches','miss_candidates'):
+            changed[field]=[{'deliberately_unrelated_input_data':True}]
+        changed['hold_analysis']['holds'][0]['input']={'press_range':[99,100],'segments':[{'unrelated':True}]}
+        self.assertEqual(draft(ucs.parse(TEMPLATE),changed,{'song_start_seconds':10,'uncertainty_seconds':0}),
+                         (document,evidence))
+        self.assertEqual(source,original)
+
     def test_rebuild_preserves_reviewed_facts_and_refuses_a_regression_atomically(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);repo=initialize(root/'repo',Provider());output=root/'video/play/segment-001';output.mkdir(parents=True)
