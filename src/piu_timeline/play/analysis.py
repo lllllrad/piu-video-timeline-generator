@@ -27,10 +27,11 @@ from piu_timeline.play.fonts import previous_digit_reader, bootstrap_digits
 from piu_timeline.play.shared_timing import FORMAT as SHARED_TIMING_FORMAT
 from piu_timeline.play.head_registration import FORMAT as HEAD_REGISTRATION_FORMAT
 from piu_timeline.play.object_roles import FORMAT as OBJECT_FORMAT, current as objects_current, apply as interpret_objects
+from piu_timeline.play.counter_pixels import READER_FORMAT
 from piu_timeline.play.beats.timing import FORMAT as BEAT_TIMING_FORMAT, current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':4,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT,'object_roles':OBJECT_FORMAT}
+TIMING_FORMAT = {'schema':1,'counter_revision':4,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT,'object_roles':OBJECT_FORMAT}
 FRAME_OBSERVATION_VERSION = 4
 
 
@@ -166,9 +167,10 @@ def refit_saved(cached, previous, output, segment, display_delay_ms, note_skin=N
     refreshed = {}
     from piu_timeline.play.fonts import refresh_reader
     replaced_font = refresh_reader(cached, output, LOCAL_DATA)
-    if replaced_font or cached.get('frame_observation_version',2) < FRAME_OBSERVATION_VERSION:
+    reader_changed=cached.get('timing_format',{}).get('counter_reader')!=READER_FORMAT
+    if replaced_font or reader_changed or cached.get('frame_observation_version',2) < FRAME_OBSERVATION_VERSION:
         print('Refreshing counter crops; preserving saved note observations, no OCR.',flush=True)
-        refreshed = refresh_counter_observations(cached,output,replace_font=replaced_font)
+        refreshed = refresh_counter_observations(cached,output,replace_font=replaced_font or reader_changed)
     tracker = NoteTracker(cached['layout'], cached['analysis_width'], cached['analysis_height'])
     combo, count, last = ComboTracker(), 0, None
     for line in (output / 'frames.jsonl').open():
@@ -265,7 +267,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             signature = crop.tobytes()
             if signature != previous_mask:
                 expected = combo.stable if combo.last_seen is not None and playback-combo.last_seen <= .15 else None
-                previous_read = digits.read(crop, expected=expected, recover=False)
+                previous_read = digits.read(crop, expected=expected)
                 previous_mask = signature
             value, confidence = previous_read
             combo.update(playback,value,confidence,digits.last_mode,pts)

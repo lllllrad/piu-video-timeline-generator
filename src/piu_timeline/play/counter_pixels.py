@@ -2,8 +2,20 @@
 import json
 
 import numpy as np
+import cv2
 
 from piu_timeline.play.frames import decode_frames
+
+READER_FORMAT={'schema':1,'revision':1,'contrast':'two_independent_neutral_otsu_masks'}
+
+
+def contrast_thresholds(rgb):
+    """Measure faded neutral text against its background, without a counter prior."""
+    low=rgb.min(axis=2)
+    neutral=low[rgb.max(axis=2)-low<65]
+    if not neutral.size:return ()
+    threshold,_=cv2.threshold(neutral,0,255,cv2.THRESH_BINARY|cv2.THRESH_OTSU)
+    return (threshold,(threshold+175)/2)if 0<threshold<175 else ()
 
 
 def contract(data):

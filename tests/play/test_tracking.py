@@ -174,3 +174,13 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual(reader.read(bright)[0],12)
         self.assertEqual(reader.last_mode,'threshold_template')
         self.assertIsNone(reader.read(np.full_like(image,195),expected=12)[0])
+
+    def test_faded_counter_requires_two_strong_independent_contrast_reads(self):
+        image=np.zeros((60,150,3),dtype='uint8')
+        cv2.putText(image,'94',(5,45),cv2.FONT_HERSHEY_SIMPLEX,1.5,(255,255,255),3)
+        reader=DigitReader();reader.train(image,94,source=1);reader.train(image,94,source=2)
+        faded=(image*.5+35).astype('uint8')
+        self.assertIsNone(reader.read(faded,recover=False)[0])
+        self.assertEqual(reader.read(faded,expected=12)[0],94)
+        self.assertEqual(reader.last_mode,'contrast_template')
+        self.assertIsNone(reader.read(np.full_like(image,120),expected=94)[0])

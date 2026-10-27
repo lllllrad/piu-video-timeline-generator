@@ -311,6 +311,13 @@ class DigitReader:
         if options and len({value for value,_ in options}) == 1:
             self.last_mode = 'threshold_template'
             return max(options, key=lambda result: result[1])
+        if not options:
+            from piu_timeline.play.counter_pixels import contrast_thresholds
+            contrast=[self._read_digits(glyphs(rgb,t),None)for t in contrast_thresholds(rgb)]
+            if (len(contrast)==2 and all(value is not None and score>=.82 for value,score in contrast)
+                    and len({value for value,_ in contrast})==1):
+                self.last_mode='contrast_template'
+                return min(contrast,key=lambda result:result[1])
         self.last_mode = 'unreadable'
         return None, 0.0
 

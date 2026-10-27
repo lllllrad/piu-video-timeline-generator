@@ -293,6 +293,14 @@ legacy analyses acquire this small region once when needed. Source, geometry,
 frame count and original timestamps are validated independently of digit reads.
 Changing an association rule never invalidates this pixel cache.
 
+Faded combo glyphs may fall below a fixed white threshold. When ordinary reads
+fail, the reader measures neutral-pixel contrast with Otsu separation and tests
+both that mask and a threshold halfway toward the usual white threshold. Both
+must independently identify the same number with the existing template score
+and ambiguity limits; the expected counter never selects this fallback. Reader
+identity is part of the timing contract, so changes replay saved counter crops
+while preserving native note observations. Legacy plays acquire this crop once.
+
 A judgment-association upgrade with compatible saved word observations replays
 those reads without refitting note trajectories. Reader/template changes retain
 the isolated rebuild path; they must not rewrite the live observation trace

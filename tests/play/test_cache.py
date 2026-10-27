@@ -31,7 +31,7 @@ class PlayCacheTest(unittest.TestCase):
             layout={'receptor_y':.2,'combo_roi':[.4,.5,.2,.1],'lanes':[{'x':.1+.2*i} for i in range(5)]}
             saved={**segment,'song':'Old OCR','chart':'S1','media':media,'game_roi':roi,'analysis_width':320,
                    'analysis_height':180,'layout':layout,'frame_count':2,'participant_slots':[],
-                   'frame_observation_version':play.FRAME_OBSERVATION_VERSION,
+                   'frame_observation_version':play.FRAME_OBSERVATION_VERSION,'timing_format':play.TIMING_FORMAT,
                    'judgment_events':[],'calibration':{'file':str(donor/'evidence/proof.png')}}
             from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,donor)}}
