@@ -92,6 +92,8 @@ def remember_alias(repository, title, code):
     aliases = json.loads((repository / 'aliases.json').read_text())
     if existing not in (None, code) or key in aliases and aliases[key]['index'] != code:
         raise ValueError('Song alias conflicts with an existing UCS identity')
+    if key in aliases:
+        return
     aliases[key] = {'title': title, 'index': code, 'basis': 'explicit_assignment'}
     write_json(repository / 'aliases.json', aliases)
 

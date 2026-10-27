@@ -43,6 +43,18 @@ def prove_types(source, holds=()):
 
 
 class ChartDataTest(unittest.TestCase):
+    def test_repeated_explicit_identity_preserves_existing_alias_proof(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            repo=initialize(Path(temporary)/'repo',Provider())
+            path=repo/'aliases.json'
+            proof={'title':'Alternate title','index':'CS349','basis':'reference_audio_verified',
+                   'alignment':{'song_start_seconds':12.3,'uncertainty_seconds':.01}}
+            path.write_text(json.dumps({'alternatetitle':proof},indent=2)+'\n')
+            before=path.read_bytes()
+            remember_alias(repo,'Alternate title','CS349')
+            self.assertEqual(path.read_bytes(),before)
+            self.assertEqual(resolve_code(repo,'Alternate title'),'CS349')
+
     def test_chord_and_hold_transcription_do_not_read_input_or_judgment_associations(self):
         source=data()
         source['notes'][1]['target_seconds']=source['notes'][0]['target_seconds']
