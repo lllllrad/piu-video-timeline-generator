@@ -8,9 +8,10 @@ import numpy as np
 from piu_timeline.play.note_types import cap_envelope, shape
 from piu_timeline.play.cap_templates import FORMAT as TEMPLATE_FORMAT
 
-FORMAT={'schema':1,'revision':7,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':8,'minimum_frames':8,'minimum_span_seconds':.12,
         'coordinate_projection':'per_frame_with_stable_offset_fallback',
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
+        'numeric_epsilon_pixels':1e-9,
         'maximum_offset_spacing':.1,'coordinate_uncertainty_pixels':1.,'cap_templates':TEMPLATE_FORMAT}
 
 
@@ -35,9 +36,11 @@ def fit_offset(samples):
     if len(samples)<FORMAT['minimum_frames'] or samples[-1]['time']-samples[0]['time']<FORMAT['minimum_span_seconds']:
         return None
     values=np.array([s['offset_pixels']for s in samples]);offset=float(np.median(values))
-    errors=abs(values-offset);inliers=errors<=FORMAT['offset_inlier_pixels']
+    # Subtracting normalized source coordinates can leave sub-picopixel error
+    # on an otherwise exact half-pixel measurement.
+    errors=abs(values-offset);inliers=errors<=FORMAT['offset_inlier_pixels']+FORMAT['numeric_epsilon_pixels']
     stable=(float(inliers.mean())>=FORMAT['minimum_inlier_fraction']
-            and float(np.median(errors))<=FORMAT['maximum_median_error_pixels'])
+            and float(np.median(errors))<=FORMAT['maximum_median_error_pixels']+FORMAT['numeric_epsilon_pixels'])
     return {'status':'registered' if stable else 'unresolved','offset_pixels':offset,
             'coordinate_uncertainty_pixels':FORMAT['coordinate_uncertainty_pixels'],
             'inlier_fraction':float(inliers.mean()),'median_error_pixels':float(np.median(errors)),

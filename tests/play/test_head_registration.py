@@ -149,6 +149,21 @@ class HeadRegistrationTest(unittest.TestCase):
         for s in samples[::2]:s['offset_pixels']=1
         self.assertEqual(fit_offset(samples)['status'],'unresolved')
 
+    def test_normalized_coordinate_roundoff_preserves_exact_pixel_boundary(self):
+        samples=[{'time':i*.02,'offset_pixels':-1.}for i in range(20)]
+        # Pixel coordinates reconstructed from normalized positions are not
+        # necessarily exactly representable, including at half-pixel centers.
+        samples[-1]['offset_pixels']=205.5-(207.5/400)*400
+        samples[-2]['offset_pixels']=1.
+        original=deepcopy(samples)
+        fitted=fit_offset(samples)
+        self.assertEqual(fitted['status'],'registered')
+        self.assertEqual(fitted['conflicting_observations'],samples[-2:-1])
+        self.assertEqual(samples,original)
+        samples[-1]['offset_pixels']=-2.001
+        self.assertEqual(fit_offset(samples)['status'],'unresolved')
+        self.assertEqual(fit_offset(samples)['conflicting_observations'],samples[-2:])
+
     def test_pixels_join_raw_detection_positions_even_after_a_previous_projection(self):
         with tempfile.TemporaryDirectory()as tmp:
             path=Path(tmp)/'pixels.npz';times=np.arange(10)*.02+10

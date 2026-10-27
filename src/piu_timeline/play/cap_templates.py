@@ -4,10 +4,11 @@ from collections import defaultdict
 import cv2
 import numpy as np
 
-FORMAT={'schema':1,'revision':4,'minimum_independent_heads':2,'cluster_similarity':.94,
+FORMAT={'schema':1,'revision':5,'minimum_independent_heads':2,'cluster_similarity':.94,
         'maximum_clusters_per_lane':128,'maximum_templates_per_lane':12,
         'minimum_similarity':.90,'different_offset_margin':.04,'distinct_offset_pixels':.75,
-        'vertical_search_pixels':4,'horizontal_search_pixels':1,'minimum_truncated_rows':3}
+        'vertical_search_pixels':4,'horizontal_search_pixels':1,'minimum_truncated_rows':3,
+        'numeric_epsilon_pixels':1e-9}
 
 
 def dice(first,second):
@@ -20,7 +21,7 @@ def learn(records,pixels,lookup):
     for record in records:
         if record['status']!='registered':continue
         for sample in record['observations']:
-            if abs(sample['offset_pixels']-record['offset_pixels'])>1:continue
+            if abs(sample['offset_pixels']-record['offset_pixels'])>1+FORMAT['numeric_epsilon_pixels']:continue
             indices=lookup.get((round(sample['time'],6),record['lane']),[])
             indices=[i for i in indices if abs(float(pixels['pts'][i])-sample['source_pts_seconds'])<1e-6
                      and abs(float(pixels['ys'][i])-sample['detected_y_pixels'])<1e-5]

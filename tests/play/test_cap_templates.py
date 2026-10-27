@@ -137,6 +137,10 @@ class CapTemplateTest(unittest.TestCase):
         templates=learn(records,pixels,lookup)[0]
         self.assertEqual(len(templates),1)
         self.assertEqual(set(templates[0]['support']),{0,1,2})
+        records[2]['observations'][0]['offset_pixels']=205.5-(207.5/400)*400
+        self.assertEqual(set(learn(records,pixels,lookup)[0][0]['support']),{0,1,2})
+        records[2]['observations'][0]['offset_pixels']=-2.001
+        self.assertEqual(set(learn(records,pixels,lookup)[0][0]['support']),{0,1})
         changed=[{**r,'lane':i}for i,r in enumerate(records)]
         other_lookup={(0.,0):[0],(0.,1):[1],(.2,2):[2]}
         self.assertTrue(all(not bank for bank in learn(changed,pixels,other_lookup).values()))
