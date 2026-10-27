@@ -70,7 +70,11 @@ unrepresented animation phases can still produce missing or ambiguous matches.
 PTS, playback time, role, template identity, skin identity, image bounds,
 per-region errors and competing matches. `visual_channels.note_types` joins
 those observations to trajectories by exact source frame, lane and detected
-position. Conflicting tap/hold observations remain conflicts.
+position. Derived observations retain their own template, image errors and
+source anchor, and reference `frames.jsonl` for the complete competing patterns.
+Body diagnostics likewise retain exact frame/lane/anchor references instead of
+copying every native alternative. The original comparisons remain unchanged in
+the native trace. Conflicting tap/hold observations remain conflicts.
 
 A complete end image supplies a tail role without inventing a tap or a press at
 that location. It remains a warning when complete hold geometry is unresolved.

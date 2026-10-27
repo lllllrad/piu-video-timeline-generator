@@ -93,6 +93,11 @@ class SkinDetectorTest(unittest.TestCase):
                   'notes':[{'lane':0,'points':[[1.,115.]]}]}
             records=observe(data,[{'playback_seconds':1.,'source_pts_seconds':31.,'skin_observations':[end]}])
             self.assertEqual(records['notes'][0]['status'],'conflict')
+            self.assertTrue(all(o['trace']=='frames.jsonl'and 'image_alternatives'not in o
+                                for o in records['notes'][0]['observations']))
+            self.assertTrue(end['alternatives'])
+            self.assertTrue(all(o['source_image_anchor']==[end['x'],end['y']]
+                                for o in records['notes'][0]['observations']))
             self.assertEqual({o['role']:o['template']for o in records['notes'][0]['observations']},
                              {'tap':'tap','hold_end':'hold_end'})
             data['visual_channels']={'note_types':records}

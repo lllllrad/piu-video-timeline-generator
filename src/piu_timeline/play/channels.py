@@ -149,6 +149,9 @@ def augment_channels(data, directory, frames=None):
                 'analysis': fingerprint({key:data.get(key) for key in
                                          ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion','object_interpretation')}),
                 'traces': {name: [p.stat().st_size, p.stat().st_mtime_ns] if (p:=directory/name).is_file() else None for name in inputs}}
+    if data.get('skin_detector'):
+        from piu_timeline.play.skins.observations import FORMAT as IMAGE_ROLE_FORMAT
+        contract['image_roles'] = IMAGE_ROLE_FORMAT
     path = directory/'visual-channels.json'
     if path.is_file():
         saved = json.loads(path.read_text())

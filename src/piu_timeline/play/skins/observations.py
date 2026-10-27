@@ -2,6 +2,8 @@
 from collections import Counter
 
 
+FORMAT = {'schema': 1, 'revision': 1, 'evidence': 'native_image_trace_references'}
+
 def observe(data, native):
     by_time = {f['playback_seconds']: f for f in native}
     records = []
@@ -28,11 +30,12 @@ def observe(data, native):
                                  'trace': 'frames.jsonl', 'template': proof['template'], 'skin': image['skin'],
                                  'region_errors': proof['region_errors'], 'bounds_pixels': proof.get('bounds_pixels',image['bounds_pixels']),
                                  'image_anchor':[proof.get('x',image.get('x')),proof.get('y',image.get('y'))],
-                                 'image_alternatives':image.get('alternatives',[])})
+                                 'source_image_anchor':[image.get('x'),image.get('y')],
+                                 'classification_status':proof.get('classification_status','full_pattern')})
         kinds = {o['kind'] for o in observations} - {'unknown'}
         records.append({'note': index, 'status': 'conflict' if len(kinds) > 1 else next(iter(kinds)) if kinds else 'unknown',
                         'observations': observations})
-    return {'format': data['skin_detector']['contract'], 'available': True, 'notes': records,
+    return {'format': {'roles':FORMAT,'skin_detector':data['skin_detector']['contract']}, 'available': True, 'notes': records,
             'counts': dict(Counter(r['status'] for r in records)), 'traces': ['frames.jsonl'],
             'pixel_coordinates': {'width': data['analysis_width'], 'height': height, 'origin': 'game_crop_top_left'}}
 

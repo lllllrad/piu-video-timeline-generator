@@ -6,7 +6,7 @@ from piu_timeline.play.holds.state import recognition_segments, recognition_wind
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 4, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 5, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -114,7 +114,8 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                             'failure_detail': 'skin_body_images_without_complete_endpoint_ownership',
                             'visible_start_seconds': observations[0][0], 'visible_end_seconds': observations[-1][0],
                             'observed_points': len(observations),
-                            'image_evidence': [{'playback_seconds': t, 'source_pts_seconds': pts, **image}
+                            'image_evidence': [{'playback_seconds': t, 'source_pts_seconds': pts, 'trace':'frames.jsonl',
+                                                **{k:image[k]for k in ('lane','x','y','role','template','bounds_pixels','region_errors')}}
                                                for t, pts, image in observations]})
     geometry = HoldGeometry.from_analysis(data, 325)
     times = [f['playback_seconds'] for f in receptor_frames]
