@@ -1,11 +1,22 @@
 """Locate image patterns directly, without generating contour candidates first."""
 import cv2
 import numpy as np
+import math
 
-from piu_timeline.play.screen_regions import occluders_at_bounds
+from piu_timeline.play.screen_regions import note_occluders
 
-FORMAT = {'schema': 1, 'revision': 1, 'method': 'lane_masked_rgb_regions',
+FORMAT = {'schema': 1, 'revision': 2, 'method': 'lane_masked_rgb_regions',
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25}
+
+
+def occluded_support(layout, support, left, top, width, height):
+    """Transparent padding and pixels outside compared regions carry no proof."""
+    for region in note_occluders(layout):
+        x,y,w,h=region['rect']
+        a=max(0,math.floor(x*width-left));b=min(support.shape[1],math.ceil((x+w)*width-left))
+        c=max(0,math.floor(y*height-top));d=min(support.shape[0],math.ceil((y+h)*height-top))
+        if a<b and c<d and support[c:d,a:b].any():return True
+    return False
 
 
 class SkinDetector:
@@ -21,15 +32,17 @@ class SkinDetector:
             rgb = cv2.resize(original['rgb'], size, interpolation=cv2.INTER_AREA).astype('float32') / 255
             mask = cv2.resize(original['mask'].astype('uint8'), size, interpolation=cv2.INTER_NEAREST)
             regions = []
+            support = np.zeros(mask.shape, dtype=bool)
             for region in original['regions']:
                 x0, y0, x1, y1 = region['box']
                 box = round(x0 * sx), round(y0 * sy), round(x1 * sx), round(y1 * sy)
                 if box[0] >= box[2] or box[1] >= box[3] or not mask[box[1]:box[3], box[0]:box[2]].any():
                     raise ValueError('Skin image region vanishes at the analysis scale')
                 regions.append({**region, 'box': box})
+                support[box[1]:box[3],box[0]:box[2]] |= mask[box[1]:box[3],box[0]:box[2]].astype(bool)
             self.templates.append({**original, 'rgb': rgb, 'mask': mask,
                                    'anchor': [original['anchor_pixels'][0] * sx, original['anchor_pixels'][1] * sy],
-                                   'regions': regions})
+                                   'regions': regions, 'support': support})
 
     def detect(self, rgb):
         if rgb.shape != (self.height, self.width, 3):
@@ -69,7 +82,7 @@ class SkinDetector:
                 for row, col in zip(rows, cols, strict=True):
                     x, y = left + col + ax, top + row + ay
                     bounds = [left + int(col), top + int(row), left + int(col) + w, top + int(row) + h]
-                    if occluders_at_bounds(self.layout, bounds, self.width, self.height):
+                    if occluded_support(self.layout,template['support'],bounds[0],bounds[1],self.width,self.height):
                         continue
                     candidates.append({'lane': lane, 'x': x / self.width, 'y': y / self.height,
                                        'role': template['role'], 'template': template['id'],

@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 from piu_timeline.play.skins.bank import load_bank
-from piu_timeline.play.skins.detector import SkinDetector
+from piu_timeline.play.skins.detector import SkinDetector,occluded_support
 from piu_timeline.play.tracking import NoteTracker
 
 
@@ -40,6 +40,23 @@ def examples(root):
 
 
 class SkinDetectorTest(unittest.TestCase):
+    def test_transparent_padding_cannot_hide_clear_cap_and_connection_pixels(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);items,_=examples(root);bank=load_bank(root/'bank.json')
+            layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1,'color':'blue'}for i in range(5)]}
+            image=np.zeros((300,200,3),dtype='uint8');end=items[2][1];image[90:125,10:30]=end
+            clear={'id':'combo','rect':[.05,.30,.025,.04]}
+            with patch('piu_timeline.play.skins.detector.note_occluders',return_value=[clear]):
+                result=SkinDetector(bank,layout,200,300).detect(image)
+            self.assertTrue(any(o['role']=='hold_end'and abs(o['y']*300-115)<1e-6 for o in result))
+            for rect in ([.08,.30,.04,.04],[.05,.35,.1,.05]):
+                with patch('piu_timeline.play.skins.detector.note_occluders',return_value=[{'id':'hud','rect':rect}]):
+                    blocked=SkinDetector(bank,layout,200,300).detect(image)
+                self.assertFalse(any(o['role']=='hold_end'and abs(o['y']*300-115)<1e-6 for o in blocked))
+            support=np.zeros((10,10),dtype=bool);support[4,4]=True
+            with patch('piu_timeline.play.skins.detector.note_occluders',return_value=[{'id':'hud','rect':[.145,.145,.001,.001]}]):
+                self.assertTrue(occluded_support({},support,10,10,100,100))
+
     def test_image_scan_finds_caps_and_distinguishes_body_above_from_body_below(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);items,_=examples(root);bank=load_bank(root/'bank.json')

@@ -34,7 +34,10 @@ sampling. An anchor is an explicit registration convention, not automatically
 the center of an arrow-shaped bounding box. Distinctive short, flat or bracket
 tails need their own anchor calibration.
 
-The detector rejects image footprints intersecting documented HUD rectangles.
+The detector rejects compared support pixels intersecting documented HUD
+rectangles. Transparent padding and pixels outside the declared comparison
+regions do not make an otherwise clear cap or connection hidden. Every supported
+pixel still has to be outside HUD; both cap and connection checks remain mandatory.
 Local image minima supply candidate positions. Nearby matches from the same
 role are deduplicated. A complete end pattern has additional connection evidence
 that a cap-only tap match lacks; retain the end and both image comparisons.
