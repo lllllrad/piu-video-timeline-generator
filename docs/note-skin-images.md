@@ -59,8 +59,13 @@ The lower search limit applies to note anchors. Surrounding image context can
 extend beyond that limit while remaining inside the original game image; it is
 still subject to HUD support checks. A fully visible template must not be
 rejected just because its canvas extends below the anchor limit.
-Local image minima supply candidate positions. Nearby matches from the same
-role are deduplicated. A complete end pattern has additional connection evidence
+Local image minima supply cap positions. Body tiles retain every vertically
+qualified origin, using horizontal minima to localize the lane pattern. A better
+match on an adjacent row does not erase positively compared body pixels. Nearby
+matches from the same role are grouped, retaining their individual comparison
+coordinates and errors as alternatives; coverage uses their supported regions.
+The body-candidate contract is independent of cap localization, so a body-only
+rule change can reuse unchanged native cap observations after reference validation. A complete end pattern has additional connection evidence
 that a cap-only candidate lacks; retain the end and both image comparisons.
 Contradictory complete tap/hold patterns remain a type conflict, including both
 source-frame interpretations. Unknown frames do not erase a positively observed

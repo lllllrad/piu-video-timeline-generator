@@ -25,13 +25,17 @@ def signatures(bank):
 
 def reusable_groups(data,bank):
     saved=data.get('skin_detector',{})
-    if saved.get('contract',{}).get('detector')!=FORMAT:return set()
+    previous=saved.get('contract',{}).get('detector',{})
+    if not isinstance(previous,dict):return set()
+    # A body-only selection change does not alter cap comparison or localization.
+    common=lambda contract:{k:v for k,v in contract.items()if k!='body_candidates'}
+    if common(previous)!=common(FORMAT):return set()
     try:old=load_bank(saved['bank_path'])
     except (OSError,ValueError,KeyError):return set()
     if (old['contract']!=saved['contract']['bank'] or old['skin']!=bank['skin']
             or old['spacing_pixels']!=bank['spacing_pixels']):return set()
     a,b=signatures(old),signatures(bank)
-    return {key for key in a if a[key]==b[key]}
+    return {key for key in a if a[key]==b[key]and(key=='caps'or previous==FORMAT)}
 
 
 def merge_observations(native,detected,reused):

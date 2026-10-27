@@ -6,7 +6,8 @@ import math
 from piu_timeline.play.screen_regions import note_occluders
 
 FORMAT = {'schema': 1, 'revision': 5, 'method': 'lane_masked_rgb_regions',
-          'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor'}
+          'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor',
+          'body_candidates': {'schema':1,'selection':'qualified_rows_horizontal_minima'}}
 
 
 def occluded_support(layout, support, left, top, width, height):
@@ -83,8 +84,9 @@ class SkinDetector:
                     cap=next(r for r in template['regions']if r['name']=='cap')
                     proposal_scores=errors['cap']/cap.get('maximum_error',.015)
                 allowed = np.isfinite(proposal_scores) & (proposal_scores <= 1)
-                # Keep local image minima; the contour detector is never called.
-                minima = cv2.erode(proposal_scores.astype('float32'), np.ones((3, 3), dtype='uint8'))
+                # Caps need a localized origin; body tiles measure supported rows.
+                kernel=(1,3)if template['role']=='hold_body'else(3,3)
+                minima = cv2.erode(proposal_scores.astype('float32'), np.ones(kernel, dtype='uint8'))
                 rows, cols = np.nonzero(allowed & (proposal_scores <= minima + 1e-7))
                 for row, col in zip(rows, cols, strict=True):
                     x, y = left + col + ax, top + row + ay

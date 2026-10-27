@@ -42,6 +42,29 @@ def examples(root):
 
 
 class SkinDetectorTest(unittest.TestCase):
+    def test_qualified_body_rows_do_not_require_a_vertical_error_minimum(self):
+        from piu_timeline.play.skins.coverage import reference_rows,image_spans
+        from piu_timeline.play.skins.holds import covered
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);items,_=examples(root);bank=load_bank(root/'bank.json')
+            bank['templates']=[t for t in bank['templates']if t['role']=='hold_body']
+            layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+            image=np.zeros((300,200,3),dtype='uint8')
+            for row in range(60,240):
+                offset=round(3+3*np.sin((row-60)*2*np.pi/60))
+                image[row,16:24]=items[3][1][0]+offset
+            observations=SkinDetector(bank,layout,200,300).detect(image)
+            data={'analysis_width':200,'analysis_height':300,'layout':layout,
+                  'skin_detector':{'bank_path':str(root/'bank.json'),'contract':{'bank':bank['contract']}}}
+            rows=reference_rows(data)
+            spans=[span for o in observations for span in image_spans(o,rows)]
+            self.assertTrue(covered(60,240,spans))
+            self.assertFalse(covered(45,60,spans))
+            self.assertFalse(covered(240,255,spans))
+            self.assertTrue(all(o['role']=='hold_body'for o in observations))
+            self.assertTrue(all(p['region_errors']['body']<=.001
+                                for o in observations for p in[o,*o['alternatives']]))
+
     def test_anchor_limit_does_not_crop_visible_context_at_the_bottom_of_the_game(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);items,_=examples(root);bank=load_bank(root/'bank.json')

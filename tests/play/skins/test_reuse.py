@@ -80,6 +80,15 @@ class ImageReuseTest(unittest.TestCase):
                     with self.assertRaises(ValueError):refresh(data,root,root/'bank.json')
                 self.assertEqual((root/'frames.jsonl').read_text(),trace)
 
+    def test_body_candidate_rules_invalidate_only_body_observations(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);examples(root);bank=load_bank(root/'bank.json')
+            data={'skin_detector':deepcopy(detector_metadata(root/'bank.json'))}
+            data['skin_detector']['contract']['detector'].pop('body_candidates')
+            self.assertEqual(reusable_groups(data,bank),{'caps'})
+            data['skin_detector']['contract']['detector']['horizontal_search_spacing']=.5
+            self.assertEqual(reusable_groups(data,bank),set())
+
     def test_changed_rules_or_unverifiable_old_bank_cannot_authorize_reuse(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);examples(root);bank=load_bank(root/'bank.json')
