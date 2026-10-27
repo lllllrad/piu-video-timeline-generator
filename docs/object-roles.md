@@ -14,6 +14,17 @@ of playable notes applies to this spatial and temporal scope. It must be a
 chart fact supported by the recorded evidence. Artwork mixed with playable
 notes in the same scope needs a more selective interpreter.
 
+For a whole interval with no playable inputs, set
+`chart_processing: skip_non_playable_interval`. This declares that the entire
+field is non-playable during that interval, regardless of decorative objects'
+pixel bounds. Native detections, body pixels, popup reads and source timestamps
+remain available; the derived chart skips note/hold reconstruction there.
+The object-role artifact lists skipped source frames, including frames with no
+detections. This is a chart fact requiring evidence that there are no playable
+notes anywhere in the interval, rather than an automatic-check exemption.
+Time/alignment uncertainty and source-bound boundary roles still apply. Ordinary
+candidates at uncertain boundaries remain candidates and retain warnings.
+
 Pending and confirmed effects are active. Rejected effects restore ordinary
 interpretation on the next replay. Source-bound audio alignment translates the
 song interval to the current recording. Invalid metadata or unavailable

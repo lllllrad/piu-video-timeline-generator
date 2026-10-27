@@ -231,6 +231,9 @@
           "playable_notes_present": {
             "type": "boolean"
           },
+          "chart_processing": {
+            "enum": ["objects", "skip_non_playable_interval"]
+          },
           "display_content": {
             "type": "string",
             "minLength": 1

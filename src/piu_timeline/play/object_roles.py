@@ -7,7 +7,7 @@ from piu_timeline.play.object_boundaries import FORMAT as BOUNDARY_FORMAT
 from piu_timeline.play.frames import TIME_EPSILON
 
 KIND='decorative_note_art'
-FORMAT={'schema':1,'revision':3,'cap_radius_spacing':.5,'boundary_frames':BOUNDARY_FORMAT}
+FORMAT={'schema':1,'revision':4,'cap_radius_spacing':.5,'boundary_frames':BOUNDARY_FORMAT}
 
 
 def reference(data,directory):
@@ -49,16 +49,22 @@ def ownership(bounds,time,candidates):
         lo,hi=effect['playback_start_seconds'],effect['playback_end_seconds']
         error=effect['boundary_uncertainty_seconds']+effect.get('alignment_uncertainty_seconds',0)
         x,y,w,h=effect['game_image_bounds'];left,top,right,bottom=bounds
-        intersects=left<x+w and x<right and top<y+h and y<bottom
+        skip=effect.get('chart_processing')=='skip_non_playable_interval'
+        intersects=skip or left<x+w and x<right and top<y+h and y<bottom
         if not intersects or not lo-error<=time<=hi+error:continue
         role=next((r['role']for r in effect.get('source_frame_roles',[])
                    if abs(time-r['playback_seconds'])<=TIME_EPSILON),None)
         if role=='ordinary_candidate':continue
         certain=lo+error<=time<hi-error or role=='decorative_art'
-        if certain and x<=left and right<=x+w and y<=top and bottom<=y+h:
+        if certain and (skip or x<=left and right<=x+w and y<=top and bottom<=y+h):
             owners.append(effect['id'])
         else:ambiguous.append(effect['id'])
     return owners,ambiguous
+
+
+def skipped_frame(time,candidates):
+    return ownership([0,0,1,1],time,[e for e in candidates
+                     if e.get('chart_processing')=='skip_non_playable_interval'])[0]
 
 
 def cap_bounds(data,note):
@@ -75,6 +81,11 @@ def filter_frames(data,frames,bodies=False):
     if not candidates:return frames
     result=[]
     for frame in frames:
+        skipped=skipped_frame(frame['playback_seconds'],candidates)
+        if skipped:
+            result.append({**frame,('bodies'if bodies else'notes'):[], 'skin_observations':[],
+                           'possible_hold_or_dense_stack':False,'non_playable_effects':skipped})
+            continue
         kept=[]
         for observation in frame.get('bodies'if bodies else'notes',[]):
             if bodies:
@@ -93,7 +104,8 @@ def filter_frames(data,frames,bodies=False):
 def apply(data,directory,display_delay_ms=0):
     """Replay native candidates with chart object roles before timing or input fits."""
     directory=Path(directory);ref=reference(data,directory)
-    artifact={'contract':ref,'status':'not_applicable','effects':[],'observations':[],'warnings':[]}
+    artifact={'contract':ref,'status':'not_applicable','effects':[],'observations':[],'warnings':[],
+              'skipped_frames':[]}
     if not ref['candidates']:return {**data,'object_interpretation':artifact}
     from piu_timeline.charts.policy import attach_regions
     prepared=attach_regions({k:v for k,v in data.items()if k!='chart_policy'},directory)
@@ -107,6 +119,10 @@ def apply(data,directory,display_delay_ms=0):
     from piu_timeline.play.object_boundaries import prepare as prepare_boundaries
     candidates=[prepare_boundaries(data,directory,e,frames)for e in candidates]
     for frame in frames:
+        skipped=skipped_frame(frame['playback_seconds'],candidates)
+        if skipped:
+            artifact['skipped_frames'].append({'playback_seconds':frame['playback_seconds'],
+                'source_pts_seconds':frame['source_pts_seconds'],'effects':skipped})
         for index,note in enumerate(frame['notes']):
             owners,ambiguous=ownership(cap_bounds(data,note),frame['playback_seconds'],candidates)
             base={'playback_seconds':frame['playback_seconds'],'source_pts_seconds':frame['source_pts_seconds'],

@@ -25,6 +25,46 @@ def geometry():
 
 
 class ObjectRoleTest(unittest.TestCase):
+    def test_whole_non_playable_interval_skips_all_lanes_but_preserves_uncertain_boundaries(self):
+        e=effect();e['chart_processing']='skip_non_playable_interval'
+        data=geometry();data['object_interpretation']={'effects':[e]}
+        frames=[{'playback_seconds':t,'source_pts_seconds':100+t,
+                 'notes':[{'lane':0,'x':.2,'y':.8},{'lane':2,'x':.6,'y':.8}],
+                 'skin_observations':[{'role':'hold_body'}],
+                 'possible_hold_or_dense_stack':True}for t in (.105,.2,.32)]
+        original=deepcopy(frames);view=roles.filter_frames(data,frames)
+        self.assertEqual(view[0]['notes'],frames[0]['notes'])
+        self.assertEqual(view[1]['notes'],[])
+        self.assertEqual(view[1]['skin_observations'],[])
+        self.assertFalse(view[1]['possible_hold_or_dense_stack'])
+        self.assertEqual(view[2]['notes'],frames[2]['notes'])
+        self.assertEqual(frames,original)
+        body=[{'playback_seconds':.2,'bodies':[{'source_components':[1]}]}]
+        self.assertEqual(roles.filter_frames(data,body,bodies=True)[0]['bodies'],[])
+        self.assertEqual(roles.ownership([.7,.6,.9,.8],.105,[e]),([],['cards']))
+        e['source_frame_roles']=[{'role':'ordinary_candidate','playback_seconds':.105}]
+        self.assertEqual(roles.ownership([.7,.6,.9,.8],.105,[e]),([],[]))
+        with self.assertRaises(ValueError):
+            validate_candidates({'gimmick_candidates':[{**e,'playable_notes_present':True}]})
+
+    def test_non_playable_skip_records_empty_frames_with_original_pts(self):
+        e={**effect(),'chart_processing':'skip_non_playable_interval'}
+        data=geometry();frames=[{'playback_seconds':t,'source_pts_seconds':100+t,'notes':[],
+                                'combo':None}for t in (.12,.14,.16,.18,.2)]
+        data.update(frame_count=len(frames),notes=[])
+        prepared={**data,'chart_policy':{'status':'applied','alignment':{'uncertainty_seconds':0},
+                                       'gimmick_candidates':[e]}}
+        with tempfile.TemporaryDirectory()as tmp:
+            directory=Path(tmp);trace=directory/'frames.jsonl'
+            trace.write_text(''.join(json.dumps(f)+'\n'for f in frames));before=trace.read_bytes()
+            with patch.object(roles,'reference',return_value={'format':roles.FORMAT,'candidates':[e]}),\
+                    patch('piu_timeline.charts.policy.attach_regions',return_value=prepared):
+                result=roles.apply(data,directory)
+            self.assertEqual(trace.read_bytes(),before)
+        self.assertEqual(result['notes'],[])
+        self.assertEqual([r['source_pts_seconds']for r in result['object_interpretation']['skipped_frames']],
+                         [r['source_pts_seconds']for r in frames])
+
     def test_only_certain_time_and_fully_contained_footprint_are_classified(self):
         e=effect();bounds=[.3,.3,.5,.7]
         self.assertEqual(roles.ownership(bounds,.2,[e]),(['cards'],[]))

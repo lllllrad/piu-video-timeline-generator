@@ -91,7 +91,7 @@ def augment_holds(data, output):
     unresolved = []
     if data.get('skin_detector'):
         from piu_timeline.play.skins.holds import reconstruct_images
-        native = [json.loads(line) for line in (output/'frames.jsonl').open()]
+        native = filter_frames(data,[json.loads(line) for line in (output/'frames.jsonl').open()])
         holds = reconstruct_images(data, frames, native, unresolved)
     else:
         holds = reconstruct(data, frames, unresolved)

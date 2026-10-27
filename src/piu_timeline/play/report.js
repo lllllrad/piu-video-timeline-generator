@@ -53,6 +53,7 @@ if(data.chart_policy){
   if(artwork?.status==='applied'){
     const observations=artwork.observations||[];
     text('p','Separated artwork: '+observations.length+' native head candidates; '+(data.hold_analysis?.decorative_body_observations||[]).length+' body observations. Original channels retain these observations.',$('chartPolicyDetails'));
+    if(data.object_interpretation.skipped_frames?.length)text('p','Non-playable interval: chart reconstruction skipped in '+data.object_interpretation.skipped_frames.length+' original source frames. Native observations remain available.',$('chartPolicyDetails'));
     const review=text('details','',$('chartPolicyDetails'));text('summary','Review artwork observations',review);
     const list=text('div','',review),more=text('button','Show next 80',review);let shown=0;
     const show=()=>{for(const observation of observations.slice(shown,shown+80)){
