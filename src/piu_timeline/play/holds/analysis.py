@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 40}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 41}
 
 
 def fingerprint(value):
@@ -254,8 +254,11 @@ def presentation(data):
     def events(key):
         result = []
         owned = {match.get('combo_event' if key == 'combo_events' else 'judgment_event') for match in matches}
+        pre_hold={m.get('judgment_event')for m in matches if m.get('recovery_method')=='strict_judgment_before_accounted_hold'}
         for event_index, event in enumerate(data.get(key, [])):
             event = dict(event)
+            if key=='judgment_events'and event_index in pre_hold:
+                event.update(status='matched',reason='tap_before_accounted_hold_regions')
             if key == 'combo_events' and any(m.get('combo_event') == event_index and m.get('aggregate_evidence_method') for m in matches):
                 event.update(status='matched', reason='aggregate_counter_with_exclusive_lane_onsets')
             if key == 'combo_events' and event_index in owned and event.get('reason') == 'possible_hold_or_dense_stack':
@@ -272,6 +275,8 @@ def presentation(data):
                                           'combo_events': events('combo_events'),
                                           'judgment_events': events('judgment_events'),
                                           'hold_analysis': {**data['hold_analysis'], 'holds': projected,'observed_tail_roles':tail_roles}})
+    from piu_timeline.play.deferred_words import recover as recover_pre_hold
+    matches,pre_hold_recovered=recover_pre_hold(data,notes,matches,suppressed)
     from piu_timeline.play.recovered_judgments import attach_recovered_labels
     labeled = attach_recovered_labels({**data, 'matches': matches,
                                       'combo_events': events('combo_events'),
@@ -305,7 +310,8 @@ def presentation(data):
             'excluded_notes': dict(Counter(note.get('reason') for note in notes if note['status'] == 'excluded')),
             'miss_candidates': [candidate for candidate in data.get('miss_candidates', []) if candidate['note'] not in suppressed],
             'combo_events': events('combo_events'), 'judgment_events': labeled['judgment_events'],
-            'hold_tick_ambiguous_notes': [index for index in ambiguous if index not in lane_recovered],
+            'hold_tick_ambiguous_notes': [index for index in ambiguous if index not in lane_recovered and index not in pre_hold_recovered],
+            'recovered_pre_hold_notes':pre_hold_recovered,
             'recovered_dense_notes': recovered, 'recovered_lane_supported_notes': lane_recovered,
             'hold_analysis': view['hold_analysis'], 'coverage': coverage,
             'note_type_diagnostics': type_diagnostics})

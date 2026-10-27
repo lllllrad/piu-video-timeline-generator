@@ -1,8 +1,11 @@
 """A body's approach visibility is distinct from its recognition interval."""
 from copy import deepcopy
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
-from piu_timeline.play.holds.input_risk import hold_overlap
+from piu_timeline.play.holds.input_risk import hold_overlap,cap_extent_spacing
 from piu_timeline.play.skins.held import FORMAT
 
 
@@ -17,6 +20,19 @@ def evidence():
 
 
 class HoldRiskTest(unittest.TestCase):
+    def test_cap_footprint_comes_from_the_source_bound_reference_bank(self):
+        from piu_timeline.play.skins.bank import load_bank
+        from tests.play.skins.test_detector import examples
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);_,document=examples(root);path=root/'bank.json'
+            bank=load_bank(path)
+            data={'skin_detector':{'bank_path':str(path),'contract':{'bank':bank['contract']}}}
+            self.assertEqual(cap_extent_spacing(data),1.)
+            document['spacing_pixels']=5;path.write_text(json.dumps(document))
+            self.assertIsNone(cap_extent_spacing(data))
+            data['skin_detector']['contract']['bank']=load_bank(path)['contract']
+            self.assertEqual(cap_extent_spacing(data),2.)
+
     def test_linked_visibility_warning_keeps_the_known_cap_bounds_and_is_not_removed(self):
         data=evidence();original=deepcopy(data)
         self.assertFalse(hold_overlap(data,1.,1.04,.034))
