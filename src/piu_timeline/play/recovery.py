@@ -1,7 +1,7 @@
 """Conservative recovery of unique rows with independent lane onset evidence."""
 from collections import defaultdict
 
-from piu_timeline.play.candidates import candidates
+from piu_timeline.play.candidates import candidates,target_offsets,target_in_window
 from piu_timeline.play.receptors import onset_overlaps
 from piu_timeline.play.channels import receptor_evidence
 from piu_timeline.play.processing import processing_support
@@ -57,10 +57,9 @@ def recover_rows(data):
         supported = []
         for option in options:
             lo, hi = option['lower_seconds'], option['upper_seconds']
-            offset = option['ranking_offset_seconds']
+            offsets = target_offsets(data,option['ranking_offset_seconds'])
             plausible = [index for index, note in eligible if note['lane'] == notes[ni]['lane']
-                         and lo-.045-note['prediction_uncertainty_seconds'] <= note['target_seconds']+offset
-                         <= hi+.045+note['prediction_uncertainty_seconds']]
+                         and any(target_in_window(note,lo,hi,offset)for offset in offsets)]
             if plausible != [ni]:
                 continue
             onset_ids = [ri for ri, run in enumerate(runs) if run['lane'] == notes[ni]['lane']

@@ -15,6 +15,20 @@ def evidence():
 
 
 class RowRecoveryTest(unittest.TestCase):
+    def test_other_press_offsets_do_not_move_the_independent_onset_eligibility_window(self):
+        data=evidence()
+        data['notes'].append({**data['notes'][0],'target_seconds':1.5,'lane':1})
+        data['matches']=[{'note':1,'target_seconds':1.5,'combo_event':1,
+                         'observation_lower_seconds':1.9,'observation_upper_seconds':1.92}]
+        matches,recovered=recover_rows(data)
+        self.assertEqual(recovered,[0])
+        self.assertEqual(next(m for m in matches if m['note']==0)['observation_upper_seconds'],1.04)
+        ambiguous=deepcopy(data)
+        ambiguous['notes'].append({**data['notes'][0],'target_seconds':.6})
+        self.assertEqual(recover_rows(ambiguous)[1],[])
+        data['display_delay_correction_ms']=400
+        self.assertEqual(recover_rows(data)[1],[])
+
     def test_flash_corroborated_onset_survives_candidate_lane_gate(self):
         data = evidence()
         run = data['hold_analysis']['receptor_runs'][1]

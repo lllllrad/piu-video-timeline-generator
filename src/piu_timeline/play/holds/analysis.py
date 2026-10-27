@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 35}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 38}
 
 
 def fingerprint(value):

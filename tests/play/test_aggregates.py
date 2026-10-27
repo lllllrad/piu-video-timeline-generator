@@ -22,6 +22,20 @@ def evidence():
 
 
 class AggregateRecoveryTest(unittest.TestCase):
+    def test_other_press_offsets_do_not_move_an_individual_target_eligibility_window(self):
+        data=evidence()
+        data['notes'].append({'status':'estimated','lane':2,'target_seconds':1.5,'prediction_uncertainty_seconds':.01})
+        data['matches'].append({'note':2,'target_seconds':1.5,'combo_event':1,
+                                'observation_lower_seconds':1.9,'observation_upper_seconds':1.92})
+        matches,recovered=recover_aggregates(data)
+        self.assertEqual(recovered,[1])
+        self.assertEqual(next(m for m in matches if m['note']==1)['observation_upper_seconds'],1.08)
+        ambiguous=deepcopy(data);ambiguous['matches']=ambiguous['matches'][1:]
+        ambiguous['notes'].extend({**data['notes'][0],'target_seconds':t,'lane':i}for i,t in enumerate((.6,.7),3))
+        self.assertEqual(recover_aggregates(ambiguous)[1],[])
+        data['display_delay_correction_ms']=400
+        self.assertEqual(recover_aggregates(data)[1],[])
+
     def test_unowned_image_tile_summary_is_not_a_continuous_hold_at_the_receptors(self):
         from piu_timeline.play.skins.held import FORMAT
         data=evidence()

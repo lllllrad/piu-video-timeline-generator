@@ -388,7 +388,8 @@ A one-frame observed onset can be corroborated by another lit sample after a bou
 
 A second association pass can recover an unassigned tap when a narrow positive combo/word refresh
 identifies one row and that lane has one independent, sustained receptor onset. It retains the
-original display bracket and onset source PTS. Existing event ownership, processed-row order, the
+original display bracket and onset source PTS. Eligibility retains candidates under both supplied
+display correction and observed local offset, with individual target uncertainty. Existing event ownership, processed-row order, the
 hard early/late window and local display-offset consistency still apply. Competing same-lane heads
 within the local association tolerance, disjoint refresh alternatives, shared onsets, MISS,
 aggregate jumps and observation gaps cannot be promoted. Chord heads may share one row only when
@@ -399,7 +400,9 @@ Strict counter-to-row alignments that overlap a possible hold/dense interval are
 
 A separate aggregate pass requires the complete increment's worth of distinct
 tap rows and an exclusive observed onset on every lane. Each target must fit its
-own timing window; players can compress the input spacing, so the chart row span
+own timing window with individual target uncertainty. Supplied and locally observed
+offsets retain every alternative, with one common offset required for the whole group.
+Players can compress the input spacing, so the chart row span
 need not equal the counter bracket's span. Every recovered row retains the full
 original aggregate bracket, and a separately read grade is not copied to others.
 Known holds, native receptor-body risk, MISS and competing ownership still block

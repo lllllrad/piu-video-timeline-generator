@@ -5,6 +5,7 @@ from statistics import median
 from piu_timeline.play.frames import TIME_EPSILON
 from piu_timeline.play.channels import receptor_evidence
 from piu_timeline.play.receptors import onset_overlaps
+from piu_timeline.play.candidates import target_offsets,target_in_window
 
 
 def bracket(match):
@@ -67,10 +68,10 @@ def recover_aggregates(data):
                for e in data.get('judgment_events', [])):
             continue
         anchors = [m for m in original if abs(m['target_seconds']-(lo+hi)/2)<1 and None not in bracket(m)]
-        offset = median([sum(bracket(m))/2-m['target_seconds'] for m in anchors]) if anchors else data.get('display_delay_correction_ms', 0)/1000
+        local=median([sum(bracket(m))/2-m['target_seconds']for m in anchors])if anchors else data.get('display_delay_correction_ms',0)/1000
+        offsets=target_offsets(data,local)
         plausible = [(i,n) for i,n in enumerate(notes) if n['status'] == 'estimated' and n.get('note_type') != 'hold'
-                     and lo-.045-n['prediction_uncertainty_seconds'] <= n['target_seconds']+offset
-                     <= hi+.045+n['prediction_uncertainty_seconds']
+                     and any(target_in_window(n,lo,hi,offset)for offset in offsets)
                      and n['target_seconds']+data.get('display_delay_correction_ms', 0)/1000-.25 <= hi
                      and n['target_seconds']+data.get('display_delay_correction_ms', 0)/1000+.5 >= lo]
         rows = []
@@ -84,6 +85,7 @@ def recover_aggregates(data):
         if len(rows) != count or any(len(row) != 1 for row in rows):
             continue
         group = [row[0] for row in rows]
+        if not any(all(target_in_window(notes[i],lo,hi,offset)for i in group)for offset in offsets):continue
         if any(notes[i]['prediction_uncertainty_seconds'] > .05 for i in group):
             continue
         if any(m['note'] not in group and None not in bracket(m) and bracket(m)[0] < hi and bracket(m)[1] > lo
@@ -117,6 +119,7 @@ def recover_aggregates(data):
             run = runs[proofs[i]]
             common = {'combo_event': ei, 'combo_lower_seconds': lo, 'combo_upper_seconds': hi,
                       'aggregate_body_risk_basis':'native_receptor_body_regions'if native_body_risk_available(data)else'hold_geometry_and_unresolved_tracks',
+                      'aggregate_target_offset_hypotheses_seconds':offsets,
                       'aggregate_row_count': event['delta'], 'aggregate_lane_onset_range': run.get('onset_range'),
                       'aggregate_lane_onset_source_pts_seconds': run.get('onset_source_pts_seconds'),
                       'aggregate_evidence_method': 'exclusive_tap_onsets_for_complete_counter_increment'}

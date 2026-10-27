@@ -11,6 +11,16 @@ EARLY_SECONDS = .25
 LATE_SECONDS = .5
 
 
+def target_offsets(data,local_offset):
+    """Keep supplied correction and observed local offset as distinct hypotheses."""
+    return sorted({data.get('display_delay_correction_ms',0)/1000,local_offset})
+
+
+def target_in_window(note,lo,hi,offset):
+    uncertainty=note['prediction_uncertainty_seconds']
+    return lo-.045-uncertainty<=note['target_seconds']+offset<=hi+.045+uncertainty
+
+
 def association_window(note, correction=0):
     """Hard limits around the fitted target; uncertainty cannot widen them."""
     center = note['target_seconds'] + correction
