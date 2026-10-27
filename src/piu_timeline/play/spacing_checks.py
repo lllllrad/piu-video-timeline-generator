@@ -47,6 +47,27 @@ def registered_gap(first,second,samples,offsets,frames,a,b):
     return float(np.median([gap for _,gap in gaps]))+corrections[1]-corrections[0]
 
 
+CLOCK_CONVERSION_FORMAT={'schema':1,'method':'shared_clock_residual_over_window',
+                         'slope_error_residual_multiplier':3.}
+
+
+def clock_conversion(first,second):
+    """Image offsets stay precise; converting a corrected time also uses speed."""
+    clock=first.get('motion_clock')
+    if not clock or clock!=second.get('motion_clock')or not clock.get('window'):return None
+    if any('motion_target_phase'not in n for n in(first,second)):return None
+    original=[clock['origin']+(n.get('clock_target_phase',n['motion_target_phase'])-clock['intercept'])/clock['velocity']
+              for n in(first,second)]
+    if max(abs(n['target_seconds']-t)for n,t in zip((first,second),original))<1e-8:return None
+    span=clock['window'][1]-clock['window'][0]
+    if span<.3 or clock.get('residual',0)<=0:return None
+    velocity_error=CLOCK_CONVERSION_FORMAT['slope_error_residual_multiplier']*clock['residual']/span
+    gap=abs(second['target_seconds']-first['target_seconds'])
+    return {'format':CLOCK_CONVERSION_FORMAT,'source_window_seconds':clock['window'],
+            'velocity_error_pixels_per_second':velocity_error,'target_gap_seconds':gap,
+            'position_error_pixels':gap*velocity_error}
+
+
 def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagnostics=None, baseline_indices=None,changed_indices=None):
     if motion is not None and hasattr(motion,'evidence'):motion=motion.evidence()
     offsets={(record['chunk'],head['note']):head['offset_pixels']
@@ -86,13 +107,19 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
             if diagnostics is not None:diagnostics.append({'peer_notes':[a,b],'observed_gap_pixels':gap,'models':models})
         elif not ca or not cb:continue
         tolerance=max(1.,3*scatter)
-        if predicted is not None and abs(predicted-gap)<=tolerance+1e-6:continue
+        conversion=clock_conversion(first,second)if motion is not None and predicted is not None and not models else None
+        comparison=tolerance+(conversion['position_error_pixels']if conversion else 0.)
+        if conversion and diagnostics is not None:
+            diagnostics.append({'peer_notes':[a,b],'observed_gap_pixels':gap,
+                                'reconstructed_gap_pixels':predicted,'clock_conversion':conversion})
+        if predicted is not None and abs(predicted-gap)<=comparison+1e-6:continue
         rejected,attribution=attributed_heads(a,b,notes,models)
         for index in rejected:
             failed.append({'note':index,'lane':notes[index]['lane'],'reason':'shared_spacing_reconstruction_conflict' if predicted is not None else 'shared_spacing_model_unavailable',
                            'check':'timing_reconstruction','visible_start_seconds':samples[0][0],
                            'visible_end_seconds':samples[-1][0],'observed_points':len(samples),
                            'peer_notes':[a,b],'observed_gap_pixels':gap,'reconstructed_gap_pixels':predicted,
-                           'tolerance_pixels':tolerance,**({'independent_coordinate_models':models,
+                           'tolerance_pixels':tolerance,**({'clock_conversion':conversion,'comparison_tolerance_pixels':comparison}if conversion else {}),
+                           **({'independent_coordinate_models':models,
                            'native_position_attribution':attribution}if models else {})})
     return failed

@@ -50,3 +50,20 @@ Selecting a clock never removes the independent visibility or motion warnings.
 [Independent native spacing](beat-row-domains.md#targets-without-a-successful-crossing-clock)
 can separately establish a chart target when a crossing clock fails. That method
 does not restore or substitute a source motion clock.
+
+
+## Converting beat corrections to pixel gaps
+
+Native relative positions keep their existing pixel tolerance. When no independent
+native coordinate model is available, a shared clock converts a beat-corrected
+time difference into a distance. Its velocity is a measurement with uncertainty.
+Use three clock residuals divided by the source-window duration as the velocity
+error, consistent with the residual-over-window rule for short extrapolation.
+Multiplying that error by the tested target-time gap gives a separate conversion
+uncertainty; retain it alongside the native pixel tolerance in the diagnostics.
+
+This applies only to corrected targets using the same measured clock. Unchanged
+native targets, exact clocks and independent native-reference models retain the
+original image gate. A wrong row outside the combined bound still fails. No
+additional beat candidate, input association or missing image is created by this
+conversion check.
