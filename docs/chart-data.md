@@ -267,3 +267,22 @@ continuous held state, with the source run index, playback interval and source
 PTS. Such state evidence cannot create a note, move a chart endpoint or select
 its lane/type. Proven body/tail components of the already resolved hold are not
 extra input barriers; an unresolved cap of another possible hold remains one.
+
+### Reusing the bounded common song phase
+
+Beat reconstruction can refine audio alignment with one common bounded song
+phase, independently of player input. UCS transcription must consume that same
+phase when translating video coordinates to song time. Otherwise already
+restored beat targets are offset from the UCS grid and the original audio error
+is added a second time, making fine subdivisions ambiguous.
+
+Reuse requires matching official timing bytes, the audio origin and uncertainty,
+unit rate, a finite phase inside its supported bounds, and at least one restored
+beat group. A failed group does not invalidate a separately supported common
+phase for other groups. Retain the posterior phase interval instead of readding
+the prior audio interval. Malformed or unsupported phase evidence fails
+explicitly. A changed reference/origin keeps the audio alignment and records why
+the stale phase was unused. The immutable audio measurement remains in
+`alignment`; `transcription_alignment` records the effective origin, uncertainty,
+phase bounds and timing digest. Source timestamps and observed target ranges
+are unchanged.

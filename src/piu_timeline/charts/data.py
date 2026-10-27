@@ -124,6 +124,8 @@ def draft(template, data, alignment, extend_constant_tempo=False):
     lanes = 5 if chart.startswith('S') else 10
     if len(view['layout']['lanes']) != lanes:
         raise ValueError('Recognized chart mode conflicts with analyzed lane geometry')
+    from piu_timeline.charts.phase import transcription_alignment
+    alignment,phase_evidence=transcription_alignment(template,data,alignment)
     document = template.expanded(lanes)
     grid = list(document.grid())
     extension = None
@@ -232,7 +234,8 @@ def draft(template, data, alignment, extend_constant_tempo=False):
     if not placements:
         raise ValueError('No bounded notes can be placed on the official timing grid')
     return document, {'placements': placements, 'unresolved': pending, 'timing_extension': extension,
-                      'transcription':transcription,'hold_simplifications':simplifications,
+                      'transcription':transcription,'transcription_alignment':phase_evidence,
+                      'hold_simplifications':simplifications,
                       'summary': {'placed_taps': sum(p['kind'] == 'tap' for p in placements),
                                   'placed_holds': sum(p['kind'] == 'hold' for p in placements),
                                   'unresolved_note_heads': len(pending),
