@@ -87,6 +87,7 @@ def collect(data, directory, frames):
             'layers': layer_manifest(directory),
             'timeline': {'frames': [[f['playback_seconds'],f['source_pts_seconds']] for f in native]},
             'popup': {'available': bool(native), 'judgment_available': judgment_trace.is_file(), 'combo_trace': 'frames.jsonl',
+                      'counter_pixel_trace': 'counter-pixels.npz' if (directory/'counter-pixels.npz').is_file() else None,
                       'judgment_trace': 'judgments.jsonl', 'frames': len(native),
                       'combo_readable_frames': sum(f.get('combo') is not None for f in native),
                       'judgment_frame_counts': dict(word_counts),
@@ -113,6 +114,7 @@ def collect(data, directory, frames):
 def layer_manifest(directory):
     """Explicit artifact ownership; feature masks are not original RGB frames."""
     artifacts = {
+        'pixel_acquisition': ['counter-pixels.npz'],
         'features': ['native-features/manifest.json', 'processing-features.npz',
                      'appearance-features.npz', 'evidence/judgments/features-v3.npz'],
         'frame_observations': ['frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
@@ -134,7 +136,7 @@ def layer_manifest(directory):
 def augment_channels(data, directory, frames=None):
     """Rebuild associations from retained pixels; invalidate independently of OCR."""
     from piu_timeline.play.holds.analysis import fingerprint
-    inputs = ('frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz')
+    inputs = ('frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz','counter-pixels.npz')
     contract = {'format': CHANNEL_FORMAT,
                 'analysis': fingerprint({key:data.get(key) for key in
                                          ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion')}),

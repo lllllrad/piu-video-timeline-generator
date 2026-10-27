@@ -334,13 +334,16 @@ imported after at least six current crops covering six digit classes match at co
 higher and improve on the local reader by at least three crops. Only glyph images and training
 provenance transfer; counter values and native timestamps always come from the current recording.
 Contradictory neural-OCR labels cannot overwrite strongly recognized glyphs. Weak saved readers can
-be revalidated against saved bootstrap crops without OCR; only their native counter strips are
-reread, with original note observations and the original counter baseline preserved. The imported
+be revalidated against saved bootstrap crops without OCR; their exact native counter pixels are
+replayed, with original note observations and the original counter baseline preserved. The imported
 bank is preserved independently; neither counter values nor timing events are transferred between
 plays. Confirmed counter values can supply additional native-resolution font examples. A recent
 stable value can restrict visually supported candidates, but blank/unsegmented crops remain
-unreadable. Temporal-template reads are marked in the frame trace. A bounded recovery pass decodes
-only the small counter region, trying brighter white thresholds where the original read failed. A
+unreadable. Temporal-template reads are marked in the frame trace. The initial native pass retains
+losslessly compressed RGB counter crops with original source PTS and playback times. A bounded
+recovery pass reuses these pixels, trying brighter white thresholds where the original read failed.
+Older analyses without this pixel cache decode the counter strip once and retain it for future font
+updates; incompatible source/region contracts or corrupted arrays fail explicitly. A
 recovered value must lie between the nearest original counter readings, within a nondecreasing gap
 of at most 250 ms and ten increments. Existing readable values, note detections and source PTS are
 preserved. `frames.base.jsonl` retains the observations before recovery; accepted additions have
@@ -355,6 +358,7 @@ Outputs stay under the ignored `.local/` directory:
 
 - `analysis.json`: native tracks, crossing estimates, combo brackets, matches, exclusions and the separate `hold_analysis` reconstruction;
 - `frames.jsonl`: native source PTS, playback time, note detections and counter observations per frame;
+- `counter-pixels.npz`: exact RGB counter crops and original timestamps for recovery and font updates without another video pass;
 - `layout.json`, `preview.png`: geometry and its original source image;
 - `calibration/`: additional source frames and a temporal median when needed;
 - `evidence/`: digit-template training images, font-bank archives, OCR observations and exact source timestamps;

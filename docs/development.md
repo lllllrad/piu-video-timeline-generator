@@ -276,6 +276,12 @@ Counter/row derivation has a separate `timing_format` contract: a timing-rule
 change refits saved native observations and replays word reads without repeating
 OCR or invalidating native appearance pixels.
 
+The first native pass also retains exact counter-region RGB pixels in
+`counter-pixels.npz`. Recovery and improved digit templates reuse these pixels;
+legacy analyses acquire this small region once when needed. Source, geometry,
+frame count and original timestamps are validated independently of digit reads.
+Changing an association rule never invalidates this pixel cache.
+
 A judgment-association upgrade with compatible saved word observations replays
 those reads without refitting note trajectories. Reader/template changes retain
 the isolated rebuild path; they must not rewrite the live observation trace

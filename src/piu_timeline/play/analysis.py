@@ -114,8 +114,8 @@ def refresh_counter_observations(cached, output, replace_font=False):
             known_after = frames[i]['combo'],frames[i]['playback_seconds']
     combo,known,count = ComboTracker(),0,0
     updated = output / 'frames.counter-update.jsonl'
-    crops = decode_frames(cached['media'],cached['start_seconds'],cached['end_seconds'],
-                          cached['game_roi'],cached['analysis_width'],region=cached['layout']['combo_roi'])
+    from piu_timeline.play.counter_pixels import counter_crops
+    crops = counter_crops(cached,output)
     with updated.open('w') as target:
         for i,(frame,decoded) in enumerate(zip_longest(frames,crops)):
             if frame is None or decoded is None:
@@ -228,6 +228,9 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     combo, tracker, times = ComboTracker(), None, []
     observed, known, previous_mask, previous_read = 0, 0, None, (None, 0.0)
     last_adapted = None
+    from piu_timeline.play.counter_pixels import CounterPixelWriter
+    counter_pixels=CounterPixelWriter({'media':record,'start_seconds':start,'end_seconds':end,
+                                      'game_roi':list(roi),'analysis_width':width,'layout':layout},output)
     with (output / 'frames.jsonl').open('w') as trace:
         for pts, playback, image in decode_frames(record, start, end, roi, width):
             if tracker is None:
@@ -235,6 +238,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             notes = tracker.detect(image)
             tracker.update(playback, notes, pts)
             crop = crop_region(image, layout['combo_roi'])
+            counter_pixels.append(pts,playback,crop)
             # Full-resolution examples are resized to the decoded crop before
             # template learning below; glyph normalization removes text scale.
             signature = crop.tobytes()
@@ -254,6 +258,8 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                 print(f'  {observed} native frames, {playback-start:.1f}/{end-start:.1f}s, combo readable {known/observed:.0%}', flush=True)
     if not times:
         raise ValueError('No native gameplay frames decoded')
+    counter_pixels.save()
+    del counter_pixels
     digits.save(output / 'evidence/digit-templates.npz')
     refinement = {}
     if known:
