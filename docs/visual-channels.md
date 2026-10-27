@@ -168,6 +168,15 @@ Word recognition and refresh tracking have independent cache dependencies.
 A tracker upgrade replays the saved timestamped word observations and rebuilds
 associations. It does not require OCR, pixel recognition or video decoding.
 
+After independent lane-onset or processing evidence recovers a counter-owned
+row, label association checks the observed word refreshes again. The original
+mutually unique synchronized-bracket rules still apply, including competing
+unassigned words/counters and existing ownership. Only one row (possibly a
+chord) with a single counter increment is eligible. This label-only step never
+moves notes or changes input brackets. A persistent readable word without a
+measured refresh does not supply this evidence; separate post-counter frame
+proof still requires its usual multiple distinct source frames.
+
 ## Note type evidence and contradictions
 
 A failed hold reconstruction does not establish a tap. The `note_types`

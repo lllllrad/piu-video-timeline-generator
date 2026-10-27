@@ -8,7 +8,7 @@ from piu_timeline.play.holds.geometry import HoldGeometry, body_tracks, hold_sta
 from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window, receptor_runs
 from piu_timeline.play.holds.continuity import CapContinuity
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 31}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 32}
 
 
 def fingerprint(value):
@@ -240,7 +240,11 @@ def presentation(data):
                                           'combo_events': events('combo_events'),
                                           'judgment_events': events('judgment_events'),
                                           'hold_analysis': {**data['hold_analysis'], 'holds': projected,'observed_tail_roles':tail_roles}})
-    matches = [dict(match) for match in matches]
+    from piu_timeline.play.recovered_judgments import attach_recovered_labels
+    labeled = attach_recovered_labels({**data, 'matches': matches,
+                                      'combo_events': events('combo_events'),
+                                      'judgment_events': events('judgment_events')})
+    matches = labeled['matches']
     for match in matches:
         proof = data.get('counter_judgment_labels', {}).get(str(match.get('combo_event')))
         if proof and not match.get('judgment_label'):
@@ -268,7 +272,7 @@ def presentation(data):
     return annotate_matches({**data, 'notes': notes, 'matches': matches, 'limitations': limitations,
             'excluded_notes': dict(Counter(note.get('reason') for note in notes if note['status'] == 'excluded')),
             'miss_candidates': [candidate for candidate in data.get('miss_candidates', []) if candidate['note'] not in suppressed],
-            'combo_events': events('combo_events'), 'judgment_events': events('judgment_events'),
+            'combo_events': events('combo_events'), 'judgment_events': labeled['judgment_events'],
             'hold_tick_ambiguous_notes': [index for index in ambiguous if index not in lane_recovered],
             'recovered_dense_notes': recovered, 'recovered_lane_supported_notes': lane_recovered,
             'hold_analysis': {**data['hold_analysis'], 'holds': projected,'observed_tail_roles':tail_roles}, 'coverage': coverage,
