@@ -12,6 +12,32 @@ from tests.play.skins.test_detector import examples
 
 
 class SkinReplayTest(unittest.TestCase):
+    def setUp(self):
+        environment=patch.dict('os.environ',{'PIU_SKIN_JOBS':'1'})
+        environment.start();self.addCleanup(environment.stop)
+
+    def test_scan_keeps_detector_geometry_and_rejects_an_empty_native_timeline(self):
+        import piu_timeline.play.skins.__main__ as cli
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);bank=root/'bank';bank.mkdir();examples(bank)
+            video=root/'source.mkv';video.write_bytes(b'video')
+            media={'path':str(video),'size_bytes':video.stat().st_size,'mtime_ns':video.stat().st_mtime_ns}
+            metadata=root/'id/analysis';metadata.mkdir(parents=True)
+            (metadata/'analysis.json').write_text(json.dumps({'media':media,'game_roi':[0,0,650,365],
+                'segments':[{'chart':'D10','start_seconds':1.,'end_seconds':2.}]}))
+            out=root/'observations.json';image=np.zeros((365,650,3),dtype='uint8')
+            with patch.object(cli,'LOCAL_DATA',root),patch.object(cli,'source_id',return_value='id'):
+                with patch.object(cli,'decode_frames',return_value=iter([(31.,1.,image)])):
+                    cli.scan('id',1,bank/'bank.json',out,1.,.1)
+                saved=json.loads(out.read_text())
+                self.assertEqual(saved['detector'],cli.DETECTOR_FORMAT)
+                self.assertEqual((saved['analysis_width'],saved['analysis_height']),(650,365))
+                self.assertEqual(saved['frames'][0]['source_pts_seconds'],31.)
+                missing=root/'empty.json'
+                with patch.object(cli,'decode_frames',return_value=iter([])),self.assertRaises(ValueError):
+                    cli.scan('id',1,bank/'bank.json',missing,1.,.1)
+                self.assertFalse(missing.exists())
+
     def test_replay_preserves_original_trace_and_every_counter_and_timestamp(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);bank=root/'bank';bank.mkdir();items,_=examples(bank)

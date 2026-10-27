@@ -241,16 +241,22 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     from piu_timeline.play.skins.bank import load_bank
     from piu_timeline.play.skins.replay import detector_metadata
     skin_bank = load_bank(note_skin) if note_skin is not None else None
+    from piu_timeline.play.skins.pipeline import classified_frames
     observed, known, previous_mask, previous_read = 0, 0, None, (None, 0.0)
     last_adapted = None
     from piu_timeline.play.counter_pixels import CounterPixelWriter
     counter_pixels=CounterPixelWriter({'media':record,'start_seconds':start,'end_seconds':end,
                                       'game_roi':list(roi),'analysis_width':width,'layout':layout},output)
     with (output / 'frames.jsonl').open('w') as trace:
-        for pts, playback, image in decode_frames(record, start, end, roi, width):
+        decoded=decode_frames(record,start,end,roi,width)
+        for pts, playback, image, skin_observations in classified_frames(decoded,skin_bank,layout,width,round(width*roi[3]/roi[2])):
             if tracker is None:
-                tracker = NoteTracker(layout, image.shape[1], image.shape[0], skin_bank=skin_bank)
-            notes = tracker.detect(image)
+                tracker = NoteTracker(layout, image.shape[1], image.shape[0])
+            if skin_observations is None:notes = tracker.detect(image)
+            else:
+                tracker.skin_observations=skin_observations
+                tracker.hold_candidate=any(o['role']=='hold_body'for o in skin_observations)
+                notes=[o for o in skin_observations if o['role']!='hold_body']
             tracker.update(playback, notes, pts)
             crop = crop_region(image, layout['combo_roi'])
             counter_pixels.append(pts,playback,crop)

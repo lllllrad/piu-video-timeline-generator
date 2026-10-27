@@ -126,3 +126,17 @@ counter observations and original PTS. The current threshold-plane cache cannot
 reconstruct RGB; image detection changes can therefore reread original media.
 The original contour trace is preserved in `frames.outline.jsonl` when switching
 an existing play to an image bank. Original media remains unchanged.
+
+RGB frame detection uses separate CPU worker processes, defaulting to half the
+available CPU affinity, capped at eight. Set `PIU_SKIN_JOBS=1` for serial execution
+or an explicit value up to 32. At most two RGB frames per worker are in flight;
+workers share one frozen reference bank and results return in source order.
+The parent retains the original image for counter reads and never substitutes
+worker completion time for source PTS. Worker failures fail the analysis and
+close acquisition. Changing worker count does not change the detector contract.
+Programmatic callers that start workers must use a guarded Python main entry
+point, as the bundled CLI does.
+
+Image-review JSON includes the detector contract, analysis dimensions and layout
+as well as reference identity and original timestamps. An empty decoded timeline
+fails explicitly rather than producing a successful report with no observations.

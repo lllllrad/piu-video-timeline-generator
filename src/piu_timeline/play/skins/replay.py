@@ -6,7 +6,8 @@ from itertools import zip_longest
 
 from piu_timeline.play.frames import decode_frames
 from piu_timeline.play.skins.bank import load_bank, ROLES
-from piu_timeline.play.skins.detector import SkinDetector, FORMAT
+from piu_timeline.play.skins.detector import FORMAT
+from piu_timeline.play.skins.pipeline import classified_frames
 
 
 def detector_contract(path):
@@ -44,7 +45,6 @@ def selected_bank(directory, segment, explicit=None):
 def refresh(data, output, path):
     """A detector change rescans RGB, never reuses old contour detections as input."""
     bank = load_bank(path)
-    detector = SkinDetector(bank, data['layout'], data['analysis_width'], data['analysis_height'])
     before = Path(data['media']['path']).stat()
     if (before.st_size, before.st_mtime_ns) != (data['media']['size_bytes'], data['media']['mtime_ns']):
         raise ValueError('Skin replay source no longer matches its acquisition identity')
@@ -55,16 +55,16 @@ def refresh(data, output, path):
     target = output / 'frames.skin-build.jsonl'
     decoded = decode_frames(data['media'], data['start_seconds'], data['end_seconds'],
                             data['game_roi'], data['analysis_width'])
+    decoded=classified_frames(decoded,bank,data['layout'],data['analysis_width'],data['analysis_height'])
     count = 0
     with trace.open() as source, target.open('w') as stream:
         for line, frame in zip_longest(source, decoded):
             if line is None or frame is None:
                 raise ValueError('Skin image replay differs from native frame count')
             native = json.loads(line)
-            pts, time, rgb = frame
+            pts, time, _, observations = frame
             if abs(pts - native['source_pts_seconds']) > 1e-6 or abs(time - native['playback_seconds']) > 1e-6:
                 raise ValueError('Skin image replay differs from original PTS')
-            observations = detector.detect(rgb)
             native.update(notes=[o for o in observations if o['role'] != 'hold_body'],
                           skin_observations=observations,
                           possible_hold_or_dense_stack=any(o['role'] == 'hold_body' for o in observations))
