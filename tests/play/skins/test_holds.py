@@ -2,7 +2,7 @@
 from copy import deepcopy
 import unittest
 
-from piu_timeline.play.skins.holds import reconstruct_images as reconstruct
+from piu_timeline.play.skins.holds import measure_connections
 from piu_timeline.play.skins.observations import observe, tail_roles
 
 
@@ -10,8 +10,17 @@ REFERENCES={'hold_start':[[0,35]],'hold_end':[[0,35]],'hold_body':[[0,30]]}
 CAP_REFERENCES={'hold_start':[[0,20]],'hold_end':[[15,35]],'hold_body':[]}
 
 
+def image_analysis(data,receptors,native,warnings,*,references=None,cap_references=None):
+    from piu_timeline.derived import call
+    from piu_timeline.play.holds.state import attach_state
+    connections=measure_connections(data,native,warnings,references=references,cap_references=cap_references)
+    result=call('holdImages.project',data['notes'],{'image_connections':connections,'unresolved_tracks':warnings})
+    warnings[:]=result['unresolved_tracks']
+    return attach_state(data,receptors,result['holds'],require_hold_geometry=True)
+
+
 def reconstruct_images(data,receptors,native,warnings,*,references=REFERENCES):
-    return reconstruct(data,receptors,native,warnings,references=references,cap_references=CAP_REFERENCES)['holds']
+    return image_analysis(data,receptors,native,warnings,references=references,cap_references=CAP_REFERENCES)
 
 
 def scenario():

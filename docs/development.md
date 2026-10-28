@@ -105,7 +105,12 @@ image start/body/end connectivity is measured independently of endpoint clocks.
 when endpoint timing fails. Timed `holds` reference them by `image_connection_id`;
 missing or contradictory endpoint times emit `hold_endpoint_timing_unresolved`
 and never become invented timing bounds or UCS placements. Body gaps, competing
-endpoints and interior tap conflicts remain geometry failures.
+endpoints and interior tap conflicts remain geometry failures. Physical image
+connections cache only native positions, raw detection anchors and image/motion
+observations. `derived/holds/image_timing.ts` is a separate cached consumer of
+those connections and endpoint timing; changing a clock does not rerun image
+measurement. Its warnings cover the complete endpoint observation span, even
+when only part of that span supplies positive body coverage.
 `play/holds/state.py` attaches independent sustained recognition and receptor-light transitions.
 Geometry does not depend on a successful input match. TypeScript `derived/candidates.ts` constrains review
 alternatives using refresh ownership, processed-row order and per-lane receptor evidence.

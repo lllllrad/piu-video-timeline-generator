@@ -9,28 +9,38 @@ def geometry(data, directory, frames, reconstruct):
     native_path = directory/'frames.base.jsonl'
     if not native_path.is_file():
         native_path = directory/'frames.jsonl'
-    inputs = {'source': feature_contract(data), 'data': {k: data[k] for k in fields if k in data},
-              'frames': [{k: f[k] for k in ('playback_seconds','source_pts_seconds','bodies','color_connections') if k in f} for f in frames],
+    image=bool(data.get('skin_detector'))
+    values={k:data[k]for k in fields if k in data}
+    if image:values['notes']=[{k:n[k]for k in ('lane','points','detected_points')if k in n}for n in data['notes']]
+    modules=['play/holds/stages.py','play/skins/holds.py','play/skins/temporal.py','play/skins/coverage.py',
+             'play/skins/observations.py','play/skins/extents.py','play/skins/detector.py','play/skins/bank.py',
+             'derived/holds/extent.ts','play/object_roles.py']if image else[
+             'play/holds/stages.py','play/holds/reconstruction.py','play/holds/geometry.py','play/holds/continuity.py',
+             'derived/holds/input.ts','play/object_roles.py']
+    from piu_timeline.play.pixel_cache import source_contract
+    inputs = {'source':source_contract(data)if image else feature_contract(data),'data':values,
+              'frames':None if image else[{k:f[k]for k in ('playback_seconds','source_pts_seconds','bodies','color_connections')if k in f}for f in frames],
               'native': files(directory, (native_path.name,)) if data.get('skin_detector') else None,
-              'producer': producer('play/holds/stages.py', 'play/holds/reconstruction.py', 'play/holds/geometry.py', 'play/holds/continuity.py',
-                                   'play/skins/holds.py', 'play/skins/temporal.py', 'play/skins/coverage.py',
-                                   'play/skins/observations.py', 'play/skins/extents.py', 'derived/holds/extent.ts', 'derived/holds/input.ts', 'play/object_roles.py')}
+              'producer': producer(*modules)}
 
     def build():
         from piu_timeline.play.object_roles import filter_frames
         unresolved = [];image_connections=[]
         if data.get('skin_detector'):
-            from piu_timeline.play.skins.holds import reconstruct_images
+            from piu_timeline.play.skins.holds import measure_connections
             import json
             with native_path.open() as stream:
                 native = filter_frames(data, [json.loads(line) for line in stream])
-            images=reconstruct_images(data,frames,native,unresolved,include_state=False)
-            holds,image_connections=images['holds'],images['image_connections']
+            image_connections=measure_connections(data,native,unresolved)
+            return {'image_connections':image_connections,'unresolved_tracks':unresolved}
         else:
             holds = reconstruct(data, frames, unresolved, include_state=False)
         return {'holds':holds,'image_connections':image_connections,'unresolved_tracks':unresolved}
 
-    return cached(directory, 'hold-geometry', inputs, build)
+    measured=cached(directory,'hold-geometry',inputs,build)
+    if not image:return measured
+    from piu_timeline.derived import call
+    return call('holdImages.projectCached',{'schema':1,'notes':data['notes'],'geometry':measured},str(directory))
 
 
 def sustained(data, directory, frames, geometry):

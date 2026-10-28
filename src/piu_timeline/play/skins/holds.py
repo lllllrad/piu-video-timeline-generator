@@ -1,12 +1,10 @@
 """Reconstruct holds from start, body and end images, without lane-color masks."""
 from collections import defaultdict
 
-from piu_timeline.play.holds.geometry import HoldGeometry
-from piu_timeline.play.holds.state import contextual_hold_support, recognition_segments, recognition_window
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 12, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 13, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -83,9 +81,7 @@ def image_pairs(data, native, roles, references, cap_references, lengths):
     return proposals,temporal['refuted']
 
 
-def reconstruct_images(data, receptor_frames, native, diagnostics, *, references=None, cap_references=None, include_state=True):
-    from piu_timeline.derived import call
-    data = {**data, 'notes': call('holdGeometry.inputNotes', data['notes'])}
+def measure_connections(data,native,diagnostics,*,references=None,cap_references=None):
     from piu_timeline.play.skins.coverage import reference_rows
     references=reference_rows(data)if references is None else references
     cap_references=reference_rows(data,cap_only=True)if cap_references is None else cap_references
@@ -103,16 +99,11 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                             'visible_start_seconds':min(p['time']for p in evidence),
                             'visible_end_seconds':max(p['time']for p in evidence),
                             'observed_points':len({p['time']for p in evidence}),'image_evidence':evidence})
-    holds, image_connections, represented = [], [], set()
+    image_connections,represented=[],set()
     for head, tail, proof, missing in proposals:
         if len(heads[head]) != 1 or len(tails[tail]) != 1:
             continue
         first, last = data['notes'][head], data['notes'][tail]
-        def bounds(note):
-            if 'geometry_native_range' in note:
-                return list(note['geometry_native_range'])
-            t, u = note['target_seconds'], note['prediction_uncertainty_seconds']
-            return [t-u, t+u]
         connection={'id':len(image_connections), 'lane': first['lane'], 'head_note': head, 'tail_note': tail,
                       'head_observation_note': head, 'tail_observation_note': tail,
                       'covered_notes': [head, tail], 'last_body_seconds': proof[-1]['time'],
@@ -125,16 +116,13 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                               if ('head_y'if i==head else'tail_y')in p})} for i in (head, tail)}}
         image_connections.append(connection)
         represented.update((head,tail))
-        timed=all(n['status']=='estimated' and n.get('target_seconds') is not None for n in (first,last))
-        ordered=timed and last['target_seconds']>first['target_seconds']
-        hold_id=len(holds)if ordered else None
         extent = lengths.cache.get((head, tail))
         if extent and extent['status'] == 'consistent':
             connection['endpoint_extent_evidence'] = extent
             unverified = extent['unverified_source_pts_seconds']
             unbound = extent['unregistered_playback_seconds']
             if unverified or unbound:
-                diagnostics.append({'note': head, 'lane': first['lane'], 'hold':hold_id,'image_connection_id':connection['id'], 'tail_note': tail,
+                diagnostics.append({'note': head, 'lane': first['lane'], 'image_connection_id':connection['id'], 'tail_note': tail,
                                     'reason': 'unresolved_hold_geometry',
                                     'failure_detail': 'known_hold_endpoint_extent_unregistered_frames',
                                     'visible_start_seconds': min(t for t, _ in first['points']),
@@ -145,26 +133,10 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
         if missing:
             diagnostics.append({'note': head, 'lane': first['lane'], 'reason': 'unresolved_hold_geometry',
                                 'failure_detail': 'known_hold_image_connection_not_observed_in_clear_frames',
-                                'hold':hold_id,'image_connection_id':connection['id'], 'tail_note': tail,
+                                'image_connection_id':connection['id'], 'tail_note': tail,
                                 'visible_start_seconds': missing[0]['time'],
                                 'visible_end_seconds': missing[-1]['time'],
                                 'observed_points': len({p['time']for p in missing}), 'image_evidence': missing})
-        if not ordered:
-            diagnostics.append({'note':head,'tail_note':tail,'lane':first['lane'],
-                'reason':'hold_endpoint_timing_unresolved','failure_detail':'connected_image_endpoints_without_ordered_timing',
-                'image_connection_id':connection['id'],'geometry_status':'connected',
-                'visible_start_seconds':min(p['time']for p in proof),'visible_end_seconds':max(p['time']for p in proof),
-                'source_pts_range':connection['source_pts_range'],'observed_points':connection['body_frames'],
-                'endpoint_failures':[{'note':i,'status':data['notes'][i]['status'],'reason':data['notes'][i].get('reason'),
-                                      'timing_status':data['notes'][i].get('timing_reconstruction',{}).get('status')}
-                                     for i in (head,tail)]})
-            continue
-        holds.append({**connection,'id':len(holds),'image_connection_id':connection['id'],
-                      'start_range':bounds(first),'end_range':bounds(last),'start_censored':False,'end_censored':False})
-        native_endpoints = [i for i in (head, tail) if 'geometry_native_range' in data['notes'][i]]
-        if native_endpoints:
-            holds[-1].update(geometry_native_endpoint_notes=native_endpoints,chart_timing_status='unresolved',
-                            geometry_source_failures=[{'note':i,**data['notes'][i]['geometry_source_failure']}for i in native_endpoints])
     for record in records:
         index = record['note']
         if index in represented or not roles[index] & {'hold_start', 'hold_end'}:
@@ -195,7 +167,4 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                             'image_evidence': [{'playback_seconds': t, 'source_pts_seconds': pts, 'trace':'frames.jsonl',
                                                 **{k:image[k]for k in ('lane','x','y','role','template','bounds_pixels','region_errors')}}
                                                for t, pts, image in observations]})
-    if include_state:
-        from piu_timeline.play.holds.state import attach_state
-        holds = attach_state(data, receptor_frames, holds, require_hold_geometry=True)
-    return {'holds':holds,'image_connections':image_connections}
+    return image_connections
