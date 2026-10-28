@@ -1,0 +1,3 @@
+packages:
+  - .
+storeDir: .local/cache/pnpm

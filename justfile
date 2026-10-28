@@ -30,11 +30,11 @@ import-studio +args:
 
 # Run the full recommended QG rules and the test suite.
 check:
-    sh scripts/run.sh npm exec --no -- qg check --full
+    sh scripts/run.sh pnpm exec qg check --full
 
 # Run Quality Gate; defaults to staged rules plus the test suite.
 qg *args:
-    sh scripts/run.sh npm exec --no -- qg "$@"
+    sh scripts/run.sh pnpm exec qg "$@"
 
 # Exercise the native macOS Vision OCR engine.
 check-ocr:

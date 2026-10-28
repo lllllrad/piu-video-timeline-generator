@@ -1,5 +1,9 @@
+// @ts-check
 'use strict';
-const data=JSON.parse(document.getElementById('data').textContent),$=id=>document.getElementById(id),video=$('video');
+const data=JSON.parse(document.getElementById('data').textContent);
+/** @template {keyof ReportElements} K @param {K} id @returns {ReportElements[K]} */
+function $(id){return /** @type {ReportElements[K]} */ (document.getElementById(id))}
+const video=$('video');
 let playhead=data.start_seconds,selected=-1,objectUrl=null;
 const matches=data.matches.filter(match=>data.timing_ranges?.notes?.[match.note]?.status==='matched'),delay=$('delay');delay.value=data.display_delay_correction_ms||0;
 const fmt=t=>{const ms=Math.round(Math.abs(t)*1000),m=Math.floor(ms/60000);return (t<0?'-':'')+m+':'+((ms%60000)/1000).toFixed(3).padStart(6,'0')};
@@ -180,7 +184,7 @@ svgNode('circle',{cx:x(m.target_seconds),cy:y((lo+hi)/2),r:2,fill:color},group);
 timingPlayhead=line(root,x(playhead),0,x(playhead),h,'#9cddbe');
 label(root,fmt(data.start_seconds),p,h-2);label(root,fmt(data.end_seconds),w-85,h-2);
 root.onclick=e=>{
-const hit=e.target?.closest?.('[data-note]');if(hit){const index=Number(hit.getAttribute('data-note'));seek(data.notes[index].target_seconds,matchByNote.get(index)?.index??-1,index);return}
+const hit=(e.target instanceof Element?e.target.closest('[data-note]'):null);if(hit){const index=Number(hit.getAttribute('data-note'));seek(data.notes[index].target_seconds,matchByNote.get(index)?.index??-1,index);return}
 const rect=root.getBoundingClientRect(),t=data.start_seconds+((e.clientX-rect.left)/root.clientWidth*w-p)/(w-2*p)*(data.end_seconds-data.start_seconds);
 if(matches.length){let i=0;for(let j=1;j<matches.length;j++)if(Math.abs(matches[j].target_seconds-t)<Math.abs(matches[i].target_seconds-t))i=j;seek(matches[i].target_seconds,i)}
 };
@@ -281,7 +285,7 @@ line(root,g.left,g.center,g.right,g.center,'#9cddbe',2);
 const now=label(root,'Now '+fmt(playhead),g.left+6,g.center-8,'#9cddbe');
 chartScene={key,origin,start,end,pps:g.pps,motion,now,selectionRects,selectedNote:null,animation:null};
 root.onclick=e=>{
-const hit=e.target?.closest?.('[data-note]');if(hit){const index=Number(hit.getAttribute('data-note'));seek(data.notes[index].target_seconds,matchByNote.get(index)?.index??-1,index);return}
+const hit=(e.target instanceof Element?e.target.closest('[data-note]'):null);if(hit){const index=Number(hit.getAttribute('data-note'));seek(data.notes[index].target_seconds,matchByNote.get(index)?.index??-1,index);return}
 const rect=root.getBoundingClientRect(),px=(e.clientX-rect.left)/root.clientWidth*g.width,py=(e.clientY-rect.top)/root.clientHeight*g.height,current=laneGeometry();
 if(px<g.left||px>=g.right||py<g.top||py>g.bottom)return;
 const lane=Math.floor((px-g.left)/g.laneWidth),t=playhead+(py-g.center)/g.pps;
@@ -325,7 +329,9 @@ const match=matchByNote.get(selectedNote)?.match,hold=holdFor(note),target=hold?
 const extent=Math.max(100,...[...(target||[]),...(input||[])].map(t=>Math.abs(1000*(t-note.target_seconds))))*1.15;
 const x=t=>center+1000*(t-note.target_seconds)/extent*(right-p)/2;
 for(const ms of [-extent,0,extent]){const px=center+ms/extent*(right-p)/2;line(root,px,15,px,135,'#314448');label(root,ms.toFixed(1)+' ms',px-25,160)}
-for(const [name,range,color,y] of [['Target (video)',target,targetColor,45],['Input (display)',input,inputColor,105]]){
+/** @type {[string, number[] | null, string, number][]} */
+const comparisonBands=[['Target (video)',target,targetColor,45],['Input (display)',input,inputColor,105]];
+for(const [name,range,color,y] of comparisonBands){
 label(root,name,5,y+4,color);
 if(range){for(const part of name==='Input (display)'?inputIntervals(match,selectedNote):[range]){
 line(root,x(part[0]),y,x(part[1]),y,color,8,!hold&&!match&&name==='Input (display)'?'5 4':null);
@@ -387,7 +393,7 @@ row.onclick=()=>seek(note.target_seconds,linked?.index??-1,index);
 }}
 function drawPlayback(){updateEvidenceCursor(playhead);$('position').value=playhead;$('chartPosition').textContent=fmt(playhead);$('clock').textContent=fmt(playhead);lanes();if(timingPlayhead){const x=60+1080*(playhead-data.start_seconds)/(data.end_seconds-data.start_seconds);timingPlayhead.setAttribute('x1',x);timingPlayhead.setAttribute('x2',x)}}
 function draw(){$('delayValue').textContent=delay.value;drawPlayback();timing();comparison()}
-delay.oninput=()=>{table();draw()};$('center').onclick=()=>{delay.value=Math.round(median(matches.map(mid)));table();draw()};$('excluded').onchange=draw;$('candidates').onchange=draw;
+delay.oninput=()=>{table();draw()};$('center').onclick=()=>{delay.value=String(Math.round(median(matches.map(mid))));table();draw()};$('excluded').onchange=draw;$('candidates').onchange=draw;
 $('layout').value=JSON.stringify(data.layout,null,2);$('download').onclick=()=>{try{const value=JSON.parse($('layout').value),url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='layout.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('layoutError').textContent=''}catch(e){$('layoutError').textContent=e.message}};
 function overlay(){
 const w=$('preview').naturalWidth,h=$('preview').naturalHeight,root=svgRoot('overlay',w,h);

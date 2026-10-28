@@ -171,7 +171,7 @@ Unknown or conflicting OCR values remain unknown. The project never infers a You
 
 - Python 3.12
 - FFmpeg and ffprobe
-- Node.js 24 or newer
+- Node.js 24 or newer and pnpm (versions managed by mise)
 - `just`
 - Xcode Command Line Tools on macOS for Vision OCR
 

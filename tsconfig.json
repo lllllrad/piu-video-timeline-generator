@@ -2,10 +2,23 @@
   "compilerOptions": {
     "target": "ES2023",
     "module": "NodeNext",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "noEmit": true,
     "allowImportingTsExtensions": true,
-    "strict": false
+    "strict": false,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "checkJs": true,
+    "moduleDetection": "legacy"
   },
-  "include": ["src/piu_timeline/derived/**/*.ts", "tests/derived/**/*.ts"]
+  "include": [
+    "src/piu_timeline/derived/**/*.ts",
+    "formats/**/*.ts",
+    "tests/**/*.ts",
+    "src/piu_timeline/play/report*.js"
+  ]
 }

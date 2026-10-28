@@ -1,14 +1,14 @@
 // Execute shipped SVG code with observable DOM and browser-animation substitutes.
-const fs = require('node:fs');
-const vm = require('node:vm');
-const assert = require('node:assert/strict');
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const payload = html.match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1];
 const runtime = html.match(/<script>\s*(.*?)<\/script>/s)[1];
 assert.ok(!html.includes('<canvas'),'report must not contain canvas elements');
 let createdNodes=0;
-const activeAnimations=new Set();
-function element(tag) {
+const activeAnimations=new Set<{currentTime: number; keyframes: unknown; options: unknown; cancel(): void}>();
+function element(tag): Record<string, any> {
   createdNodes++;
   return {tag,style:{},attributes:{},children:[],textContent:'',value:'',
     clientWidth:1200,clientHeight:350,complete:false,files:[],paused:true,ended:false,currentTime:0,playbackRate:1,handlers:{},
@@ -44,6 +44,7 @@ const context = vm.createContext({document: {
   getElementById(id) { assert.ok(elements.has(id), 'missing element '+id); return elements.get(id); },
   createElement: element,createElementNS(namespace,tag){assert.equal(namespace,'http://www.w3.org/2000/svg');return element(tag)},
 }, URL, Blob, setTimeout,
+Element: class {static [Symbol.hasInstance](node: unknown) {return node !== null && typeof node === "object" && "closest" in node}},
 ResizeObserver:class {constructor(callback){resizeCallback=callback}observe(canvas){assert.equal(canvas,elements.get('lanes'))}},
 requestAnimationFrame:callback=>{const id=++callbackId;animationCallbacks.set(id,callback);return id},
 cancelAnimationFrame:id=>animationCallbacks.delete(id)});

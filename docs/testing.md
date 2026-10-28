@@ -13,10 +13,13 @@ than being imported from another test case. `tests/integration/vision_ocr.py` is
 an optional host Vision run invoked by `just check-ocr`; it is deliberately not
 part of offline discovery.
 
-QG's shared `tests` check runs this discovery command from both `just check`
+QG's shared `native-tests` check runs this discovery command from both `just check`
 and the pre-commit hook.
-The same gate runs TypeScript type checking and direct Node tests under
-`tests/derived/`. Python tests at the acquisition boundary call the TypeScript
+The same gate checks TypeScript, bundled formats and the browser report scripts,
+and runs direct TypeScript tests under `tests/derived/` with QG's native
+`node-test` integration. Run `pnpm test` for the complete gate, or
+`pnpm exec node --test tests/derived/*.test.ts` for the derived suite alone.
+Python tests at the acquisition boundary call the TypeScript
 implementation through the retained-data transport; they do not exercise a
 separate Python fit or row-transcription implementation.
 
@@ -65,7 +68,7 @@ Song/chart facts belong in the separate editable UCS repository. If a reusable
 artifact fits neither repository, discuss a storage location before tracking it.
 
 
-`tests/play/beats/fixtures.py` generates native observation records from an
+`tests/derived/fixtures.ts` generates native observation records from an
 independent list of expected chart times and lanes. Its stored-JSON pipeline
 matrix covers triplet/quarter rhythms, simultaneous heads, close staggers,
 Single/Double lane counts, three geometry sizes and 30/60/120 fps. It runs the

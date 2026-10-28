@@ -21,6 +21,7 @@ command -v "$PYTHON" >/dev/null || { echo "Python 3.12 is required." >&2; exit 1
 command -v ffmpeg >/dev/null || { echo "FFmpeg is required." >&2; exit 1; }
 command -v ffprobe >/dev/null || { echo "ffprobe is required." >&2; exit 1; }
 command -v node >/dev/null || { echo "Node.js 24 or newer is required." >&2; exit 1; }
+command -v pnpm >/dev/null || { echo "pnpm is required." >&2; exit 1; }
 command -v just >/dev/null || { echo "just is required." >&2; exit 1; }
 "$PYTHON" -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' || {
   echo "Python 3.12 is required." >&2
@@ -33,4 +34,5 @@ node -e 'const major=Number(process.versions.node.split(".")[0]); process.exit(m
 
 "$PYTHON" scripts/bootstrap.py
 .venv/bin/python scripts/configure_codex.py
+pnpm install --frozen-lockfile
 just check

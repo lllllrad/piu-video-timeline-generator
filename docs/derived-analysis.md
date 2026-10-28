@@ -87,8 +87,10 @@ across pipe chunks. Physical seconds and coordinates remain floating-point value
 ## Validation
 
 `just check` includes TypeScript type checking, direct Node regression tests and
-the existing Python synthetic observation-to-beat-to-UCS matrix, which now calls
-the TypeScript implementation. Direct tests cover standalone replay without a
+the TypeScript synthetic observation-to-beat-to-UCS matrix.
+QG uses native `node-test` integration for `tests/**/*.test.ts`; `pnpm test`
+runs the same gate as `just check`. Python retains native acquisition, orchestration
+and cross-language boundary tests. Direct tests cover standalone replay without a
 Python executable, explicit malformed-input failure, exact section arithmetic,
 cross-measure ambiguity and pure HTML rendering. Coordinate snapshot tests cover
 promotion, changed producer identity and corruption.

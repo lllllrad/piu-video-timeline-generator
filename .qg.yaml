@@ -1,4 +1,11 @@
 # The CLI loads the language-independent recommended rules by default.
+presets: [js]
+rules:
+  test/no-directory-fixture-copy: error
+  pnpm/lockfile-is-current:
+    severity: error
+    options:
+      ignoredShadowDirectories: [.git, .local, .qg, dist, node_modules, .venv, build, __pycache__]
 artifacts:
   generated:
     include: [".venv/**", "build/**"]
@@ -9,14 +16,14 @@ hooks:
 
 checks:
   - name: typescript
-    command: npm
-    args: [exec, --no, --, tsc, --project, tsconfig.json]
+    command: pnpm
+    args: [exec, tsc, --project, tsconfig.json]
     message: "Fix TypeScript type errors before committing."
   - name: derived-tests
-    command: node
-    args: [--test, "tests/derived/*.test.ts"]
+    type: node-test
+    files: ["tests/**/*.test.ts"]
     message: "Fix the derived-data regression tests before committing."
-  - name: tests
+  - name: native-tests
     command: sh
     args: [scripts/run.sh, .venv/bin/python, -m, unittest, discover, -s, tests, -t, ., -v]
     message: "Fix the failing tests before committing."

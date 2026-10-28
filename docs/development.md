@@ -6,7 +6,7 @@ The project requires Python 3.12, uv, FFmpeg, Node.js 24 or newer and `just`.
 
 ```sh
 mise install
-npm ci
+pnpm install --frozen-lockfile
 mise exec -- just check
 mise exec -- just auto SOURCE
 ```
@@ -232,12 +232,18 @@ rule scan without tests. QG automatically installs its pre-commit hook on first
 use, preserving an existing custom hook. The hook checks staged files and runs
 the shared tests from `.qg.yaml` against the working tree.
 
-Quality Gate is a project-local npm development dependency, pinned to 0.1.0 in
-`package.json` with its transitive dependencies locked in `package-lock.json`.
-Run `npm ci` after cloning or updating the lockfile; its prepare script installs
+Without mise shell activation, run commits with `mise exec -- git commit` too.
+The lockfile rule invokes pnpm in an isolated directory; its inherited PATH must
+contain the provisioned binaries. A mise shim there would instead try to load
+the temporary copy of `mise.toml`, which is intentionally untrusted.
+
+Quality Gate and its JS/TS rules are project-local pnpm development dependencies, pinned in
+`package.json` with its transitive dependencies locked in `pnpm-lock.yaml`.
+Run `pnpm install --frozen-lockfile` after cloning or updating the lockfile; its prepare script installs
 the QG hook. `just check` and `just qg` use the installed package without fetching
-or building the tool. `node_modules/` is ignored, and recipe-invoked npm commands
-keep their download cache under `.local/cache/npm/`.
+or building the tool. `node_modules/` is ignored, and pnpm keeps its package store under `.local/cache/pnpm/` through `pnpm-workspace.yaml`.
+The `js` preset checks source directives, fixture practices and pnpm lockfile
+consistency. Native `node-test` checks run the TypeScript suite through QG's test reporter; type errors and failed tests block both the CLI and hook.
 
 ## Data and recognition rules
 

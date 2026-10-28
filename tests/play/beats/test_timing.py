@@ -1,33 +1,8 @@
 """Natural subdivisions describe rhythm; increasing Split cannot hide uncertainty."""
 import unittest
 
-from piu_timeline.play.beats.timing import fit_grid
-
 
 class BeatGridTest(unittest.TestCase):
-    def test_regular_quarters_use_smallest_split_and_exact_rows(self):
-        result=fit_grid([10.001,10.124,10.251,10.374],[.003]*4,120,10)
-        self.assertEqual(result['status'],'restored')
-        self.assertEqual(result['split'],4)
-        self.assertEqual(result['targets'],[10,10.125,10.25,10.375])
-
-    def test_triplets_and_quarters_share_natural_twelve_way_split(self):
-        times=[10,10.125,10+1/6,10+1/3]
-        result=fit_grid(times,[.0001]*4,120,10)
-        self.assertEqual(result['split'],12)
-
-    def test_uncertain_rows_and_unsupported_positions_fail_explicitly(self):
-        ambiguous=fit_grid([10.25],[.26],120,10)
-        self.assertEqual(ambiguous['reason'],'ambiguous_beat_rows')
-        unsupported=fit_grid([10.137],[.000001],120,10)
-        self.assertEqual(unsupported['reason'],'no_natural_beat_subdivision')
-
-    def test_unresolved_row_is_not_collapsed_onto_an_independent_known_row(self):
-        result=fit_grid([10.01,10.11],[.12,.12],120,10)
-        self.assertEqual(result['status'],'partial')
-        self.assertEqual(result['rows'],[0,None])
-        self.assertEqual(result['targets'],[10,None])
-
     def test_reference_application_keeps_video_ranges_and_marks_ambiguous_notes_failed(self):
         from pathlib import Path
         import tempfile
@@ -53,13 +28,6 @@ class BeatGridTest(unittest.TestCase):
                 self.assertEqual([n['target_seconds']for n in result['notes']],[10,None,10.25])
                 self.assertEqual({w['note']for w in result['beat_timing']['warnings']},{1})
 
-    def test_one_common_phase_is_required_instead_of_moving_each_note_independently(self):
-        result=fit_grid([10.01,10.135],[.001,.001],120,10,phase_uncertainty=.02)
-        self.assertEqual(result['split'],4)
-        self.assertAlmostEqual(sum(result['phase_range'])/2,.01)
-        conflict=fit_grid([10.01,10.115],[.001,.001],120,10,splits=[4],phase_uncertainty=.02)
-        self.assertEqual(conflict['status'],'failed')
-
     def test_input_associations_are_rebuilt_from_restored_targets_and_failed_notes_are_not_used(self):
         from piu_timeline.play.beats.timing import reassociate
         data={'notes':[{'lane':0,'status':'estimated','target_seconds':1.,'prediction_uncertainty_seconds':.01}],
@@ -74,21 +42,6 @@ class BeatGridTest(unittest.TestCase):
         data['beat_timing']['status']='failed'
         self.assertEqual(reassociate(data,0)['matches'],[])
 
-    def test_global_phase_is_chosen_before_greedy_local_subdivisions(self):
-        from piu_timeline.play.beats.phase import fit_phase
-        groups=[{'targets':[10.001,10.124,10.251],'errors':[.003]*3,'bpm':120,'origin':10},
-                {'targets':[12.001,12.124,12.251],'errors':[.003]*3,'bpm':120,'origin':10}]
-        result=fit_phase(groups,.02)
-        self.assertEqual(result['status'],'restored')
-        self.assertTrue(all(f['split']==4 for f in result['fits']))
-        self.assertAlmostEqual(result['phase'],0,delta=.003)
-
-    def test_phase_without_supported_groups_is_explicitly_failed(self):
-        from piu_timeline.play.beats.phase import fit_phase
-        group={'targets':[10.137],'errors':[.000001],'bpm':120,'origin':10}
-        result=fit_phase([group],0)
-        self.assertEqual(result['status'],'failed')
-        self.assertEqual(result['fits'][0]['reason'],'ambiguous_or_unsupported_song_phase')
 
     def test_constant_catalogue_tempo_extends_short_template_without_changing_original(self):
         from pathlib import Path

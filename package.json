@@ -5,14 +5,18 @@
   "scripts": {
     "prepare": "qg hooks install",
     "quality": "qg check",
-    "quality:full": "qg check --full"
+    "quality:full": "qg check --full",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "qg check --full"
   },
   "devDependencies": {
     "@slop-lab/qg": "0.1.0",
+    "@slop-lab/qg-rules-js": "0.1.0",
     "@types/node": "26.6.5",
     "typescript": "7.0.2"
   },
   "engines": {
     "node": ">=24"
-  }
+  },
+  "packageManager": "pnpm@11.10.0"
 }

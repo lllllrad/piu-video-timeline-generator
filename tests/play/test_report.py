@@ -53,7 +53,7 @@ class ReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'report.html'
             write_report(data, path)
-            result = subprocess.run(['node', str(Path(__file__).with_name('report_runtime.cjs')), str(path)],
+            result = subprocess.run(['node', str(Path(__file__).with_name('report-runtime.ts')), str(path)],
                                     check=True, capture_output=True, text=True)
         return json.loads(result.stdout)
 

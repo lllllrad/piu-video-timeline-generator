@@ -1,3 +1,4 @@
+// @ts-check
 'use strict';
 // Retained native observations. Playback moves only the cursor, never the rows.
 let evidenceScene=null;
@@ -25,7 +26,9 @@ function renderEvidence(noteIndex){
   const bodyScale=height/(channel.processing.pixel_coordinates?.height||height);
   $('evidenceSummary').textContent='Note '+(noteIndex+1)+' / lane '+(note.lane+1)+' · Processing: '+(processing?processing.status+' / '+processing.reason:'unavailable')+(processing?.range?' / '+formatRange(processing.range):'')+(processing?.visibility_loss?' / Visibility loss (processing unconfirmed): '+formatRange(processing.visibility_loss.range):'')
     +(processing?.motion_basis?' / Motion basis: '+processing.motion_basis:'')+'. Positions use the '+(data.analysis_width||'?')+'×'+height+' game crop, with y increasing downward. Click a frame to inspect its original timestamp.';
-  for(const [name,y] of [['Popup',45],['Receptor effect',105],['Moving heads',165],['Note processing',225]]){
+  /** @type {[string, number][]} */
+  const channelRows=[['Popup',45],['Receptor effect',105],['Moving heads',165],['Note processing',225]];
+  for(const [name,y] of channelRows){
     label(root,name,4,y+4);line(root,180,y,1180,y,'#314448');
   }
   for(const t of [lo,note.target_seconds,hi]){
