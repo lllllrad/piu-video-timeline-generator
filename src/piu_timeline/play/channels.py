@@ -73,7 +73,8 @@ def collect(data, directory, frames):
               for i, note in enumerate(data.get('notes', []))]
     effects = [{**run, 'id': 'receptor:'+str(i)} for i, run in enumerate(data.get('hold_analysis', {}).get('receptor_runs', []))]
     from piu_timeline.play.receptors import onset_overlaps
-    processing = observe_processing(data, directory/'processing-features.npz')
+    from piu_timeline.play.observations.channel_stages import processing as measured_processing, note_types as measured_types
+    processing = measured_processing(data, directory, observe_processing)
     processing['body_fields'] = ['lane','top','bottom','top_visible','tail_visible','long','stripe_support']
     processing['body_observations'] = [[[body.get(key) for key in processing['body_fields']]
                                        for body in frame.get('bodies', [])] for frame in frames]
@@ -81,15 +82,16 @@ def collect(data, directory, frames):
         event['id'] = 'processing:'+str(event['note'])
     if not words:
         words = [{} for _ in native]
-    from piu_timeline.play.appearance import acquire
+    from piu_timeline.play.appearance import retained
     from piu_timeline.play.object_roles import filter_frames
     interpreted=filter_frames(data,frames,bodies=True)
-    if data.get('skin_detector'):
-        from piu_timeline.play.skins.observations import observe
-        types = observe(data, native)
-    else:
-        appearance = acquire(data,directory,native)
-        types = observe_appearance(data,appearance,interpreted) if appearance else observe_types(data,pixel_path,interpreted)
+    def read_types(source):
+        if source.get('skin_detector'):
+            from piu_timeline.play.skins.observations import observe
+            return observe(source, native)
+        appearance = retained(source,directory,native)
+        return observe_appearance(source,appearance,interpreted) if appearance else observe_types(source,pixel_path,interpreted)
+    types = measured_types(data, directory, native, interpreted, read_types)
     return {'format': CHANNEL_FORMAT,
             'layers': layer_manifest(directory),
             'timeline': {'frames': [[f['playback_seconds'],f['source_pts_seconds']] for f in native]},
@@ -127,10 +129,12 @@ def layer_manifest(directory):
                      'appearance-features.npz', 'evidence/judgments/features-v3.npz'],
         'frame_observations': ['frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
         'interpretations': ['object-interpretation.json', 'head-registration.json', 'skin-role-evidence.json', 'body-risk-evidence.json', 'holds.json', 'visual-channels.json'],
+        'native_measurements': ['native-stages/hold-geometry.json', 'native-stages/processing.json', 'native-stages/note-types.json', 'native-stages/risk-proofs.json'],
+        'sustained_state': ['hold-state-input.json', 'derived-stages/hold-state.json'],
         'coordinates': ['coordinates.json'],
         'musical_timing': ['beat-input.json', 'beat-timing.json'],
         'associations': ['analysis.json'],
-        'presentation': ['report-data.json', 'report-summary.json', 'report.html'],
+        'presentation': ['presentation-input.json', 'derived-stages/manifest.json', 'report-data.json', 'report-summary.json', 'report.html'],
     }
     return {'source': 'analysis.json#/media',
             'artifacts': artifacts,
@@ -156,6 +160,12 @@ def augment_channels(data, directory, frames=None):
                 'analysis': fingerprint({key:data.get(key) for key in
                                          ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion','object_interpretation','skin_role_evidence','body_risk_evidence')}),
                 'traces': {name: [p.stat().st_size, p.stat().st_mtime_ns] if (p:=directory/name).is_file() else None for name in inputs}}
+    from piu_timeline.play.observations.artifacts import producer
+    from piu_timeline.play.observations.channel_stages import derived_motion_contract
+    contract['measurement_producers'] = producer('play/observations/channel_stages.py', 'play/processing/__init__.py', 'play/processing/motion.py',
+        'play/processing/templates.py', 'play/processing/poses.py', 'play/processing/passage.py',
+        'play/note_types.py', 'play/holds/type_links.py', 'play/holds/geometry.py', 'play/skins/observations.py')
+    contract['measurement_producers']['motion'] = derived_motion_contract()
     if data.get('skin_detector'):
         from piu_timeline.play.skins.observations import FORMAT as IMAGE_ROLE_FORMAT
         contract['image_roles'] = IMAGE_ROLE_FORMAT
@@ -167,7 +177,7 @@ def augment_channels(data, directory, frames=None):
     if frames is None:
         from piu_timeline.play.receptors import observations, reject_common_flashes
         frames = list(read_frames(directory/'hold-frames.jsonl'))
-        frames = reject_common_flashes(frames, observations(data, directory, frames))
+        frames = reject_common_flashes(frames, observations(data, directory, frames, allow_decode=False))
     channels = collect(data, directory, frames)
     contract['traces'] = {name:[p.stat().st_size,p.stat().st_mtime_ns] if (p:=directory/name).is_file() else None for name in inputs}
     pending = path.with_suffix('.build-json')

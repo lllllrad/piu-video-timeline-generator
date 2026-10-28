@@ -87,7 +87,7 @@ export function recognition(data: RecordData, ranges: RecordData): RecordData {
     const i = e.note, n = data.notes[i];
     if (n.status !== 'estimated' || n.note_type === 'hold') continue;
     const conflict = matches.get(i)?.processing_conflict;
-    if (e.status === 'unresolved' || conflict) add({note: i, lane: n.lane, visible_start_seconds: n.target_seconds, visible_end_seconds: n.target_seconds, observed_points: (e.samples ?? []).length,
+    if (e.status === 'unresolved' || conflict) add({note: i, lane: n.lane, visible_start_seconds: n.target_seconds, visible_end_seconds: n.target_seconds, observed_points: e.sample_count ?? (e.samples ?? []).length,
       reason: conflict ? 'processing_refresh_conflict' : 'note_processing_unresolved', processing_reason: e.reason, channel_evidence: e.id});
   }
   warnings.sort((a, b) => a.visible_start_seconds - b.visible_start_seconds || a.lane - b.lane || (a.reason < b.reason ? -1 : a.reason > b.reason ? 1 : 0));

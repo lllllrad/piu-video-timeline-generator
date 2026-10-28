@@ -4,7 +4,8 @@ from piu_timeline.derived import call,evidence_input
 
 
 def counter_frame_ranges(path):
-    with path.open()as stream:frames=[json.loads(line)for line in stream]
+    from piu_timeline.play.observations.records import counter
+    with path.open()as stream:frames=[counter(json.loads(line))for line in stream]
     return call('ranges.counterFrameRanges',frames)
 
 

@@ -2,8 +2,27 @@
 import {annotateMatches, bracket, onsetOverlaps, processingEvidence, processingSupport, receptorEvidence} from './evidence.ts';
 import {associate} from './association.ts';
 import type {RecordData} from './types.ts';
+import {equal} from './math.ts';
 const active = (data, kind) => (data.chart_policy?.gimmick_candidates ?? []).filter(e => e.kind === kind && e.review_status !== 'rejected');
 const contains = (e, lo, hi) => e.playback_start_seconds <= lo && hi < e.playback_end_seconds;
+
+export const FORMAT = {schema: 1, revision: 6};
+export function verifyArtwork(data: RecordData): RecordData {
+  const artifact = data.object_interpretation ?? {}, saved = artifact.effects ?? [], warnings = [];
+  for (const effect of active(data, 'decorative_note_art')) {
+    if (saved.some(record => Object.entries(effect).every(([k, v]) => equal(record[k], v)))) continue;
+    warnings.push({reason: 'decorative_art_interpretation_missing', check: 'chart_effect', lane: 0,
+      visible_start_seconds: effect.playback_start_seconds, visible_end_seconds: effect.playback_end_seconds, observed_points: 0, gimmick_candidate: effect.id});
+  }
+  return {...data, object_interpretation: {...artifact, warnings: [...(artifact.warnings ?? []), ...warnings]}};
+}
+export function interpret(data: RecordData): RecordData {
+  let result = verifyArtwork(simultaneousIncrement(visibilityModifier(data)));
+  if (result.chart_policy) result = {...result, chart_policy: {...result.chart_policy, gimmick_format: FORMAT,
+    unsupported_gimmicks: (result.chart_policy.gimmick_candidates ?? []).filter(e => e.review_status !== 'rejected' &&
+      !['scroll_pause', 'scroll_speed_change', 'suspected_visibility_modifier', 'suspected_multi_increment', 'decorative_note_art'].includes(e.kind)).map(e => e.id)}};
+  return result;
+}
 
 export function visibilityModifier(data: RecordData): RecordData {
   const effects = active(data, 'suspected_visibility_modifier');

@@ -31,7 +31,7 @@ Codex-only environment generation and optional mise installation are documented 
 ## Architecture
 
 See [the current play data flow](play-data-flow.md) for stage ownership, stored
-artifacts, cache coupling and the limits of current validation.
+artifacts, independent stage reuse and the limits of current validation.
 
 Read the [gameplay visual model](gameplay-visual-model.md) before changing note geometry or recognition rules. Keep observed game behavior, measurement assumptions and implementation thresholds distinct; passing a test does not establish the visual model.
 
@@ -103,7 +103,8 @@ converting ticks into presses. `play/holds/features.py` acquires and caches nati
 Geometry does not depend on a successful input match. TypeScript `derived/candidates.ts` constrains review
 alternatives using refresh ownership, processed-row order and per-lane receptor evidence.
 - `play/analysis.py` orchestrates opt-in visual analysis and caches evidence. `play/presentation.py`
-  prepares data through TypeScript consumers; `play/report.py` renders the prepared document and
+  prepares external/native inputs, then TypeScript `derived/pipeline/` executes independently
+  cached consumers; `play/report.py` renders the prepared document and
   summaries. The standalone SVG view uses browser-driven CSS transform playback. Bounded time pages
   limit DOM size; video time anchors animations without per-frame note rebuilding. TypeScript
   `derived/ranges.ts` derives review-only alternative refresh intervals and conditional

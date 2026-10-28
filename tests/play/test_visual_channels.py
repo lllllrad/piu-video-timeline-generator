@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -62,6 +63,36 @@ def pixel_play(directory, kind='consumed'):
 
 
 class VisualChannelTest(unittest.TestCase):
+    def test_hud_changes_reuse_native_processing_and_type_measurements(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary); data, frames = pixel_play(directory)
+            (directory/'frames.jsonl').write_text(''.join(json.dumps(frame)+'\n' for frame in frames))
+            before = collect(data, directory, frames)
+            data['judgment_events'] = [{'lower_seconds': 59/60, 'upper_seconds': 1., 'label': 'GREAT'}]
+            data['hold_analysis']['receptor_runs'] = [{'lane': 2, 'lit': True, 'frames': 3, 'start_seconds': 1., 'end_seconds': 1.04, 'onset_range': [.98, 1.]}]
+            with patch('piu_timeline.play.channels.observe_processing', side_effect=AssertionError('must reuse native processing')), \
+                    patch('piu_timeline.play.channels.observe_types', side_effect=AssertionError('must reuse native type reads')):
+                after = collect(data, directory, frames)
+            self.assertEqual(after['processing'], before['processing'])
+            self.assertEqual(after['note_types'], before['note_types'])
+            self.assertEqual(len(after['popup']['judgment_events']), 1)
+            self.assertEqual(after['popup']['judgment_events'][0]['source_pts_seconds'], [42+59/60, 43.])
+
+    def test_measurement_consumers_fail_when_acquisition_is_missing_without_decoding(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary); data, frames = pixel_play(directory)
+            data['media'] = {'video_streams': [{'index': 0}]}
+            frames[0]['notes'] = [{'lane': 2, 'x': .4, 'y': .8}]
+            from piu_timeline.play.appearance import retained
+            from piu_timeline.play.receptors import observations
+            with patch('piu_timeline.play.appearance.decode_frames', side_effect=AssertionError('consumer must not decode')), \
+                    self.assertRaisesRegex(ValueError, 'acquisition stage'):
+                retained(data, directory, frames)
+            missing = [{k: v for k, v in f.items() if k != 'receptor_white_fraction'} for f in frames]
+            with patch('piu_timeline.play.receptors.decode_frames', side_effect=AssertionError('consumer must not decode')), \
+                    self.assertRaisesRegex(ValueError, 'acquisition stage'):
+                observations(data, directory, missing, allow_decode=False)
+
     def test_pixels_distinguish_consumption_passage_and_unknown_without_hud_or_light(self):
         for kind, expected in [('consumed','disappeared_near_receptor'), ('passed','passed_target'),
                                ('reappeared','passed_target'), ('flash','disappeared_near_receptor'),

@@ -39,7 +39,7 @@ def fractions(rgb, layout, full_height=None, y_offset=0):
     return result
 
 
-def observations(data, directory, frames):
+def observations(data, directory, frames, *, allow_decode=True):
     """Top up legacy bool-only caches once using only the native receptor strip."""
     if all('receptor_white_fraction' in frame for frame in frames):
         return np.asarray([frame['receptor_white_fraction'] for frame in frames])
@@ -56,6 +56,8 @@ def observations(data, directory, frames):
                 if scores.shape != (len(frames),len(data['layout']['lanes'])):
                     raise ValueError('Receptor feature dimensions differ from native observations')
                 return scores
+    if not allow_decode:
+        raise ValueError('Native receptor features require the acquisition stage before measurement')
     print('  Extracting native receptor strip measurements; no OCR...', flush=True)
     width = FORMAT['width']; height = round(width*data['game_roi'][3]/data['game_roi'][2])
     spacing = float(np.median(np.diff([lane['x']*width for lane in data['layout']['lanes']])))

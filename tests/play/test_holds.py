@@ -406,7 +406,7 @@ class HoldTest(unittest.TestCase):
                 with patch('piu_timeline.play.holds.features.decode_frames', side_effect=AssertionError('cached pixels')), \
                         patch('piu_timeline.play.holds.analysis.reconstruct', wraps=reconstruct) as rebuilt:
                     refreshed = augment_holds(updated, root)
-                self.assertEqual(rebuilt.call_count, 1)
+                self.assertEqual(rebuilt.call_count, 0)
                 self.assertNotEqual(refreshed['hold_analysis']['association_contract'], result['hold_analysis']['association_contract'])
             self.assertEqual(source.read_bytes(), b'original recording')
 

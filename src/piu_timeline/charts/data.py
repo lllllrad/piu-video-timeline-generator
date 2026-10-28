@@ -102,13 +102,17 @@ def canonical_chart(data):
     return call('chartDraft.canonicalChart',{'chart':data.get('chart'),'chart_identity':data.get('chart_identity')})
 
 
-def draft(template,data,alignment,extend_constant_tempo=False):
+def draft(template,data,alignment,extend_constant_tempo=False,*,input_path=None):
     from dataclasses import asdict
     from piu_timeline.derived import call
     from piu_timeline.play.holds.analysis import chart_projection
     view=chart_projection(data)
     fields=('chart','chart_identity','layout','notes','hold_analysis','beat_timing','end_seconds')
-    doc,proof=call('chartDraft.draft',asdict(template),{key:view[key]for key in fields if key in view},alignment,extend_constant_tempo)
+    observations={key:view[key]for key in fields if key in view}
+    if input_path is not None:
+        write_json(input_path, {'timing_text':template.text(),'chart_observations':observations,
+                               'alignment':alignment,'extend_constant_tempo':extend_constant_tempo})
+    doc,proof=call('chartDraft.draft',asdict(template),observations,alignment,extend_constant_tempo)
     return ucs.document(doc),proof
 
 
@@ -165,7 +169,7 @@ def register(data, output, code=None, repository=None, song_start=None, revision
     code_entry = next(item for item in catalogue(repository)['songs'] if item['index'] == resolved)
     bpm = code_entry.get('bpm', '')
     constant = ucs.constant_tempo(template,bpm)
-    document, evidence = draft(template, data, alignment, extend_constant_tempo=constant)
+    document, evidence = draft(template, data, alignment, extend_constant_tempo=constant, input_path=output/'ucs-input.json')
     content = document.text().encode()
     metadata = {'$schema': '../../../../schema.json', 'schema': 1, 'regions': [],
                 'identity': {'ucs_index': resolved, 'chart': chart, 'revision': revision},

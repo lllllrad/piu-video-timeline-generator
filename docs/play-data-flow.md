@@ -1,7 +1,7 @@
 # Current play-analysis data flow
 
-This describes the implemented pipeline and its remaining coupling. It is not a
-claim that the stages are already independently resumable or fully validated.
+This describes implemented stage boundaries, cache dependencies and validation
+limits. Stored observations are inputs to independently repeatable consumers.
 
 ## Entry points and outputs
 
@@ -66,37 +66,49 @@ can authorize special processing; it must not manufacture observations or turn
 unexplained conflicts into successes. Editable UCS/chart facts live separately
 from this code repository.
 
-## Current coupling and repeated work
+## Stage execution and cache reuse
 
-`play/analysis.py` coordinates acquisition/refit, object interpretation, head
-registration, beat reconstruction, reassociation, judgment augmentation, hold
-augmentation, report generation and chart registration. These are functions in
-separate modules, but their persisted boundaries are incomplete.
+`play/analysis.py` schedules source acquisition/refit, registered coordinates,
+musical timing, native judgment/hold measurements, presentation and chart
+registration. Scheduling does not give report consumers access to a decoder.
 
-* `coordinates.json` now preserves the registered pre-beat output with its own
-  source/geometry/producer identity and content fingerprint. Segment-local paths
-  are stored relative to that artifact so promotion does not invalidate it.
-* `TIMING_FORMAT` covers upstream reconstruction only; musical timing retains its
-  own contract. A beat-only change can resume `coordinates.json` without frame
-  replay or copying the segment. Legacy analyses need one upstream refit to
-  create this boundary; missing or incompatible snapshots cannot be invented.
-* `beat-input.json` contains the prepared reference text and calculation inputs.
-  TypeScript reconstructs musical timing in one call and returns only owned
-  output fields. Acquisition identity stays outside numerical calculations.
-* Native/skin/object changes still require `refit_saved`, which copies a pending
-  segment and replays saved observations. That path has not been replaced by a
-  universal independently cached stage graph.
-* `play/presentation.py` invokes derived projections, ranges and diagnostics, persists
-  `report-data.json`, and emits review warnings. `play/report.py` passes that
-  prepared document to the pure TypeScript HTML renderer. The index reads a
-  small prepared summary instead of rerunning analysis. Re-rendering prepared
-  data does not inspect observations. Preparation still reads frame traces.
-* Hold geometry, popup association, lane evidence and processing still have
-  broad fingerprints. Their acquisition and derived consumers are not yet all
-  separate persisted stages.
+* `coordinates.json` preserves registered pre-beat output with source, geometry,
+  producer identity and a content fingerprint. Musical timing has its own
+  contract; a beat-only change resumes this boundary without frame replay.
+* `beat-input.json` stores reference text and calculation inputs. TypeScript
+  returns only owned fields; acquisition identity stays outside numerical fits.
+* Native geometry, note processing and type observations have separate cached
+  outputs under `native-stages/`. Hold geometry does not depend on HUD refreshes.
+  `hold-state-input.json` feeds the independent TypeScript sustained-state stage.
+  `holds.json` and `visual-channels.json` assemble these outputs for callers.
+* `presentation-input.json` binds prepared external metadata, native proofs and
+  compact channel records. TypeScript consumers prepare chart/input views,
+  ranges, continuity and diagnostics, with separate artifacts and a dependency
+  manifest under `derived-stages/`. Changing a counter observation does not rerun
+  the visibility consumer; changing a title does not rerun inference.
+* Native processing under configured motion is an explicit measurement producer.
+  Its output is bound to the interpreted geometry and concrete motion model.
+  A prepared consumer cannot request new pixel reads through a callback.
+* `report-data.json` feeds the pure HTML renderer. `report-summary.json` feeds
+  the index. Re-rendering either view performs no analysis or frame reads.
+* `ucs-input.json` stores chart observations, exact reference timing and alignment
+  for an independent UCS draft. Chart-repository registration is a separate I/O
+  operation that preserves human edits.
 
-The saved-data runtime and standalone replay commands are described in
-[derived analysis](derived-analysis.md).
+Artifact reuse requires matching declared inputs and producer identities.
+Corrupted output hashes or contradictory source timelines fail explicitly.
+The maintenance scheduler checks the stage manifest and native producers before
+classifying an analysis as current. Existing plays produce these artifacts on
+an ordinary `just play` refresh; no data-migration command is required.
+
+Native detector/geometry refits still use a pending segment and atomic directory
+promotion. That transaction can copy retained acquisition artifacts. It does not
+make downstream rule changes require a native refit or original-video decoding.
+Changed acquisition requirements can require the original recording; retained
+feature masks cannot supply pixels they never captured.
+
+See [derived analysis](derived-analysis.md) for stage contracts and standalone
+replay commands.
 
 ## Validation and geometry scope
 

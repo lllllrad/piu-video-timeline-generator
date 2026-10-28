@@ -1,14 +1,14 @@
 # Derived analysis runtime
 
 Saved observations are ordinary data, independent of the acquisition language.
-Python owns video decoding, image measurements, OCR, audio alignment, downloads
-and acquisition orchestration. TypeScript under `src/piu_timeline/derived/` owns
+Python owns video decoding, image measurements and geometry, source-bound image
+proofs, OCR, audio alignment, downloads and acquisition orchestration. TypeScript under `src/piu_timeline/derived/` owns
 joint coordinate registration, saved-track and clock fitting, native spacing and
 chord checks, common song-phase and beat-row reconstruction, speed estimates,
 exact UCS timing and per-measure row transcription, and HTML rendering.
 It also owns popup/row association and recovery, hold chart projection, concrete
-visibility/counter effects, input ranges, continuity and unresolved-evidence
-diagnostics. Original visual observations are inputs to these operations.
+visibility/counter effects, sustained receptor state, input ranges, continuity
+and unresolved-evidence diagnostics. Original visual observations are inputs to these operations.
 
 Python adapters connect acquisition objects and callers to this implementation.
 There is one implementation of each migrated fit and consumer. One Node worker
@@ -61,16 +61,88 @@ Only comparisons against measured seconds convert to floating point. Unsupported
 or ambiguous rows retain explicit failures; subdivision does not expand the
 time tolerance or replace missing observations.
 
-`report-data.json` is the prepared presentation document. `play/presentation.py`
-owns policy projection and diagnostic preparation; `play/report.py` only renders
-that data through TypeScript. Rendering preserves opaque serialized acquisition
-metadata and escapes HTML/script delimiters. It does not run timing inference.
-`report-summary.json` supplies the index without repeating projection or reading
-every trajectory. Render a prepared report using TypeScript alone:
+`presentation-input.json` contains the analysis document, prepared policy and visual
+support metadata, source-timestamped position/counter records, named HUD occluders
+and verified image-risk proofs. Native proof preparation has its own
+`native-stages/risk-proofs.json` cache bound to the geometry, risk evidence and
+verified reference-bank extent. Concrete-motion processing measurements include
+their exact interpretation input; contradictory measurements fail explicitly.
+Preparing these inputs belongs to `play/observations/presentation.py`. It resolves
+external metadata and native proof dependencies before calling a consumer.
+
+TypeScript `derived/pipeline/presentation.ts` executes seven small consumers:
+
+| Stage | Inputs | Output |
+| --- | --- | --- |
+| `hold-view` | Tracks, native holds, channels and prepared risk proofs | Hold-aware chart objects and judgment associations |
+| `motion-effects` | Concrete chart effects | Pause and relative-speed models |
+| `effect-view` | Interpreted rows, lane/processing evidence and chart effects | Effect-specific associations and visibility interpretation |
+| `policy-view` | Interpreted chart and scoped policies | Eligible input associations |
+| `timing-ranges` | Targets, input observations and compact counter frames | Target/input ranges and explicit unknowns |
+| `visibility` | Native positions, models, HUD geometry and processing states | Explained occlusions, detection gaps and motion warnings |
+| `diagnostics` | Original/projected notes, ranges and continuity results | Excluded-track and unresolved-evidence warnings |
+
+Each consumer caches its owned output under `derived-stages/`, keyed by consumed
+inputs and implementation dependencies. The manifest records input/output hashes
+and which results were reused. Unrelated metadata, such as a title, does not
+invalidate inference. Shared contract or pipeline-composition changes can affect
+several consumers. Corrupt outputs fail explicitly. Segment-local references use
+`@segment/` inside hashed artifacts so directory promotion preserves their identity.
+Maintenance checks include producer identities and retained source-file signatures.
+
+Replay the prepared calculation without Python, image libraries, audio, network or
+source video:
 
 ```sh
-just render .local/data/SOURCE/play/segment-001/report-data.json .local/data/SOURCE/play/segment-001/report.html
+just derive presentation .local/data/SOURCE/play/segment-001/presentation-input.json .local/tmp/report-data.json
+just render .local/tmp/report-data.json .local/tmp/report.html
 ```
+
+The standalone `hold-view`, `effects`, `ranges` and `visibility` stages are also
+available. `hold-view` uses a presentation request; `effects` and `ranges` consume
+an analysis view; `visibility` takes `data`, compact `frames` and `occluders`.
+
+`play/presentation.py` persists diagnostic views and `report-data.json` after the
+TypeScript calculation. `play/report.py` renders that prepared document only.
+Rendering preserves opaque acquisition metadata and escapes HTML/script delimiters.
+`report-summary.json` supplies the index without reading trajectories or running
+inference. HTML rendering is independently repeatable:
+
+```sh
+just render .local/data/SOURCE/play/segment-001/report-data.json .local/tmp/report.html
+```
+
+## Native and sustained-state boundaries
+
+`play/observations/acquisition.py` explicitly prepares body, receptor and appearance
+features. Native measurement consumers read retained features; missing appearance
+or receptor acquisition cannot trigger an implicit decode inside channel collection.
+The four channel observations retain their own original timestamps and unknowns.
+
+`native-stages/hold-geometry.json` contains native geometric holds and unresolved
+connections, without sustained-input decisions. `native-stages/processing.json`
+and `native-stages/note-types.json` cache per-note pixel measurements independently
+of popup ownership and receptor-run association. A HUD refresh change can update
+channel assembly without repeating those image measurements.
+
+`hold-state-input.json` captures the geometric bounds, native receptor/body records,
+raw HUD refreshes and the geometry scale needed for sustained-state interpretation.
+TypeScript `hold_state.ts` returns sustained spans and receptor runs, cached as
+`derived-stages/hold-state.json`. This stage never turns hold ticks into separate
+presses or invents physical press/release timestamps:
+
+```sh
+just derive hold-state .local/data/SOURCE/play/segment-001/hold-state-input.json .local/tmp/hold-state.json
+```
+
+Counter and visibility consumers receive compact records, excluding skin image
+comparisons and unrelated per-frame detection details. Presentation preparation
+uses the retained channel projection when available; legacy traces are projected
+one record at a time. Source and frame-count contradictions fail explicitly.
+
+Chart registration saves `ucs-input.json` after reference preparation and chart
+projection. It is independent of HTML preparation and supports replaying the complete
+UCS draft through the existing `ucs` stage.
 
 Native processing still evaluates the fitted trajectory while inspecting pixels.
 The Python callback evaluates returned coefficients or measured displacement;
@@ -101,6 +173,7 @@ native word states and independent per-event aggregate offset provenance.
 Recognition tolerances are retained. Passing these tests does not establish a new
 corpus recognition rate. Pixel acquisition, online tracking, native hold/skin
 interpretation, source identity verification, metadata/reference I/O and pipeline
-orchestration remain Python. Not every producer has an independently persisted
-output yet; native detector/geometry changes can still require frame replay.
+orchestration remain Python. Acquisition changes can require frame replay; consumer changes reuse the declared
+retained inputs. Native observation refits use a transactional pending segment
+before promotion, while ordinary consumer refreshes use their stage artifacts.
 See [data flow](play-data-flow.md).

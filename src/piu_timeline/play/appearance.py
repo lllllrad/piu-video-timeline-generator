@@ -44,7 +44,7 @@ def patches(rgb, detections, layout, spacing):
     return result
 
 
-def acquire(data, directory, frames):
+def acquire(data, directory, frames, *, allow_decode=True):
     """One no-OCR pass; refits and future type rules reuse the spatial masks."""
     if not data.get('media',{}).get('video_streams') or not any(f.get('notes') for f in frames):
         return None
@@ -53,6 +53,8 @@ def acquire(data, directory, frames):
         with np.load(path,allow_pickle=False) as saved:
             if json.loads(str(saved['contract'])) == expected:
                 return path
+    if not allow_decode:
+        raise ValueError('Native appearance features require the acquisition stage before measurement')
     print('  Retaining native head neighborhoods across the full approach; no OCR...',flush=True)
     before = Path(data['media']['path']).stat()
     width = data['analysis_width']
@@ -84,3 +86,8 @@ def acquire(data, directory, frames):
     finally:
         temporary.unlink(missing_ok=True)
     return path
+
+
+def retained(data, directory, frames):
+    """Read only source-bound acquired neighborhoods; never open the video."""
+    return acquire(data, directory, frames, allow_decode=False)

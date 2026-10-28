@@ -5,40 +5,26 @@ from pathlib import Path
 
 
 def prepare_report(data,path,final_directory=None):
-    from piu_timeline.play.support import visual_support
-    data={**data,'visual_support':visual_support(data)}
-    path.with_name('visual-support.json').write_text(json.dumps(data['visual_support'],ensure_ascii=False,indent=2)+'\n')
-    native = data
-    from piu_timeline.charts.policy import attach_regions, apply_projection
-    data = attach_regions(data, path.parent)
-    from piu_timeline.play.holds.analysis import presentation
-    from piu_timeline.play.gimmicks import apply_gimmicks
-    data = apply_projection(apply_gimmicks(presentation(data),path.parent))
-    path.with_name('object-interpretation.json').write_text(json.dumps(data.get('object_interpretation',{}),ensure_ascii=False,indent=2)+'\n')
-    from piu_timeline.play.exclusions import exclusion_diagnostics, recognition_diagnostics
-    exclusions = exclusion_diagnostics(native, data)
-    data = {**data, 'exclusion_diagnostics': exclusions}
-    from piu_timeline.play.ranges import timing_ranges, counter_frame_ranges
-    ranges = timing_ranges(data)
-    frames = path.with_name('frames.jsonl')
-    if ranges['counts'].get('unknown') and frames.is_file():
-        ranges = timing_ranges({**data, 'counter_frame_events': counter_frame_ranges(frames)})
-    from piu_timeline.play.continuity import continuity_diagnostics
-    native_frames=[]
-    if frames.is_file():
-        with frames.open()as stream:native_frames=[json.loads(line)for line in stream]
-    continuity = continuity_diagnostics(data,native_frames)
-    data = {**data, 'timing_ranges': ranges, 'visibility_diagnostics':continuity}
-    path.with_name('visibility-diagnostics.json').write_text(json.dumps(continuity,ensure_ascii=False,indent=2)+'\n')
-    path.with_name('beat-timing.json').write_text(json.dumps(data.get('beat_timing',{}),ensure_ascii=False,indent=2)+'\n')
-    reconstruction=data.get('timing_reconstruction',{})
-    if reconstruction.get('status')=='failed':
-        print(f"Warning: timing reconstruction FAILED for {reconstruction['failed_notes']} note trajectories; rejected estimates are retained only for review.",file=sys.stderr)
-    path.with_name('timing-reconstruction.json').write_text(json.dumps(reconstruction,ensure_ascii=False,indent=2)+'\n')
-    recognition = recognition_diagnostics(data, ranges)
-    data['recognition_diagnostics'] = recognition
+    from piu_timeline.play.observations.presentation import prepare
+    from piu_timeline.derived import call
+    request = prepare(data, path.parent)
+    pending = path.with_name('presentation-input.build.json')
+    pending.write_text(json.dumps(request, ensure_ascii=False, allow_nan=False)+'\n')
+    pending.replace(path.with_name('presentation-input.json'))
+    data = call('presentation.prepare', request, str(path.parent))
+    artifacts = {'visual-support.json': data.get('visual_support'),
+                 'object-interpretation.json': data.get('object_interpretation', {}),
+                 'visibility-diagnostics.json': data['visibility_diagnostics'],
+                 'beat-timing.json': data.get('beat_timing', {}),
+                 'timing-reconstruction.json': data.get('timing_reconstruction', {})}
     if data.get('chart_policy'):
-        path.with_name('chart-policy.json').write_text(json.dumps(data['chart_policy'],ensure_ascii=False,indent=2)+'\n')
+        artifacts['chart-policy.json'] = data['chart_policy']
+    for name, value in artifacts.items():
+        path.with_name(name).write_text(json.dumps(value, ensure_ascii=False, indent=2)+'\n')
+    reconstruction = data.get('timing_reconstruction', {})
+    if reconstruction.get('status') == 'failed':
+        print(f"Warning: timing reconstruction FAILED for {reconstruction['failed_notes']} note trajectories; rejected estimates are retained only for review.", file=sys.stderr)
+    exclusions, recognition = data['exclusion_diagnostics'], data['recognition_diagnostics']
     final_directory=Path(final_directory or path.parent)
     path.with_name('timing-ranges.json').write_text(json.dumps(data['timing_ranges'], ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     path.with_name('excluded-trajectories.json').write_text(json.dumps(exclusions, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

@@ -58,6 +58,13 @@ export function motionWarnings(data: RecordData, frames: RecordData[], regions: 
 export function continuity(data: RecordData, frames: RecordData[], regions: RecordData[]): RecordData {
   const warnings = [], occlusions = [], exits = [];
   if (!frames.length || !data.layout?.lanes?.length) return {format: FORMAT, warnings: [], known_occlusions: [], accounted_exits: [], counts: {}};
+  if (data.layout.lanes.length < 2 || ![data.analysis_width, data.analysis_height].every(v => Number.isFinite(v) && v > 0) ||
+    !Number.isFinite(data.layout.receptor_y) || !(laneSpacing(data) > 0)) {
+    return {format: FORMAT, known_occlusions: [], accounted_exits: [], counts: {visibility_geometry_unavailable: 1}, warnings: [{
+      reason: 'visibility_geometry_unavailable', check: 'note_visibility', lane: 0, observed_points: 0,
+      visible_start_seconds: data.start_seconds ?? frames[0].playback_seconds, visible_end_seconds: data.end_seconds ?? frames.at(-1).playback_seconds,
+      failure_detail: 'Positive game geometry and at least two measured lane centers are required.'}]};
+  }
   const times = frames.map(f => f.playback_seconds), height = data.analysis_height, layout = data.layout, spacing = laneSpacing(data), receptor = layout.receptor_y * height;
   const peers = new Map<number, RecordData>((data.scroll_motion?.samples ?? []).map(s => [s.time, s]));
   const processing = new Map<number, RecordData>((data.visual_channels?.processing?.notes ?? []).map(p => [p.note, p]));

@@ -12,4 +12,5 @@ def inputs(data):
 
 def continuity_diagnostics(data,frames):
     from piu_timeline.play.object_roles import filter_frames
-    return call('visibility.continuity',inputs(data),filter_frames(data,frames),note_occluders(data.get('layout',{})))
+    from piu_timeline.play.observations.records import positions
+    return call('visibility.continuity',inputs(data),filter_frames(data,[positions(f) for f in frames]),note_occluders(data.get('layout',{})))

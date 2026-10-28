@@ -10,8 +10,19 @@ import {parse, text} from './charts/ucs.ts';
 import {transcribe} from './charts/transcription.ts';
 import {draft} from './charts/draft.ts';
 import {parseData, stringifyData} from './json.ts';
+import {prepare, preview} from './pipeline/presentation.ts';
+import {timingRanges} from './ranges.ts';
+import {continuity} from './visibility.ts';
+import {interpret as effects} from './effects.ts';
+import {sustained as holdState} from './hold_state.ts';
 
 export function derive(stage: string, input): unknown {
+  if (stage === 'presentation') return prepare(input);
+  if (stage === 'hold-view') return preview(input);
+  if (stage === 'ranges') return timingRanges(input);
+  if (stage === 'visibility') return continuity(input.data, input.frames, input.occluders);
+  if (stage === 'effects') return effects(input);
+  if (stage === 'hold-state') return holdState(input);
   if (stage === 'beats') return reconstruct(input);
   if (stage === 'coordinates') return registered(input.tracks, input.timeline, input.height, input.spacing, input.receptor, input.bottom);
   if (stage === 'clocks') return fitMany(input.state, input.tracks, input.receptor, input.layout);
@@ -31,7 +42,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   const [stage, source, destination] = process.argv.slice(2);
   let pending: string | null = null;
   try {
-    if (!stage || !source || !destination || process.argv.length !== 5) throw new Error('Usage: derive <beats|coordinates|clocks|speed|ucs> INPUT.json OUTPUT.json');
+    if (!stage || !source || !destination || process.argv.length !== 5) throw new Error('Usage: derive STAGE INPUT.json OUTPUT.json');
     if (resolve(source) === resolve(destination) || !destination.endsWith('.json')) throw new Error('Output must be a separate JSON artifact');
     const input = parseData(readFileSync(source, 'utf8')), result = derive(stage, input);
     const encoded = stringifyData(result);

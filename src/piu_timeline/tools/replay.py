@@ -58,6 +58,9 @@ def current(path):
     if not visibility.is_file() or json.loads(visibility.read_text()).get('format') != VISIBILITY_FORMAT:
         return False
     data = json.loads(path.read_text())
+    from piu_timeline.derived import call
+    if not call('presentation.current', str(path.parent)):
+        return False
     from piu_timeline.play.skins.replay import configuration_current
     if not configuration_current(data,path.parent.parent.parent,int(path.parent.name.removeprefix('segment-'))):
         return False
@@ -96,6 +99,9 @@ def current(path):
             or contract.get('format') != ASSOCIATION_FORMAT):
         return False
     if data.get('media', {}).get('video_streams'):
+        from piu_timeline.play.observations.artifacts import current as native_stages_current
+        if not native_stages_current(path.parent, ('hold-geometry', 'processing', 'note-types', 'risk-proofs')) or not call('holdState.current', str(path.parent)):
+            return False
         from piu_timeline.play.channels import CHANNEL_FORMAT
         if (data.get('visual_channels', {}).get('format') != CHANNEL_FORMAT
                 or not all(path.with_name(name).is_file() for name in

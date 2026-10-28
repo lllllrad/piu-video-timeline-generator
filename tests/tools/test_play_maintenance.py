@@ -44,6 +44,9 @@ def play(root, source='source', number=1, stale=False):
     (directory/'beat-timing.json').write_text(json.dumps(data['beat_timing']))
     from piu_timeline.play.continuity import FORMAT
     (directory/'visibility-diagnostics.json').write_text(json.dumps({'format':FORMAT,'warnings':[]}))
+    from piu_timeline.derived import call
+    call('presentation.prepare', {'schema': 1, 'data': data, 'observations': {'frames': [], 'visibility_frames': [],
+         'occluders': [], 'native_body_risk_available': False, 'pre_hold_proofs': {}}}, str(directory))
     return path, data
 
 

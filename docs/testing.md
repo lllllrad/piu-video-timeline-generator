@@ -79,3 +79,12 @@ Separate geometry cases retain scaled noise, contradictory references and
 measurement uncertainty across JSON round trips. This validates consumption of
 native observations; it does not cover arbitrary skins, image acquisition,
 hold appearance or the complete four-channel evidence combination.
+
+Stage-boundary tests execute real consumer calculations over synthetic native
+records. They verify selective reuse, source-PTS and opaque-integer preservation,
+full four-channel retention, explicit damaged-cache and stale-proof failure,
+standalone replay without Python, and atomic output preservation on failure.
+Native integration tests forbid decoding or image remeasurement when only HUD
+associations change. Missing acquisition must fail before a measurement consumer
+can open the video. Bulk skin/detection details are excluded from counter and
+visibility consumer records.

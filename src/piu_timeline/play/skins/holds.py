@@ -19,7 +19,7 @@ def covered(lo, hi, boxes):
     return False
 
 
-def reconstruct_images(data, receptor_frames, native, diagnostics, *, references=None, cap_references=None):
+def reconstruct_images(data, receptor_frames, native, diagnostics, *, references=None, cap_references=None, include_state=True):
     from piu_timeline.play.skins.coverage import reference_rows, image_spans
     references=reference_rows(data)if references is None else references
     cap_references=reference_rows(data,cap_only=True)if cap_references is None else cap_references
@@ -150,10 +150,7 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                             'image_evidence': [{'playback_seconds': t, 'source_pts_seconds': pts, 'trace':'frames.jsonl',
                                                 **{k:image[k]for k in ('lane','x','y','role','template','bounds_pixels','region_errors')}}
                                                for t, pts, image in observations]})
-    geometry = HoldGeometry.from_analysis(data, 325)
-    times = [f['playback_seconds'] for f in receptor_frames]
-    contextual = contextual_hold_support(data, receptor_frames, geometry.receptor, geometry.spacing,
-                                        holds, require_hold_geometry=True)
-    for hold in holds:
-        hold['input'] = recognition_segments(receptor_frames, times, hold, contextual, recognition_window(data, hold, geometry))
+    if include_state:
+        from piu_timeline.play.holds.state import attach_state
+        holds = attach_state(data, receptor_frames, holds, require_hold_geometry=True)
     return holds

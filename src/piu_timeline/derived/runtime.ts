@@ -33,13 +33,16 @@ import * as labels from './labels.ts';
 import * as holdProjection from './hold_projection.ts';
 import * as holdPresentation from './hold_presentation.ts';
 import * as effects from './effects.ts';
+import * as presentation from './pipeline/presentation.ts';
+import * as stageInputs from './pipeline/inputs.ts';
+import * as holdState from './hold_state.ts';
 import {parseData, stringifyData} from './json.ts';
 
 const operations = {
   coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription,
   registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft,
-  candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects,
-  beats: {fitGrid, reconstruct},
+  candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
+  holdState, beats: {fitGrid, reconstruct},
 };
 const chunk = Buffer.alloc(65536);
 const decoder = new StringDecoder('utf8');
