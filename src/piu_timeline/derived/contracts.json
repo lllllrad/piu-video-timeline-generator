@@ -42,7 +42,8 @@
   },
   "recovery": {
     "schema": 1,
-    "revision": 5,
+    "revision": 6,
+    "final_validation": "candidate_and_reference_validation_with_independent_source_timing",
     "unplaced_head_timing": "retain_validated_continuous_native_interval",
     "method": "native_coordinates_with_frozen_beat_references",
     "rejected_beat_references": "unique_source_clock_rows_outside_tested_group",

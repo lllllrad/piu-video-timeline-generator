@@ -5,7 +5,7 @@ import {parse, grid, constantTempo} from '../charts/ucs.ts';
 import {prepare as coordinateSupport} from './coordinates.ts';
 import {prepare as chordSupport} from './chords.ts';
 import {fitPhase} from './phase.ts';
-import {recover,validateReferences} from './recovery.ts';
+import {recover,validateRecovery} from './recovery.ts';
 import {validate, spacingSupportedNotes} from './validation.ts';
 import type {Note, RecordData} from '../types.ts';
 import {validateBeatInput} from '../validate.ts';
@@ -118,7 +118,7 @@ export function reconstruct(input: BeatInput): RecordData {
   result.warnings.push(...finalWarnings);
   result.coordinate_checks = [...initialChecks.map(c => ({...c, stage: 'reference_validation'})), ...finalChecks.map(c => ({...c, stage: 'recovery_validation'}))];
   result.native_chords = [...new Map([...initialChords, ...finalChords].map(p => [p.peer_notes.join(','), p])).values()];
-  result.warnings.push(...validateReferences(notes,recovered));
+  result.warnings.push(...validateRecovery(notes,recovered));
   result.native_coordinate_recovery = entries<RecordData>(recovered).map(([i, p]) => ({note: i, ...p}));
   const restored = entries<RecordData>(recovered).filter(([i]) => notes[i].status === 'estimated').map(([i]) => i);
   const intervals = entries<RecordData>(recovered).filter(([,p]) => p.native_interval_status === 'restored').map(([i]) => i);

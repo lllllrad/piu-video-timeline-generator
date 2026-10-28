@@ -127,6 +127,7 @@ export function recover(notes: Note[], support: CoordinateSupport | null, sectio
       if (RECOVERABLE.includes(n.reason) && r.native_target_range &&
         ['ambiguous_native_coordinate_rows', 'native_coordinates_outside_natural_rows', 'native_coordinate_interval_crosses_tempo_boundary'].includes(r.reason)) {
         const [lo,hi] = r.native_target_range;
+        r.source_timing=sourceTiming(n);
         Object.assign(n, {reason:'beat_timing_reconstruction_failed', video_target_range:[lo-alignmentError,hi+alignmentError],
           prediction_uncertainty_seconds:(hi-lo)/2+alignmentError,
           timing_reconstruction:{status:'restored',method:'native_coordinate_interval',previous_motion_attempt:n.timing_reconstruction},
@@ -136,7 +137,8 @@ export function recover(notes: Note[], support: CoordinateSupport | null, sectio
       continue;
     }
     const n = notes[i], target = r.target_seconds, [lo, hi] = r.native_target_range;
-    const rejected = RECOVERABLE.includes(n.reason) ? {} : {rejected_beat_assignment: n.beat_reconstruction, rejected_clock_target_range: n.video_target_range};
+    const rejected = RECOVERABLE.includes(n.reason) ? {} : {rejected_beat_assignment: n.beat_reconstruction};
+    r.source_timing=sourceTiming(n);
     Object.assign(n, {status: 'estimated', reason: null, target_seconds: target, fit_method: 'native_beat_coordinate_interpolation',
       prediction_uncertainty_seconds: Math.max(target - lo, hi - target) + alignmentError, video_target_range: [lo - alignmentError, hi + alignmentError],
       beat_reconstruction: {status: 'restored', method: F.method, section: r.section, split: r.split, row: r.row},
@@ -145,29 +147,41 @@ export function recover(notes: Note[], support: CoordinateSupport | null, sectio
   return results;
 }
 
-export function validateReferences(notes: Note[], results: RecordData): RecordData[] {
+/** Preserve the input attempt separately from any coordinate-derived interval. */
+function sourceTiming(note: Note): RecordData {
+  const state=note.timing_reconstruction,range=note.video_target_range;
+  const independent=state?.status==='restored'&&![F.method,'native_coordinate_interval'].includes(state.method)&&
+    note.fit_method!=='native_beat_coordinate_interpolation'&&Array.isArray(range)&&range.length===2&&
+    range.every(Number.isFinite)&&range[0]<range[1];
+  return {independent,range:Array.isArray(range)?[...range]:null,fit_method:note.fit_method??null,reconstruction:state?{...state}:null};
+}
+
+export function validateRecovery(notes: Note[], results: RecordData): RecordData[] {
   const warnings=[];
-  for (const [index,proof] of entries<RecordData>(results)) {
-    const n=notes[index];
-    if (n.status!=='estimated' && proof.native_interval_status!=='restored') continue;
+  // Recovery freezes source-row references before making any proposal.
+  for(const [index,proof]of entries<RecordData>(results)){
+    if(proof.status!=='restored'&&proof.native_interval_status!=='restored')continue;
+    const n=notes[index],ownFailure=proof.status==='restored'&&n.status!=='estimated';
     const references=proof.models.flatMap(m=>m.model.references);
-    if (!references.some(r=>notes[r.note].status!=='estimated'||Math.abs(notes[r.note].target_seconds-r.target_seconds)>1e-8)) continue;
-    const reason='native_coordinate_reference_failed_validation';
-    const original=n.timing_reconstruction?.previous_motion_attempt, range=n.timing_reconstruction?.rejected_clock_target_range;
-    const retained=original?.status==='restored'&&Array.isArray(range)&&range.length===2&&range.every(Number.isFinite)&&range[0]<range[1];
-    Object.assign(n,{status:'excluded',reason:retained?'beat_timing_reconstruction_failed':reason,target_seconds:null,
+    const referenceFailure=references.some(r=>notes[r.note].status!=='estimated'||Math.abs(notes[r.note].target_seconds-r.target_seconds)>1e-8);
+    if(!ownFailure&&!referenceFailure)continue;
+    const reason=ownFailure?'native_coordinate_failed_pair_validation':'native_coordinate_reference_failed_validation';
+    const failureDetail=ownFailure?n.reason:null;
+    const original=proof.source_timing?.independent?proof.source_timing:null;
+    Object.assign(n,{status:'excluded',reason:original?'beat_timing_reconstruction_failed':reason,target_seconds:null,
       beat_reconstruction:{...n.beat_reconstruction,status:'failed',reason}});
-    if (retained) {
-      n.timing_reconstruction={...original,rejected_coordinate_reconstruction:{status:'failed',reason,method:n.timing_reconstruction.method}};
-      n.video_target_range=[...range];n.prediction_uncertainty_seconds=(range[1]-range[0])/2;
+    if(original){
+      n.timing_reconstruction={...original.reconstruction,rejected_coordinate_reconstruction:{status:'failed',reason,method:F.method}};
+      n.video_target_range=[...original.range];n.prediction_uncertainty_seconds=(original.range[1]-original.range[0])/2;
+      if(original.fit_method)n.fit_method=original.fit_method;else delete n.fit_method;
       proof.native_interval_status='original_clock_retained';
-    } else {
+    }else{
       n.timing_reconstruction={...n.timing_reconstruction,status:'failed',reason};
-      if (proof.native_interval_status==='restored') proof.native_interval_status='failed';
+      proof.native_interval_status='failed';
     }
-    Object.assign(proof,{status:'failed',reason});
+    Object.assign(proof,{status:'failed',reason,...(failureDetail?{failure_detail:failureDetail}:{})});
     warnings.push({note:index,lane:n.lane,reason,check:'timing_reconstruction',visible_start_seconds:n.points[0][0],
-      visible_end_seconds:n.points.at(-1)[0],observed_points:n.points.length});
+      visible_end_seconds:n.points.at(-1)[0],observed_points:n.points.length,...(failureDetail?{failure_detail:failureDetail}:{})});
   }
   return warnings;
 }

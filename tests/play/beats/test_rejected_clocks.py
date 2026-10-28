@@ -60,7 +60,8 @@ class RejectedClockRecoveryTest(unittest.TestCase):
         self.assertLess(note['target_seconds'],original['notes'][4]['video_target_range'][0])
         self.assertEqual(note['points'],original['notes'][4]['points'])
         self.assertEqual(note['motion_clock'],original['notes'][4]['motion_clock'])
-        self.assertEqual(note['timing_reconstruction']['rejected_clock_target_range'],[1.519,1.522])
+        self.assertEqual(proof['source_timing']['range'],[1.519,1.522])
+        self.assertTrue(proof['source_timing']['independent'])
         self.assertEqual(note['timing_reconstruction']['rejected_beat_assignment'],original['notes'][4]['beat_reconstruction'])
         self.assertEqual(proof['excluded_reference_group'],[3,4,5])
         for model in proof['models']:

@@ -127,3 +127,21 @@ export function adjacentImageHolds(scale=1,fps=50){
  }
  return s;
 }
+
+/** Calibrated references and one separately timed/unplaced native head. */
+export function coordinateRecoveryScene(spacing=40,target=1.061,fine=true,nativeClock=false,fps=60){
+ const events:[number,number][]=Array.from({length:7},(_,i)=>[.5+i/8,i%5]);
+ if(fine)events[6][0]+=1/128;events.push([target,0]);
+ const data=nativeScene(events,spacing,fps,5,{end:1.5});
+ for(let i=0;i<7;i++)Object.assign(data.notes[i],{beat_reconstruction:{status:'restored',group_index:0},
+  video_target_range:[events[i][0]-.001,events[i][0]+.001]});
+ Object.assign(data.notes[7],{status:'excluded',reason:'shared_timing_reconstruction_failed',target_seconds:null,
+  timing_reconstruction:{status:'failed',unaccepted_previous_estimate:{target_seconds:target}}});
+ const groups=[{notes:[0,1,2,3,4,5,6],unconstrained_row_domains:events.slice(0,7).map(([t])=>[Math.round(t*128),Math.round(t*128)])}];
+ if(nativeClock){
+  Object.assign(data.notes[7],{reason:'beat_grid_conflicts_with_spatial_spacing',video_target_range:[target-.01,target+.01],
+   fit_method:'shared_scroll_clock',timing_reconstruction:{status:'restored',method:'shared_scroll_clock'},beat_reconstruction:{status:'failed',group_index:1}});
+  groups.push({notes:[7],unconstrained_row_domains:[[0,0]]});
+ }
+ return {data,groups};
+}

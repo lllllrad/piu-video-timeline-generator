@@ -38,7 +38,8 @@ class UnsupportedRecoveryTest(unittest.TestCase):
                     refs=results[4]['models'][0]['model']['references']
                     self.assertNotIn(4,[r['note']for r in refs])
                     self.assertGreaterEqual(len(refs),5)
-                    self.assertEqual(notes[4]['timing_reconstruction']['rejected_clock_target_range'],[1.53,1.55])
+                    self.assertEqual(results[4]['source_timing']['range'],[1.53,1.55])
+                    self.assertFalse(results[4]['source_timing']['independent'])
 
     def test_unsupported_and_ambiguous_clock_rows_keep_distinct_failure_reasons(self):
         targets=[1+i*.125+.02 for i in range(12)];errors=[.03]*12

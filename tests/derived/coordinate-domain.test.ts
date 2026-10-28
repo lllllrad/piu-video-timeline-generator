@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {coordinateReferenceScene,nativeScene} from './fixtures.ts';
+import {coordinateReferenceScene,nativeScene,coordinateRecoveryScene} from './fixtures.ts';
 import {fit,prepare} from '../../src/piu_timeline/derived/beats/coordinates.ts';
 import {clip,targetRange} from '../../src/piu_timeline/derived/beats/line_bounds.ts';
-import {chooseRow,recover,validateReferences} from '../../src/piu_timeline/derived/beats/recovery.ts';
+import {chooseRow,recover,validateRecovery} from '../../src/piu_timeline/derived/beats/recovery.ts';
 import {attributedHeads} from '../../src/piu_timeline/derived/beats/spacing.ts';
 import {inputNotes} from '../../src/piu_timeline/derived/holds/input.ts';
 
@@ -24,19 +24,7 @@ for(const spacing of [20,40,80])test(`all reference bands stay enforced at spaci
 });
 
 function unplacedHead(spacing=40,target=1.061,fine=true,nativeClock=false){
- const events:[number,number][]=Array.from({length:7},(_,i)=>[.5+i/8,i%5]);
- if(fine)events[6][0]+=1/128;events.push([target,0]);
- const data=nativeScene(events,spacing,60,5,{end:1.5});
- for(let i=0;i<7;i++)Object.assign(data.notes[i],{beat_reconstruction:{status:'restored',group_index:0},
-  video_target_range:[events[i][0]-.001,events[i][0]+.001]});
- Object.assign(data.notes[7],{status:'excluded',reason:'shared_timing_reconstruction_failed',target_seconds:null,
-  timing_reconstruction:{status:'failed',unaccepted_previous_estimate:{target_seconds:target}}});
- const groups=[{notes:[0,1,2,3,4,5,6],unconstrained_row_domains:events.slice(0,7).map(([t])=>[Math.round(t*128),Math.round(t*128)])}];
- if(nativeClock){
-  Object.assign(data.notes[7],{reason:'beat_grid_conflicts_with_spatial_spacing',video_target_range:[target-.01,target+.01],
-   timing_reconstruction:{status:'restored',method:'shared_scroll_clock'},beat_reconstruction:{status:'failed',group_index:1}});
-  groups.push({notes:[7],unconstrained_row_domains:[[0,0]]});
- }
+ const {data,groups}=coordinateRecoveryScene(spacing,target,fine,nativeClock);
  const result=recover(data.notes,prepare(data,spacing,true),[[0,3,120]],0,0,0,groups,[0,0],spacing,data.scroll_motion);
  return {data,result};
 }
@@ -46,7 +34,7 @@ for(const spacing of [20,40,80])test(`continuous native timing survives ambiguou
  assert.equal(result[7].native_interval_status,'restored');assert.equal(head.status,'excluded');assert.equal(head.target_seconds,null);
  assert.equal(head.timing_reconstruction.status,'restored');assert.equal(head.beat_reconstruction.status,'failed');
  assert.ok(head.video_target_range[0]<1.061&&head.video_target_range[1]>1.061);
- assert.deepEqual(validateReferences(data.notes,result),[]);
+ assert.deepEqual(validateRecovery(data.notes,result),[]);
  const native=inputNotes(data.notes)[7];assert.equal(native.status,'estimated');
  assert.equal(native.beat_reconstruction.status,'failed');assert.deepEqual(native.points,head.points);
 });
@@ -54,7 +42,7 @@ test('invalid final references revoke a continuous native interval',()=>{
  for(const mode of ['excluded','changed-time']){
   const {data,result}=unplacedHead();
   if(mode==='excluded')data.notes[0].status='excluded';else data.notes[0].target_seconds+=.001;
-  const warnings=validateReferences(data.notes,result);
+  const warnings=validateRecovery(data.notes,result);
   assert.equal(warnings[0].reason,'native_coordinate_reference_failed_validation');
   assert.equal(result[7].native_interval_status,'failed');assert.equal(data.notes[7].timing_reconstruction.status,'failed');
   assert.equal(inputNotes(data.notes)[7].status,'excluded');
@@ -68,14 +56,14 @@ test('incompatible native models do not supply a usable continuous interval',()=
 test('invalid references also revoke a previously unique coordinate-derived beat target',()=>{
  const {data,result}=unplacedHead(40,1.0625,false);
  assert.equal(result[7].status,'restored');assert.equal(data.notes[7].timing_reconstruction.status,'restored');
- data.notes[0].target_seconds+=.001;validateReferences(data.notes,result);
+ data.notes[0].target_seconds+=.001;validateRecovery(data.notes,result);
  assert.equal(result[7].status,'failed');assert.equal(data.notes[7].timing_reconstruction.status,'failed');
  assert.equal(inputNotes(data.notes)[7].status,'excluded');
 });
 test('a rejected coordinate model cannot erase a valid independent native clock',()=>{
  const {data,result}=unplacedHead(40,1.0625,false,true);
  assert.equal(result[7].status,'restored');
- data.notes[0].status='excluded';validateReferences(data.notes,result);
+ data.notes[0].status='excluded';validateRecovery(data.notes,result);
  const head=data.notes[7];
  assert.equal(result[7].status,'failed');assert.equal(result[7].native_interval_status,'original_clock_retained');
  assert.equal(head.beat_reconstruction.status,'failed');assert.equal(head.timing_reconstruction.method,'shared_scroll_clock');

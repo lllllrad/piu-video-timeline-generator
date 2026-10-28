@@ -72,9 +72,17 @@ changed/finally excluded reference rows cannot supply it. Native timing recovery
 and musical placement have separate statuses and warnings; an unresolved musical
 row stays excluded from UCS even when independent input evidence uses its native
 interval.
-If coordinate-reference validation fails, a separately restored original motion
-clock can retain its own bounded interval. The rejected coordinate model cannot
-erase that independent observation or supply its own timing in its place.
+If a coordinate candidate fails its final native pair/concurrency check or a
+reference fails validation, discard that candidate's timing interval. A separately
+restored source motion clock or frame-bound crossing can retain its own interval,
+stored in `source_timing` on the recovery proof before promotion. Its
+`independent` flag requires a restored source clock/range, rather than a previous
+coordinate-derived interval. Failed source attempts remain available for review.
+Restore its original range and fit method together. The musical row remains
+failed, and the warning records the rejected coordinate derivation. Without an
+independent source interval, mark native timing failed so image geometry and
+association consumers cannot use the rejected range. Source observations remain
+available for review.
 
 Replay a prepared input without Python, OCR or video decoding:
 
