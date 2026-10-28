@@ -63,7 +63,9 @@
   },
   "spacing": {
     "schema": 1,
+    "revision": 2,
     "pair_selection": "native_lane_relative_neighbors",
+    "independent_validation": "each_head_against_reference_coordinate_bounds",
     "minimum_gap_spacing": 0.07500000000000001
   },
   "clock_conversion": {

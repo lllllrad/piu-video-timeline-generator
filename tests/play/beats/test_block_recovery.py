@@ -52,8 +52,8 @@ class NativeBlockRecoveryTest(unittest.TestCase):
 
     def test_fallback_is_not_promoted_if_pair_validation_refutes_a_reference(self):
         data,groups=sparse()
-        # A 1.2-pixel row mismatch fits the individual head's 1.5-pixel
-        # positional bound but exceeds the existing one-pixel pair bound.
+        # Registration permits 1.5 pixels of native position scatter, but an
+        # independent beat reference retains its stricter one-pixel bound.
         data['notes'][4]['points']=[(t,y+1.2)for t,y in data['notes'][4]['points']]
         data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'][4]['offset_pixels']+=1.2
         before=deepcopy(data)

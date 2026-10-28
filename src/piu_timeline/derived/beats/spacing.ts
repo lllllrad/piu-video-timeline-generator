@@ -10,12 +10,12 @@ export function attributedHeads(a: number, b: number, notes: Note[], models: Rec
   for (const model of models) {
     if (!model.peer_offsets_pixels) return [[a, b], []];
     const errors = [a, b].map((i, j) => model.peer_offsets_pixels[j] - (model.offset_at_origin_pixels + model.velocity_pixels_per_second * (notes[i].target_seconds - model.origin_seconds)));
-    const tolerance = C.maximum_native_error_spacing * model.lane_spacing_pixels + model.maximum_reference_error_pixels;
+    const tolerance = C.maximum_reference_error_spacing * model.lane_spacing_pixels + model.maximum_reference_error_pixels;
     const bad = [a, b].filter((i, j) => Math.abs(errors[j]) > tolerance + 1e-6);
     bad.forEach(i => rejected.add(i));
     proof.push({chunk: model.chunk, peer_position_errors_pixels: errors, maximum_position_error_pixels: tolerance, contradicting_notes: bad});
   }
-  return [rejected.size ? [a, b].filter(i => rejected.has(i)) : [a, b], proof];
+  return [[a, b].filter(i => rejected.has(i)), proof];
 }
 
 export function registeredGap(first: Note, second: Note, samples: number[][], offsets: RecordData, frames: RecordData, a: number, b: number): number | null {
@@ -94,8 +94,11 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
     const conversion = motion !== null && predicted !== null && !models.length ? clockConversion(first, second) : null;
     const comparison = tolerance + (conversion?.position_error_pixels ?? 0);
     if (conversion) diagnostics?.push({peer_notes: [a, b], observed_gap_pixels: gap, reconstructed_gap_pixels: predicted, clock_conversion: conversion});
-    if (predicted !== null && Math.abs(predicted - comparisonGap) <= comparison + 1e-6) continue;
     const [rejected, attribution] = attributedHeads(a, b, notes, models);
+    // Independent references constrain each coordinate. A difference of two
+    // bounded measurements cannot reuse a single-coordinate error budget, and
+    // a correct difference alone cannot validate two equally shifted heads.
+    if (models.length ? !rejected.length : predicted !== null && Math.abs(predicted - comparisonGap) <= comparison + 1e-6) continue;
     for (const i of rejected) failed.push({note: i, lane: notes[i].lane, reason: predicted !== null ? 'shared_spacing_reconstruction_conflict' : 'shared_spacing_model_unavailable',
       check: 'timing_reconstruction', visible_start_seconds: samples[0][0], visible_end_seconds: samples.at(-1)[0], observed_points: samples.length,
       peer_notes: [a, b], observed_gap_pixels: gap, reconstructed_gap_pixels: predicted,

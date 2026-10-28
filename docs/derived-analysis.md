@@ -34,6 +34,14 @@ fetch timing files or prepare audio alignment. Its output is a patch containing
 It does not echo source media identity. In particular, nanosecond file timestamps
 must not make a floating-point round trip through numerical calculations.
 
+When independent neighboring beat rows establish a native coordinate model,
+spacing validation checks each observed head against that model's position and
+existing native/reference error bounds. Each contradicting head is attributed
+separately. Opposite permitted endpoint errors can change their relative gap;
+the gap cannot reuse a single-coordinate error budget. Conversely, equal shifts
+of both heads preserve their gap but still contradict the reference coordinates.
+Without an independent model, the registered-motion gap check remains required.
+
 Replay a prepared input without Python, OCR or video decoding:
 
 ```sh

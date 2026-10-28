@@ -28,9 +28,18 @@ class SpacingAttributionTest(unittest.TestCase):
         def model(offsets,chunk=0):
             return {'chunk':chunk,'lane_spacing_pixels':40.,'peer_offsets_pixels':offsets,'maximum_reference_error_pixels':0,
                     'offset_at_origin_pixels':0,'origin_seconds':0,'velocity_pixels_per_second':10}
-        for models in ([],[model([.75,9.25])],[model([0,13]),model([3,10],1)],[{}]):
+        for models in ([],[model([0,13]),model([3,10],1)],[{}]):
             rejected,_=attributed_heads(0,1,notes,models)
             self.assertEqual(rejected,(0,1))
+
+    def test_two_individually_bounded_coordinates_have_no_attributed_conflict(self):
+        notes=[{'target_seconds':0},{'target_seconds':1}]
+        model={'chunk':0,'lane_spacing_pixels':40.,'peer_offsets_pixels':[.75,9.25],
+               'maximum_reference_error_pixels':0,'offset_at_origin_pixels':0,'origin_seconds':0,
+               'velocity_pixels_per_second':10}
+        rejected,proof=attributed_heads(0,1,notes,[model])
+        self.assertEqual(rejected,())
+        self.assertEqual(proof[0]['maximum_position_error_pixels'],1.)
 
     def test_without_independent_coordinate_support_pair_conflicts_still_reject_both(self):
         data=fixture();data['notes'][4]['target_seconds']+=.06
