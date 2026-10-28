@@ -348,7 +348,9 @@ generation. Generic timing exclusions do not suppress these checks.
 Python adapters prepare acquisition objects for TypeScript `derived/tracks.ts`,
 `derived/registration.ts` and `derived/clocks.ts`, which rebuild displacement
 and subframe clocks from registered trajectory identities. `derived/beats/`
-checks relative geometry and uses prepared official UCS timing and verified
+checks every co-observed neighboring head, including chords and close staggers,
+against independent coordinate references; a small relative gap cannot exempt a
+shared absolute timing error. It uses prepared official UCS timing and verified
 alignment to test natural subdivisions. Missing references, failed shared
 support and ambiguous beat rows remain explicit review states. Native video,
 frame traces and pixel caches are reusable across these derived-rule changes.

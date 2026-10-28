@@ -3,7 +3,7 @@ import {equal, median} from '../math.ts';
 import {predictions} from './coordinates.ts';
 import {clip} from './line_bounds.ts';
 import type {CoordinateSupport, Note, RecordData} from '../types.ts';
-const C = contracts.coordinates, S = contracts.spacing, K = contracts.clock_conversion;
+const C = contracts.coordinates, K = contracts.clock_conversion;
 
 export function attributedHeads(a: number, b: number, notes: Note[], models: RecordData[]): [number[], RecordData[]] {
   if (!models.length) return [[a, b], []];
@@ -79,7 +79,7 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
         if (!neighbors.some(p => equal(p, pair))) neighbors.push(pair);
       }
     }
-    for (const [[ya, a], [yb, b]] of neighbors) if (yb - ya > S.minimum_gap_spacing * spacing) {
+    for (const [[ya, a], [yb, b]] of neighbors) {
       const key = `${a},${b}`;
       if (!pairs.has(key)) pairs.set(key, []);
       pairs.get(key).push([time, yb - ya]);
@@ -96,6 +96,9 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
     let predicted = motion === null ? (ca && cb && Object.keys(ca).length && Object.keys(cb).length && equal(ca, cb) ? (second.target_seconds - first.target_seconds) * ca.velocity : null) :
       (ca && cb ? registeredGap(first, second, samples, offsets, frames, a, b) : null);
     const models = predictions(a, b, notes, [samples[0][0], samples.at(-1)[0]], support);
+    // Without independent reference coordinates, a small raster gap alone
+    // cannot establish separation. Absolute reference checks still apply.
+    if (!models.length && gap <= contracts.spacing.minimum_unregistered_gap_spacing * spacing) continue;
     let comparisonGap = gap;
     if (models.length) {
       const measured = m => m.peer_offsets_pixels[1] - m.peer_offsets_pixels[0];
