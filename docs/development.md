@@ -2,11 +2,11 @@
 
 ## Setup
 
-The project requires Python 3.12, uv, FFmpeg, Node.js 24 or newer and `just`.
+The project requires Python 3.12, uv, FFmpeg, Node.js 24 or newer, pnpm and `just`.
 
 ```sh
 mise install
-pnpm install --frozen-lockfile
+mise exec -- pnpm install --frozen-lockfile
 mise exec -- just check
 mise exec -- just auto SOURCE
 ```
@@ -21,6 +21,10 @@ declarations trigger an update. Failed installations are retried on the next run
 tools are already on PATH, `just` can be used directly.
 
 No shell activation is required; recipes use `scripts/run.sh` to apply project-local cache paths and invoke `.venv` explicitly.
+
+Use mise shell activation or `mise exec -- COMMAND` to supply the configured tools.
+An editor or agent launched through `mise exec` passes that environment to its
+child commands, so `pnpm`, `just` and Git hooks can run directly in that session.
 
 Codex-only environment generation and optional mise installation are documented in [codex-environment.md](codex-environment.md). They are not part of normal project setup.
 
@@ -231,11 +235,6 @@ contents and runs the same tests; use `check --full --rules-only` for a full
 rule scan without tests. QG automatically installs its pre-commit hook on first
 use, preserving an existing custom hook. The hook checks staged files and runs
 the shared tests from `.qg.yaml` against the working tree.
-
-Without mise shell activation, run commits with `mise exec -- git commit` too.
-The lockfile rule invokes pnpm in an isolated directory; its inherited PATH must
-contain the provisioned binaries. A mise shim there would instead try to load
-the temporary copy of `mise.toml`, which is intentionally untrusted.
 
 Quality Gate and its JS/TS rules are project-local pnpm development dependencies, pinned in
 `package.json` with its transitive dependencies locked in `pnpm-lock.yaml`.

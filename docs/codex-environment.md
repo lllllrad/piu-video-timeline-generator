@@ -1,6 +1,23 @@
 # Codex development environment
 
-This document applies only when the repository is opened as a trusted project in Codex. It is not required for normal use or development.
+This document covers launching Codex with the project tools and optional
+checkout-local configuration. Normal project setup is described in
+[development](development.md).
+
+From the repository root, install the tools and dependencies, then launch Codex
+inside the mise environment:
+
+```sh
+mise install
+mise exec -- pnpm install --frozen-lockfile
+mise exec -- codex
+```
+
+The session's child commands inherit the tool environment. Run `just check`,
+`pnpm` and Git commits directly within that session. Restart Codex after changing
+the tool configuration so subsequent commands inherit the updated environment.
+
+## Optional checkout-local setup
 
 Run the Codex-only setup explicitly through `sh`:
 
@@ -27,11 +44,7 @@ just check
 just auto '/absolute/path/to/video.mp4'
 ```
 
-An already-open Codex session may still have the previous environment. Reload the project after setup, or use this fallback in the stale session:
-
-```sh
-sh scripts/run.sh just check
-```
+Restart Codex after generating or changing its checkout-local configuration.
 
 ## Generated configuration
 
