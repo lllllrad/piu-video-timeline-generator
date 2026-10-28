@@ -2,7 +2,6 @@
 import argparse
 from collections import Counter
 import fcntl
-from fractions import Fraction
 from hashlib import sha256
 import json
 import math
@@ -99,149 +98,18 @@ def remember_alias(repository, title, code):
 
 
 def canonical_chart(data):
-    """Keep display labels; accept basic-mode identity only with summary proof."""
-    chart = data.get('chart') or ''
-    if re.fullmatch(r'[SD]\d{1,2}', chart):
-        return chart
-    identity = data.get('chart_identity') or {}
-    frames = identity.get('source_frames', [])
-    pts = {frame.get('source_pts_seconds') for frame in frames
-           if frame.get('file') and isinstance(frame.get('source_pts_seconds'), (int, float))
-           and math.isfinite(frame['source_pts_seconds'])}
-    if (identity.get('status') == 'recognized' and identity.get('method') == 'matching_title_summary_badge'
-            and identity.get('display_chart') == chart and len(pts) >= 2
-            and re.fullmatch(r'VERY HARD \d{1,2}', chart)
-            and identity.get('chart') == 'S'+chart.removeprefix('VERY HARD ')):
-        return identity['chart']
-    return None
+    from piu_timeline.derived import call
+    return call('chartDraft.canonicalChart',{'chart':data.get('chart'),'chart_identity':data.get('chart_identity')})
 
 
-def draft(template, data, alignment, extend_constant_tempo=False):
-    """Place observed heads/holds, keeping collisions and censored ends unresolved."""
+def draft(template,data,alignment,extend_constant_tempo=False):
+    from dataclasses import asdict
+    from piu_timeline.derived import call
     from piu_timeline.play.holds.analysis import chart_projection
-    view = chart_projection(data)
-    chart = canonical_chart(view)
-    if chart is None:
-        raise ValueError('A recognized Single/Double chart and level are required')
-    lanes = 5 if chart.startswith('S') else 10
-    if len(view['layout']['lanes']) != lanes:
-        raise ValueError('Recognized chart mode conflicts with analyzed lane geometry')
-    from piu_timeline.charts.phase import transcription_alignment
-    alignment,phase_evidence=transcription_alignment(template,data,alignment)
-    document = template.expanded(lanes)
-    grid = list(document.grid())
-    extension = None
-    if extend_constant_tempo:
-        endpoints = [note['target_seconds']-alignment['song_start_seconds'] for note in view['notes']
-                     if note['status'] == 'estimated' and math.isfinite(note['target_seconds'])
-                     and note.get('prediction_uncertainty_seconds', .02) <= .08]
-        endpoints.extend(sum(hold['end_range'])/2-alignment['song_start_seconds']
-                         for hold in view.get('hold_analysis', {}).get('holds', [])
-                         if hold['end_range'] and not hold['end_censored'])
-        latest = min(max(endpoints, default=0)+.05, data['end_seconds']-alignment['song_start_seconds']+.1)
-        settings = {}
-        for section in document.sections:
-            settings.update(section.directives)
-        step = 60/(Fraction(settings['BPM'])*int(settings['Split']))
-        original_end = grid[-1][2]
-        additional = max(0, math.ceil((Fraction(str(latest))-original_end)/step))
-        if additional:
-            if additional*step > 900:
-                raise ValueError('Timing extension exceeds supported song duration')
-            document.sections[-1].rows.extend(['.'*lanes]*additional)
-            grid = list(document.grid())
-            extension = {'basis': 'constant_tempo_catalogue_and_template', 'additional_rows': additional,
-                         'original_last_row_seconds': float(original_end), 'extended_last_row_seconds': float(grid[-1][2]),
-                         'review_required': True}
-    if any(b[2]<=a[2] for a,b in zip(grid,grid[1:])):
-        raise ValueError('Overlapping UCS timing sections need manual placement')
-    origin = alignment['song_start_seconds']
-    alignment_error=alignment['uncertainty_seconds']
-    if not math.isfinite(origin) or not math.isfinite(alignment_error) or not 0<=alignment_error<=.1:
-        raise ValueError('Song alignment must be finite')
-    holds = {hold['display_note']: hold for hold in view.get('hold_analysis', {}).get('holds', [])}
-    pending, observed, endpoints = [], [], {}
-    def interval(target, uncertainty):
-        if not math.isfinite(target) or not math.isfinite(uncertainty) or not 0 <= uncertainty <= .08:
-            raise ValueError('Unbounded visible-note timing')
-        error=uncertainty+alignment_error
-        return [target-origin-error,target-origin+error]
-    for ni, note in enumerate(view['notes']):
-        if note['status'] != 'estimated':
-            continue
-        try:
-            lane = note['lane']
-            if not isinstance(lane, int) or not 0 <= lane < lanes:
-                raise ValueError('Invalid observed lane')
-            hold = holds.get(ni)
-            kind = note.get('type_status')
-            if kind == 'conflict':
-                raise ValueError('Contradictory tap and hold observations')
-            if not hold and kind != 'tap':
-                raise ValueError('Observed hold cap has no resolved hold geometry' if kind == 'hold'
-                                 else 'Note type is unverified')
-            uncertainty=note.get('prediction_uncertainty_seconds', .02)
-            head=interval(note['target_seconds'],uncertainty)
-            tail=None
-            if hold:
-                if hold['start_censored'] or hold['end_censored'] or not hold['end_range']:
-                    raise ValueError('Hold endpoint is censored')
-                end_range = hold['end_range']
-                tail=interval(sum(end_range)/2,(end_range[1]-end_range[0])/2)
-            endpoints[ni,'head']=head
-            if tail is not None:endpoints[ni,'tail']=tail
-            observed.append({'note':ni,'lane':lane,'kind':'hold' if hold else 'tap',
-                             'observed_target_range':[note['target_seconds']-uncertainty,note['target_seconds']+uncertainty],
-                             **({'observed_end_range':hold['end_range']} if hold else {})})
-        except ValueError as error:
-            pending.append({'note': ni, 'reason': str(error)})
-    from piu_timeline.charts.hold_simplification import simplify
-    observed,endpoints,simplifications=simplify(document,observed,endpoints,view['notes'],origin,
-                                               view.get('hold_analysis',{}).get('receptor_runs',()))
-    from piu_timeline.charts.transcription import transcribe
-    document,grid,rows,failures,transcription=transcribe(document,endpoints)
-    proposals=[]
-    for observation in observed:
-        ni=observation['note'];edges=['head','tail'] if observation['kind']=='hold' else ['head']
-        rejected={edge:failures[ni,edge] for edge in edges if (ni,edge) not in rows}
-        if rejected:
-            pending.append({'note':ni,'reason':'Measure timing reconstruction failed','endpoints':rejected})
-            continue
-        start=rows[ni,'head'];end=rows.get((ni,'tail'),start)
-        if observation['kind']=='hold' and end<=start:
-            pending.append({'note':ni,'reason':'Hold endpoints share or reverse a timing row'})
-            continue
-        target=sum(observation['observed_target_range'])/2-origin
-        proposals.append({**observation,'start':start,'end':end,'residual_seconds':float(grid[start][2])-target})
-    occupied = {}
-    for pi, proposal in enumerate(proposals):
-        for row in range(proposal['start'], proposal['end']+1):
-            occupied.setdefault((row, proposal['lane']), []).append(pi)
-    conflicts = {pi for owners in occupied.values() if len(owners) > 1 for pi in owners}
-    placements = []
-    for pi, proposal in enumerate(proposals):
-        if pi in conflicts:
-            pending.append({'note': proposal['note'], 'reason': 'Conflicting observed notes occupy the same lane and timing row'})
-            continue
-        for row in range(proposal['start'], proposal['end']+1):
-            si, ri, _ = grid[row]
-            chars = list(document.sections[si].rows[ri])
-            chars[proposal['lane']] = ('X' if proposal['kind'] == 'tap' else
-                                       'M' if row == proposal['start'] else 'W' if row == proposal['end'] else 'H')
-            document.sections[si].rows[ri] = ''.join(chars)
-        si, ri, time = grid[proposal['start']]
-        ei, er, end_time = grid[proposal['end']]
-        placements.append({**proposal, 'section': si, 'row': ri, 'song_seconds': float(time),
-                           'end_section': ei, 'end_row': er, 'end_song_seconds': float(end_time)})
-    if not placements:
-        raise ValueError('No bounded notes can be placed on the official timing grid')
-    return document, {'placements': placements, 'unresolved': pending, 'timing_extension': extension,
-                      'transcription':transcription,'transcription_alignment':phase_evidence,
-                      'hold_simplifications':simplifications,
-                      'summary': {'placed_taps': sum(p['kind'] == 'tap' for p in placements),
-                                  'placed_holds': sum(p['kind'] == 'hold' for p in placements),
-                                  'unresolved_note_heads': len(pending),
-                                  'excluded_observations': dict(Counter(note.get('reason') for note in view['notes'] if note['status'] != 'estimated'))}}
+    view=chart_projection(data)
+    fields=('chart','chart_identity','layout','notes','hold_analysis','beat_timing','end_seconds')
+    doc,proof=call('chartDraft.draft',asdict(template),{key:view[key]for key in fields if key in view},alignment,extend_constant_tempo)
+    return ucs.document(doc),proof
 
 
 def register(data, output, code=None, repository=None, song_start=None, revision='phoenix', client=None, rebuild_draft=False):
@@ -385,7 +253,7 @@ def auto_register(data, output, **options):
         try:
             candidates = record_candidates(data,Path(output),result)
             if candidates['changed'] and (Path(output)/'report.html').is_file():
-                from piu_timeline.play.report import write_report
+                from piu_timeline.play.presentation import build_report as write_report
                 write_report(data,Path(output)/'report.html')
         except (OSError,ValueError,KeyError) as error:
             candidates = {'status':'pending','reason':str(error)}

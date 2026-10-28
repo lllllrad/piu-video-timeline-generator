@@ -1,6 +1,4 @@
 """Native-frame judgment words and refresh evidence independent of the counter."""
-from copy import deepcopy
-from bisect import bisect_left, bisect_right
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -11,7 +9,6 @@ import numpy as np
 
 from piu_timeline.vision.ocr import ocr_images
 from piu_timeline.play.frames import crop_region, decode_frames, TIME_EPSILON
-from piu_timeline.play.tracking import associate
 from piu_timeline.play.associations import source_assignments
 
 from piu_timeline.play.words import LABELS, feature_map, color_mask, JudgmentReader, JudgmentTracker, EVENT_FORMAT
@@ -253,181 +250,23 @@ def learn_models(data, output, models, samples):
     return models
 
 
-def synchronized_refreshes(data, events):
-    """Pair mutually unique display brackets before using predicted note times."""
-    links = []
-    for ji,event in enumerate(events):
-        if event['status']!='candidate' or event['upper_seconds']-event['lower_seconds']>.05:
-            continue
-        for ci,counter in enumerate(data.get('combo_events',[])):
-            if counter['delta']!=1 or counter['upper_seconds']-counter['lower_seconds']>.1+TIME_EPSILON:
-                continue
-            if counter['status']!='matched' and counter.get('reason')!='ambiguous_note_or_combo_association':
-                continue
-            overlap=min(event['upper_seconds'],counter['upper_seconds'])-max(event['lower_seconds'],counter['lower_seconds'])
-            distance=abs(event['upper_seconds']-counter['upper_seconds'])
-            if overlap>=-1e-6 and distance<=.025:
-                links.append((distance,ji,ci))
-    pairs=[]
-    for distance,ji,ci in links:
-        alternatives=[other for other,j,c in links if (j,c)!=(ji,ci) and (j==ji or c==ci)]
-        if not alternatives or min(alternatives)-distance>=.008:
-            pairs.append((ji,ci))
-    # Display order must agree in both channels. Conflicting pairs stay unresolved.
-    return [(j,c) for j,c in pairs if all((j-j2)*(c-c2)>0 for j2,c2 in pairs if j2!=j)]
+def synchronized_refreshes(data,events):
+    from piu_timeline.derived import call
+    return [tuple(p)for p in call('association.synchronizedRefreshes',{'combo_events':data.get('combo_events',[])},events)]
 
 
-def label_counter_frames(data, observations):
-    """Read labels after an already observed counter update; invent no refresh."""
-    data['counter_judgment_labels']={}
-    if not observations:
-        return
-    times=[frame['playback_seconds'] for frame in observations]
-    groups={i:[] for i in range(len(data.get('combo_events', [])))}
-    for match in data['matches']:
-        if match['combo_event'] is not None:
-            groups.setdefault(match['combo_event'],[]).append(match)
-    count=0
-    for ci,group in groups.items():
-        event=data['combo_events'][ci]
-        if event['delta']!=1 or event['upper_seconds']-event['lower_seconds']>.1+TIME_EPSILON:
-            continue
-        start=event['upper_seconds']
-        stop=start+.050001
-        if ci+1<len(data['combo_events']):
-            stop=min(stop,data['combo_events'][ci+1]['lower_seconds']-1e-6)
-        frames=observations[bisect_left(times,start-1e-6):bisect_right(times,stop)]
-        labels={frame['label'] for frame in frames if frame['label'] is not None}
-        known=[frame for frame in frames if frame['label'] is not None and frame['confidence']>=.8]
-        if (len(labels)!=1 or 'MISS' in labels or len(known)<2
-                or known[0]['playback_seconds']>start+.035
-                or not any(b['playback_seconds']-a['playback_seconds']<=.035 for a,b in zip(known,known[1:]))
-                or len({frame['source_pts_seconds'] for frame in known})<2):
-            continue
-        proof={'label':known[0]['label'], 'observations':[{key:frame[key] for key in
-               ('source_pts_seconds','playback_seconds','label','confidence')} for frame in known]}
-        data['counter_judgment_labels'][str(ci)]=proof
-        for match in group:
-            if match.get('judgment_label'):
-                continue
-            match.update(evidence_source='combo+judgment',judgment_label=known[0]['label'],
-                         judgment_event=None,judgment_label_source='post_combo_frames',
-                         judgment_observations=deepcopy(proof['observations']))
-            count+=1
-    data['coverage']['combo_frame_labeled_note_heads']=count
+def label_counter_frames(data,observations):
+    from piu_timeline.derived import call,evidence_input,_merge
+    result=call('labels.labelCounterFrames',evidence_input(data),observations)
+    for k in ('matches','coverage','counter_judgment_labels'):
+        if k in result:data[k]=_merge(data.get(k),result[k])
 
 
-def merge_judgments(data, events, observations=()):
-    events = deepcopy(events)
-    for event in events:
-        event.pop('anchor_combo_event',None)
-        event.update(status=event.get('detection_status','candidate'),reason=event.get('detection_reason'))
-        if event['label']=='MISS':
-            event.update(status='excluded',reason='miss_is_not_a_press_timestamp')
-        elif any(event['upper_seconds']>=interval['start_seconds']-.1
-                 and event['lower_seconds']<=interval['end_seconds']+.1
-                 for interval in data.get('unsupported_intervals',[])):
-            event.update(status='excluded',reason='possible_hold_or_dense_stack')
-    matches = [match for match in source_assignments(data) if match['combo_event'] is not None]
-    combo_matches = list(matches)
-    by_note = {match['note']:match for match in matches}
-    for match in matches:
-        match['evidence_source']='combo'
-        match['observation_lower_seconds']=match['combo_lower_seconds']
-        match['observation_upper_seconds']=match['combo_upper_seconds']
-        for key in ('judgment_label','judgment_event','judgment_label_source','judgment_observations'):
-            match.pop(key,None)
-    counter_groups={}
-    for match in matches:
-        counter_groups.setdefault(match['combo_event'],[]).append(match)
-    anchors=[]
-    anchored_counters=set()
-    for ji,ci in synchronized_refreshes(data,events):
-        group=counter_groups.get(ci)
-        if not group:
-            continue
-        event=events[ji]
-        event.update(status='corroborating',reason=None,anchor_combo_event=ci)
-        for match in group:
-            match.update(evidence_source='combo+judgment',judgment_label=event['label'],
-                         judgment_event=ji,judgment_label_source='synchronized_refresh')
-        anchors.append((ji,{match['note'] for match in group}))
-        anchored_counters.add(ci)
-    constraints={}
-    for ji,event in enumerate(events):
-        if event['status']!='candidate':continue
-        before=[ids for index,ids in anchors if index<ji]
-        after=[ids for index,ids in anchors if index>ji]
-        low=max((max(data['notes'][n]['target_seconds'] for n in ids) for ids in before),default=-float('inf'))
-        high=min((min(data['notes'][n]['target_seconds'] for n in ids) for ids in after),default=float('inf'))
-        constraints[ji]={n for n,note in enumerate(data['notes']) if note['status']=='estimated'
-                         and low<note['target_seconds']<high}
-    judge_matches = associate(data['notes'],events,display_delay=data.get('display_delay_correction_ms',0)/1000,
-                              event_note_constraints=constraints)
-    groups = {}
-    for match in judge_matches:
-        groups.setdefault(match['combo_event'],[]).append(match)
-    def constituent_refresh(ci, note_ids, event):
-        counter = data['combo_events'][ci]
-        members = counter_groups.get(ci,[])
-        if (counter.get('delta',1) <= 1 or not note_ids <= {m['note'] for m in members}
-                or not 0 < counter['upper_seconds']-counter['lower_seconds'] <= .1+TIME_EPSILON):
-            return False
-        times = sorted(m['target_seconds'] for m in members)
-        rows = []
-        for time in times:
-            if not rows or time-rows[-1] >= .025:
-                rows.append(time)
-        return (len(rows)==counter['delta']
-                and event['upper_seconds'] >= counter['lower_seconds']-TIME_EPSILON
-                and event['lower_seconds'] <= counter['upper_seconds']+TIME_EPSILON)
-    for index,group in groups.items():
-        event = events[index]
-        note_ids = {match['note'] for match in group}
-        conflicting = [match for match in combo_matches if match['note'] not in note_ids
-                       and match['combo_event'] not in anchored_counters
-                       and not constituent_refresh(match['combo_event'],note_ids,event)
-                       and event['lower_seconds']-.025<=match['combo_upper_seconds']
-                       and event['upper_seconds']+.025>=match['combo_lower_seconds']]
-        if conflicting:
-            event.update(status='excluded',reason='competing_combo_evidence')
-            continue
-        for match in group:
-            existing = by_note.get(match['note'])
-            if existing is not None:
-                existing.update(evidence_source='combo+judgment',judgment_label=event['label'],judgment_event=index)
-                existing['judgment_label_source']='aligned_refresh'
-                event['status']='corroborating'
-            else:
-                match.pop('combo_event')
-                match.update(combo_event=None,judgment_event=index,judgment_label=event['label'],evidence_source='judgment')
-                match['observation_lower_seconds']=match.pop('combo_lower_seconds')
-                match['observation_upper_seconds']=match.pop('combo_upper_seconds')
-                matches.append(match)
-    # A MISS is visible failure evidence, never a physical input timestamp.
-    # Link only a unique previously unmatched row in a bounded delayed window.
-    used = {match['note'] for match in matches}
-    miss_candidates=[]
-    for index,event in enumerate(events):
-        if event['label']!='MISS':continue
-        candidates=[i for i,note in enumerate(data['notes']) if note['status']=='estimated' and i not in used
-                    and event['lower_seconds']-.25<=note['target_seconds']<=event['upper_seconds']]
-        if candidates and max(data['notes'][i]['target_seconds'] for i in candidates)-min(data['notes'][i]['target_seconds'] for i in candidates)<.025:
-            for note in candidates:
-                miss_candidates.append({'note':note,'judgment_event':index,'label':'MISS',
-                                        'status':'possible_miss','input_seconds':None})
-                used.add(note)
-    data['matches']=sorted(matches,key=lambda match:match['target_seconds'])
-    data['judgment_events']=events
-    data['miss_candidates']=miss_candidates
-    data['coverage']['combo_frame_labeled_note_heads']=0
-    label_counter_frames(data,observations)
-    data['coverage'].update(timed_note_heads=len(matches),
-                            judgment_labeled_note_heads=sum(bool(m.get('judgment_label')) for m in matches),
-                            unlabeled_timed_note_heads=sum(not m.get('judgment_label') for m in matches),
-                            judgment_only_note_heads=sum(m['evidence_source']=='judgment' for m in matches),
-                            observed_judgment_updates=len(events),
-                            observed_miss_updates=sum(e['label']=='MISS' for e in events))
+def merge_judgments(data,events,observations=()):
+    from piu_timeline.derived import call,evidence_input,_merge
+    result=call('labels.mergeJudgments',evidence_input(data),events,observations)
+    for k in ('matches','conflicted_matches','judgment_events','miss_candidates','coverage','counter_judgment_labels'):
+        if k in result:data[k]=_merge(data.get(k),result[k])
     return data
 
 

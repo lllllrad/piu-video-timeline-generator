@@ -8,6 +8,14 @@ hooks:
     installation: auto
 
 checks:
+  - name: typescript
+    command: npm
+    args: [exec, --no, --, tsc, --project, tsconfig.json]
+    message: "Fix TypeScript type errors before committing."
+  - name: derived-tests
+    command: node
+    args: [--test, "tests/derived/*.test.ts"]
+    message: "Fix the derived-data regression tests before committing."
   - name: tests
     command: sh
     args: [scripts/run.sh, .venv/bin/python, -m, unittest, discover, -s, tests, -t, ., -v]

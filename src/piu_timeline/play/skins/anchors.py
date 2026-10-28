@@ -3,9 +3,9 @@ from hashlib import sha256
 import json
 import math
 
-FORMAT = {'schema': 1, 'method': 'source_bound_native_cap_center',
-          'coordinate_uncertainty_pixels': 1., 'maximum_offset_spacing': .1,
-          'minimum_similarity': .9, 'alternative_margin': .04}
+from piu_timeline.derived import CONTRACTS
+
+FORMAT = CONTRACTS['native_anchor']
 
 
 def digest(value):

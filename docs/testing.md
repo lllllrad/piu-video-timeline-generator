@@ -15,6 +15,10 @@ part of offline discovery.
 
 QG's shared `tests` check runs this discovery command from both `just check`
 and the pre-commit hook.
+The same gate runs TypeScript type checking and direct Node tests under
+`tests/derived/`. Python tests at the acquisition boundary call the TypeScript
+implementation through the retained-data transport; they do not exercise a
+separate Python fit or row-transcription implementation.
 
 ## What the suite establishes
 

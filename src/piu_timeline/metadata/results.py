@@ -307,3 +307,20 @@ def extract_stats(observations, directory, width, height):
     write_json(saved, frames)
     result["evidence"] = str((directory / "frames.json").resolve())
     return result
+
+
+def play_reference(segment, player=None):
+    """Reuse corroborated result OCR as a coverage reference, not a chart count."""
+    results = segment.get('results') or {}
+    players = results.get('players', {})
+    if player is None and len(players) == 1:
+        player = next(iter(players))
+    result = players.get(player, {})
+    fields = result.get('fields', {})
+    names = ('perfect', 'great', 'good', 'bad', 'miss')
+    if not all(fields.get(name, {}).get('status') == 'recognized'
+               and isinstance(result.get(name), int) for name in names):
+        return None
+    counts = {name: result[name] for name in names}
+    return {'player': player, 'counts': counts, 'total': sum(counts.values()),
+            'max_combo': result.get('max_combo'), 'evidence': results.get('evidence')}

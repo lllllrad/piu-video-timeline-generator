@@ -104,35 +104,15 @@ def attach_regions(data, directory, repository=None):
     return {**data, 'chart_policy': policy}
 
 
-def note_policy(data, note):
-    target = note.get('target_seconds')
-    if target is None:
-        return None
-    regions = [region for region in data.get('chart_policy', {}).get('regions', [])
-               if region['playback_start_seconds'] <= target < region['playback_end_seconds']]
-    if not regions:
-        return None
-    processing = next((region['processing'] for region in regions if region['processing'] != 'standard'), 'standard')
-    return {'regions': [region['id'] for region in regions], 'processing': processing,
-            'suppress_timing': processing == 'exclude_timing' or processing == 'hold_state_only' and note.get('note_type') != 'hold',
-            'check_exceptions': sorted({check for region in regions for check in region['check_exceptions']}),
-            'reasons': [region['reason'] for region in regions]}
+def note_policy(data,note):
+    from piu_timeline.derived import call
+    return call('evidence.notePolicy',{'chart_policy':data.get('chart_policy',{})},
+                {k:note[k]for k in ('target_seconds','note_type')if k in note})
 
 
 def apply_projection(data):
-    if not data.get('chart_policy', {}).get('regions'):
-        return data
-    policies = {ni: note_policy(data, note) for ni, note in enumerate(data['notes']) if note['status'] == 'estimated'}
-    excluded = {ni for ni, policy in policies.items() if policy and policy['suppress_timing']}
-    if not excluded:
-        return data
-    matches = [match for match in data['matches'] if match['note'] not in excluded]
-    holds = []
-    for hold in data.get('hold_analysis', {}).get('holds', []):
-        if hold.get('display_note') in excluded:
-            hold = {**hold, 'input': {**hold['input'], 'segments': [], 'recognition_envelope': None,
-                                     'policy_retained_observations': hold['input']['segments']}}
-        holds.append(hold)
-    return {**data, 'matches': matches,
-            'hold_analysis': {**data.get('hold_analysis', {}), 'holds': holds},
-            'coverage': {**data.get('coverage', {}), 'timed_note_heads': len(matches), 'policy_excluded_note_heads': len(excluded)}}
+    from piu_timeline.derived import call,evidence_input
+    patch=call('evidence.policyProjection',evidence_input(data))
+    if 'hold_analysis'in patch:
+        patch['hold_analysis']={**data.get('hold_analysis',{}),**patch['hold_analysis']}
+    return {**data,**patch}

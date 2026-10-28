@@ -6,7 +6,7 @@ import tempfile
 import unittest
 import json
 
-from piu_timeline.play.report import write_report
+from piu_timeline.play.presentation import build_report as write_report
 
 
 class ReportTest(unittest.TestCase):

@@ -1,110 +1,16 @@
-"""Constrain beat domains with independently measured concurrent cap positions."""
-from collections import defaultdict
-from itertools import combinations
-import math
-
-import numpy as np
-from piu_timeline.play.skins.anchors import FORMAT as ANCHOR_FORMAT
-from piu_timeline.play.skins.coordinates import FORMAT as IMAGE_COORDINATE_FORMAT
-
-FORMAT={'schema':1,'revision':7,'domain_constraint':'bounded_native_lane_distance','image_support':'qualified_native_centers_or_identical_cap_reference','native_cap_registration':ANCHOR_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'minimum_frames':4,'minimum_span_seconds':.065,
-        'maximum_gap_spacing':.025,'maximum_motion_residual_spacing':.0375,
-        'minimum_displacement_spacing':.8,'coordinate_error_spacing':.025}
+"""Native chord evidence is calculated by the TypeScript saved-data stage."""
+from piu_timeline.derived import CONTRACTS, call
+FORMAT=CONTRACTS['chords']
 
 
 def prepare(data,spacing):
-    """Use native measured centers only, never target times or input evidence."""
-    at=defaultdict(list)
-    for record in data.get('head_registration',{}).get('notes',[]):
-        image=record.get('coordinate_method')=='native_image_anchors'
-        if not image and (record.get('coordinate_method')!='native_cap_measurements'
-                or record.get('coordinate_uncertainty_pixels',float('inf'))>(FORMAT['coordinate_error_spacing']*spacing)):continue
-        index=record['note'];note=data['notes'][index];points=dict(note['points'])
-        for sample in record['observations']:
-            if image and sample.get('native_cap_registration_status')=='conflicting':continue
-            time=sample['time']
-            if time not in points:continue
-            model=('calibrated',None)
-            if image:
-                if not sample.get('template')or abs(sample['native_y_pixels']-points[time])>1e-5:
-                    raise ValueError('Image chord coordinates disagree with native reference anchors')
-                uncertainty=sample.get('native_cap_coordinate_uncertainty_pixels')
-                if uncertainty is not None:
-                    scale=sample.get('native_cap_reference_scale_y')
-                    if (data['head_registration'].get('format',{}).get('native_cap_registration')!=ANCHOR_FORMAT
-                            or any(type(v)not in(int,float)or not np.isfinite(v)or v<=0 for v in (uncertainty,scale))
-                            or abs(uncertainty-max(ANCHOR_FORMAT['coordinate_uncertainty_pixels'],ANCHOR_FORMAT['coordinate_uncertainty_pixels']*scale))>1e-9):
-                        raise ValueError('Image chord has an unsupported native anchor registration')
-                if uncertainty is None or uncertainty>(FORMAT['coordinate_error_spacing']*spacing):
-                    model=('image_reference',sample['cap_reference_sha256'])if sample.get('cap_reference_sha256')else('image_template',sample['template'])
-            reference=sample.get('native_cap_reference_template',sample.get('template'))if image else None
-            at[time].append((index,note['lane'],points[time],sample['source_pts_seconds'],model,reference))
-    pairs=defaultdict(list)
-    for time,points in sorted(at.items()):
-        if max(p[3]for p in points)-min(p[3]for p in points)>1e-6:
-            raise ValueError('Native cap measurements disagree on source PTS')
-        for a,b in combinations(sorted(points),2):
-            if a[1]!=b[1]and abs(a[3]-b[3])<=1e-6 and a[4]==b[4]:
-                pairs[a[0],b[0],a[4]].append((time,a[2],b[2],a[3],a[5],b[5]))
-    result=[]
-    for (a,b,model),samples in sorted(pairs.items()):
-        if (len(samples)<FORMAT['minimum_frames']or samples[-1][0]-samples[0][0]<FORMAT['minimum_span_seconds']
-                or len({s[3]for s in samples})!=len(samples)):continue
-        gap=max(abs(s[1]-s[2])for s in samples)
-        if gap>(FORMAT['maximum_gap_spacing']*spacing):continue
-        time=np.array([s[0]-samples[0][0]for s in samples])
-        y=np.array([(s[1]+s[2])/2 for s in samples]);velocity,intercept=np.polyfit(time,y,1)
-        error=float(max(abs(y-velocity*time-intercept)))
-        displacement=float(y[0]-y[-1])
-        if (displacement<FORMAT['minimum_displacement_spacing']*spacing
-                or error>(FORMAT['maximum_motion_residual_spacing']*spacing)):continue
-        lower=(displacement-2*(FORMAT['coordinate_error_spacing']*spacing))/float(time[-1])
-        if lower<=0:continue
-        image_templates=sorted({name for s in samples for name in s[4:]if name is not None})
-        result.append({'lane_spacing_pixels':spacing,'peer_notes':[a,b],'observed_points':len(samples),'maximum_gap_pixels':gap,
-                       **({'measurement_basis':'shared_image_reference','reference_identity':model[1],
-                           'reference_templates':image_templates}if model[0]in('image_reference','image_template')else{}),
-                       **({'measurement_basis':'source_bound_native_cap_centers','registered_image_templates':image_templates}
-                          if model[0]=='calibrated'and image_templates else{}),
-                       'visible_start_seconds':samples[0][0],'visible_end_seconds':samples[-1][0],
-                       'source_pts_seconds':[s[3]for s in samples],
-                       'minimum_velocity_pixels_per_second':lower,'maximum_motion_residual_pixels':error})
-    return result
+    return call('chords.prepare',data,spacing)
 
 
 def constrain(domains,step,constraints):
-    """Keep every row pair within the measured native concurrency bound."""
-    limit_spacing=FORMAT['maximum_gap_spacing']+2*FORMAT['coordinate_error_spacing']
-    edges=[(proof,math.floor(limit_spacing*proof['lane_spacing_pixels']/(step*proof['minimum_velocity_pixels_per_second'])+1e-9))
-           for proof in constraints]
-    result=list(domains);used=set();changed=True
-    while changed:
-        changed=False
-        for index,(proof,limit)in enumerate(edges):
-            a,b=proof['indices'];first,second=result[a],result[b]
-            if first[0]>first[1]or second[0]>second[1]:
-                narrowed=[(1,0),(1,0)]
-            else:
-                narrowed=[(max(first[0],second[0]-limit),min(first[1],second[1]+limit)),
-                          (max(second[0],first[0]-limit),min(second[1],first[1]+limit))]
-                if any(lo>hi for lo,hi in narrowed):narrowed=[(1,0),(1,0)]
-            if limit==0 or narrowed!=[first,second]:used.add(index)
-            if narrowed!=[first,second]:
-                result[a],result[b]=narrowed;changed=True
-    return result,[proof for i,(proof,_)in enumerate(edges)if i in used]
+    options,proofs=call('chords.constrain',domains,step,constraints)
+    return [tuple(d)for d in options],proofs
 
 
 def conflicts(notes,constraints):
-    """Cross-group assignments must also agree with the measured concurrency."""
-    result=[]
-    for proof in constraints:
-        threshold=(FORMAT['maximum_gap_spacing']+2*FORMAT['coordinate_error_spacing'])*proof['lane_spacing_pixels']
-        a,b=proof['peer_notes']
-        if any(notes[i]['status']!='estimated'for i in (a,b)):continue
-        distance=abs(notes[a]['target_seconds']-notes[b]['target_seconds'])*proof['minimum_velocity_pixels_per_second']
-        if distance<=threshold:continue
-        for i in (a,b):
-            result.append({**proof,'note':i,'lane':notes[i]['lane'],'check':'timing_reconstruction',
-                           'reason':'beat_grid_conflicts_with_native_chord',
-                           'reconstructed_minimum_gap_pixels':distance,'maximum_compatible_gap_pixels':threshold})
-    return result
+    return call('chords.conflicts',notes,constraints)

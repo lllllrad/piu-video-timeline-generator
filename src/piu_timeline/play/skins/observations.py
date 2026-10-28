@@ -45,19 +45,5 @@ def observe(data, native):
 
 
 def tail_roles(data):
-    """A complete end image includes the cap and its upper body connection."""
-    result = []
-    for record in data.get('visual_channels', {}).get('note_types', {}).get('notes', []):
-        observations = record['observations']
-        roles={o.get('role')for o in observations}-{'unknown'}
-        if not observations or roles != {'hold_end'}:
-            continue
-        supported=[o for o in observations if o.get('role')=='hold_end']
-        index = record['note']
-        result.append({'tail_note': index, 'head_note': None, 'lane': data['notes'][index]['lane'],
-                       'status': 'observed_image_tail_timing_unresolved',
-                       'visible_start_seconds': min(o['playback_seconds'] for o in supported),
-                       'visible_end_seconds': max(o['playback_seconds'] for o in supported),
-                       'source_pts_seconds': [o['source_pts_seconds'] for o in supported],
-                       'image_evidence': supported})
-    return result
+    from piu_timeline.derived import call,projection_input
+    return call('holdProjection.imageTailRoles',projection_input(data))

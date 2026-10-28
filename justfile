@@ -12,6 +12,14 @@ play +args:
 charts +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.charts.data "$@"
 
+# Rebuild a derived artifact from saved data using TypeScript only.
+derive stage input output:
+    node src/piu_timeline/derived/cli.ts "$1" "$2" "$3"
+
+# Render an already prepared report without Python or observation analysis.
+render input output:
+    node src/piu_timeline/derived/render.ts "$1" "$2"
+
 # Download a YouTube video into the cache used by `auto`.
 fetch +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.workflow fetch "$@"

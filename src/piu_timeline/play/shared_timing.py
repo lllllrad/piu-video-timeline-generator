@@ -9,51 +9,18 @@ FORMAT = {'schema':1,'revision':15,'method':'registered_peer_displacement','loca
 
 
 def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
-    """Final identities remove repeated-pattern correspondence guesses."""
-    at = defaultdict(dict)
-    for index,track in enumerate(tracks):
-        for time,y in track.points:
-            if receptor+.85*spacing < y < bottom-.55*spacing:
-                at[time][index]=(track.lane,y)
-    motion=ScrollMotion(height,spacing)
-    motion.evidence_format=FORMAT
-    motion.registered_positions=at
-    previous=None;anchor=None
-    for native in timeline:
-        time=native['time'];current=at[time]
-        displacement=None;observed=None;support=lanes=0;scatter=0.;basis='unsupported'
-        if previous is not None and 0 < time-previous['time'] <= .05+1e-6:
-            before=at[previous['time']]
-            pairs=[(before[i][1]-current[i][1],current[i][0],i) for i in before.keys() & current.keys()]
-            if pairs:
-                center=float(np.median([p[0] for p in pairs]));observed=center
-                kept=[p for p in pairs if abs(p[0]-center)<=1.5]
-                support=len(kept);lanes=len({p[1] for p in kept})
-                if support>=2 and (lanes>=2 or max(current[p[2]][1] for p in kept)-min(current[p[2]][1] for p in kept)>.65*spacing) and -.75<=center<=spacing*30*(time-previous['time']):
-                    displacement=max(0,float(np.median([p[0] for p in kept])))
-                    scatter=max(.35,float(np.std([p[0] for p in kept])))
-                    basis='independent_registered_peers'
-                    anchor=(time,{p[2] for p in kept})
-                elif (len(pairs)==1 and anchor is not None and time-anchor[0]<=.25+1e-6
-                      and pairs[0][2] in anchor[1] and -.75<=pairs[0][0]<=spacing*30*(time-previous['time'])):
-                    # A previously corroborated identity may carry the same
-                    # coordinate system briefly. This is measured displacement,
-                    # never interpolation across an absent source observation.
-                    displacement=max(0,pairs[0][0]);support=lanes=1;scatter=.75
-                    basis='registered_identity_continuation'
-        if displacement is None:
-            motion.chunks.append([]);phase=variance=0.;anchor=None
-        else:
-            phase=motion.samples[-1]['phase']+displacement
-            variance=motion.samples[-1]['variance']+scatter**2
-        sample={**native,'phase':phase,'pairwise_phase_pixels':phase,'observed_peer_displacement_pixels':observed,
-                'variance':variance,'chunk':len(motion.chunks)-1,
-                'support':support if displacement is not None else 0,'lanes':lanes if displacement is not None else 0,
-                'displacement_basis':basis}
-        motion.samples.append(sample);motion.at_time[time]=sample;motion.chunks[-1].append(sample)
-        previous=native
-    from piu_timeline.play.registered_coordinates import refine
-    refine(motion,tracks,receptor,spacing,bottom)
+    """One saved-data call integrates and jointly registers every trajectory."""
+    from piu_timeline.derived import call
+    from piu_timeline.play.registered_coordinates import apply_result
+    result=call('tracks.registered',[{'lane':t.lane,'points':t.points}for t in tracks],timeline,height,spacing,receptor,bottom)
+    motion=ScrollMotion(height,spacing);motion.evidence_format=FORMAT
+    motion.samples=result['samples'];motion.at_time={s['time']:s for s in motion.samples}
+    motion.chunks=[]
+    for sample in motion.samples:
+        while len(motion.chunks)<=sample['chunk']:motion.chunks.append([])
+        motion.chunks[sample['chunk']].append(sample)
+    motion.registered_positions={float(t):{int(i):p for i,p in points.items()}for t,points in result['registered_positions'].items()}
+    apply_result(motion,tracks,result)
     return motion
 
 
@@ -67,11 +34,12 @@ def restore(notes, tracks, timeline, layout, width, height):
     for i,track in enumerate(tracks):
         for t,y in track.points:shared_frames[t][i]=y
     warnings=list(motion.coordinate_conflicts)
+    fitted_tracks=motion.fit_many(tracks,receptor,layout)
     for index,(note,track) in enumerate(zip(notes,tracks,strict=True)):
         # Short/noisy candidates already have explicit exclusion diagnostics.
         if len(track.points)<4 or track.points[-1][0]-track.points[0][0]<.065:
             continue
-        fitted=motion.fit(track,receptor,layout)
+        fitted=fitted_tracks[index]
         peer_counts=defaultdict(int)
         for t,y in track.points:
             for peer,py in shared_frames[t].items():

@@ -130,8 +130,8 @@ def observe_processing(data, path):
     radius = max(2, round(.45*spacing))
     # Cap identity is resolved before interpreting a disappearance as a tap.
     components = {n for h in data.get('hold_analysis', {}).get('holds', []) for n in h['covered_notes']}
-    from piu_timeline.play.processing.motion import observed_path
-    paths = [observed_path(note, data, receptor, spacing, scale) for note in data.get('notes', [])]
+    from piu_timeline.play.processing.motion import observed_paths
+    paths = observed_paths(data.get('notes', []), data, receptor, spacing, scale)
     learned=learn(data,path.parent,times,pts)
     result = []
     for index, note in enumerate(data.get('notes', [])):

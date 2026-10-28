@@ -176,63 +176,14 @@ class NoteTracker:
 
 
 def fit_track(track, receptor_y, spacing, motion=None, layout=None):
-    result = {'lane': track.lane, 'points': [[float(t), float(y)] for t, y in track.points],
-              'status': 'excluded', 'reason': None, 'target_seconds': None}
+    from piu_timeline.derived import call
     if motion is not None:
-        shared = motion.fit(track, receptor_y, layout)
+        shared=motion.fit(track,receptor_y,layout)
         if shared is not None:
-            return {**result, **shared}
-    # The detection crop clips a head as it approaches the receptor. Those
-    # bounding-box centers flatten even during perfectly constant scrolling.
-    visible = [p for p in track.points if p[1] > receptor_y + .85 * spacing]
-    if len(visible) < 4 or visible[-1][0] - visible[0][0] < .065:
-        return {**result, 'reason': 'insufficient_track'}
-    # A local fit must itself be linear; never use an average song scroll speed.
-    points = np.asarray(visible[-12:], dtype=float)
-    t = points[:, 0] - points[-1, 0]
-    y = points[:, 1]
-    velocity, intercept = np.polyfit(t, y, 1)
-    residual = float(np.sqrt(np.mean((y - (velocity * t + intercept)) ** 2)))
-    result.update(velocity_pixels_per_second=float(velocity), residual_pixels=residual)
-    if velocity >= -spacing:
-        return {**result, 'reason': 'stopped_or_reverse_scroll'}
-    half = len(points) // 2
-    first_fit = np.polyfit(t[:half], y[:half], 1)
-    last_fit = np.polyfit(t[half:], y[half:], 1)
-    first, last = first_fit[0], last_fit[0]
-    change = abs(first - last) / max(abs(velocity), 1)
-    result['speed_change_fraction'] = float(change)
-    # Pixel rounding is a larger slope error for slow/short trajectories.
-    quantization = 2 / max(abs(velocity) * (t[-1] - t[half]), 1)
-    def slope_variance(ts, ys, fit):
-        errors = ys-np.polyval(fit, ts)
-        return float(np.dot(errors,errors)/max(1,len(ts)-2)/max(np.sum((ts-ts.mean())**2),1e-9))
-    # Encoded frames can repeat a rendered game frame. That stepwise motion
-    # produces slope noise, not acceleration. Account for its measured error.
-    slope_error = 3*math.sqrt(slope_variance(t[:half],y[:half],first_fit)
-                             + slope_variance(t[half:],y[half:],last_fit))/abs(velocity)
-    if residual > spacing * .14 or change > .18 + quantization + slope_error:
-        gaps = np.flatnonzero(np.diff(points[:,0]) > .06)
-        if len(gaps):
-            latest = points[gaps[-1]+1:]
-            if len(latest) >= 4 and latest[-1,0]-latest[0,0] >= .065:
-                recovered = fit_track(Track(track.lane, latest.tolist()), receptor_y, spacing)
-                if recovered['status'] == 'estimated':
-                    return {**recovered, 'points': result['points'], 'fit_method': 'linear_after_occlusion'}
-        return {**result, 'reason': 'variable_speed_or_tracking_error'}
-    target = float(points[-1, 0] + (receptor_y - intercept) / velocity)
-    extrapolation = target - points[-1, 0]
-    if not 0 <= extrapolation <= .25 or intercept - receptor_y > 2.5 * spacing:
-        return {**result, 'reason': 'receptor_not_observed_closely'}
-    step = float(np.median(np.diff(points[:,0])))
-    held_since, hold_span = points[0,0], 0.0
-    for i in range(1,len(points)):
-        if abs(points[i,1]-points[i-1,1]) > .75:
-            held_since = points[i,0]
-        hold_span = max(hold_span, points[i,0]-held_since)
-    return {**result, 'status': 'estimated', 'target_seconds': target,
-            'prediction_uncertainty_seconds': max(residual / abs(velocity),
-                getattr(track,'registration_uncertainty_pixels',0)/abs(velocity),(step+hold_span)/2)}
+            return {'lane':track.lane,'points':[[float(t),float(y)]for t,y in track.points],**shared}
+    return call('tracks.fitTrack',{'lane':track.lane,'points':track.points,
+        'registration_uncertainty_pixels':getattr(track,'registration_uncertainty_pixels',0)},receptor_y,spacing)
+
 
 
 def glyphs(rgb, threshold=175):
@@ -402,84 +353,8 @@ class ComboTracker:
         self.stable, self.last_seen, self.pending = value, seconds, None
 
 
-def associate(notes, combo_events, window=.045, display_delay=0.0, event_note_constraints=None):
-    """Align judged rows, not individual heads, to observed counter increments.
-
-    A chord is one row. A skipped counter value can cover consecutive rows,
-    but each receives the original aggregate observation bracket.
-    """
-    rows = []
-    for index, note in sorted(enumerate(notes), key=lambda item: item[1].get('target_seconds') or math.inf):
-        if note['status'] != 'estimated':
-            continue
-        if rows and abs(note['target_seconds'] - rows[-1]['seconds']) < .025:
-            rows[-1]['notes'].append(index)
-        else:
-            rows.append({'seconds': note['target_seconds'], 'notes': [index]})
-    events = [(i, event) for i,event in enumerate(combo_events) if event['status'] == 'candidate']
-    lengths = [event.get('delta',1) for _,event in events]
-    weights = np.zeros((len(events),len(rows)))
-    links = []
-    for i,(event_index,event) in enumerate(events):
-        count = lengths[i]
-        center = (event['lower_seconds']+event['upper_seconds'])/2
-        span = event['upper_seconds']-event['lower_seconds']
-        radius = span/2+window
-        if not 1 <= count <= 10:
-            continue
-        for j in range(len(rows)-count+1):
-            group = rows[j:j+count]
-            allowed = (event_note_constraints or {}).get(event_index)
-            if allowed is not None and any(k not in allowed for row in group for k in row['notes']):
-                continue
-            if any(len({notes[k]['lane'] for k in row['notes']}) != len(row['notes']) for row in group):
-                continue
-            distances = [abs(row['seconds']+display_delay-center) for row in group]
-            if max(distances)>radius or group[-1]['seconds']-group[0]['seconds']>span+.02:
-                continue
-            weights[i,j] = count*(1-.5*(sum(distances)/count/radius)**2)
-            links.append((i,j,count))
-    forward = np.zeros((len(events)+1,len(rows)+1))
-    backward = np.zeros_like(forward)
-    for i,count in enumerate(lengths):
-        for end in range(1,len(rows)+1):
-            paired = forward[i,end-count]+weights[i,end-count] if 0<count<=end and weights[i,end-count] else 0
-            forward[i+1,end] = max(forward[i,end],forward[i+1,end-1],paired)
-    for i in reversed(range(len(events))):
-        count = lengths[i]
-        for j in reversed(range(len(rows))):
-            paired = weights[i,j]+backward[i+1,j+count] if weights[i,j] else 0
-            backward[i,j] = max(backward[i+1,j],backward[i,j+1],paired)
-    path,i,j = [],len(events),len(rows)
-    while i and j:
-        count = lengths[i-1]
-        if 0<count<=j and weights[i-1,j-count] and abs(forward[i,j]-forward[i-1,j-count]-weights[i-1,j-count])<1e-9:
-            path.append((i-1,j-count));i-=1;j-=count
-        elif forward[i-1,j]>=forward[i,j-1]:
-            i-=1
-        else:
-            j-=1
-    accepted = {}
-    optimum = forward[-1,-1]
-    for i,j in path:
-        count = lengths[i]
-        alternatives = [forward[k,l]+weights[k,l]+backward[k+1,l+n]
-                        for k,l,n in links if (k,l)!=(i,j)
-                        and (k==i or l<j+count and l+n>j)]
-        if not alternatives or optimum-max(alternatives)>.08:
-            accepted[i]=j
-    matches=[]
-    for i,(event_index,event) in enumerate(events):
-        if i not in accepted:
-            event.update(status='excluded',reason='ambiguous_note_or_combo_association')
-            continue
-        event.update(status='matched',reason=None)
-        for row in rows[accepted[i]:accepted[i]+lengths[i]]:
-            for index in row['notes']:
-                target=notes[index]['target_seconds']
-                matches.append({'note':index,'combo_event':event_index,'target_seconds':target,
-                                'row_note_count':len(row['notes']),'aggregate_row_count':lengths[i],
-                                'combo_lower_seconds':event['lower_seconds'],'combo_upper_seconds':event['upper_seconds'],
-                                'raw_offset_lower_ms':1000*(event['lower_seconds']-target),
-                                'raw_offset_upper_ms':1000*(event['upper_seconds']-target)})
-    return sorted(matches,key=lambda match:match['target_seconds'])
+def associate(notes,combo_events,window=.045,display_delay=0.0,event_note_constraints=None):
+    from piu_timeline.derived import call
+    fields=('lane','status','target_seconds')
+    return call('association.associate',[{k:n[k]for k in fields if k in n}for n in notes],
+                combo_events,window,display_delay,event_note_constraints,mutated=(1,))

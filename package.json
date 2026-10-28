@@ -1,13 +1,16 @@
 {
   "name": "piu-video-timeline-generator",
   "private": true,
+  "type": "module",
   "scripts": {
     "prepare": "qg hooks install",
     "quality": "qg check",
     "quality:full": "qg check --full"
   },
   "devDependencies": {
-    "@slop-lab/qg": "0.1.0"
+    "@slop-lab/qg": "0.1.0",
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2"
   },
   "engines": {
     "node": ">=24"

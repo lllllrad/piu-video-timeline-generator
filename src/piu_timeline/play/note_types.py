@@ -187,51 +187,6 @@ def observe_appearance(data, path, frames):
             'pixel_coordinates':{'width':325,'height':round(height*source_scale),'origin':'game_crop_top_left'}}
 
 
-def project_types(data, notes, holds):
-    """Combine identities without voting away a single contradictory observation."""
-    records = data.get('visual_channels', {}).get('note_types', {}).get('notes')
-    if records is None:
-        return []
-    by_note = {r['note']:r for r in records}
-    groups = {h['display_note']: set(h['covered_notes']) | {h[key] for key in ('head_note','head_observation_note','tail_observation_note') if h.get(key) is not None}
-              for h in holds}
-    hold_by_note = {h['display_note']:h for h in holds}
-    timeline = {pts:time for time,pts in data.get('visual_channels', {}).get('timeline', {}).get('frames', [])}
-    diagnostics = []
-    for index, note in enumerate(notes):
-        if note['status'] != 'estimated':
-            continue
-        members = groups.get(index,{index})
-        observations = [o for n in sorted(members) for o in by_note.get(n,{}).get('observations',[])]
-        hold = hold_by_note.get(index)
-        if hold and hold.get('start_range'):
-            contact = hold['start_range'][0]
-            observations = [{**o,'kind':'unknown','observed_kind':'tap','reason':'hold_processing_remnant'}
-                            if o['kind']=='tap' and o['playback_seconds'] >= contact else o for o in observations]
-        kinds = {o['kind'] for o in observations}-{'unknown'}
-        # A supported reconstructed hold also contradicts an isolated cap,
-        # even if the cap was seen in another frame of the same identity.
-        if index in groups:
-            kinds.add('hold')
-            hold = hold_by_note[index]
-            pts_range = hold.get('source_pts_range')
-            if pts_range and all(pts in timeline for pts in pts_range):
-                observations.append({'kind':'hold', 'reason':'reconstructed_connected_body',
-                                     'source_note':hold['head_note'], 'hold':hold['id'],
-                                     'playback_seconds':timeline[pts_range[0]],
-                                     'playback_end_seconds':timeline[pts_range[1]],
-                                     'source_pts_seconds':pts_range[0], 'source_pts_range':pts_range})
-        status = 'conflict' if len(kinds)>1 else next(iter(kinds)) if kinds else 'unknown'
-        note['type_status'] = status
-        note['type_evidence'] = observations
-        note['type_unknown_reasons'] = dict(Counter(o['reason'] for o in observations if o['kind']=='unknown'))
-        if status in ('unknown','conflict') or status == 'hold' and note.get('note_type') != 'hold':
-            proof = [o for o in observations if o['kind'] != 'unknown']
-            times = [t for o in proof for t in (o['playback_seconds'],o.get('playback_end_seconds',o['playback_seconds']))] or [t for t,_ in note.get('points',[])] or [note['target_seconds']]
-            diagnostics.append({'note':index,'lane':note['lane'],
-                                'reason':'note_type_conflict' if status == 'conflict' else 'note_type_unresolved',
-                                'visible_start_seconds':min(times),'visible_end_seconds':max(times),
-                                'observed_points':len(observations),'type_evidence':proof,
-                                'type_unknown_reasons':note['type_unknown_reasons'],
-                                'hold':note.get('hold_id')})
-    return diagnostics
+def project_types(data,notes,holds):
+    from piu_timeline.derived import call,projection_input
+    return call('holdProjection.projectTypes',projection_input(data),notes,holds,mutated=(1,))

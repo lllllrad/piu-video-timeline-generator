@@ -18,6 +18,7 @@ from piu_timeline.play.frames import decode_frames, crop_region, TIME_EPSILON
 from piu_timeline.play.tracking import NoteTracker, DigitReader, ComboTracker, associate
 from piu_timeline.metadata.recognition import capture_game
 from piu_timeline.workflow import LOCAL_DATA, source_id
+from piu_timeline.metadata.results import play_reference as result_reference
 from piu_timeline.play.judgments import augment_judgments, cache_current as judgment_cache_current, observations_current as judgment_observations_current
 
 from piu_timeline.play.layout import (validate_layout, receptor_centers, locate_layout,
@@ -28,29 +29,13 @@ from piu_timeline.play.shared_timing import FORMAT as SHARED_TIMING_FORMAT
 from piu_timeline.play.head_registration import FORMAT as HEAD_REGISTRATION_FORMAT
 from piu_timeline.play.object_roles import FORMAT as OBJECT_FORMAT, current as objects_current, apply as interpret_objects
 from piu_timeline.play.counter_pixels import READER_FORMAT
-from piu_timeline.play.beats.timing import FORMAT as BEAT_TIMING_FORMAT, current as beat_current, apply as apply_beats, reassociate as reassociate_beats
+from piu_timeline.play.beats.timing import current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':5,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'beat_grid':BEAT_TIMING_FORMAT,'object_roles':OBJECT_FORMAT}
+TIMING_FORMAT = {'schema':1,'counter_revision':5,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'object_roles':OBJECT_FORMAT}
 FRAME_OBSERVATION_VERSION = 4
 
 
-
-def result_reference(segment, player=None):
-    """Reuse corroborated result OCR as a coverage reference, not a chart count."""
-    results = segment.get('results') or {}
-    players = results.get('players', {})
-    if player is None and len(players) == 1:
-        player = next(iter(players))
-    result = players.get(player, {})
-    fields = result.get('fields', {})
-    names = ('perfect', 'great', 'good', 'bad', 'miss')
-    if not all(fields.get(name, {}).get('status') == 'recognized'
-               and isinstance(result.get(name), int) for name in names):
-        return None
-    counts = {name: result[name] for name in names}
-    return {'player': player, 'counts': counts, 'total': sum(counts.values()),
-            'max_combo': result.get('max_combo'), 'evidence': results.get('evidence')}
 
 
 def resolve_timing(tracker, combo, display_delay_ms):
@@ -362,9 +347,15 @@ def run(source, segment_number=1, force=False, **options):
                          and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
                          and all(key in cached for key in ('layout','analysis_height','frame_count'))
                          and (final / 'frames.jsonl').is_file())
-            if (same_source and same_settings and cached.get('play_analysis_version') == VERSION
+            upstream_current=(same_source and same_settings and cached.get('play_analysis_version') == VERSION
                     and cached.get('skin_detector',{}).get('contract') == skin_contract
-                    and cached.get('timing_format') == TIMING_FORMAT and beat_current(cached,final) and objects_current(cached,final)
+                    and cached.get('timing_format') == TIMING_FORMAT and objects_current(cached,final))
+            beat_ready=beat_current(cached,final)if upstream_current else False
+            coordinates=None
+            if upstream_current and not beat_ready:
+                from piu_timeline.play.stages import load_coordinates
+                coordinates=load_coordinates(cached,final)
+            if (upstream_current and (beat_ready or coordinates is not None)
                     and cached.get('song')==segments[segment_number-1].get('song')
                     and cached.get('chart')==segments[segment_number-1].get('chart')
                     and cached.get('chart_identity')==segments[segment_number-1].get('chart_identity')
@@ -373,18 +364,22 @@ def run(source, segment_number=1, force=False, **options):
                     and digit_cache_current(cached,final,LOCAL_DATA)
                     and ((judgments_current := judgment_cache_current(cached,root,final))
                          or judgment_observations_current(cached,root,final))):
-                from piu_timeline.play.report import write_report
+                from piu_timeline.play.presentation import build_report as write_report
                 from piu_timeline.play.holds.analysis import augment_holds
                 refresh_fields=('judgment_cache','hold_analysis','visual_channels','association_view_format',
                                 'matches','conflicted_matches','coverage','skin_detector')
                 previous_refresh={k:cached.get(k)for k in refresh_fields}
-                if not judgments_current:
+                if coordinates is not None:
+                    print('Reconstructing beat rows from saved coordinates; no frame replay, decoding or OCR.',flush=True)
+                    cached=reassociate_beats(apply_beats(coordinates,final),options.get('display_delay_ms',0))
+                    cached=augment_judgments(cached,final)
+                if not judgments_current and coordinates is None:
                     cached = augment_judgments(cached,final)
                 if note_skin is not None:
                     cached['skin_detector']={**cached['skin_detector'],'bank_path':note_skin}
                 cached = augment_holds(cached, final)
                 write_report(cached, final / 'report.html', final)
-                if {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
+                if coordinates is not None or {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
                     updated = final / 'analysis.refresh-build.json'
                     updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
                     updated.replace(previous)
@@ -408,6 +403,8 @@ def run(source, segment_number=1, force=False, **options):
         result=interpret_objects(result,pending,options.get('display_delay_ms',0))
         from piu_timeline.play.head_registration import apply as register_heads
         result=register_heads(result,pending,options.get('display_delay_ms',0))
+        from piu_timeline.play.stages import save_coordinates
+        result=save_coordinates(result,pending)
         result=apply_beats(result,pending)
         result=reassociate_beats(result,options.get('display_delay_ms',0))
         result = augment_judgments(result,pending)
@@ -418,7 +415,7 @@ def run(source, segment_number=1, force=False, **options):
             raise ValueError('Source changed during play analysis')
         result['segment_number'] = segment_number
         (pending / 'analysis.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
-        from piu_timeline.play.report import write_report
+        from piu_timeline.play.presentation import build_report as write_report
         write_report(result, pending / 'report.html', final)
         from piu_timeline.storage import relocate_evidence
         relocate_evidence(pending, final)

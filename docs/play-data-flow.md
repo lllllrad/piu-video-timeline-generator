@@ -44,10 +44,10 @@ and then rebuilt after target times or hold interpretations change.
 | --- | --- | --- |
 | Metadata | `metadata/`, `vision/`, `workflow.py` | Song/chart/player identity, segment bounds, stage-result OCR |
 | Pixel and frame acquisition | `play/observations/`, `play/frames.py`, `play/skins/`, `play/holds/features.py`, `play/judgments.py` | `frames.base.jsonl`, `frames.jsonl`, `judgments.jsonl`, `hold-frames.jsonl`, feature masks and manifests |
-| Object/track/coordinate interpretation | `play/object_roles.py`, `play/tracking.py`, `play/head_registration.py`, `play/shared_timing.py` | Original detections, interpreted tracks, native registration, shared displacement and target-clock evidence |
-| Musical timing | `play/beats/` | Beat candidates, unique/ambiguous/failed rows, independent-reference proofs and recovery |
-| Evidence association | `play/judgments.py`, `play/holds/`, `play/processing/`, `play/channels.py` | Popup links, sustained holds, lane effects, disappearance/passage and unresolved states |
-| Consumption | `play/report.py`, `play/ranges.py`, `charts/data.py`, `charts/transcription.py` | HTML, diagnostics, target/input ranges and per-measure UCS rows |
+| Object/track/coordinate interpretation | `play/object_roles.py`, `play/tracking.py`, `play/head_registration.py`; TypeScript `derived/registration.ts`, `derived/tracks.ts`, `derived/clocks.ts` | Original detections, interpreted tracks, native registration, shared displacement and target-clock evidence |
+| Musical timing | `derived/beats/` (TypeScript), `play/beats/timing.py` (reference preparation) | Beat candidates, unique/ambiguous/failed rows, independent-reference proofs and recovery |
+| Evidence interpretation | Python `play/holds/`, `play/processing/`, `play/channels.py`; TypeScript `derived/labels.ts`, `derived/recovery.ts`, `derived/hold_projection.ts`, `derived/hold_presentation.ts` | Independent native states, popup links, sustained holds, lane effects and unresolved associations |
+| Consumption | Python `play/presentation.py` orchestration; TypeScript `derived/ranges.ts`, `derived/visibility.ts`, `derived/diagnostics.ts`, `derived/report.ts`, `derived/charts/` | HTML, diagnostics, target/input ranges and per-measure UCS drafts |
 
 The four visual channels are popup changes, receptor effects, note movement and
 note processing. They preserve separate observations and counts; one popup may
@@ -73,27 +73,30 @@ registration, beat reconstruction, reassociation, judgment augmentation, hold
 augmentation, report generation and chart registration. These are functions in
 separate modules, but their persisted boundaries are incomplete.
 
-* `analysis.json` combines motion measurements, proposed chart times, recovered
-  rows and association results. The normal command does not persist a dedicated,
-  independently contracted pre-beat snapshot. Diagnostic boundary captures exist
-  locally, but are not a supported resume layer.
-* `TIMING_FORMAT` combines counter, head-registration, shared-motion, beat and
-  object-interpretation contracts. A beat-only change can invalidate the overall
-  timing result and trigger `refit_saved` from frame observations.
-* `refit_saved` copies the existing segment directory, relocates evidence paths,
-  replays frame observations and rebuilds tracks/clocks. A reviewed segment
-  directory occupied approximately 3.7 GB. No new RGB decoding is needed for that
-  path, but copying and replaying are still substantial work.
-* `write_report` also calculates projections, ranges, continuity and recognition
-  diagnostics and reads saved frame traces. It is not a pure HTML renderer.
-* Hold geometry, popup association, lane evidence and processing have genuine
-  dependencies, but the current cache fingerprints include broad combined
-  analysis objects. A downstream change can therefore cause wider recomputation.
+* `coordinates.json` now preserves the registered pre-beat output with its own
+  source/geometry/producer identity and content fingerprint. Segment-local paths
+  are stored relative to that artifact so promotion does not invalidate it.
+* `TIMING_FORMAT` covers upstream reconstruction only; musical timing retains its
+  own contract. A beat-only change can resume `coordinates.json` without frame
+  replay or copying the segment. Legacy analyses need one upstream refit to
+  create this boundary; missing or incompatible snapshots cannot be invented.
+* `beat-input.json` contains the prepared reference text and calculation inputs.
+  TypeScript reconstructs musical timing in one call and returns only owned
+  output fields. Acquisition identity stays outside numerical calculations.
+* Native/skin/object changes still require `refit_saved`, which copies a pending
+  segment and replays saved observations. That path has not been replaced by a
+  universal independently cached stage graph.
+* `play/presentation.py` invokes derived projections, ranges and diagnostics, persists
+  `report-data.json`, and emits review warnings. `play/report.py` passes that
+  prepared document to the pure TypeScript HTML renderer. The index reads a
+  small prepared summary instead of rerunning analysis. Re-rendering prepared
+  data does not inspect observations. Preparation still reads frame traces.
+* Hold geometry, popup association, lane evidence and processing still have
+  broad fingerprints. Their acquisition and derived consumers are not yet all
+  separate persisted stages.
 
-A cleaner boundary would persist immutable native measurements and independently
-versioned track/coordinate, musical-timing, association and presentation results.
-Each consumer should declare exactly which producer output and geometry units it
-uses. This is a structural follow-up, not an implemented replacement in this change.
+The saved-data runtime and standalone replay commands are described in
+[derived analysis](derived-analysis.md).
 
 ## Validation and geometry scope
 

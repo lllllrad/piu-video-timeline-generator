@@ -1,0 +1,133 @@
+{
+  "coordinates": {
+    "schema": 1,
+    "revision": 9,
+    "minimum_references": 5,
+    "minimum_lanes": 2,
+    "reference_radius_seconds": 0.75,
+    "minimum_target_span_seconds": 0.3,
+    "minimum_slope_span_seconds": 0.15,
+    "maximum_reference_error_spacing": 0.025,
+    "maximum_native_error_spacing": 0.0375
+  },
+  "chords": {
+    "schema": 1,
+    "revision": 7,
+    "domain_constraint": "bounded_native_lane_distance",
+    "image_support": "qualified_native_centers_or_identical_cap_reference",
+    "minimum_frames": 4,
+    "minimum_span_seconds": 0.065,
+    "maximum_gap_spacing": 0.025,
+    "maximum_motion_residual_spacing": 0.0375,
+    "minimum_displacement_spacing": 0.8,
+    "coordinate_error_spacing": 0.025
+  },
+  "domains": {
+    "schema": 1,
+    "revision": 3,
+    "references": "frozen_unique_rows_in_shared_native_block",
+    "neighbor_reference_window": "beat_group_span_plus_radius"
+  },
+  "recovery": {
+    "schema": 1,
+    "revision": 4,
+    "method": "native_coordinates_with_frozen_beat_references",
+    "rejected_beat_references": "unique_source_clock_rows_outside_tested_group",
+    "unsupported_clock_rows": "unique_source_clock_neighbors",
+    "block_fallback": "all_direct_clock_rows_with_pair_validation"
+  },
+  "timing": {
+    "schema": 1,
+    "revision": 15,
+    "group_beats": 4,
+    "unsupported_rows": "retain_independently_unique_neighbors",
+    "incompatible_chords": "fail_component_keep_independent_rows",
+    "reference_validation": "before_and_after_native_recovery",
+    "phase_selection": "native_spacing_constrained",
+    "neighbor_references": "initial_spatially_validated_rows"
+  },
+  "registration": {
+    "schema": 1,
+    "revision": 1,
+    "model": "head_y_plus_frame_displacement_equals_head_offset",
+    "robust_passes": 3,
+    "maximum_iterations": 512,
+    "gradient_tolerance": 1e-05,
+    "huber_pixels": 1.5
+  },
+  "transcription": {
+    "schema": 1,
+    "revision": 2,
+    "method": "per_measure_unique_intervals",
+    "maximum_row_residual_seconds": 0.012
+  },
+  "spacing": {
+    "schema": 1,
+    "pair_selection": "native_lane_relative_neighbors",
+    "minimum_gap_spacing": 0.07500000000000001
+  },
+  "clock_conversion": {
+    "schema": 1,
+    "method": "shared_clock_residual_over_window",
+    "slope_error_residual_multiplier": 3.0
+  },
+  "local_clock": {
+    "schema": 1,
+    "revision": 1,
+    "selection": "precision_then_native_support",
+    "position_floor_pixels": 0.75,
+    "maximum_radius_seconds": 0.5,
+    "windows": "all_contiguous_bracketing",
+    "bracket_validation": "phase_within_capture_and_position_error"
+  },
+  "speed": {
+    "schema": 1,
+    "revision": 3,
+    "window_seconds": 0.3,
+    "confirmation_seconds": 0.45,
+    "minimum_independent_fraction": 0.7
+  },
+  "hold_simplification": {
+    "revision": 2,
+    "maximum_gap_seconds": 0.12,
+    "maximum_gap_beats": 0.25,
+    "held_state_maximum_gap_seconds": 0.25,
+    "held_state_maximum_gap_beats": 0.5,
+    "purpose": "similar_judgments_and_continuous_held_state",
+    "hold_tick_equivalence": "unverified"
+  },
+  "native_anchor": {
+    "schema": 1,
+    "method": "source_bound_native_cap_center",
+    "coordinate_uncertainty_pixels": 1.0,
+    "maximum_offset_spacing": 0.1,
+    "minimum_similarity": 0.9,
+    "alternative_margin": 0.04
+  },
+  "image_coordinates": {
+    "schema": 1,
+    "revision": 4,
+    "method": "native_image_anchors",
+    "trace": "frames.jsonl"
+  },
+  "visibility": {
+    "schema": 1,
+    "revision": 4
+  },
+  "natural_splits": [
+    1,
+    2,
+    3,
+    4,
+    6,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48,
+    64,
+    96,
+    192
+  ]
+}

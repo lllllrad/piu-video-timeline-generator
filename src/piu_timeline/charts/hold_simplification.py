@@ -1,77 +1,14 @@
-"""Simplify interrupted holds in derived UCS without changing observations."""
-import math
-
-from piu_timeline.charts.transcription import measures
-
-
-POLICY={'revision':2,'maximum_gap_seconds':.12,'maximum_gap_beats':.25,
-        'held_state_maximum_gap_seconds':.25,'held_state_maximum_gap_beats':.5,
-        'purpose':'similar_judgments_and_continuous_held_state',
-        'hold_tick_equivalence':'unverified'}
+"""TypeScript UCS hold simplification; recognition observations remain unchanged."""
+from dataclasses import asdict
+from piu_timeline.derived import CONTRACTS, call
+POLICY=CONTRACTS['hold_simplification']
 
 
-def continuous_state(runs, lane, bridge, origin):
-    """Use retained lane-local recognition, never a combo tick or press guess."""
-    for index,run in enumerate(runs):
-        if run.get('lane')!=lane or run.get('lit')is not True or run.get('frames',0)<2:continue
-        start,end=run.get('start_seconds'),run.get('end_seconds')
-        if (any(type(t)not in (int,float)or not math.isfinite(t)for t in (start,end))
-                or not start<end or start>bridge[0]+origin or end<bridge[1]+origin):continue
-        return {'channel':'receptor_runs','run':index,'playback_range':[start,end],
-                'source_pts_range':[run.get('first_source_pts_seconds'),run.get('last_source_pts_seconds')]}
-    return None
+def continuous_state(runs,lane,bridge,origin):
+    return call('chartHolds.continuousState',runs,lane,bridge,origin)
 
 
-def simplify(document, observations, endpoints, notes, origin, held_runs=()):
-    """Bridge short, bounded same-lane gaps unless another head intervenes."""
-    spans=measures(document)
-    eligible={item['note'] for item in observations if item['kind']=='hold'}
-    blockers={}
-    for index,note in enumerate(notes):
-        if index in eligible:continue
-        if note.get('note_type')=='hold_component' and note.get('reason')=='long_note_body_or_tail':continue
-        target=note.get('target_seconds');error=note.get('prediction_uncertainty_seconds',.02)
-        bounded=(type(target)in (int,float)and math.isfinite(target)
-                 and type(error)in (int,float)and math.isfinite(error)and 0<=error<=.08)
-        blockers.setdefault(note.get('lane'),[]).append(
-            [target-origin-error,target-origin+error] if bounded else None)
-    result=[];edges=dict(endpoints);merges=[]
-    holds=sorted((o for o in observations if o['kind']=='hold'),
-                 key=lambda o:(o['lane'],sum(edges[o['note'],'head'])))
-    for current in holds:
-        item=dict(current);ni=item['note'];head=edges[ni,'head'];tail=edges[ni,'tail']
-        previous=result[-1] if result else None
-        if previous is not None and previous['lane']==item['lane']:
-            pi=previous['note'];old_tail=edges[pi,'tail'];lower=head[0]-old_tail[1];upper=head[1]-old_tail[0]
-            bridge=[min(old_tail[0],head[0]),max(old_tail[1],head[1])]
-            tempos=[float(s['beat_duration']) for s in spans
-                    if float(s['end'])>=bridge[0] and float(s['start'])<=bridge[1]]
-            limit=min(POLICY['maximum_gap_seconds'],min(tempos,default=0)*POLICY['maximum_gap_beats'])
-            state=continuous_state(held_runs,item['lane'],bridge,origin)
-            if state:
-                limit=max(limit,min(POLICY['held_state_maximum_gap_seconds'],
-                                    min(tempos,default=0)*POLICY['held_state_maximum_gap_beats']))
-            blocked=any(b is None or b[0]<=bridge[1] and b[1]>=bridge[0]
-                        for b in blockers.get(item['lane'],[]))
-            if (limit>0 and -limit<=lower<=upper<=limit and tail[0]>old_tail[1]
-                    and head[0]>edges[pi,'head'][1] and not blocked):
-                if 'source_hold_intervals' not in previous:
-                    previous['source_hold_intervals']=[dict(previous)]
-                    previous['bridged_gaps']=[]
-                previous['source_hold_intervals'].append(dict(item))
-                previous['bridged_gaps'].append({'song_range':bridge,'gap_range_seconds':[lower,upper],
-                                                  'maximum_gap_seconds':limit,
-                                                  'basis':'continuous_held_state' if state else 'bounded_chart_geometry',
-                                                  'held_state_evidence':state})
-                previous['observed_end_range']=item['observed_end_range']
-                edges[pi,'tail']=tail
-                del edges[ni,'head'];del edges[ni,'tail']
-                continue
-        result.append(item)
-    for item in result:
-        if 'source_hold_intervals' in item:
-            merges.append({'note':item['note'],'lane':item['lane'],
-                           'source_hold_intervals':item['source_hold_intervals'],
-                           'bridged_gaps':item['bridged_gaps']})
-    result.extend(dict(o)for o in observations if o['kind']!='hold')
-    return result,edges,{'policy':POLICY,'merges':merges}
+def simplify(document,observations,endpoints,notes,origin,held_runs=()):
+    saved={f'{note},{edge}':v for (note,edge),v in endpoints.items()}
+    result,edges,proof=call('chartHolds.simplify',asdict(document),observations,saved,notes,origin,held_runs)
+    return result,{(int(k.split(',')[0]),k.split(',')[1]):v for k,v in edges.items()},proof

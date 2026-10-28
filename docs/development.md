@@ -96,14 +96,20 @@ calibration. See [note-skin images](note-skin-images.md).
 converting ticks into presses. `play/holds/features.py` acquires and caches native-frame pixels;
 `play/holds/geometry.py` resolves head/body/tail geometry in explicit pixel coordinates;
 `play/holds/state.py` attaches independent sustained recognition and receptor-light transitions.
-Geometry does not depend on a successful input match. `play/candidates.py` constrains review
+Geometry does not depend on a successful input match. TypeScript `derived/candidates.ts` constrains review
 alternatives using refresh ownership, processed-row order and per-lane receptor evidence.
-- `play/analysis.py` orchestrates opt-in visual analysis and caches evidence; `play/report.py` renders a self-contained local HTML view with retained SVG geometry and browser-driven CSS transform playback. Bounded time pages limit DOM size; video time anchors animations without per-frame note rebuilding. `play/ranges.py` derives review-only alternative refresh intervals and conditional neighboring-row bounds from saved evidence without changing confirmed associations or reacquiring frames.
+- `play/analysis.py` orchestrates opt-in visual analysis and caches evidence. `play/presentation.py`
+  prepares data through TypeScript consumers; `play/report.py` renders the prepared document and
+  summaries. The standalone SVG view uses browser-driven CSS transform playback. Bounded time pages
+  limit DOM size; video time anchors animations without per-frame note rebuilding. TypeScript
+  `derived/ranges.ts` derives review-only alternative refresh intervals and conditional
+  neighboring-row bounds from saved evidence without changing confirmed associations or reacquiring
+  frames.
 - `play/judgments.py` learns a bounded set of judgment-word templates, detects native-frame label/animation refreshes independently of combo visibility, and merges evidence without duplicate note assignments. MISS never becomes a physical input timestamp.
 - `play/recovery.py` recovers uniquely constrained tap rows using independent lane onsets, preserving display brackets and source PTS while rejecting shared onsets and competing refreshes.
 - `play/frames.py` streams native decoded frames with original PTS and no FPS conversion.
-- `play/motion.py` measures corroborated peer-note displacement, bridges bounded HUD occlusion and maps shared pixel coordinates to continuous target-time estimates. It preserves the original frame timeline and capture uncertainty, with local fitting as a fallback when independent motion support is unavailable.
-- `charts/official.py` downloads and validates the official song catalogue and blank timing archives. `charts/ucs.py` preserves exact section timing; `charts/audio.py` aligns reference music without retiming; `charts/data.py` registers editable, unreviewed chart drafts in a separate repository without replacing existing files. See [chart data](chart-data.md).
+- `play/motion.py` retains online tracking state; TypeScript `derived/clocks.ts` fits shared subframe clocks, and `derived/tracks.ts` registers saved peer-note displacement. It preserves the original frame timeline and capture uncertainty, with local fitting as a fallback when independent motion support is unavailable.
+- `charts/official.py` downloads and validates the official song catalogue and blank timing archives. `charts/ucs.py` adapts Python document values to exact TypeScript section timing; `charts/audio.py` aligns reference music without retiming; `charts/data.py` registers editable, unreviewed chart drafts in a separate repository without replacing existing files. See [chart data](chart-data.md).
 - `charts/policy.py` validates human-authored song regions, maps them through a recording-specific alignment, applies report processing methods, and scopes automatic-check exceptions without changing native evidence or result quotas. Invalid policies remain visible rather than silently taking effect.
 - `play/tracking.py` locates colored note-head outlines, bridges bounded UI occlusions, distinguishes repeated render frames from nonlinear motion, learns combo digit templates and aligns judged rows with confirmed combo updates. A chord occupies one judged row. Compatible native observations can be refitted without frame decoding or OCR; font examples are reusable across plays from unchanged source media. It does not equate display refresh with physical switch input.
 - `formats/` contains Node.js TypeScript presentation programs. `formats/lib/timeline.ts` separates song labels, player names and recording-aware segment labels; both bundled formats share the same automatic name-visibility policy. See [custom formats](formats.md).
@@ -332,9 +338,10 @@ versioned `visibility-diagnostics.json` is derived from saved frames without
 decoding or OCR; replay refreshes an older diagnostic contract through report
 generation. Generic timing exclusions do not suppress these checks.
 
-`play/shared_timing.py` rebuilds displacement from registered trajectory
-identities. `play/spacing_checks.py` checks relative geometry, while
-`play/beats/timing.py` uses locally available official UCS timing and verified
+Python adapters prepare acquisition objects for TypeScript `derived/tracks.ts`,
+`derived/registration.ts` and `derived/clocks.ts`, which rebuild displacement
+and subframe clocks from registered trajectory identities. `derived/beats/`
+checks relative geometry and uses prepared official UCS timing and verified
 alignment to test natural subdivisions. Missing references, failed shared
 support and ambiguous beat rows remain explicit review states. Native video,
 frame traces and pixel caches are reusable across these derived-rule changes.
@@ -422,9 +429,9 @@ Reference/current checks themselves remain read-only and never decode audio or
 fetch reference files. Failed preparation remains an explicit beat warning with
 the alignment error; it does not silently fall back to a guessed song origin.
 
-`play/registered_coordinates.py` refines registered displacement with a
-matrix-free solve of the head-overlap Laplacian and robust native-position
-weights. It uses NumPy only and runs on saved detections. Its diagnostics are
+`derived/registration.ts` refines registered displacement with a matrix-free
+solve of the head-overlap Laplacian and robust native-position weights. It
+runs on saved detections without numerical-library dependencies. Its diagnostics are
 retained under `scroll_motion.coordinate_registration`; failed blocks cannot
 provide shared distances, target clocks or automatic speed estimates. Native
 source-position conflicts remain separate reconstruction warnings.

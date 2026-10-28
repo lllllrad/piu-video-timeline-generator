@@ -6,7 +6,9 @@ import numpy as np
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.anchors import cap_reference, FORMAT as ANCHOR_FORMAT
 
-FORMAT={'schema':1,'revision':4,'method':'native_image_anchors','trace':'frames.jsonl','native_cap_registration':ANCHOR_FORMAT}
+from piu_timeline.derived import CONTRACTS
+
+FORMAT=CONTRACTS['image_coordinates']
 
 
 

@@ -127,7 +127,10 @@ def layer_manifest(directory):
                      'appearance-features.npz', 'evidence/judgments/features-v3.npz'],
         'frame_observations': ['frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
         'interpretations': ['object-interpretation.json', 'head-registration.json', 'skin-role-evidence.json', 'body-risk-evidence.json', 'holds.json', 'visual-channels.json'],
+        'coordinates': ['coordinates.json'],
+        'musical_timing': ['beat-input.json', 'beat-timing.json'],
         'associations': ['analysis.json'],
+        'presentation': ['report-data.json', 'report-summary.json', 'report.html'],
     }
     return {'source': 'analysis.json#/media',
             'artifacts': artifacts,
@@ -160,7 +163,7 @@ def augment_channels(data, directory, frames=None):
     if path.is_file():
         saved = json.loads(path.read_text())
         if saved.get('contract') == contract:
-            return annotate_matches({**data, 'visual_channels': saved['channels']})
+            return annotate_matches({**data, 'visual_channels': {**saved['channels'],'layers':layer_manifest(directory)}})
     if frames is None:
         from piu_timeline.play.receptors import observations, reject_common_flashes
         frames = list(read_frames(directory/'hold-frames.jsonl'))
@@ -174,37 +177,6 @@ def augment_channels(data, directory, frames=None):
 
 
 def annotate_matches(data):
-    """Make channel provenance available on every match, including conflicts."""
-    if not data.get('visual_channels'):
-        return partition(data)
-    from piu_timeline.play.receptors import onset_overlaps
-    guard = 2*(data.get('median_frame_interval_seconds') or .017)
-    matches = []
-    for original in assignments(data):
-        match = dict(original)
-        ni = match['note']
-        observed = next((e for e in processing_evidence(data) if e['note'] == ni), None)
-        if observed is not None:
-            match.pop('processing_conflict',None)
-            match.pop('processing_passage_after_refresh',None)
-        refs = ['motion:'+str(ni)]
-        for key, prefix in (('combo_event','combo:'), ('judgment_event','judgment:')):
-            if match.get(key) is not None:
-                refs.append(prefix+str(match[key]))
-        lo = match.get('observation_lower_seconds', match.get('combo_lower_seconds'))
-        hi = match.get('observation_upper_seconds', match.get('combo_upper_seconds'))
-        if lo is not None and hi is not None:
-            refs += [run.get('id', 'receptor:'+str(i)) for i,run in enumerate(receptor_evidence(data))
-                     if run['lane'] == data['notes'][ni]['lane'] and onset_overlaps(run, lo, hi, guard)]
-            if processing_support(data, ni, lo, hi, guard):
-                refs.append('processing:'+str(ni))
-        match['visual_evidence'] = refs
-        match['processing_status'] = observed['status'] if observed else 'unavailable'
-        if observed and observed['status'] == 'disappeared_near_receptor' and lo is not None and hi is not None:
-            match['processing_conflict'] = processing_conflicts(data, ni, lo, hi, guard)
-        if observed and hi is not None:
-            from piu_timeline.play.processing.passage import after_refresh
-            passage=after_refresh(observed,hi,guard)
-            if passage:match.update(processing_conflict=True,processing_passage_after_refresh=passage)
-        matches.append(match)
-    return partition({**data,'matches':matches,'conflicted_matches':[]})
+    """Attach provenance through the TypeScript evidence consumer."""
+    from piu_timeline.derived import call,evidence_input
+    return {**data,**call('evidence.associationPatch',evidence_input(data),True)}

@@ -78,6 +78,19 @@ class PlayCacheTest(unittest.TestCase):
             self.assertEqual(report.with_name('frames.jsonl').read_text(),trace)
             self.assertEqual(Path(result['calibration']['file']),report.parent/'evidence/proof.png')
             self.assertEqual(Path(result['calibration']['file']).read_bytes(),b'original evidence')
+            # A musical-rule change resumes the independently persisted coordinate
+            # output, even after its pending directory was promoted and relocated.
+            result['beat_timing']['contract']['format']={'old_rules':True}
+            (report.parent/'analysis.json').write_text(json.dumps(result))
+            with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
+                    patch.object(play,'refit_saved',side_effect=AssertionError('must not replay native frames')), \
+                    patch.object(play,'analyze_play',side_effect=AssertionError('must not reacquire')), \
+                    patch.object(play.shutil,'copytree',side_effect=AssertionError('must not copy native artifacts')):
+                self.assertEqual(play.run('id',2,width=320),report)
+            refreshed=json.loads((report.parent/'analysis.json').read_text())
+            self.assertEqual(refreshed['coordinate_stage'],result['coordinate_stage'])
+            self.assertEqual(refreshed['media'],media)
+            self.assertEqual(report.with_name('frames.jsonl').read_text(),trace)
             self.assertEqual((donor/'evidence/proof.png').read_bytes(),b'original evidence')
 
     def test_counter_recovery_must_fit_neighboring_original_observations(self):

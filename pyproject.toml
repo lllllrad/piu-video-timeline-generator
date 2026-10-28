@@ -17,3 +17,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "piu_timeline.play" = ["report.html", "report.css", "report.js", "report-evidence.js"]
+"piu_timeline.derived" = ["*.ts", "*.json", "beats/*.ts", "charts/*.ts"]

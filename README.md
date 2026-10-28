@@ -93,6 +93,11 @@ counted as new presses. Unreadable endpoints, rolls and nonlinear motion remain 
 writes a linked overview at `.local/data/SOURCE_ID/play/index.html`. See [play
 analysis](docs/play-analysis.md) for calibration, latency correction and limited windows.
 
+Saved-data modeling and report consumers run in TypeScript; Python handles media,
+OCR and native image evidence. Registered coordinates and prepared report data
+are reusable independently of beat reconstruction and HTML rendering. See
+[derived analysis](docs/derived-analysis.md) for `just derive` and `just render`.
+
 ## Editable chart data
 
 Official UCS downloads contain timing and BPM changes, **not the actual chart notes**. Create a separate local Git repository, then fill a draft from an already analyzed play:
