@@ -254,6 +254,14 @@ onset's source PTS.
 
 ## Judgment animation refreshes
 
+Aligned combo and word refreshes may share a timing family, but retain their
+own row capacities. A counter increment of two does not turn a single word
+refresh into a two-row observation. Count plausible alternatives separately for
+each source's own bracket and distance: a single word with two plausible rows
+remains ambiguous even beside an aggregate counter. A word can independently
+support a tap during a hold only with the existing unique-row and lane-onset or
+processing proof; the aggregate counter is not consumed as a single tap.
+
 A repeated word can relaunch through several small growth steps. Compare a
 continuous run of native word boxes over at most 75 ms, requiring two width
 growth steps of at least 3%, total width growth over 10% and area growth over

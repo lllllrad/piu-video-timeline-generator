@@ -72,15 +72,23 @@ export function candidates(input: RecordData, events: RecordData[]): [Record<str
       selected.push(...rows.filter(r => !selected.includes(r) && Math.abs(r.target - center) <= hi - lo + .02));
       selected = selected.sort((a, b) => a.cost - b.cost).slice(0, capacity);
     }
-    for (const r of rows) if (!selected.includes(r)) r.notes.forEach(i => reject(i, 'another_note_row_is_better_supported'));
     const sourceCost = (r, e) => Math.max(0, Math.abs(r.target + offset - (e.lower_seconds + e.upper_seconds) / 2) - (e.upper_seconds - e.lower_seconds) / 2 - r.uncertainty);
-    for (const row of selected) for (const index of row.notes) for (const event of family.events) {
+    const sourceRows = new Map<RecordData, RecordData[]>();
+    for (const event of family.events) {
+      const plausible = ((event.delta ?? 1) === 1 ? rows : selected).filter(row =>
+        row.notes.some(index => intersectWindow([event.lower_seconds, event.upper_seconds], associationWindow(notes[index], correction))));
+      const best = Math.min(...plausible.map(row => sourceCost(row, event)));
+      sourceRows.set(event, plausible.filter(row => (event.delta ?? 1) !== 1 || sourceCost(row, event) <= best + Math.max(.008, frame / 2)));
+    }
+    const usedRows = new Set([...sourceRows.values()].flat());
+    for (const row of rows) if (!usedRows.has(row)) row.notes.forEach(i => reject(i, 'another_note_row_is_better_supported'));
+    for (const event of family.events) for (const row of sourceRows.get(event)) for (const index of row.notes) {
       const window = associationWindow(notes[index], correction), range = intersectWindow([event.lower_seconds, event.upper_seconds], window);
-      if (!range || (event.delta ?? 1) === 1 && sourceCost(row, event) > Math.min(...selected.map(r => sourceCost(r, event))) + Math.max(.008, frame / 2)) continue;
+      if (!range) continue;
       (result[index] ??= []).push({...event, candidate_range: range, association_window: window, constraints: ['hard_timing_window', 'event_ownership', 'processed_row_order', 'closest_row'],
         processing_evidence: processingSupport(data, index, range[0], range[1], frame * 2), lane_receptor_support: !!supports[index].length, lane_support_runs: supports[index],
         lane_receptor_status: supports[index].length ? 'supported' : (unknown[notes[index].lane] ?? []).some(r => r.start_seconds <= range[1] && r.end_seconds >= range[0]) ? 'unknown' : 'unmeasured',
-        ranking_offset_seconds: offset, alternative_rows: capacity === 1 ? selected.length : 1, aggregate_row_capacity: capacity});
+        ranking_offset_seconds: offset, alternative_rows: (event.delta ?? 1) === 1 ? sourceRows.get(event).length : 1, aggregate_row_capacity: event.delta ?? 1});
     }
   }
   return [result, Object.fromEntries(Object.entries(rejected).map(([i, r]) => [i, [...r].sort()]))];
