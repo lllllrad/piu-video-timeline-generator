@@ -42,6 +42,17 @@ the gap cannot reuse a single-coordinate error budget. Conversely, equal shifts
 of both heads preserve their gap but still contradict the reference coordinates.
 Without an independent model, the registered-motion gap check remains required.
 
+A confirmed tap can retain its independently restored native crossing interval
+when musical-row assignment fails. The presentation/association view marks it
+with `target_timing_basis: native_motion` and `chart_timing_status: unresolved`;
+its midpoint is a recording-time estimate, not an accepted beat row. This requires
+an exclusively tap image role, a finite native interval and a restored native
+clock. Unknown/conflicting roles, hold caps, failed clocks and unrelated exclusions
+cannot use this path. Original source exclusions and beat failures remain intact.
+Normal refresh ownership and independent input-evidence requirements still apply.
+UCS transcription reports the unresolved beat placement and neither places the
+tap nor extends timing sections to accommodate it.
+
 Replay a prepared input without Python, OCR or video decoding:
 
 ```sh

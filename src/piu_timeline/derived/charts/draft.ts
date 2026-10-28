@@ -24,7 +24,7 @@ export function draft(template: Document, view: RecordData, alignment: RecordDat
   const [calibration, phaseProof] = transcriptionAlignment(template, view, alignment);
   let doc = expanded(template, lanes), rows = grid(doc), extension = null;
   if (extend) {
-    const ends = view.notes.filter(n => n.status === 'estimated' && Number.isFinite(n.target_seconds) && (n.prediction_uncertainty_seconds ?? .02) <= .08)
+    const ends = view.notes.filter(n => n.status === 'estimated' && n.chart_timing_status !== 'unresolved' && Number.isFinite(n.target_seconds) && (n.prediction_uncertainty_seconds ?? .02) <= .08)
       .map(n => n.target_seconds - calibration.song_start_seconds);
     ends.push(...(view.hold_analysis?.holds ?? []).filter(h => h.end_range && !h.end_censored).map(h => (h.end_range[0] + h.end_range[1]) / 2 - calibration.song_start_seconds));
     const latest = Math.min((ends.length ? Math.max(...ends) : 0) + .05, view.end_seconds - calibration.song_start_seconds + .1), settings: Record<string, string> = {};
@@ -52,7 +52,7 @@ export function draft(template: Document, view: RecordData, alignment: RecordDat
       const lane = n.lane;
       if (!Number.isInteger(lane) || lane < 0 || lane >= lanes) throw new Error('Invalid observed lane');
       const hold = holds.get(ni), kind = n.type_status;
-      if (hold?.chart_timing_status === 'unresolved' || n.chart_timing_status === 'unresolved') throw new Error('Hold beat timing remains unresolved');
+      if (hold?.chart_timing_status === 'unresolved' || n.chart_timing_status === 'unresolved') throw new Error(hold ? 'Hold beat timing remains unresolved' : 'Note beat timing remains unresolved');
       if (kind === 'conflict') throw new Error('Contradictory tap and hold observations');
       if (!hold && kind !== 'tap') throw new Error(kind === 'hold' ? 'Observed hold cap has no resolved hold geometry' : 'Note type is unverified');
       const uncertainty = n.prediction_uncertainty_seconds ?? .02, head = interval(n.target_seconds, uncertainty);
@@ -66,7 +66,7 @@ export function draft(template: Document, view: RecordData, alignment: RecordDat
       observed.push({note: ni, lane, kind: hold ? 'hold' : 'tap', observed_target_range: [n.target_seconds - uncertainty, n.target_seconds + uncertainty], ...(hold ? {observed_end_range: hold.end_range} : {})});
     } catch (error) {
       if (!['Invalid observed lane', 'Contradictory tap and hold observations', 'Observed hold cap has no resolved hold geometry',
-        'Note type is unverified', 'Unbounded visible-note timing', 'Hold endpoint is censored', 'Hold beat timing remains unresolved'].includes(error.message)) throw error;
+        'Note type is unverified', 'Unbounded visible-note timing', 'Hold endpoint is censored', 'Hold beat timing remains unresolved', 'Note beat timing remains unresolved'].includes(error.message)) throw error;
       pending.push({note: ni, reason: error.message});
     }
   });

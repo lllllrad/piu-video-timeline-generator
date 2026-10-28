@@ -1,5 +1,5 @@
 /** Project measured held intervals into chart objects without a separate head press. */
-import {nativeEndpoint} from './holds/input.ts';
+import {nativeEndpoint, inputNotes} from './holds/input.ts';
 import type {RecordData} from './types.ts';
 const unique = <T>(a: T[]): T[] => [...new Set(a)];
 const count = (observations, field) => { const result = {}; for (const o of observations) result[o[field]] = (result[o[field]] ?? 0) + 1; return result; };
@@ -72,7 +72,14 @@ export function projectTypes(data: RecordData, notes: RecordData[], holds: Recor
 }
 
 export function chartProjection(data: RecordData): RecordData {
-  const holds = data.hold_analysis?.holds ?? [], notes = (data.notes ?? []).map(n => ({...n}));
+  const roles = new Map((data.visual_channels?.note_types?.notes ?? []).map(r =>
+    [r.note, new Set((r.observations ?? []).map(o => o.kind).filter(k => k !== 'unknown'))]));
+  const holds = data.hold_analysis?.holds ?? [], notes = inputNotes(data.notes ?? []).map((n,i) => {
+    const kinds=roles.get(i) as Set<string> | undefined;
+    if (!n.geometry_source_failure) return {...n};
+    if (kinds?.size!==1 || !kinds.has('tap')) return {...data.notes[i]};
+    return {...n, chart_timing_status:'unresolved', target_timing_basis:'native_motion'};
+  });
   if (!data.hold_analysis || !Object.keys(data.hold_analysis).length) return {...data, notes, note_type_diagnostics: projectTypes(data, notes, [])};
   const suppressed = new Set<number>(holds.flatMap(h => [...h.covered_notes, h.head_note, h.tail_note]).filter(i => i != null));
   const tailRoles = observedTailRoles(data).filter(r => !suppressed.has(r.tail_note)); tailRoles.forEach(r => suppressed.add(r.tail_note));
