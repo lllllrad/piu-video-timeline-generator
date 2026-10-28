@@ -331,3 +331,18 @@ missing image geometry. Accepted holds retain the length interval and original P
 Unregistered endpoint frames remain an explicit geometry warning, even if nearby
 qualified frames establish the hold. This relative length proof does not establish
 absolute receptor timing calibration or enable UCS export for an uncalibrated skin.
+
+## Geometry when beat placement fails
+
+An image-confirmed hold must not disappear solely because an endpoint has no
+unique musical row. Geometry preparation can reuse its retained `video_target_range`
+when native motion reconstruction succeeded and only beat reconstruction rejected
+the note. Missing, nonfinite or failed native timing cannot supply this fallback.
+The connected image regions, endpoint roles and ownership checks still run.
+
+Such a hold retains its native endpoint bounds and original beat failure records,
+and explicitly marks chart timing unresolved. Projection verifies that the displayed
+native head range belongs to the original observation. Reports can show that hold
+and its sustained evidence; the original timing warnings remain active. UCS draft
+placement rejects it explicitly until musical timing is resolved. Ordinary taps and
+native reconstruction failures retain their existing eligibility rules.

@@ -319,6 +319,7 @@ for(const t of part)line(root,x(t),y-9,x(t),y+9,color,2);
 }}else label(root,'Unconfirmed — no press timestamp',p,y+4,color);
 }
 text('p','Note '+(selectedNote+1)+' / '+(data.layout.lanes[note.lane].name||String(note.lane+1))+' · Target: '+formatRange(target)+' · Input: '+(inputIntervals(match,selectedNote).map(formatRange).join(' ∪ ')||'Unconfirmed'),$('comparisonDetails'));
+if(note.chart_timing_status==='unresolved')text('p','At least one hold endpoint uses an observed native timing range. Musical-row placement remains unresolved; its original timing warnings remain active and UCS export is pending.',$('comparisonDetails'));
 text('p','Note type: '+(note.type_status||'unknown')+(note.type_status==='hold'&&!hold?' / hold geometry unresolved':''),$('comparisonDetails'));
 if(note.type_status==='unknown')text('p','Type remains unconfirmed: '+(Object.entries(note.type_unknown_reasons||{}).map(([reason,count])=>reason.replaceAll('_',' ')+': '+count).join('; ')||'No eligible clear type observation.'),$('comparisonDetails'));
 for(const observation of note.type_evidence||[]){

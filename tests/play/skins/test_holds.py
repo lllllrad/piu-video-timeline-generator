@@ -37,6 +37,25 @@ def scenario():
 
 
 class ImageHoldTest(unittest.TestCase):
+    def test_failed_beat_row_does_not_erase_a_connected_image_hold_with_native_timing(self):
+        data,native,receptors=scenario()
+        n=data['notes'][0]
+        n.update(status='excluded',reason='beat_timing_reconstruction_failed',target_seconds=None,
+                 video_target_range=[.83,.87],timing_reconstruction={'status':'restored'},
+                 beat_reconstruction={'status':'failed','reason':'ambiguous_beat_rows'})
+        before=deepcopy(data)
+        holds=reconstruct_images(data,receptors,native,[])
+        self.assertEqual(len(holds),1)
+        self.assertEqual(holds[0]['start_range'],[.83,.87])
+        self.assertEqual(holds[0]['geometry_native_endpoint_notes'],[0])
+        self.assertEqual(holds[0]['chart_timing_status'],'unresolved')
+        self.assertEqual(data,before)
+        n['timing_reconstruction']['status']='failed'
+        warnings=[]
+        self.assertEqual(reconstruct_images(data,receptors,native,warnings),[])
+        self.assertTrue(warnings)
+
+
     def test_independent_registered_endpoint_errors_recover_connected_rounded_caps(self):
         data,native,receptors=scenario()
         errors=[(-.75,.75),(.5,-.5),(-.25,.25),(.75,-.75)]

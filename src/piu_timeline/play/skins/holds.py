@@ -6,7 +6,7 @@ from piu_timeline.play.holds.state import contextual_hold_support, recognition_s
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 10, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 11, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -20,6 +20,8 @@ def covered(lo, hi, boxes):
 
 
 def reconstruct_images(data, receptor_frames, native, diagnostics, *, references=None, cap_references=None, include_state=True):
+    from piu_timeline.derived import call
+    data = {**data, 'notes': call('holdGeometry.inputNotes', data['notes'])}
     from piu_timeline.play.skins.coverage import reference_rows, image_spans
     references=reference_rows(data)if references is None else references
     cap_references=reference_rows(data,cap_only=True)if cap_references is None else cap_references
@@ -101,6 +103,8 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
             continue
         first, last = data['notes'][head], data['notes'][tail]
         def bounds(note):
+            if 'geometry_native_range' in note:
+                return list(note['geometry_native_range'])
             t, u = note['target_seconds'], note['prediction_uncertainty_seconds']
             return [t-u, t+u]
         holds.append({'id': len(holds), 'lane': first['lane'], 'head_note': head, 'tail_note': tail,
@@ -114,6 +118,11 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                       'component_evidence': {str(i): {'kind': 'registered_cap',
                           'source_pts_seconds': sorted({p['source_pts'] for p in proof
                               if ('head_y'if i==head else'tail_y')in p})} for i in (head, tail)}})
+        native_endpoints = [i for i in (head, tail) if 'geometry_native_range' in data['notes'][i]]
+        if native_endpoints:
+            holds[-1].update(geometry_native_endpoint_notes=native_endpoints, chart_timing_status='unresolved',
+                             geometry_source_failures=[{'note': i, **data['notes'][i]['geometry_source_failure']}
+                                                       for i in native_endpoints])
         extent = lengths.cache.get((head, tail))
         if extent and extent['status'] == 'consistent':
             holds[-1]['endpoint_extent_evidence'] = extent
