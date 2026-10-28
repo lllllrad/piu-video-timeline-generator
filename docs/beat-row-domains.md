@@ -208,3 +208,18 @@ video range, a null accepted target and an explicit reconstruction warning.
 The analysis remains failed while any such warning survives. Independent unique
 neighbors can still supply geometry and input associations, subject to all
 ordinary checks; unresolved heads cannot participate in those accepted matches.
+
+
+## Closely staggered notes
+
+A unique candidate row for each head does not establish that their relative
+placement is correct. Final native-spacing validation also checks neighboring
+heads separated by more than the existing concurrency compatibility bound
+(1 pixel observed gap plus 1 pixel coordinate uncertainty per head). This bound
+is independent of note width and UCS split. Thus a small but measurable stagger
+cannot silently become a chord. The check retains the existing four-frame,
+65 ms support and residual requirements, and uses registered native offsets or
+an independently supported coordinate model. Missing coordinate support remains
+an explicit reconstruction failure. Differences inside the pixel uncertainty
+bound do not establish distinct rows; unresolved row domains retain ambiguity
+warnings. Actual player input times never determine chart concurrency.

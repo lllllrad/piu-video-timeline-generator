@@ -2,8 +2,13 @@
 from collections import defaultdict
 
 import numpy as np
+from piu_timeline.play.beats.chords import FORMAT as CHORD_FORMAT
 from piu_timeline.play.beats.coordinates import predictions
 from piu_timeline.play.beats.coordinates import FORMAT as COORDINATE_FORMAT
+
+
+SPACING_FORMAT={'schema':1,'pair_selection':'native_pixel_resolvable_neighbors',
+                'minimum_gap_pixels':CHORD_FORMAT['maximum_gap_pixels']+2*CHORD_FORMAT['coordinate_error_pixels']}
 
 
 def attributed_heads(a,b,notes,models):
@@ -85,7 +90,7 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
             baseline=[p for p in points if p[1]in baseline_indices]
             neighbors.extend(pair for pair in zip(baseline,baseline[1:])if pair not in neighbors)
         for (ya,a),(yb,b) in neighbors:
-            if yb-ya>.65*spacing:pairs[(a,b)].append((time,yb-ya))
+            if yb-ya>SPACING_FORMAT['minimum_gap_pixels']:pairs[(a,b)].append((time,yb-ya))
     failed=[]
     for (a,b),samples in pairs.items():
         if changed_indices is not None and a not in changed_indices and b not in changed_indices:continue

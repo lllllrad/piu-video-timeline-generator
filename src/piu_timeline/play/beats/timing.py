@@ -10,13 +10,13 @@ from piu_timeline.play.beats.coordinates import RECOVERABLE_MOTION_FAILURES
 from piu_timeline.play.beats.chords import FORMAT as CHORD_FORMAT
 from piu_timeline.play.beats.domains import FORMAT as DOMAIN_FORMAT
 from piu_timeline.play.beats.recovery import FORMAT as RECOVERY_FORMAT
-from piu_timeline.play.spacing_checks import CLOCK_CONVERSION_FORMAT
+from piu_timeline.play.spacing_checks import CLOCK_CONVERSION_FORMAT,SPACING_FORMAT
 
 from piu_timeline.charts.ucs import NATURAL_SPLITS
 
 FORMAT={'schema':1,'revision':15,'group_beats':4,'natural_splits':list(NATURAL_SPLITS),
         'unsupported_rows':'retain_independently_unique_neighbors',
-        'reference_validation':'before_and_after_native_recovery','clock_conversion':CLOCK_CONVERSION_FORMAT,
+        'reference_validation':'before_and_after_native_recovery','clock_conversion':CLOCK_CONVERSION_FORMAT,'spacing_checks':SPACING_FORMAT,
         'phase_selection':'native_spacing_constrained','independent_coordinates':COORDINATE_FORMAT,'native_chords':CHORD_FORMAT,'native_row_domains':DOMAIN_FORMAT,'native_recovery':RECOVERY_FORMAT}
 
 
