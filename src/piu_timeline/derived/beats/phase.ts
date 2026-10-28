@@ -20,7 +20,9 @@ export function fitGroups(groups: RecordData[], phase: number, consistent?: Vali
       if (t != null && (!qualified || qualified.has(n))) unique.set(n, [t, g.bpm]);
     });
   });
-  const results = groups.map(g => {
+  const blocked = new Set<number>();
+  const refine = () => groups.map((g, i) => {
+    if (blocked.has(i)) return {status: 'failed', reason: 'unstable_neighbor_reference_rows'};
     const blocks = [];
     for (const b of g.native_coordinates ?? []) {
       blocks.push(b);
@@ -34,20 +36,40 @@ export function fitGroups(groups: RecordData[], phase: number, consistent?: Vali
     }
     return run(g, blocks);
   });
-  for (let pass = 0; pass < groups.length; pass++) {
+  let results = refine();
+  const history = groups.map(() => []);
+  // Initial neighboring rows are provisional. A row refined to a different
+  // time cannot continue calibrating another group at its previous time.
+  // Revoke that assignment and recompute from original observations; deleting
+  // provisional references makes this process finite without accepting a cycle.
+  while (true) {
     const final = new Map();
     groups.forEach((g, i) => { if (['restored', 'partial'].includes(results[i].status)) (g.notes ?? []).forEach((n, j) => {
       if (results[i].targets[j] != null) final.set(n, results[i].targets[j]);
     }); });
-    const invalid = [];
+    const invalid = [], revoked = new Set();
     groups.forEach((g, i) => {
       const local = new Set(g.notes ?? []);
       const refs = (results[i].native_coordinate_constraints ?? []).flatMap(p => p.model.references).filter(r => !local.has(r.note));
-      if (refs.some(r => !final.has(r.note) || Math.abs(final.get(r.note) - r.target_seconds) > 1e-8)) invalid.push(i);
+      const bad = [...new Map<string, RecordData>(refs.filter(r => !final.has(r.note) || Math.abs(final.get(r.note) - r.target_seconds) > 1e-8)
+        .map(r => [`${r.note}:${r.target_seconds}`, r])).values()];
+      if (bad.length) invalid.push(i);
+      for (const r of bad) {
+        revoked.add(r.note);
+        history[i].push({note: r.note, reference_target_seconds: r.target_seconds, final_target_seconds: final.get(r.note) ?? null,
+          reason: final.has(r.note) ? 'reference_row_changed' : 'reference_row_unresolved'});
+      }
     });
     if (!invalid.length) break;
-    for (const i of invalid) results[i] = {status: 'failed', reason: 'unstable_neighbor_reference_rows'};
+    let removed = false;
+    for (const note of revoked) if (unique.delete(note)) removed = true;
+    if (!removed) {
+      // An invalid externally supplied reference cannot be replaced by a guess.
+      for (const i of invalid) { blocked.add(i); for (const note of groups[i].notes ?? []) unique.delete(note); }
+    }
+    results = refine();
   }
+  results = results.map((r, i) => history[i].length ? {...r, neighbor_reference_resolution: history[i]} : r);
   return results;
 }
 

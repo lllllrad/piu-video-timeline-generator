@@ -35,7 +35,8 @@
   },
   "domains": {
     "schema": 1,
-    "revision": 3,
+    "revision": 4,
+    "neighbor_reference_validation": "recompute_without_revoked_provisional_rows",
     "references": "frozen_unique_rows_in_shared_native_block",
     "neighbor_reference_window": "beat_group_span_plus_radius"
   },

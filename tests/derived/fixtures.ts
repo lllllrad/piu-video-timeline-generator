@@ -39,6 +39,35 @@ export function nativeScene(events: [number, number][], spacing = 40, fps = 60, 
       coordinate_registration: {chunks: [{chunk: 0, status: 'fitted', head_offsets: offsets}]}}};
 }
 
+/** A broad crossing initially fits a coarse row, then loses native support. */
+export function neighborReferenceScene(spacing=40,fps=60) {
+  const events:[number,number][]=Array.from({length:5},(_,i)=>[1.125+i/8,i%5]);
+  events.push([1.875+1/128,0]);
+  for(let i=0;i<7;i++)events.push([2+i/8,(i+1)%5]);
+  const data=nativeScene(events,spacing,fps,5,{end:3}),velocity=spacing*6;
+  data.notes.forEach((n,i)=>{
+    const bias=i<5?(i%2===0?1:-1)*.02375*spacing:0;
+    n.points=n.points.map(([t,y])=>[t,y+bias]);
+    data.scroll_motion.coordinate_registration.chunks[0].head_offsets[i].offset_pixels+=bias;
+    n.motion_target_phase+=bias;n.target_seconds=events[i][0]+bias/velocity;
+    n.prediction_uncertainty_seconds=.005;n.fit_method='shared_scroll_clock';
+  });
+  Object.assign(data.notes[5],{target_seconds:1.879,motion_clock:null,fit_method:'shared_scroll_frame_bounds',
+    native_clock_warning:{reason:'shared_subframe_clock_unresolved'}});
+  data.timing_reconstruction={status:'failed',failed_notes:1,restored_notes:data.notes.length,
+    warnings:[{note:5,lane:data.notes[5].lane,reason:'shared_subframe_clock_unresolved',check:'timing_reconstruction',
+      visible_start_seconds:1.874,visible_end_seconds:1.884}]};
+  const heads=data.scroll_motion.coordinate_registration.chunks[0].head_offsets.map((h,i)=>({
+    offset:h.offset_pixels,lane:data.notes[i].lane,native_note:i,native_points:data.notes[i].points.length,
+    native_maximum_error_pixels:0,source_pts_range:[80+data.notes[i].points[0][0],80+data.notes[i].points.at(-1)[0]]}));
+  const groups=[events.flatMap(([t],i)=>t<2?[i]:[]),events.flatMap(([t],i)=>t>=2?[i]:[])].map(indices=>({
+    notes:indices,targets:indices.map(i=>data.notes[i].target_seconds),errors:indices.map(i=>data.notes[i].prediction_uncertainty_seconds),bpm:120,origin:0,
+    native_coordinates:[{chunk:0,lane_spacing_pixels:spacing,
+      heads:Object.fromEntries(indices.map((i,j)=>[j,heads[i]])),
+      neighbor_heads:Object.fromEntries(heads.flatMap((h,i)=>indices.includes(i)?[]:[[i,h]]))}]}));
+  return {data,events,groups};
+}
+
 /** Captured endpoints with independent registration errors; truth stays rigid. */
 export function holdEndpointScene(length: number, scale = 1, delays: number[] = []) {
   const times = Array.from({length: 12}, (_, i) => .2 + i / 60 + (delays[i] ?? 0));

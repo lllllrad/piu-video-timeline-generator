@@ -262,8 +262,17 @@ run the same independent native-spacing and concurrency checks used to score
 the final assignment. An initially unique row which already fails those checks
 cannot constrain another group's domains. Rebuild neighbor models using only
 the surviving initial rows, without promoting newly resolved rows into that
-reference set. Later reference changes and failures still invalidate dependent
-proofs. A unique row alone is insufficient evidence for use as a neighbor anchor.
+reference set. If refinement changes or rejects a referenced row, withdraw its
+provisional assignment from the neighbor-reference set and recompute affected
+inferences from the original native domains. Never retain a proof using the old
+row or fail a whole group solely because that obsolete proof was attempted.
+All remaining reference bands, native position gates and unique-row checks still
+apply. Newly refined rows cannot replace withdrawn initial references in this
+pass. The reference set only shrinks, so circular changes cannot bootstrap new
+anchors. An invalid externally supplied reference which cannot be withdrawn
+remains an explicit failure. `neighbor_reference_resolution` retains the old and
+final row targets behind each withdrawal. A unique row alone is insufficient
+evidence for use as a neighbor anchor.
 
 
 ## Geometry units
