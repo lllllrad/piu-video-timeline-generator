@@ -13,6 +13,17 @@ def observation(label='PERFECT',width=100,height=20,blank=False):
     return {'label':label,'confidence':.99 if label else 0,'box':[5,5,width,height] if label else None,'blank':blank}
 
 
+def reappearing_word_capture(fps=60,clear_seconds=.15,hidden_frames=2):
+    """Native reads of a word, a clear interval, occlusion and the same word."""
+    clear_frames=round(clear_seconds*fps)
+    frames=[]
+    for i in range(2+clear_frames+hidden_frames+3):
+        clear=2<=i<2+clear_frames;hidden=2+clear_frames<=i<2+clear_frames+hidden_frames
+        frames.append({'playback_seconds':i/fps,'source_pts_seconds':80+i/fps,
+                       **observation(None if clear or hidden else 'PERFECT',blank=clear)})
+    return frames,[(1+clear_frames)/fps,(2+clear_frames+hidden_frames)/fps]
+
+
 class JudgmentTest(unittest.TestCase):
     def combo_data(self,times,brackets):
         return {'notes':[{'lane':0,'status':'estimated','target_seconds':t} for t in times],
@@ -320,6 +331,36 @@ class JudgmentTest(unittest.TestCase):
         for t in (.08,.10,.15,.20,.25):tracker.update(t,observation(None))
         tracker.update(.27,observation());tracker.update(.29,observation())
         self.assertEqual(len(tracker.events),1)
+
+    def test_a_completed_clear_interval_survives_later_unreadable_frames(self):
+        for fps in (30,60,120):
+            with self.subTest(fps=fps):
+                frames,expected=reappearing_word_capture(fps);before=deepcopy(frames);tracker=JudgmentTracker()
+                for frame in frames:tracker.update(frame['playback_seconds'],frame)
+                self.assertEqual(len(tracker.events),2)
+                event=tracker.events[-1]
+                self.assertEqual(event['trigger'],'reappearance')
+                self.assertEqual([event['lower_seconds'],event['upper_seconds']],expected)
+                self.assertEqual(event['blank_observation_range'],[2/fps,expected[0]])
+                self.assertEqual(event['detection_status'],'candidate')
+                self.assertEqual(frames,before)
+        frames,expected=reappearing_word_capture(hidden_frames=12);tracker=JudgmentTracker()
+        for frame in frames:tracker.update(frame['playback_seconds'],frame)
+        self.assertEqual(len(tracker.events),2)
+        self.assertEqual([tracker.events[-1]['lower_seconds'],tracker.events[-1]['upper_seconds']],expected)
+        self.assertEqual(tracker.events[-1]['detection_reason'],'judgment_observation_gap')
+        frames,_=reappearing_word_capture(clear_seconds=.05);tracker=JudgmentTracker()
+        for frame in frames:tracker.update(frame['playback_seconds'],frame)
+        self.assertEqual(len(tracker.events),1,'unknown frames cannot complete a short clear interval')
+        frames,_=reappearing_word_capture();tracker=JudgmentTracker()
+        clear=[f for f in frames if f['blank']]
+        frames=[f for f in frames if not f['blank']or f in (clear[0],clear[-1])]
+        for frame in frames:tracker.update(frame['playback_seconds'],frame)
+        self.assertEqual(len(tracker.events),1,'missing native frames cannot prove a continuous clear interval')
+        frames,_=reappearing_word_capture(clear_seconds=.05,hidden_frames=12);tracker=JudgmentTracker()
+        for frame in frames:
+            if frame['label']is not None or frame['blank']:tracker.update(frame['playback_seconds'],frame)
+        self.assertEqual(len(tracker.events),1,'a capture gap after a short blank does not prove reappearance')
 
     def test_word_change_blank_reappearance_and_animation_restart(self):
         tracker=JudgmentTracker()

@@ -264,6 +264,16 @@ Keep the entire interval from before the first growth step through detection,
 rather than claiming an exact animation onset inside it. Moving notes touching
 the word remain a required negative case for the word reader and tracker.
 
+A clear blank run spanning at least 100 ms remains evidence after subsequent
+unknown frames. Returning to the same word can therefore establish reappearance
+without a label change or size growth. Clear samples must be no more than 50 ms
+apart to complete that run; unknown or missing frames cannot complete it. Retain
+the witnessed `blank_observation_range` on the event and bracket reappearance
+from the last clear read through the first returning word. A resulting bracket
+over 100 ms remains excluded as `judgment_observation_gap`; the unknown interval
+is never removed from its uncertainty. Readable return consumes the blank proof,
+so a persistent word cannot repeatedly create events.
+
 Word recognition and refresh tracking have independent cache dependencies.
 A tracker upgrade replays the saved timestamped word observations and rebuilds
 associations. It does not require OCR, pixel recognition or video decoding.

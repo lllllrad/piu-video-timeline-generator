@@ -102,7 +102,7 @@ class JudgmentReader:
         return {'label':label,'confidence':confidence,'box':box,'blank':False,'read_mode':'component_template'}
 
 
-EVENT_FORMAT = {'schema': 1, 'revision': 3}
+EVENT_FORMAT = {'schema': 1, 'revision': 4}
 
 
 def gradual_relaunch(history):
@@ -134,6 +134,7 @@ class JudgmentTracker:
         self.last_frame = None
         self.events = []
         self.blank_since = None
+        self.completed_blank_range = None
         self.last_clear = None
         self.scale_history = []
 
@@ -142,15 +143,20 @@ class JudgmentTracker:
         if label is None:
             self.scale_history = []
             if observation.get('blank'):
-                if self.blank_since is None:self.blank_since=seconds
+                if self.blank_since is None or self.last_frame is None or seconds-self.last_frame>.05+TIME_EPSILON:
+                    self.blank_since=seconds
                 self.last_clear=seconds
+                if seconds-self.blank_since>=.10-TIME_EPSILON:
+                    self.completed_blank_range=[self.blank_since,seconds]
             else:
                 self.blank_since=None
             self.last_frame = seconds
             return
         box = observation['box']
         changed = self.last is None or label!=self.last['label']
-        gap = self.blank_since is not None and seconds-self.blank_since>=.10
+        gap = (self.completed_blank_range is not None or self.blank_since is not None
+               and self.last_frame is not None and 0<seconds-self.last_frame<=.05+TIME_EPSILON
+               and seconds-self.blank_since>=.10)
         if changed or self.pending is not None:
             self.scale_history = []
         if box:
@@ -185,7 +191,9 @@ class JudgmentTracker:
             lower = gradual[0] if gradual and not changed and not gap else max(evidence) if evidence else None
             self.pending = {'label':label,'lower_seconds':lower,
                             'upper_seconds':seconds,'launch_width':box[2] if box else 0,'trigger':'label_change' if changed else 'reappearance' if gap else 'animation_restart'}
+            if gap:self.pending['blank_observation_range']=self.completed_blank_range or [self.blank_since,self.last_clear]
         self.blank_since = None
+        self.completed_blank_range = None
         self.last_visible = seconds
         self.last_frame = seconds
         if self.pending is None:
