@@ -4,7 +4,8 @@ from collections import defaultdict
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 13, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 14, 'method': 'independent_image_hold_proof',
+          'interior_caps':'separate_observed_objects'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -76,9 +77,27 @@ def image_pairs(data, native, roles, references, cap_references, lengths):
             missing.extend(pair['missing'])
         else:proposals.append((head,tail,pair['proof'],pair['missing']))
         heads[head].add(tail);tails[tail].add(head)
-    refuted={(p['head'],p['tail'])for p in temporal['refuted']}
+    refuted={(p['head'],p['tail']):list(p['evidence'])for p in temporal['refuted']}
+    positions=defaultdict(list)
+    for i,note in enumerate(data['notes']):
+        if note.get('duplicate_of')is not None or not roles[i]&{'tap','hold_start','hold_end'}:continue
+        for time,y in note['points']:positions[time,note['lane']].append((i,y))
+    for head,tail,proof,_ in proposals:
+        first,last=data['notes'][head],data['notes'][tail]
+        before,after=dict(first['points']),dict(last['points']);seen=set()
+        for point in proof:
+            time=point['time'];bounds=point.get('covered_bounds_pixels')
+            lo=before.get(time,bounds[0]if bounds else None);hi=after.get(time,bounds[1]if bounds else None)
+            if lo is None or hi is None:continue
+            for i,y in positions[time,first['lane']]:
+                if i in(head,tail)or not lo<y<hi or(time,i)in seen:continue
+                # A same-kind cap seen later can be an endpoint continuation.
+                # Call it interior only while both endpoint positions are observed.
+                if 'tap'not in roles[i]and(time not in before or time not in after):continue
+                seen.add((time,i));refuted.setdefault((head,tail),[]).append({'time':time,'source_pts':point['source_pts'],
+                    'source_note':i,'observed_roles':sorted(roles[i]),'trace':'frames.jsonl'})
     proposals=[p for p in proposals if p[:2]not in refuted]
-    return proposals,temporal['refuted']
+    return proposals,[{'head':a,'tail':b,'evidence':proof}for(a,b),proof in refuted.items()]
 
 
 def measure_connections(data,native,diagnostics,*,references=None,cap_references=None):
@@ -92,13 +111,6 @@ def measure_connections(data,native,diagnostics,*,references=None,cap_references
     proposals,refuted=image_pairs(data,native,roles,references,cap_references,lengths)
     heads,tails=defaultdict(set),defaultdict(set)
     for head,tail,_,_ in proposals:heads[head].add(tail);tails[tail].add(head)
-    for pair in refuted:
-        evidence=pair['evidence'];head=pair['head']
-        diagnostics.append({'note':head,'lane':data['notes'][head]['lane'],'reason':'unresolved_hold_geometry',
-                            'failure_detail':'skin_hold_interior_note_conflict','tail_note':pair['tail'],
-                            'visible_start_seconds':min(p['time']for p in evidence),
-                            'visible_end_seconds':max(p['time']for p in evidence),
-                            'observed_points':len({p['time']for p in evidence}),'image_evidence':evidence})
     image_connections,represented=[],set()
     for head, tail, proof, missing in proposals:
         if len(heads[head]) != 1 or len(tails[tail]) != 1:
@@ -137,6 +149,14 @@ def measure_connections(data,native,diagnostics,*,references=None,cap_references
                                 'visible_start_seconds': missing[0]['time'],
                                 'visible_end_seconds': missing[-1]['time'],
                                 'observed_points': len({p['time']for p in missing}), 'image_evidence': missing})
+    for pair in refuted:
+        if pair['head']in represented and pair['tail']in represented:continue
+        evidence=pair['evidence'];head=pair['head']
+        diagnostics.append({'note':head,'lane':data['notes'][head]['lane'],'reason':'unresolved_hold_geometry',
+                            'failure_detail':'skin_hold_interior_note_conflict','tail_note':pair['tail'],
+                            'visible_start_seconds':min(p['time']for p in evidence),
+                            'visible_end_seconds':max(p['time']for p in evidence),
+                            'observed_points':len({p['time']for p in evidence}),'image_evidence':evidence})
     for record in records:
         index = record['note']
         if index in represented or not roles[index] & {'hold_start', 'hold_end'}:

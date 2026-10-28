@@ -11,7 +11,7 @@ def geometry(data, directory, frames, reconstruct):
         native_path = directory/'frames.jsonl'
     image=bool(data.get('skin_detector'))
     values={k:data[k]for k in fields if k in data}
-    if image:values['notes']=[{k:n[k]for k in ('lane','points','detected_points')if k in n}for n in data['notes']]
+    if image:values['notes']=[{k:n[k]for k in ('lane','points','detected_points','duplicate_of')if k in n}for n in data['notes']]
     modules=['play/holds/stages.py','play/skins/holds.py','play/skins/temporal.py','play/skins/coverage.py',
              'play/skins/observations.py','play/skins/extents.py','play/skins/detector.py','play/skins/bank.py',
              'derived/holds/extent.ts','play/object_roles.py']if image else[

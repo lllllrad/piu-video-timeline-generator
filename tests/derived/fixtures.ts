@@ -80,3 +80,20 @@ export function imageHoldScene(scale=1,fps=50){
  const scaled=r=>Object.fromEntries(Object.entries(r).map(([role,runs])=>[role,(runs as number[][]).map(run=>run.map(v=>v*scale))]));
  return {data,native,references:scaled(rows),cap_references:scaled(caps)};
 }
+
+/** Two adjacent source holds whose compared image margins touch across the gap. */
+export function adjacentImageHolds(scale=1,fps=50){
+ const s=imageHoldScene(scale,fps),offsets=[0,40,60,100];
+ s.data.notes=offsets.map((offset,i)=>({lane:0,status:'estimated',target_seconds:.85+offset/100,
+  prediction_uncertainty_seconds:.01,velocity_pixels_per_second:-100*scale,
+  points:s.native.map(f=>[f.playback_seconds,(100-100*f.playback_seconds+offset)*scale])}));
+ for(const f of s.native){
+  const y=100-100*f.playback_seconds;
+  f.skin_observations=offsets.map((offset,i)=>({lane:0,x:.1,y:(y+offset)/300,role:i%2?'hold_end':'hold_start',
+   template:i%2?'hold_end':'hold_start',skin:'synthetic',region_errors:{cap:0,connection:0},
+   bounds_pixels:[10,y+offset-(i%2?25:10),30,y+offset+(i%2?10:25)].map(v=>v*scale)}));
+  for(const offset of[0,60])f.skin_observations.push({lane:0,x:.1,y:(y+offset+35)/300,role:'hold_body',template:'hold_body',
+   skin:'synthetic',region_errors:{cap:0,connection:0},bounds_pixels:[16,y+offset+20,24,y+offset+50].map(v=>v*scale)});
+ }
+ return s;
+}

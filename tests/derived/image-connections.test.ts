@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {imageHoldScene} from './fixtures.ts';
+import {imageHoldScene,adjacentImageHolds} from './fixtures.ts';
 import {project as timeConnections} from '../../src/piu_timeline/derived/holds/image_timing.ts';
 import {observedTailRoles} from '../../src/piu_timeline/derived/hold_projection.ts';
 
@@ -96,4 +96,18 @@ with tempfile.TemporaryDirectory()as tmp:
  assert.deepEqual(r.first.holds,[]);assert.equal(r.second.holds.length,1);
  assert.deepEqual(r.second.holds[0].end_range,[1.44,1.46]);
  assert.ok(!r.second.unresolved_tracks.some(w=>w.reason==='hold_endpoint_timing_unresolved'));
+});
+
+for(const scale of [.5,1,2])for(const fps of [25,50,100])test(`interior hold caps separate adjacent source objects: scale=${scale}, fps=${fps}`,()=>{
+ const s=adjacentImageHolds(scale,fps),r=measure(s);
+ assert.deepEqual(r.image_connections.map(c=>[c.head_note,c.tail_note]),[[0,1],[2,3]]);
+ assert.deepEqual(r.holds.map(h=>[h.head_note,h.tail_note]),[[0,1],[2,3]]);
+ assert.deepEqual(r.warnings,[]);assert.ok(r.unchanged);
+});
+test('an untimed adjacent cap still refutes a spanning hold candidate',()=>{
+ const s=adjacentImageHolds();failClock(s,0);const r=measure(s);
+ assert.deepEqual(r.image_connections.map(c=>[c.head_note,c.tail_note]),[[0,1],[2,3]]);
+ assert.deepEqual(r.holds.map(h=>[h.head_note,h.tail_note]),[[2,3]]);
+ assert.equal(r.warnings.filter(w=>w.reason==='hold_endpoint_timing_unresolved').length,1);
+ assert.ok(!r.warnings.some(w=>w.failure_detail==='skin_hold_interior_note_conflict'));
 });

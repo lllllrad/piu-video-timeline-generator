@@ -105,7 +105,12 @@ image start/body/end connectivity is measured independently of endpoint clocks.
 when endpoint timing fails. Timed `holds` reference them by `image_connection_id`;
 missing or contradictory endpoint times emit `hold_endpoint_timing_unresolved`
 and never become invented timing bounds or UCS placements. Body gaps, competing
-endpoints and interior tap conflicts remain geometry failures. Physical image
+endpoints and independently observed interior caps remain geometry failures.
+Touching template margins cannot join adjacent source holds across another
+start/end cap. A rejected spanning proposal does not warn when both endpoints
+are accounted for by separate proven objects; their actual timing failures
+remain explicit. Adjacent source objects stay separate before UCS held-state
+simplification. Physical image
 connections cache only native positions, raw detection anchors and image/motion
 observations. `derived/holds/image_timing.ts` is a separate cached consumer of
 those connections and endpoint timing; changing a clock does not rerun image
