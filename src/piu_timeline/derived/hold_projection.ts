@@ -1,5 +1,5 @@
 /** Project measured held intervals into chart objects without a separate head press. */
-import {nativeHead} from './holds/input.ts';
+import {nativeEndpoint} from './holds/input.ts';
 import type {RecordData} from './types.ts';
 const unique = <T>(a: T[]): T[] => [...new Set(a)];
 const count = (observations, field) => { const result = {}; for (const o of observations) result[o[field]] = (result[o[field]] ?? 0) + 1; return result; };
@@ -94,8 +94,8 @@ export function chartProjection(data: RecordData): RecordData {
     Object.assign(notes[head], {status: 'estimated', reason: null, note_type: 'hold', hold_id: h.id, input_requirement: 'held_state', requires_head_press: false, target_seconds: target,
       prediction_uncertainty_seconds: h.start_censored ? 0 : (start[1] - start[0]) / 2});
     if (h.chart_timing_status === 'unresolved') notes[head].chart_timing_status = 'unresolved';
-    if (nativeHead(h, head, notes[head])) notes[head].target_timing_basis = 'native_motion';
-    if (notes[head].timing_reconstruction?.status === 'failed' || notes[head].beat_reconstruction?.status === 'failed' && !nativeHead(h, head, notes[head])) {
+    if (nativeEndpoint(h, head, notes[head], 'start')) notes[head].target_timing_basis = 'native_motion';
+    if (notes[head].timing_reconstruction?.status === 'failed' || notes[head].beat_reconstruction?.status === 'failed' && !nativeEndpoint(h, head, notes[head], 'start')) {
       Object.assign(notes[head], {status: 'excluded', reason: 'timing_reconstruction_failed'});
     }
     h.display_note = head;

@@ -1,5 +1,9 @@
 """Bound possible hold ticks from geometry and native receptor observations."""
 import math
+import json
+from functools import lru_cache
+
+from piu_timeline.derived import call
 
 
 def complete_image_hold(hold):
@@ -57,20 +61,32 @@ def cap_extent_spacing(data):
     except (OSError,ValueError,KeyError):return None
 
 
+@lru_cache(maxsize=1024)
+def _cap_guard(encoded):
+    # The result is pure arithmetic over a compact immutable request. No source
+    # observation, identity or ownership record is reused between recordings.
+    return call('holdRisk.capGuard', json.loads(encoded))
+
+
 def cap_guard(data,hold,extent_spacing=1.):
     if not complete_image_hold(hold):return None
     lanes=data.get('layout',{}).get('lanes',[])
     if len(lanes)<2:return None
-    spacing=(lanes[1]['x']-lanes[0]['x'])*data['analysis_width'];speeds=[]
-    for index in(hold['head_note'],hold['tail_note']):
-        note=data['notes'][index]
-        if note['status']!='estimated'or any((note.get(k)or{}).get('status')=='failed'
-                                           for k in('timing_reconstruction','beat_reconstruction')):return None
-        measured=[abs(v)for v in(note.get('velocity_pixels_per_second'),(note.get('motion_clock')or{}).get('velocity'))
-                  if type(v)in(int,float)and math.isfinite(v)and abs(v)>0]
-        if not measured:return None
-        speeds.extend(measured)
-    return max(2*(data.get('median_frame_interval_seconds')or .017),extent_spacing*spacing/min(speeds))
+    keys=('status','reason','video_target_range','velocity_pixels_per_second')
+    notes=[]
+    for index in (hold['head_note'],hold['tail_note']):
+        source=data['notes'][index]
+        note={k:source[k]for k in keys if k in source}
+        for field in ('timing_reconstruction','beat_reconstruction'):
+            if source.get(field)is not None:note[field]={'status':source[field].get('status')}
+        if source.get('motion_clock')is not None:note['motion_clock']={'velocity':source['motion_clock'].get('velocity')}
+        notes.append(note)
+    fields=('head_note','tail_note','start_censored','end_censored','start_range','end_range',
+            'body_frames','body_evidence','geometry_native_endpoint_notes')
+    request={'hold':{k:hold[k]for k in fields if k in hold},'notes':notes,
+             'spacing':(lanes[1]['x']-lanes[0]['x'])*data['analysis_width'],
+             'cadence':data.get('median_frame_interval_seconds')or .017,'extent_spacing':extent_spacing}
+    return _cap_guard(json.dumps(request,sort_keys=True,allow_nan=False))
 
 
 def pre_hold_accounting(data,lo,hi,extent_spacing=1.):

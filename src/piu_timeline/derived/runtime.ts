@@ -38,13 +38,14 @@ import * as stageInputs from './pipeline/inputs.ts';
 import * as holdState from './hold_state.ts';
 import * as holdExtent from './holds/extent.ts';
 import * as holdGeometry from './holds/input.ts';
+import * as holdRisk from './holds/risk.ts';
 import {parseData, stringifyData} from './json.ts';
 
 const operations = {
   coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription,
   registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft,
   candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
-  holdState, holdExtent, holdGeometry, beats: {fitGrid, reconstruct},
+  holdState, holdExtent, holdGeometry, holdRisk, beats: {fitGrid, reconstruct},
 };
 const chunk = Buffer.alloc(65536);
 const decoder = new StringDecoder('utf8');

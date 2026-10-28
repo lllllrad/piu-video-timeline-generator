@@ -33,6 +33,10 @@ geometry are available, a second pass can reconsider that refresh only when:
   ownership establishing that the hold is still approaching.
 - All known holds have uncensored image endpoints, repeated body evidence and
   measured endpoint motion. The word precedes every relevant held-state interval.
+  A failed musical beat assignment does not invalidate native geometry: an
+  endpoint may use its restored native crossing interval when that exact interval
+  is recorded as the hold's owned endpoint. Failed native reconstruction,
+  unrelated exclusions and mismatched endpoint intervals cannot supply a guard.
   A cap neighborhood uses the larger of one lane spacing and the reference
   bank's maximum vertical cap extent, divided by the slower measured endpoint
   velocity, with a minimum of two capture frames. A changed or missing bank

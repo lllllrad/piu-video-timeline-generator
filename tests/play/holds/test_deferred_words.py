@@ -25,6 +25,21 @@ class DeferredWordTest(unittest.TestCase):
         self.assertEqual(match['hold_risk_accounting']['holds'],[0])
         self.assertEqual(data,original)
 
+    def test_source_bound_native_endpoints_keep_early_word_recovery_when_beat_assignment_fails(self):
+        data=scenario();hold=data['hold_analysis']['holds'][0]
+        hold['geometry_native_endpoint_notes']=[1,2]
+        for index,edge in ((1,'start_range'),(2,'end_range')):
+            data['notes'][index].update(status='excluded',reason='beat_timing_reconstruction_failed',target_seconds=None,
+                video_target_range=hold[edge],timing_reconstruction={'status':'restored'},beat_reconstruction={'status':'failed'})
+        original=deepcopy(data)
+        matches,indices=recover(data,data['notes'],[],{1,2})
+        self.assertEqual(indices,[0])
+        self.assertEqual((matches[0]['observation_lower_seconds'],matches[0]['observation_upper_seconds']),(1.,1.017))
+        self.assertEqual(data,original)
+        for field,value in (('timing_reconstruction',{'status':'failed'}),('video_target_range',[1.1,1.2]),('reason','decorative_art')):
+            invalid=deepcopy(data);invalid['notes'][1][field]=value
+            self.assertEqual(recover(invalid,invalid['notes'],[],{1,2})[1],[])
+
     def test_nullable_shared_clock_keeps_independent_measured_velocity(self):
         data=scenario();data['notes'][1]['motion_clock']=None
         self.assertEqual(recover(data,data['notes'],[],{1,2})[1],[0])

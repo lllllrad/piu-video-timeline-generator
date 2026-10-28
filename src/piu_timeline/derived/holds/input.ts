@@ -15,7 +15,7 @@ export function inputNotes(notes: RecordData[]): RecordData[] {
       geometry_source_failure: {reason: note.reason, beat_reconstruction: note.beat_reconstruction}};
   });
 }
-export function nativeHead(h: RecordData, index: number, note: RecordData): boolean {
+export function nativeEndpoint(h: RecordData, index: number, note: RecordData, edge: 'start' | 'end'): boolean {
   const range = nativeRange(note);
-  return !!range && (h.geometry_native_endpoint_notes ?? []).includes(index) && range.every((value, i) => value === h.start_range[i]);
+  return !!range && (h.geometry_native_endpoint_notes ?? []).includes(index) && range.every((value, i) => value === h[edge + '_range']?.[i]);
 }
