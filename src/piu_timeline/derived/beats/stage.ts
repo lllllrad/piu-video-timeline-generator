@@ -5,7 +5,7 @@ import {parse, grid, constantTempo} from '../charts/ucs.ts';
 import {prepare as coordinateSupport} from './coordinates.ts';
 import {prepare as chordSupport} from './chords.ts';
 import {fitPhase} from './phase.ts';
-import {recover} from './recovery.ts';
+import {recover,validateReferences} from './recovery.ts';
 import {validate, spacingSupportedNotes} from './validation.ts';
 import type {Note, RecordData} from '../types.ts';
 import {validateBeatInput} from '../validate.ts';
@@ -111,7 +111,6 @@ export function reconstruct(input: BeatInput): RecordData {
   result.warnings.push(...initialWarnings);
   support = spacing ? coordinateSupport({...data, notes}, spacing, true) : null;
   const recovered = recover(notes, support, sections, origin, phase.phase ?? null, ref.alignment_uncertainty_seconds, result.groups, phase.phase_range ?? null, spacing, data.scroll_motion ?? null, chords);
-  result.native_coordinate_recovery = entries<RecordData>(recovered).map(([i, p]) => ({note: i, ...p}));
   if (support) support.recovery_reference_sets = entries<RecordData>(recovered).filter(([i]) => notes[i].status === 'estimated')
     .flatMap(([i, p]) => p.models.map(m => ({note: i, chunk: m.chunk, references: m.model.references})));
   const [finalWarnings, finalChords, finalChecks] = validate(data, notes, spacing, support, support?.reference_notes ?? null,
@@ -119,22 +118,22 @@ export function reconstruct(input: BeatInput): RecordData {
   result.warnings.push(...finalWarnings);
   result.coordinate_checks = [...initialChecks.map(c => ({...c, stage: 'reference_validation'})), ...finalChecks.map(c => ({...c, stage: 'recovery_validation'}))];
   result.native_chords = [...new Map([...initialChords, ...finalChords].map(p => [p.peer_notes.join(','), p])).values()];
-  for (const [index, proof] of entries<RecordData>(recovered)) {
-    if (notes[index].status !== 'estimated') continue;
-    const references = proof.models.flatMap(m => m.model.references);
-    if (references.some(r => notes[r.note].status !== 'estimated' || Math.abs(notes[r.note].target_seconds - r.target_seconds) > 1e-8)) {
-      const reason = 'native_coordinate_reference_failed_validation', n = notes[index];
-      Object.assign(n, {status: 'excluded', reason, target_seconds: null, beat_reconstruction: {...n.beat_reconstruction, status: 'failed', reason}});
-      result.warnings.push({note: index, lane: n.lane, reason, check: 'timing_reconstruction', visible_start_seconds: n.points[0][0], visible_end_seconds: n.points.at(-1)[0], observed_points: n.points.length});
-    }
+  result.warnings.push(...validateReferences(notes,recovered));
+  result.native_coordinate_recovery = entries<RecordData>(recovered).map(([i, p]) => ({note: i, ...p}));
+  const restored = entries<RecordData>(recovered).filter(([i]) => notes[i].status === 'estimated').map(([i]) => i);
+  const intervals = entries<RecordData>(recovered).filter(([,p]) => p.native_interval_status === 'restored').map(([i]) => i);
+  for (const index of intervals) {
+    const n=notes[index],p=recovered[index];
+    result.warnings.push({note:index,lane:n.lane,reason:'beat_timing_reconstruction_failed',check:'timing_reconstruction',
+      failure_detail:p.reason,native_interval_status:'restored',native_target_range:n.video_target_range,
+      visible_start_seconds:n.points[0][0],visible_end_seconds:n.points.at(-1)[0],observed_points:n.points.length});
   }
-  const restored = entries<RecordData>(recovered).filter(([i]) => notes[i].status === 'estimated').map(([i]) => i), reconstruction = {...data.timing_reconstruction};
-  if (restored.length) {
-    const keep = w => !(restored.includes(w.note) && w.reason === recovered[w.note].source_failure);
-    result.warnings = result.warnings.filter(keep);
-    const remaining = (reconstruction.warnings ?? []).filter(keep);
+  const nativeRestored = [...restored,...intervals].filter(i=>RECOVERABLE.includes(recovered[i].source_failure)), reconstruction = {...data.timing_reconstruction};
+  if (restored.length || nativeRestored.length) {
+    result.warnings = result.warnings.filter(w=>!(restored.includes(w.note) && w.reason===recovered[w.note].source_failure));
+    const remaining = (reconstruction.warnings ?? []).filter(w=>!(nativeRestored.includes(w.note) && w.reason===recovered[w.note].source_failure));
     Object.assign(reconstruction, {warnings: remaining, status: remaining.length ? 'failed' : 'restored', failed_notes: new Set(remaining.map(w => w.note)).size,
-      restored_notes: (reconstruction.restored_notes ?? 0) + restored.filter(i => RECOVERABLE.includes(recovered[i].source_failure)).length});
+      restored_notes: (reconstruction.restored_notes ?? 0) + nativeRestored.length});
   }
   result.status = result.warnings.length ? 'failed' : 'restored';
   return {notes, beat_timing: result, timing_reconstruction: reconstruction};

@@ -65,6 +65,17 @@ Normal refresh ownership and independent input-evidence requirements still apply
 UCS transcription reports the unresolved beat placement and neither places the
 tap nor extends timing sections to accommodate it.
 
+The same separation applies when a failed motion clock is replaced by a bounded
+native-coordinate interval. A unique musical row is not required to retain that
+continuous interval. Conflicting coordinate models, failed joint validation or
+changed/finally excluded reference rows cannot supply it. Native timing recovery
+and musical placement have separate statuses and warnings; an unresolved musical
+row stays excluded from UCS even when independent input evidence uses its native
+interval.
+If coordinate-reference validation fails, a separately restored original motion
+clock can retain its own bounded interval. The rejected coordinate model cannot
+erase that independent observation or supply its own timing in its place.
+
 Replay a prepared input without Python, OCR or video decoding:
 
 ```sh

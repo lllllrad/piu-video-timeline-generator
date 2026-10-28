@@ -32,7 +32,8 @@
   },
   "recovery": {
     "schema": 1,
-    "revision": 4,
+    "revision": 5,
+    "unplaced_head_timing": "retain_validated_continuous_native_interval",
     "method": "native_coordinates_with_frozen_beat_references",
     "rejected_beat_references": "unique_source_clock_rows_outside_tested_group",
     "unsupported_clock_rows": "unique_source_clock_neighbors",

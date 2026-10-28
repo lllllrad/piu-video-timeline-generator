@@ -57,12 +57,12 @@ export function chooseRow(models: RecordData[], sections: number[][], origin: nu
       if (targets.some(t => Math.abs((t - base) / step - Math.round((t - base) / step)) > 1e-6)) continue;
       const a = Math.ceil((lower - base) / step - 1e-8), b = Math.floor((upper - base) / step + 1e-8);
       if (a > b) continue;
-      if (a < b) return {status: 'failed', reason: 'ambiguous_native_coordinate_rows'};
+      if (a < b) return {status: 'failed', reason: 'ambiguous_native_coordinate_rows', native_target_range: [lower, upper]};
       return {status: 'restored', section: si, split, row: a, target_seconds: base + a * step, native_target_range: [lower, upper]};
     }
-    return {status: 'failed', reason: 'native_coordinates_outside_natural_rows'};
+    return {status: 'failed', reason: 'native_coordinates_outside_natural_rows', native_target_range: [lower, upper]};
   }
-  return {status: 'failed', reason: 'native_coordinate_interval_crosses_tempo_boundary'};
+  return {status: 'failed', reason: 'native_coordinate_interval_crosses_tempo_boundary', native_target_range: [lower, upper]};
 }
 
 export function interpolationModels(index: number, notes: Note[], support: CoordinateSupport, eligible: number[], section: number[], origin: number, window: number[] | null = null): RecordData[] {
@@ -122,7 +122,19 @@ export function recover(notes: Note[], support: CoordinateSupport | null, sectio
     results[i] = result;
   });
   for (const [i, r] of entries<RecordData>(results)) {
-    if (r.status !== 'restored') continue;
+    if (r.status !== 'restored') {
+      const n = notes[i];
+      if (RECOVERABLE.includes(n.reason) && r.native_target_range &&
+        ['ambiguous_native_coordinate_rows', 'native_coordinates_outside_natural_rows', 'native_coordinate_interval_crosses_tempo_boundary'].includes(r.reason)) {
+        const [lo,hi] = r.native_target_range;
+        Object.assign(n, {reason:'beat_timing_reconstruction_failed', video_target_range:[lo-alignmentError,hi+alignmentError],
+          prediction_uncertainty_seconds:(hi-lo)/2+alignmentError,
+          timing_reconstruction:{status:'restored',method:'native_coordinate_interval',previous_motion_attempt:n.timing_reconstruction},
+          beat_reconstruction:{...n.beat_reconstruction,status:'failed',method:F.method,reason:r.reason}});
+        r.native_interval_status='restored';
+      }
+      continue;
+    }
     const n = notes[i], target = r.target_seconds, [lo, hi] = r.native_target_range;
     const rejected = RECOVERABLE.includes(n.reason) ? {} : {rejected_beat_assignment: n.beat_reconstruction, rejected_clock_target_range: n.video_target_range};
     Object.assign(n, {status: 'estimated', reason: null, target_seconds: target, fit_method: 'native_beat_coordinate_interpolation',
@@ -131,4 +143,31 @@ export function recover(notes: Note[], support: CoordinateSupport | null, sectio
       timing_reconstruction: {status: 'restored', method: F.method, previous_motion_attempt: n.timing_reconstruction, ...rejected}});
   }
   return results;
+}
+
+export function validateReferences(notes: Note[], results: RecordData): RecordData[] {
+  const warnings=[];
+  for (const [index,proof] of entries<RecordData>(results)) {
+    const n=notes[index];
+    if (n.status!=='estimated' && proof.native_interval_status!=='restored') continue;
+    const references=proof.models.flatMap(m=>m.model.references);
+    if (!references.some(r=>notes[r.note].status!=='estimated'||Math.abs(notes[r.note].target_seconds-r.target_seconds)>1e-8)) continue;
+    const reason='native_coordinate_reference_failed_validation';
+    const original=n.timing_reconstruction?.previous_motion_attempt, range=n.timing_reconstruction?.rejected_clock_target_range;
+    const retained=original?.status==='restored'&&Array.isArray(range)&&range.length===2&&range.every(Number.isFinite)&&range[0]<range[1];
+    Object.assign(n,{status:'excluded',reason:retained?'beat_timing_reconstruction_failed':reason,target_seconds:null,
+      beat_reconstruction:{...n.beat_reconstruction,status:'failed',reason}});
+    if (retained) {
+      n.timing_reconstruction={...original,rejected_coordinate_reconstruction:{status:'failed',reason,method:n.timing_reconstruction.method}};
+      n.video_target_range=[...range];n.prediction_uncertainty_seconds=(range[1]-range[0])/2;
+      proof.native_interval_status='original_clock_retained';
+    } else {
+      n.timing_reconstruction={...n.timing_reconstruction,status:'failed',reason};
+      if (proof.native_interval_status==='restored') proof.native_interval_status='failed';
+    }
+    Object.assign(proof,{status:'failed',reason});
+    warnings.push({note:index,lane:n.lane,reason,check:'timing_reconstruction',visible_start_seconds:n.points[0][0],
+      visible_end_seconds:n.points.at(-1)[0],observed_points:n.points.length});
+  }
+  return warnings;
 }
