@@ -363,7 +363,12 @@ alignment to test natural subdivisions. Missing references, failed shared
 support and ambiguous beat rows remain explicit review states. Candidate refresh
 selection also rejects a head independently observed moving sufficiently after
 the refresh, using the same guarded passage check as confirmed associations.
-Unverified, broad or temporally overlapping passage never proves this conflict. Native video,
+Unverified, broad or temporally overlapping passage never proves this conflict.
+Row recovery repeats its existing predicates until no further independently
+supported match can be added. Each generation passes processing-conflict checks
+before supplying anchors to the next; previously confirmed assignments stay
+fixed. Ambiguous rows cannot bootstrap each other without an independent seed.
+Additional matches retain their recovery generation and original evidence bounds. Native video,
 frame traces and pixel caches are reusable across these derived-rule changes.
 
 ## Measuring scroll-speed changes

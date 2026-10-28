@@ -71,13 +71,30 @@ export function present(input: RecordData, preHoldProofs: Record<string, RecordD
   const [rowMatches, laneRecovered] = recoverRows({...data, notes, matches, combo_events: events('combo_events'), judgment_events: events('judgment_events'), hold_analysis: {...data.hold_analysis, holds: projected, observed_tail_roles: tails}});
   matches = rowMatches;
   const [earlyMatches, preHoldRecovered] = recoverPreHold(data, notes, matches, [...suppressed], preHoldProofs); matches = earlyMatches;
-  const labeled = attachRecoveredLabels({...data, matches, combo_events: events('combo_events'), judgment_events: events('judgment_events')}); matches = labeled.matches;
+  let labeled = attachRecoveredLabels({...data, matches, combo_events: events('combo_events'), judgment_events: events('judgment_events')}); matches = labeled.matches;
   for (const m of matches) {
     const proof = data.counter_judgment_labels?.[String(m.combo_event)];
     if (proof && !m.judgment_label) Object.assign(m, {judgment_label: proof.label, judgment_event: null, judgment_label_source: 'post_combo_frames',
       judgment_observations: proof.observations.map(o => ({...o})), evidence_source: (m.evidence_source ?? 'combo') + '+judgment'});
   }
-  const validated = annotateMatches({...data, notes, matches}); matches = validated.matches; data = {...data, conflicted_matches: validated.conflicted_matches};
+  let validated = annotateMatches({...data, notes, matches}); matches = validated.matches; data = {...data, conflicted_matches: validated.conflicted_matches};
+  // Every new anchor still needs the same independent lane/processing proof.
+  // Confirmed notes grow monotonically, so closure takes at most notes.length passes.
+  for (let generation=2;;generation++) {
+    const assigned=new Set(matches.map(m=>m.note));
+    const [proposals]=recoverRows({...data,notes,matches,combo_events:events('combo_events'),judgment_events:labeled.judgment_events,
+      hold_analysis:{...data.hold_analysis,holds:projected,observed_tail_roles:tails}});
+    const fresh=proposals.filter(m=>!assigned.has(m.note)).map(m=>({...m,recovery_generation:generation}));
+    if(!fresh.length)break;
+    const checked=annotateMatches({...data,notes,matches:[...matches,...fresh]});
+    const accepted=checked.matches.filter(m=>!assigned.has(m.note));
+    matches=checked.matches;data={...data,conflicted_matches:checked.conflicted_matches};
+    if(!accepted.length)break;
+    laneRecovered.push(...accepted.map(m=>m.note));
+    labeled=attachRecoveredLabels({...data,matches,combo_events:events('combo_events'),judgment_events:labeled.judgment_events});
+    matches=labeled.matches;
+  }
+  validated=annotateMatches({...data,notes,matches});matches=validated.matches;data={...data,conflicted_matches:validated.conflicted_matches};
   const coverage = {...data.coverage, visible_note_heads: notes.filter(n => n.status === 'estimated').length, timed_note_heads: matches.length,
     matched_combo_updates: new Set(matches.filter(m => m.combo_event != null).map(m => m.combo_event)).size, judgment_only_note_heads: matches.filter(m => m.evidence_source === 'judgment').length,
     judgment_labeled_note_heads: matches.filter(m => m.judgment_label).length, unlabeled_timed_note_heads: matches.filter(m => !m.judgment_label).length,
