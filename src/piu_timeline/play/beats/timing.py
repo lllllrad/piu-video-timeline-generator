@@ -256,7 +256,7 @@ def apply(data,directory):
     result['warnings'].extend(initial_warnings)
     coordinate_support=prepare({**data,'notes':notes},spacing,include_failed=True)if spacing else None
     recovered=recover(notes,coordinate_support,sections,origin,phase.get('phase'),ref['alignment_uncertainty_seconds'],
-                      groups=result['groups'],phase_range=phase.get('phase_range'))
+                      groups=result['groups'],phase_range=phase.get('phase_range'),spacing=spacing,motion=data.get('scroll_motion'),native_chords=chords)
     result['native_coordinate_recovery']=[{'note':i,**proof}for i,proof in recovered.items()]
     if coordinate_support:
         coordinate_support['recovery_reference_sets']=[{'note':i,'chunk':model['chunk'],'references':model['model']['references']}

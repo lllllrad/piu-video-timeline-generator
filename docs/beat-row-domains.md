@@ -235,3 +235,25 @@ In that partial fit, inconsistent chord members retain explicit
 `native_chord_domains_incompatible` failures; source intervals are unchanged.
 These failed members cannot serve as references for their surviving neighbors,
 and final native spacing and cross-group reference validation still apply.
+
+
+## Sparse local references inside a complete native block
+
+When no local interpolation model is qualified, recovery can test all direct
+source-clock rows in the same registered native-coordinate block and official
+timing section. It excludes the tested head and the previously rejected group
+where required. Recovered or native-refined rows cannot supply this fallback.
+Every eligible reference is included: none may be removed to obtain a fit.
+The existing five-reference, two-lane, three-time, span and one-pixel maximum
+reference-error requirements still apply, and the complete target interval
+must be bracketed by those references. A changing phase-to-time relation which
+cannot satisfy that bound remains a failure.
+
+The same unique natural-row and original ambiguous-clock interval checks apply.
+Before promotion, the proposed row is compared with its existing neighbors using
+independent native spacing and concurrency validation. A contradiction involving
+the candidate or its own references rejects the proposal without modifying
+those notes. Final joint validation and reference invalidation still run after
+all proposals are considered. Proofs record `complete_native_block`, all reference
+identities and any failed pre-promotion checks. This extends available evidence,
+rather than the temporal or positional error budget.

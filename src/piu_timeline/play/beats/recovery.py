@@ -7,6 +7,7 @@ from piu_timeline.play.beats.coordinates import fit, FORMAT as COORDINATE_FORMAT
 FORMAT={'schema':1,'revision':4,'method':'native_coordinates_with_frozen_beat_references',
         'rejected_beat_references':'unique_source_clock_rows_outside_tested_group',
         'unsupported_clock_rows':'unique_source_clock_neighbors',
+        'block_fallback':'all_direct_clock_rows_with_pair_validation',
         'measurement_limits':COORDINATE_FORMAT,'natural_splits':list(NATURAL_SPLITS)}
 
 
@@ -73,7 +74,38 @@ def choose_row(models, sections, origin, phase,clock_range=None):
     return {'status':'failed','reason':'native_coordinate_interval_crosses_tempo_boundary'}
 
 
-def recover(notes, support, sections, origin, phase, alignment_error,groups=(),phase_range=None):
+def interpolation_models(index,notes,support,eligible,section,origin,window=None):
+    models=[]
+    for number,heads in support['chunks'].items():
+        if index not in heads:continue
+        refs=[{'note':j,'target_seconds':notes[j]['target_seconds'],**head}for j,head in heads.items()
+              if j in eligible and origin+section[0]<=notes[j]['target_seconds']<origin+section[1]
+              and(window is None or window[0]<=notes[j]['target_seconds']<=window[1])]
+        model=fit(refs)
+        if model is None:continue
+        time=model['origin_seconds']+(heads[index]['offset']-model['offset_at_origin_pixels'])/model['velocity_pixels_per_second']
+        error=(COORDINATE_FORMAT['maximum_native_error_pixels']+model['maximum_reference_error_pixels'])/model['velocity_pixels_per_second']
+        lower,upper=model['reference_target_range']
+        if not lower<=time-error<=time+error<=upper:continue
+        models.append({'chunk':number,'head':heads[index],'model':model,'range':[time-error,time+error]})
+    return models
+
+
+def block_validation(index,result,notes,support,spacing,motion,native_chords):
+    """A fallback must not refute its own references when placed among neighbors."""
+    from piu_timeline.play.spacing_checks import spacing_failures
+    from piu_timeline.play.beats.chords import conflicts
+    candidate=[dict(n)for n in notes]
+    candidate[index].update(status='estimated',target_seconds=result['target_seconds'],fit_method='native_beat_coordinate_interpolation')
+    proof_sets=[{'note':index,'chunk':m['chunk'],'references':m['model']['references']}for m in result['models']]
+    qualified={**support,'recovery_reference_sets':proof_sets}
+    failures=spacing_failures(candidate,spacing,motion,qualified,changed_indices={index})
+    failures+=conflicts(candidate,[p for p in native_chords if index in p['peer_notes']])
+    references={r['note']for m in result['models']for r in m['model']['references']}
+    return [f for f in failures if f['note']in references|{index}]
+
+
+def recover(notes, support, sections, origin, phase, alignment_error,groups=(),phase_range=None,spacing=None,motion=None,native_chords=()):
     """References are frozen before recovery; a rejected clock only locates a window."""
     if not support or phase is None:return {}
     frozen={i for i,n in enumerate(notes)if n['status']=='estimated'
@@ -87,25 +119,22 @@ def recover(notes, support, sections, origin, phase, alignment_error,groups=(),p
         eligible=direct-omitted if omitted else frozen
         section=next(((lo,hi)for lo,hi,_ in sections if origin+lo<=seed<origin+hi),None)
         if section is None:continue
-        models=[]
-        for number,heads in support['chunks'].items():
-            if i not in heads:continue
-            refs=[{'note':j,'target_seconds':notes[j]['target_seconds'],**head}for j,head in heads.items()
-                  if j in eligible and window[0]<=notes[j]['target_seconds']<=window[1]
-                  and origin+section[0]<=notes[j]['target_seconds']<origin+section[1]]
-            model=fit(refs)
-            if model is None:continue
-            time=model['origin_seconds']+(heads[i]['offset']-model['offset_at_origin_pixels'])/model['velocity_pixels_per_second']
-            error=(COORDINATE_FORMAT['maximum_native_error_pixels']+model['maximum_reference_error_pixels'])/model['velocity_pixels_per_second']
-            lower,upper=model['reference_target_range']
-            if not lower<=time-error<=time+error<=upper:continue
-            models.append({'chunk':number,'head':heads[i],'model':model,'range':[time-error,time+error]})
+        models=interpolation_models(i,notes,support,eligible,section,origin,window)
+        block_fallback=False
+        if not models and groups and spacing is not None and motion is not None:
+            models=interpolation_models(i,notes,support,direct-omitted,section,origin)
+            block_fallback=bool(models)
         if not models:continue
         clock_range=note['video_target_range']if note.get('beat_reconstruction',{}).get('reason')=='ambiguous_beat_rows'else None
         result=choose_row(models,sections,origin,phase,clock_range)
         result.update(format=FORMAT,source_failure=note['reason'],reference_window_center_seconds=seed,models=models)
         if clock_range is not None:result['clock_constraint_range']=clock_range
         if omitted:result.update(excluded_reference_group=sorted(omitted),reference_selection='unique_source_clock_rows')
+        if block_fallback:
+            result.update(reference_scope='complete_native_block',reference_selection='unique_source_clock_rows')
+            if result['status']=='restored':
+                failures=block_validation(i,result,notes,support,spacing,motion,native_chords)
+                if failures:result.update(status='failed',reason='native_block_recovery_failed_pair_validation',validation_failures=failures)
         results[i]=result
     # No recovered row can become a reference for another recovered row.
     for i,result in results.items():
