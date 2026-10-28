@@ -42,6 +42,18 @@ the gap cannot reuse a single-coordinate error budget. Conversely, equal shifts
 of both heads preserve their gap but still contradict the reference coordinates.
 Without an independent model, the registered-motion gap check remains required.
 
+Reference-coordinate models retain the complete feasible region of positive
+velocity and intercept values. Every reference must satisfy the existing
+lane-relative reference error bound; no outlier is discarded. A median line is
+only a representative and cannot invalidate another feasible line. The stored
+convex region also prevents choosing a convenient line to force one beat row.
+Target-time ranges include all feasible models and the measured head's positional
+bound. Beat-domain filtering and native recovery consume these complete ranges.
+Independent pair validation requires one common model for both heads; separate
+possible models for each head do not establish a consistent pair. If the model
+can include zero/reverse velocity, inverse timing is not identifiable and fails.
+Missing model bounds fail explicitly instead of reverting to a point estimate.
+
 A confirmed tap can retain its independently restored native crossing interval
 when musical-row assignment fails. The presentation/association view marks it
 with `target_timing_basis: native_motion` and `chart_timing_status: unresolved`;

@@ -1,6 +1,7 @@
 import {contracts} from '../contracts.ts';
 import {equal, median} from '../math.ts';
 import {predictions} from './coordinates.ts';
+import {clip} from './line_bounds.ts';
 import type {CoordinateSupport, Note, RecordData} from '../types.ts';
 const C = contracts.coordinates, S = contracts.spacing, K = contracts.clock_conversion;
 
@@ -8,12 +9,24 @@ export function attributedHeads(a: number, b: number, notes: Note[], models: Rec
   if (!models.length) return [[a, b], []];
   const rejected = new Set<number>(), proof = [];
   for (const model of models) {
-    if (!model.peer_offsets_pixels) return [[a, b], []];
+    if (!model.peer_offsets_pixels || !model.coordinate_domain?.vertices?.length ||
+      model.coordinate_domain.vertices.some(([v,b]) => !Number.isFinite(v) || v <= 0 || !Number.isFinite(b))) return [[a, b], []];
     const errors = [a, b].map((i, j) => model.peer_offsets_pixels[j] - (model.offset_at_origin_pixels + model.velocity_pixels_per_second * (notes[i].target_seconds - model.origin_seconds)));
-    const tolerance = C.maximum_reference_error_spacing * model.lane_spacing_pixels + model.maximum_reference_error_pixels;
-    const bad = [a, b].filter((i, j) => Math.abs(errors[j]) > tolerance + 1e-6);
+    const vertices = model.coordinate_domain.vertices, headError = C.maximum_reference_error_spacing * model.lane_spacing_pixels;
+    const ranges = [], bad = []; let joint = vertices;
+    for (const [j,i] of [a,b].entries()) {
+      const dt = notes[i].target_seconds - model.origin_seconds, offset = model.peer_offsets_pixels[j];
+      const positions = vertices.map(([v,intercept]) => intercept + v * dt);
+      ranges.push([Math.min(...positions) - headError, Math.max(...positions) + headError]);
+      if (!clip(vertices, dt, offset, headError).length) bad.push(i);
+      joint = clip(joint, dt, offset, headError);
+    }
+    if (!joint.length && !bad.length) bad.push(a,b);
     bad.forEach(i => rejected.add(i));
-    proof.push({chunk: model.chunk, peer_position_errors_pixels: errors, maximum_position_error_pixels: tolerance, contradicting_notes: bad});
+    const point = errors.map((e,j) => model.peer_offsets_pixels[j] - e);
+    proof.push({chunk:model.chunk,peer_position_errors_pixels:errors,
+      maximum_position_error_pixels:Math.max(...ranges.flatMap((r,j)=>r.map(v=>Math.abs(v-point[j])))),
+      peer_allowed_position_ranges_pixels:ranges,joint_model_feasible:!!joint.length,contradicting_notes:bad});
   }
   return [[a, b].filter(i => rejected.has(i)), proof];
 }

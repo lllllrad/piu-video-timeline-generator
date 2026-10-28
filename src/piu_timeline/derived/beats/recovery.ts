@@ -1,6 +1,7 @@
 import {contracts, NATURAL_SPLITS, RECOVERABLE} from '../contracts.ts';
 import {entries, sum} from '../math.ts';
 import {fit} from './coordinates.ts';
+import {targetRange} from './line_bounds.ts';
 import {spacingFailures} from './spacing.ts';
 import {conflicts} from './chords.ts';
 import type {CoordinateSupport, Note, RecordData} from '../types.ts';
@@ -72,11 +73,10 @@ export function interpolationModels(index: number, notes: Note[], support: Coord
       (!window || window[0] <= notes[j].target_seconds && notes[j].target_seconds <= window[1])).map(([j, h]) => ({note: j, target_seconds: notes[j].target_seconds, ...h}));
     const model = fit(refs, support.lane_spacing_pixels);
     if (!model) continue;
-    const time = model.origin_seconds + (heads[index].offset - model.offset_at_origin_pixels) / model.velocity_pixels_per_second;
-    const error = (C.maximum_native_error_spacing * model.lane_spacing_pixels + model.maximum_reference_error_pixels) / model.velocity_pixels_per_second;
+    const range = targetRange(model, heads[index].offset, C.maximum_native_error_spacing * model.lane_spacing_pixels);
     const [lo, hi] = model.reference_target_range;
-    if (!(lo <= time - error && time + error <= hi)) continue;
-    models.push({chunk: number, head: heads[index], model, range: [time - error, time + error]});
+    if (!(lo <= range[0] && range[1] <= hi)) continue;
+    models.push({chunk: number, head: heads[index], model, range});
   }
   return models;
 }

@@ -27,6 +27,7 @@ class SpacingAttributionTest(unittest.TestCase):
         notes=[{'target_seconds':0},{'target_seconds':1}]
         def model(offsets,chunk=0):
             return {'chunk':chunk,'lane_spacing_pixels':40.,'peer_offsets_pixels':offsets,'maximum_reference_error_pixels':0,
+                    'coordinate_domain':{'vertices':[[10.,0.]],'maximum_reference_error_pixels':0},
                     'offset_at_origin_pixels':0,'origin_seconds':0,'velocity_pixels_per_second':10}
         for models in ([],[model([0,13]),model([3,10],1)],[{}]):
             rejected,_=attributed_heads(0,1,notes,models)
@@ -35,6 +36,7 @@ class SpacingAttributionTest(unittest.TestCase):
     def test_two_individually_bounded_coordinates_have_no_attributed_conflict(self):
         notes=[{'target_seconds':0},{'target_seconds':1}]
         model={'chunk':0,'lane_spacing_pixels':40.,'peer_offsets_pixels':[.75,9.25],
+               'coordinate_domain':{'vertices':[[10.,0.]],'maximum_reference_error_pixels':0},
                'maximum_reference_error_pixels':0,'offset_at_origin_pixels':0,'origin_seconds':0,
                'velocity_pixels_per_second':10}
         rejected,proof=attributed_heads(0,1,notes,[model])

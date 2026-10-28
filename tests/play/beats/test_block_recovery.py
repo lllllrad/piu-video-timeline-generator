@@ -52,10 +52,11 @@ class NativeBlockRecoveryTest(unittest.TestCase):
 
     def test_fallback_is_not_promoted_if_pair_validation_refutes_a_reference(self):
         data,groups=sparse()
-        # Registration permits 1.5 pixels of native position scatter, but an
-        # independent beat reference retains its stricter one-pixel bound.
-        data['notes'][4]['points']=[(t,y+1.2)for t,y in data['notes'][4]['points']]
-        data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'][4]['offset_pixels']+=1.2
+        # Recovery allows the 1.5-pixel head interval plus the reference-model
+        # interval. Joint pair validation retains its stricter one-pixel head
+        # bound, so this 2.4-pixel contradiction still cannot be promoted.
+        data['notes'][4]['points']=[(t,y+2.4)for t,y in data['notes'][4]['points']]
+        data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'][4]['offset_pixels']+=2.4
         before=deepcopy(data)
         result=recover(data['notes'],prepare(data,40,True),[(0,8,120)],0,0,0,groups,
                        spacing=40,motion=data['scroll_motion'])

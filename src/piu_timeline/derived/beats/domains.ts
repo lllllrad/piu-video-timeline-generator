@@ -1,6 +1,7 @@
 import {contracts} from '../contracts.ts';
 import {entries} from '../math.ts';
 import {fit} from './coordinates.ts';
+import {targetRange} from './line_bounds.ts';
 import type {Interval, RecordData} from '../types.ts';
 const F = contracts.coordinates;
 
@@ -24,15 +25,14 @@ export function constrain(options: Interval[], step: number, origin: number, blo
       if (!model) continue;
       const [lower, upper] = model.reference_target_range;
       if (!(lower <= origin + lo * step && origin + hi * step <= upper)) continue;
-      const error = F.maximum_native_error_spacing * model.lane_spacing_pixels + model.maximum_reference_error_pixels;
-      const velocity = model.velocity_pixels_per_second, offset = heads[index].offset;
-      const time = model.origin_seconds + (offset - model.offset_at_origin_pixels) / velocity;
-      const allowed: Interval = [Math.max(lo, Math.ceil((Math.max(lower, time - error / velocity) - origin) / step - 1e-8)),
-        Math.min(hi, Math.floor((Math.min(upper, time + error / velocity) - origin) / step + 1e-8))];
+      const error = F.maximum_native_error_spacing * model.lane_spacing_pixels, offset = heads[index].offset;
+      const range = targetRange(model, offset, error);
+      const allowed: Interval = [Math.max(lo, Math.ceil((Math.max(lower, range[0]) - origin) / step - 1e-8)),
+        Math.min(hi, Math.floor((Math.min(upper, range[1]) - origin) / step + 1e-8))];
       const before = result[index];
       result[index] = [Math.max(before[0], allowed[0]), Math.min(before[1], allowed[1])];
       proofs.push({index, note: heads[index].native_note ?? index, chunk: block.chunk, original_domain: [lo, hi],
-        allowed_domain: allowed, measured_offset_pixels: offset, maximum_position_error_pixels: error, model});
+        allowed_domain: allowed, measured_offset_pixels: offset, maximum_position_error_pixels: error, native_target_range: range, model});
     }
   });
   return [result, proofs];

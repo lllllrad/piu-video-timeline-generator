@@ -1,6 +1,7 @@
 import {contracts, RECOVERABLE} from '../contracts.ts';
 import {entries, median} from '../math.ts';
 import type {CoordinateModel, CoordinateSupport, Interval, Note, RecordData, Reference} from '../types.ts';
+import {domain} from './line_bounds.ts';
 const F = contracts.coordinates;
 
 export function prepare(data: RecordData, spacing: number, includeFailed = false): CoordinateSupport | null {
@@ -48,12 +49,20 @@ export function fit(references: Reference[], spacing: number): CoordinateModel |
     if (Math.abs(targets[j] - targets[i]) >= F.minimum_slope_span_seconds) slopes.push((offsets[j] - offsets[i]) / (targets[j] - targets[i]));
   }
   if (!slopes.length) return null;
-  const velocity = median(slopes), intercept = median(offsets.map((v, i) => v - velocity * (targets[i] - origin)));
-  const error = Math.max(...offsets.map((v, i) => Math.abs(v - velocity * (targets[i] - origin) - intercept)));
-  if (velocity <= 0 || error > F.maximum_reference_error_spacing * spacing) return null;
+  const limit = F.maximum_reference_error_spacing * spacing, vertices = domain(references, origin, limit);
+  if (!vertices.length) return null;
+  let velocity = median(slopes), intercept = median(offsets.map((v, i) => v - velocity * (targets[i] - origin)));
+  let error = Math.max(...offsets.map((v, i) => Math.abs(v - velocity * (targets[i] - origin) - intercept)));
+  if (velocity <= 0 || error > limit) {
+    velocity = vertices.reduce((v, p) => v + p[0], 0) / vertices.length;
+    intercept = vertices.reduce((b, p) => b + p[1], 0) / vertices.length;
+    error = Math.max(...offsets.map((v, i) => Math.abs(v - velocity * (targets[i] - origin) - intercept)));
+  }
+  if (error > limit + 1e-7) return null;
   return {lane_spacing_pixels: spacing, velocity_pixels_per_second: velocity, origin_seconds: origin,
     offset_at_origin_pixels: intercept, maximum_reference_error_pixels: error,
-    reference_target_range: [origin, end], references};
+    reference_target_range: [origin, end], references,
+    coordinate_domain: {vertices, maximum_reference_error_pixels: limit}};
 }
 
 export function predictions(a: number, b: number, notes: Note[], interval: Interval, support: CoordinateSupport | null, radius = F.reference_radius_seconds): RecordData[] {

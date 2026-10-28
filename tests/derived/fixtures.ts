@@ -46,3 +46,16 @@ export function holdEndpointScene(length: number, scale = 1, delays: number[] = 
     head_y: scale * (200 - 180 * time + headError[i % 4]),
     tail_y: scale * (200 - 180 * time + length + tailError[i % 4]), head_uncertainty: scale, tail_uncertainty: scale}));
 }
+
+/** Registered reference heads with independently bounded, fixed anchor errors. */
+export function coordinateReferenceScene(spacing = 40, biases = [1,-1,-1,-1,-1,-1,-1]) {
+  const events: [number,number][] = Array.from({length:7},(_,i)=>[.5+i/8,i%5]);
+  const data = nativeScene(events,spacing,60,5,{end:1.5}), error = .025*spacing;
+  for (const [i,bias] of biases.entries()) {
+    data.notes[i].points = data.notes[i].points.map(([t,y])=>[t,y+bias*error]);
+    data.scroll_motion.coordinate_registration.chunks[0].head_offsets[i].offset_pixels += bias*error;
+  }
+  const references = data.notes.map((n,i)=>({note:i,lane:n.lane,target_seconds:events[i][0],
+    offset:data.scroll_motion.coordinate_registration.chunks[0].head_offsets[i].offset_pixels}));
+  return {data,references,velocity:spacing*6,intercept:spacing*1.3+spacing*6*.5,error};
+}

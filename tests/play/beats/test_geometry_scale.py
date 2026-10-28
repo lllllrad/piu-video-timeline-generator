@@ -40,7 +40,7 @@ class GeometryScaleTest(unittest.TestCase):
                     self.assertEqual(4 in support['chunks'][0],accepted)
 
     def test_independent_reference_fit_has_the_same_verdict_after_storage_and_resize(self):
-        for error,accepted in ((.8,True),(1.2,False)):
+        for error,accepted in ((.8,True),(1.2,True),(2.4,False)):
             data=fixture();data['notes'][0]['points']=[(t,y+error)for t,y in data['notes'][0]['points']]
             data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'][0]['offset_pixels']+=error
             for scale in (.5,1.,2.,4.):
@@ -51,7 +51,7 @@ class GeometryScaleTest(unittest.TestCase):
     def test_spacing_conflicts_remain_conflicts_at_every_size(self):
         for wrong in (False,True):
             data=fixture()
-            if wrong:data['notes'][4]['target_seconds']+=.006
+            if wrong:data['notes'][4]['target_seconds']+=.012
             for scale in (.5,1.,2.,4.):
                 d=resized(data,scale);support=prepare(d,40*scale)
                 warnings=spacing_failures(d['notes'],40*scale,d['scroll_motion'],support)
