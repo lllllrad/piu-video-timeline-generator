@@ -223,3 +223,12 @@ an independently supported coordinate model. Missing coordinate support remains
 an explicit reconstruction failure. Differences inside the pixel uncertainty
 bound do not establish distinct rows; unresolved row domains retain ambiguity
 warnings. Actual player input times never determine chart concurrency.
+
+
+A native concurrency constraint with incompatible source-clock domains rejects
+its connected component, rather than discarding every head in the beat group.
+Other independently unique rows can remain supported at the same common phase.
+In that partial fit, inconsistent chord members retain explicit
+`native_chord_domains_incompatible` failures; source intervals are unchanged.
+These failed members cannot serve as references for their surviving neighbors,
+and final native spacing and cross-group reference validation still apply.
