@@ -317,3 +317,17 @@ point, as the bundled CLI does.
 Image-review JSON includes the detector contract, analysis dimensions and layout
 as well as reference identity and original timestamps. An empty decoded timeline
 fails explicitly rather than producing a successful report with no observations.
+
+## Rigid hold length from registered endpoints
+
+A connected hold can have different rounded cap coordinates in successive frames.
+When a nominal constant-length test fails, `derived/holds/extent.ts` intersects
+per-frame length intervals from independent head and tail registration errors.
+Only source-bound native image-anchor comparisons provide these errors. At least
+four qualified pairs spanning 65 ms must agree; incompatible intervals still fail.
+The original compared image regions, connected-body support, unique ownership and
+motion requirements remain necessary. Timing or successful input cannot provide
+missing image geometry. Accepted holds retain the length interval and original PTS.
+Unregistered endpoint frames remain an explicit geometry warning, even if nearby
+qualified frames establish the hold. This relative length proof does not establish
+absolute receptor timing calibration or enable UCS export for an uncalibrated skin.

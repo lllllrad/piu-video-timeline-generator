@@ -21,8 +21,11 @@ def displacement(before,after,motion,positions,notes,spacing):
     return (float(value),basis)if -.75<=value<=30*spacing*dt else None
 
 
-def temporal_pairs(data,native,roles,references,cap_references):
+def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=None):
     """No interpolated image or assumed constant velocity supplies an edge."""
+    if length_checks is None:
+        from piu_timeline.play.skins.extents import LengthChecks
+        length_checks=LengthChecks(data)
     known=defaultdict(list);positions=defaultdict(list)
     for i,note in enumerate(data['notes']):
         role=('head'if roles[i]=={'hold_start'}else'tail'if roles[i]=={'hold_end'}
@@ -88,7 +91,7 @@ def temporal_pairs(data,native,roles,references,cap_references):
         if len(observed)<2 or max(observed)-min(observed)<.5*spacing:continue
         before,after=dict(first['points']),dict(last['points'])
         gaps=[after[t]-before[t]for t in before.keys()&after.keys()]
-        if gaps and (min(gaps)<=0 or max(gaps)-min(gaps)>2):continue
+        if gaps and (min(gaps)<=0 or max(gaps)-min(gaps)>2 and length_checks.check(head,tail)['status']!='consistent'):continue
         by_time=defaultdict(list)
         for node in component:by_time[node['time']].append(node)
         # A conflicting note between positive islands refutes the interval too.

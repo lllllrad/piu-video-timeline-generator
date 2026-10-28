@@ -25,3 +25,12 @@ export function nativeScene(events: [number, number][], spacing = 40, fps = 60, 
     scroll_motion: {samples: times.map(time => ({time, source_pts: 80 + time, phase: velocity * time, chunk: 0})),
       coordinate_registration: {chunks: [{chunk: 0, status: 'fitted', head_offsets: offsets}]}}};
 }
+
+/** Captured endpoints with independent registration errors; truth stays rigid. */
+export function holdEndpointScene(length: number, scale = 1, delays: number[] = []) {
+  const times = Array.from({length: 12}, (_, i) => .2 + i / 60 + (delays[i] ?? 0));
+  const headError = [-.75, .5, -.25, .75], tailError = [.75, -.5, .25, -.75];
+  return times.map((time, i) => ({time, source_pts_seconds: 80 + time,
+    head_y: scale * (200 - 180 * time + headError[i % 4]),
+    tail_y: scale * (200 - 180 * time + length + tailError[i % 4]), head_uncertainty: scale, tail_uncertainty: scale}));
+}

@@ -37,6 +37,38 @@ def scenario():
 
 
 class ImageHoldTest(unittest.TestCase):
+    def test_independent_registered_endpoint_errors_recover_connected_rounded_caps(self):
+        data,native,receptors=scenario()
+        errors=[(-.75,.75),(.5,-.5),(-.25,.25),(.75,-.75)]
+        records=[{'note':i,'coordinate_method':'native_image_anchors','observations':[]} for i in (0,1)]
+        for fi,frame in enumerate(native):
+            for i,offset in enumerate(errors[fi%len(errors)]):
+                time,y=data['notes'][i]['points'][fi]
+                data['notes'][i]['points'][fi][1]=y+offset
+                image=frame['skin_observations'][i]
+                image['y']=(y+offset)/data['analysis_height']
+                image['bounds_pixels'][1]+=offset;image['bounds_pixels'][3]+=offset
+                records[i]['observations'].append({'time':time,'source_pts_seconds':frame['source_pts_seconds'],
+                    'native_y_pixels':y+offset,'native_cap_coordinate_uncertainty_pixels':1.,
+                    'native_cap_reference_template':image['template']})
+        # Image connection alone cannot resolve inconsistent endpoint coordinates.
+        self.assertEqual(reconstruct_images(data,receptors,native,[]),[])
+        data['head_registration']={'notes':records}
+        warnings=[];holds=reconstruct_images(data,receptors,native,warnings)
+        self.assertEqual(len(holds),1)
+        proof=holds[0]['endpoint_extent_evidence']
+        self.assertLessEqual(proof['length_range_pixels'][0],60)
+        self.assertGreaterEqual(proof['length_range_pixels'][1],60)
+        self.assertEqual(proof['source_pts_seconds'],[frame['source_pts_seconds'] for frame in native])
+        records[0]['observations'][0].pop('native_cap_coordinate_uncertainty_pixels')
+        unregistered=[];self.assertEqual(len(reconstruct_images(data,receptors,native,unregistered)),1)
+        self.assertIn('known_hold_endpoint_extent_unregistered_frames',[w.get('failure_detail') for w in unregistered])
+        # A true length change remains a contradiction with the same measured errors.
+        data['notes'][1]['points'][-1][1]+=8
+        records[1]['observations'][-1]['native_y_pixels']+=8
+        self.assertEqual(reconstruct_images(data,receptors,native,[]),[])
+
+
     def test_start_body_and_end_images_form_one_held_interval_without_color_components(self):
         data,native,receptors=scenario();original=deepcopy((data,native,receptors));warnings=[]
         holds=reconstruct_images(data,receptors,native,warnings)

@@ -5,7 +5,7 @@ from piu_timeline.play.observations.artifacts import cached, files, producer
 def geometry(data, directory, frames, reconstruct):
     from piu_timeline.play.holds.features import feature_contract
     fields = ('notes', 'layout', 'analysis_width', 'analysis_height', 'game_roi', 'start_seconds',
-              'scroll_motion', 'object_interpretation', 'skin_detector', 'skin_role_evidence')
+              'scroll_motion', 'head_registration', 'object_interpretation', 'skin_detector', 'skin_role_evidence')
     native_path = directory/'frames.base.jsonl'
     if not native_path.is_file():
         native_path = directory/'frames.jsonl'
@@ -14,7 +14,7 @@ def geometry(data, directory, frames, reconstruct):
               'native': files(directory, (native_path.name,)) if data.get('skin_detector') else None,
               'producer': producer('play/holds/stages.py', 'play/holds/reconstruction.py', 'play/holds/geometry.py', 'play/holds/continuity.py',
                                    'play/skins/holds.py', 'play/skins/temporal.py', 'play/skins/coverage.py',
-                                   'play/skins/observations.py', 'play/object_roles.py')}
+                                   'play/skins/observations.py', 'play/skins/extents.py', 'derived/holds/extent.ts', 'play/object_roles.py')}
 
     def build():
         from piu_timeline.play.object_roles import filter_frames

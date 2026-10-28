@@ -6,7 +6,7 @@ from piu_timeline.play.holds.state import contextual_hold_support, recognition_s
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 9, 'method': 'independent_image_hold_proof'}
+FORMAT = {'schema': 1, 'revision': 10, 'method': 'independent_image_hold_proof'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -23,6 +23,8 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
     from piu_timeline.play.skins.coverage import reference_rows, image_spans
     references=reference_rows(data)if references is None else references
     cap_references=reference_rows(data,cap_only=True)if cap_references is None else cap_references
+    from piu_timeline.play.skins.extents import LengthChecks
+    lengths = LengthChecks(data)
     records = observe(data, native)['notes']
     roles = {r['note']: {o['role'] for o in r['observations']} - {'unknown'} for r in records}
     by_time = {f['playback_seconds']: f for f in native}
@@ -68,12 +70,12 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                     or proof[0]['head_y'] - proof[-1]['head_y'] < .5 * spacing):
                 continue
             gaps = [p['tail_y'] - p['head_y'] for p in proof]
-            if max(gaps) - min(gaps) > 2:
+            if max(gaps) - min(gaps) > 2 and lengths.check(head, tail)['status'] != 'consistent':
                 continue
             proposals.append((head, tail, proof, missing)); heads[head].add(tail); tails[tail].add(head)
     from piu_timeline.play.skins.temporal import temporal_pairs
     existing={(head,tail):(proof,missing)for head,tail,proof,missing in proposals}
-    temporal=temporal_pairs(data,native,roles,references,cap_references)
+    temporal=temporal_pairs(data,native,roles,references,cap_references,length_checks=lengths)
     for pair in temporal['pairs']:
         head,tail=pair['head'],pair['tail']
         if (head,tail)in existing:
@@ -112,6 +114,20 @@ def reconstruct_images(data, receptor_frames, native, diagnostics, *, references
                       'component_evidence': {str(i): {'kind': 'registered_cap',
                           'source_pts_seconds': sorted({p['source_pts'] for p in proof
                               if ('head_y'if i==head else'tail_y')in p})} for i in (head, tail)}})
+        extent = lengths.cache.get((head, tail))
+        if extent and extent['status'] == 'consistent':
+            holds[-1]['endpoint_extent_evidence'] = extent
+            unverified = extent['unverified_source_pts_seconds']
+            unbound = extent['unregistered_playback_seconds']
+            if unverified or unbound:
+                diagnostics.append({'note': head, 'lane': first['lane'], 'hold': holds[-1]['id'], 'tail_note': tail,
+                                    'reason': 'unresolved_hold_geometry',
+                                    'failure_detail': 'known_hold_endpoint_extent_unregistered_frames',
+                                    'visible_start_seconds': min(t for t, _ in first['points']),
+                                    'visible_end_seconds': max(t for t, _ in last['points']),
+                                    'observed_points': len(unverified)+len(unbound),
+                                    'unregistered_source_pts_seconds': unverified,
+                                    'unregistered_playback_seconds': unbound})
         represented.update((head, tail))
         if missing:
             diagnostics.append({'note': head, 'lane': first['lane'], 'reason': 'unresolved_hold_geometry',
