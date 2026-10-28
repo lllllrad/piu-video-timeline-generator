@@ -81,10 +81,10 @@ def interpolation_models(index,notes,support,eligible,section,origin,window=None
         refs=[{'note':j,'target_seconds':notes[j]['target_seconds'],**head}for j,head in heads.items()
               if j in eligible and origin+section[0]<=notes[j]['target_seconds']<origin+section[1]
               and(window is None or window[0]<=notes[j]['target_seconds']<=window[1])]
-        model=fit(refs)
+        model=fit(refs,support['lane_spacing_pixels'])
         if model is None:continue
         time=model['origin_seconds']+(heads[index]['offset']-model['offset_at_origin_pixels'])/model['velocity_pixels_per_second']
-        error=(COORDINATE_FORMAT['maximum_native_error_pixels']+model['maximum_reference_error_pixels'])/model['velocity_pixels_per_second']
+        error=(COORDINATE_FORMAT['maximum_native_error_spacing']*model['lane_spacing_pixels']+model['maximum_reference_error_pixels'])/model['velocity_pixels_per_second']
         lower,upper=model['reference_target_range']
         if not lower<=time-error<=time+error<=upper:continue
         models.append({'chunk':number,'head':heads[index],'model':model,'range':[time-error,time+error]})

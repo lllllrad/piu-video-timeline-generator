@@ -52,7 +52,7 @@ class NativeRowDomainTest(unittest.TestCase):
                 data['notes'][4]['prediction_uncertainty_seconds']=.001
                 data['notes'][0]['prediction_uncertainty_seconds']=.13
             support=prepare(data,40)
-            blocks=[{'chunk':number,'heads':heads}for number,heads in support['chunks'].items()]
+            blocks=[{'chunk':number,'lane_spacing_pixels':support['lane_spacing_pixels'],'heads':heads}for number,heads in support['chunks'].items()]
             targets=[n['target_seconds']for n in data['notes']]
             errors=[n['prediction_uncertainty_seconds']for n in data['notes']]
             result=fit_grid(targets,errors,120,1,splits=[192]if case=='fine_ambiguous'else None,
@@ -74,7 +74,7 @@ class NativeRowDomainTest(unittest.TestCase):
         data['notes'][4]['points']=[(t,y+15)for t,y in data['notes'][4]['points']]
         data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'][4]['offset_pixels']+=15
         support=prepare(data,40)
-        blocks=[{'chunk':number,'heads':heads}for number,heads in support['chunks'].items()]
+        blocks=[{'chunk':number,'lane_spacing_pixels':support['lane_spacing_pixels'],'heads':heads}for number,heads in support['chunks'].items()]
         result=fit_grid([n['target_seconds']for n in data['notes']],
                         [n['prediction_uncertainty_seconds']for n in data['notes']],120,1,
                         native_coordinates=blocks)
@@ -89,7 +89,7 @@ class NativeRowDomainTest(unittest.TestCase):
         support=prepare(data,40)
         result=fit_grid([n['target_seconds']for n in data['notes']],
                         [n['prediction_uncertainty_seconds']for n in data['notes']],120,1,
-                        native_coordinates=[{'chunk':c,'heads':h}for c,h in support['chunks'].items()])
+                        native_coordinates=[{'chunk':c,'lane_spacing_pixels':support['lane_spacing_pixels'],'heads':h}for c,h in support['chunks'].items()])
         self.assertEqual(result['status'],'partial')
         self.assertEqual(result['reason'],'native_coordinate_domains_incompatible')
         self.assertIsNone(result['targets'][4])

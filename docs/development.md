@@ -26,6 +26,9 @@ Codex-only environment generation and optional mise installation are documented 
 
 ## Architecture
 
+See [the current play data flow](play-data-flow.md) for stage ownership, stored
+artifacts, cache coupling and the limits of current validation.
+
 Read the [gameplay visual model](gameplay-visual-model.md) before changing note geometry or recognition rules. Keep observed game behavior, measurement assumptions and implementation thresholds distinct; passing a test does not establish the visual model.
 
 The optional [native cap-clearance model](note-skin-clearance.md) combines matched

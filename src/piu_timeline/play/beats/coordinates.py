@@ -5,10 +5,10 @@ import numpy as np
 
 RECOVERABLE_MOTION_FAILURES=('shared_timing_reconstruction_failed','shared_spacing_reconstruction_conflict')
 
-FORMAT={'schema':1,'revision':8,'minimum_references':5,'minimum_lanes':2,
+FORMAT={'schema':1,'revision':9,'minimum_references':5,'minimum_lanes':2,
         'reference_radius_seconds':.75,'minimum_target_span_seconds':.3,
-        'minimum_slope_span_seconds':.15,'maximum_reference_error_pixels':1.,
-        'maximum_native_error_pixels':1.5}
+        'minimum_slope_span_seconds':.15,'maximum_reference_error_spacing':.025,
+        'maximum_native_error_spacing':.0375}
 
 
 def prepare(data,spacing,include_failed=False):
@@ -34,17 +34,18 @@ def prepare(data,spacing,include_failed=False):
                     and samples[t]['chunk']==number and receptor+.85*spacing<y<bottom-.55*spacing]
             if len(points)<4 or points[-1][0]-points[0][0]<.065:continue
             error=max(abs(y+samples[t]['phase']-head['offset_pixels'])for t,y in points)
-            if error>FORMAT['maximum_native_error_pixels']:continue
+            if error>FORMAT['maximum_native_error_spacing']*spacing:continue
             heads[index]={'offset':head['offset_pixels'],'lane':note['lane'],
                           'native_points':len(points),'native_maximum_error_pixels':error,
                           'source_pts_range':[samples[points[0][0]]['source_pts'],samples[points[-1][0]]['source_pts']]}
         chunks[number]=heads
-    return {'chunks':chunks,'frames':{t:s['chunk']for t,s in samples.items()},'observed':observed,
+    return {'lane_spacing_pixels':spacing,'chunks':chunks,'frames':{t:s['chunk']for t,s in samples.items()},'observed':observed,
             'reference_notes':{i for i,n in enumerate(data['notes'])if n['status']=='estimated'}}
 
 
-def fit(references):
+def fit(references,spacing):
     """Every reference must agree; a robust estimate cannot discard an outlier."""
+    if not np.isfinite(spacing)or spacing<=0:raise ValueError('Native coordinate fitting requires positive lane spacing')
     if len(references)<FORMAT['minimum_references']or len({r['lane']for r in references})<FORMAT['minimum_lanes']:return None
     targets=np.array([r['target_seconds']for r in references]);offsets=np.array([r['offset']for r in references])
     if len(set(targets))<3 or max(targets)-min(targets)<FORMAT['minimum_target_span_seconds']:return None
@@ -54,8 +55,8 @@ def fit(references):
     velocity=float(np.median(slopes));origin=float(min(targets))
     intercept=float(np.median(offsets-velocity*(targets-origin)))
     error=float(max(abs(offsets-velocity*(targets-origin)-intercept)))
-    if velocity<=0 or error>FORMAT['maximum_reference_error_pixels']:return None
-    return {'velocity_pixels_per_second':velocity,'origin_seconds':origin,'offset_at_origin_pixels':intercept,
+    if velocity<=0 or error>FORMAT['maximum_reference_error_spacing']*spacing:return None
+    return {'lane_spacing_pixels':spacing,'velocity_pixels_per_second':velocity,'origin_seconds':origin,'offset_at_origin_pixels':intercept,
             'maximum_reference_error_pixels':error,'reference_target_range':[origin,float(max(targets))],
             'references':references}
 
@@ -85,7 +86,7 @@ def predictions(a,b,notes,interval,support):
         for refs in reference_sets:
             key=tuple(sorted(r['note']for r in refs))
             if key in seen:continue
-            seen.add(key);model=fit(refs)
+            seen.add(key);model=fit(refs,support['lane_spacing_pixels'])
             if model is None:continue
             lo,hi=model['reference_target_range']
             if not lo<=min(ta,tb)<=max(ta,tb)<=hi:continue

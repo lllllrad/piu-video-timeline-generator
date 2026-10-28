@@ -7,9 +7,9 @@ import numpy as np
 from piu_timeline.play.skins.anchors import FORMAT as ANCHOR_FORMAT
 from piu_timeline.play.skins.coordinates import FORMAT as IMAGE_COORDINATE_FORMAT
 
-FORMAT={'schema':1,'revision':6,'domain_constraint':'bounded_native_pixel_distance','image_support':'qualified_native_centers_or_identical_cap_reference','native_cap_registration':ANCHOR_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'minimum_frames':4,'minimum_span_seconds':.065,
-        'maximum_gap_pixels':1.,'maximum_motion_residual_pixels':1.5,
-        'minimum_displacement_spacing':.8,'coordinate_error_pixels':1.}
+FORMAT={'schema':1,'revision':7,'domain_constraint':'bounded_native_lane_distance','image_support':'qualified_native_centers_or_identical_cap_reference','native_cap_registration':ANCHOR_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'minimum_frames':4,'minimum_span_seconds':.065,
+        'maximum_gap_spacing':.025,'maximum_motion_residual_spacing':.0375,
+        'minimum_displacement_spacing':.8,'coordinate_error_spacing':.025}
 
 
 def prepare(data,spacing):
@@ -18,7 +18,7 @@ def prepare(data,spacing):
     for record in data.get('head_registration',{}).get('notes',[]):
         image=record.get('coordinate_method')=='native_image_anchors'
         if not image and (record.get('coordinate_method')!='native_cap_measurements'
-                or record.get('coordinate_uncertainty_pixels',float('inf'))>FORMAT['coordinate_error_pixels']):continue
+                or record.get('coordinate_uncertainty_pixels',float('inf'))>(FORMAT['coordinate_error_spacing']*spacing)):continue
         index=record['note'];note=data['notes'][index];points=dict(note['points'])
         for sample in record['observations']:
             if image and sample.get('native_cap_registration_status')=='conflicting':continue
@@ -35,7 +35,7 @@ def prepare(data,spacing):
                             or any(type(v)not in(int,float)or not np.isfinite(v)or v<=0 for v in (uncertainty,scale))
                             or abs(uncertainty-max(ANCHOR_FORMAT['coordinate_uncertainty_pixels'],ANCHOR_FORMAT['coordinate_uncertainty_pixels']*scale))>1e-9):
                         raise ValueError('Image chord has an unsupported native anchor registration')
-                if uncertainty is None or uncertainty>FORMAT['coordinate_error_pixels']:
+                if uncertainty is None or uncertainty>(FORMAT['coordinate_error_spacing']*spacing):
                     model=('image_reference',sample['cap_reference_sha256'])if sample.get('cap_reference_sha256')else('image_template',sample['template'])
             reference=sample.get('native_cap_reference_template',sample.get('template'))if image else None
             at[time].append((index,note['lane'],points[time],sample['source_pts_seconds'],model,reference))
@@ -51,17 +51,17 @@ def prepare(data,spacing):
         if (len(samples)<FORMAT['minimum_frames']or samples[-1][0]-samples[0][0]<FORMAT['minimum_span_seconds']
                 or len({s[3]for s in samples})!=len(samples)):continue
         gap=max(abs(s[1]-s[2])for s in samples)
-        if gap>FORMAT['maximum_gap_pixels']:continue
+        if gap>(FORMAT['maximum_gap_spacing']*spacing):continue
         time=np.array([s[0]-samples[0][0]for s in samples])
         y=np.array([(s[1]+s[2])/2 for s in samples]);velocity,intercept=np.polyfit(time,y,1)
         error=float(max(abs(y-velocity*time-intercept)))
         displacement=float(y[0]-y[-1])
         if (displacement<FORMAT['minimum_displacement_spacing']*spacing
-                or error>FORMAT['maximum_motion_residual_pixels']):continue
-        lower=(displacement-2*FORMAT['coordinate_error_pixels'])/float(time[-1])
+                or error>(FORMAT['maximum_motion_residual_spacing']*spacing)):continue
+        lower=(displacement-2*(FORMAT['coordinate_error_spacing']*spacing))/float(time[-1])
         if lower<=0:continue
         image_templates=sorted({name for s in samples for name in s[4:]if name is not None})
-        result.append({'peer_notes':[a,b],'observed_points':len(samples),'maximum_gap_pixels':gap,
+        result.append({'lane_spacing_pixels':spacing,'peer_notes':[a,b],'observed_points':len(samples),'maximum_gap_pixels':gap,
                        **({'measurement_basis':'shared_image_reference','reference_identity':model[1],
                            'reference_templates':image_templates}if model[0]in('image_reference','image_template')else{}),
                        **({'measurement_basis':'source_bound_native_cap_centers','registered_image_templates':image_templates}
@@ -74,8 +74,8 @@ def prepare(data,spacing):
 
 def constrain(domains,step,constraints):
     """Keep every row pair within the measured native concurrency bound."""
-    threshold=FORMAT['maximum_gap_pixels']+2*FORMAT['coordinate_error_pixels']
-    edges=[(proof,math.floor(threshold/(step*proof['minimum_velocity_pixels_per_second'])+1e-9))
+    limit_spacing=FORMAT['maximum_gap_spacing']+2*FORMAT['coordinate_error_spacing']
+    edges=[(proof,math.floor(limit_spacing*proof['lane_spacing_pixels']/(step*proof['minimum_velocity_pixels_per_second'])+1e-9))
            for proof in constraints]
     result=list(domains);used=set();changed=True
     while changed:
@@ -96,8 +96,9 @@ def constrain(domains,step,constraints):
 
 def conflicts(notes,constraints):
     """Cross-group assignments must also agree with the measured concurrency."""
-    result=[];threshold=FORMAT['maximum_gap_pixels']+2*FORMAT['coordinate_error_pixels']
+    result=[]
     for proof in constraints:
+        threshold=(FORMAT['maximum_gap_spacing']+2*FORMAT['coordinate_error_spacing'])*proof['lane_spacing_pixels']
         a,b=proof['peer_notes']
         if any(notes[i]['status']!='estimated'for i in (a,b)):continue
         distance=abs(notes[a]['target_seconds']-notes[b]['target_seconds'])*proof['minimum_velocity_pixels_per_second']

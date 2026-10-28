@@ -9,24 +9,23 @@ without widening either time interval or changing the natural subdivision.
 
 Use canonical centers actually measured in each source frame, never the fallback
 offset positions. Both caps must be in different lanes, with at least four common
-measurements spanning 65 ms. Every common measurement must put them within one
-analysis pixel; do not discard a disagreeing frame to create a chord. Source PTS
+measurements spanning 65 ms. Every common measurement must put them within 0.025 lane spacings; do not discard a disagreeing frame to create a chord. Source PTS
 must agree at the same playback time; an inconsistent cache fails explicitly.
-Each cap's declared coordinate uncertainty must be at most one analysis pixel.
+Each cap's declared coordinate uncertainty must be at most 0.025 lane spacings.
 
 The mean observed trajectory must move upwards at least 0.8 lane spacings and
-fit a line with maximum residual at most 1.5 pixels. Its conservative speed
-lower bound subtracts two pixels of endpoint uncertainty from the observed
+fit a line with maximum residual at most 0.0375 lane spacings. Its conservative speed
+lower bound subtracts 0.05 lane spacings of endpoint uncertainty from the observed
 displacement before dividing by the source-time span. Stationary, nonlinear,
 insufficiently measured and unregistered candidates cannot supply this proof.
 
 ## Resolving a domain
 
 For each proposed natural Split, multiply its row duration by the measured speed
-lower bound. Divide the three-pixel concurrency bound (one pixel of observed
-pair separation plus one pixel of uncertainty for each cap) by that distance
+lower bound. Divide the 0.075-lane concurrency bound (0.025 lane spacings of observed
+pair separation plus 0.025 lane spacings of uncertainty for each cap) by that distance
 and take the integer floor. This is the maximum compatible difference between
-the two row indices. If one row already exceeds three pixels, the difference
+the two row indices. If one row already exceeds 0.075 lane spacings, the difference
 must be zero; finer rows retain a bounded difference instead of losing the
 constraint entirely. A small row duration cannot hide a large total gap.
 
@@ -56,14 +55,14 @@ A broad time interval can also cover several nonconcurrent rows. Use uniquely
 placed heads as independent anchors in each registered coordinate block,
 including nearby measures at the same tempo. A model needs at least five other heads, two
 lanes, three distinct target times and a target span of at least 300 ms.
-Every reference must satisfy the existing one-pixel model residual limit;
+Every reference must satisfy the 0.025-lane model residual limit;
 no disagreeing reference is discarded. The tested head needs qualified native
 measurement support and cannot train its own model.
 
 Apply a model only when the entire candidate row domain lies between its
 independent anchors. Intersect the existing row domain with the measured
 coordinate interval, using the reference model's actual maximum residual plus
-the existing 1.5-pixel native support limit. Models can remove candidate rows,
+the 0.0375-lane native support limit. Models can remove candidate rows,
 never add one or enlarge a time interval. Every qualified block constrains the
 result; conflicting evidence cannot be bypassed by selecting a favorable block.
 Singleton row domains receive the same check: one possible row is not proof
@@ -114,7 +113,7 @@ rows can bracket that head in the same registered coordinate block.
 Freeze accepted references before recovery. The rejected estimate selects only
 a bounded reference neighborhood; it supplies neither the accepted time nor an
 error interval. Fit offset against reference target time using the ordinary
-five-head, two-lane, three-target, 300-ms and one-pixel requirements. The tested
+five-head, two-lane, three-target, 300-ms and 0.025-lane residual requirements. The tested
 head retains its native-support gate. Its entire inferred interval must lie
 inside the reference target span and a single tempo section. Every qualifying
 block must agree. Recovered heads cannot become references in this pass.
@@ -218,7 +217,7 @@ ordinary checks; unresolved heads cannot participate in those accepted matches.
 A unique candidate row for each head does not establish that their relative
 placement is correct. Final native-spacing validation also checks neighboring
 heads separated by more than the existing concurrency compatibility bound
-(1 pixel observed gap plus 1 pixel coordinate uncertainty per head). This bound
+(0.025 lane spacings of observed gap plus 0.025 lane spacings of uncertainty per head). This bound
 is independent of note width and UCS split. Thus a small but measurable stagger
 cannot silently become a chord. The check retains the existing four-frame,
 65 ms support and residual requirements, and uses registered native offsets or
@@ -244,7 +243,7 @@ source-clock rows in the same registered native-coordinate block and official
 timing section. It excludes the tested head and the previously rejected group
 where required. Recovered or native-refined rows cannot supply this fallback.
 Every eligible reference is included: none may be removed to obtain a fit.
-The existing five-reference, two-lane, three-time, span and one-pixel maximum
+The existing five-reference, two-lane, three-time, span and 0.025-lane maximum
 reference-error requirements still apply, and the complete target interval
 must be bracketed by those references. A changing phase-to-time relation which
 cannot satisfy that bound remains a failure.
@@ -265,3 +264,16 @@ cannot constrain another group's domains. Rebuild neighbor models using only
 the surviving initial rows, without promoting newly resolved rows into that
 reference set. Later reference changes and failures still invalidate dependent
 proofs. A unique row alone is insufficient evidence for use as a neighbor anchor.
+
+
+## Geometry units
+
+Beat-domain, native-reference and pair-spacing acceptance limits use fractions
+of the measured lane spacing. Model records retain `lane_spacing_pixels` with
+pixel-valued observations for source inspection; a pixel field is not a fixed
+pixel acceptance budget. Missing model scale cannot silently fall back to a
+presumed screen size. Time limits remain seconds and do not scale with geometry
+or UCS Split. The current relative tolerances preserve the former nominal
+40-pixel-lane calibration; they are implementation limits, not measured engine
+judgment windows. Actual template/raster uncertainty remains separately measured.
+Upscaling a low-resolution image does not establish more independent evidence.

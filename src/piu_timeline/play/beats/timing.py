@@ -212,7 +212,7 @@ def apply(data,directory):
     if coordinate_support:
         for group in proposals:
             positions={index:j for j,index in enumerate(group['notes'])}
-            group['native_coordinates']=[{'chunk':number,'heads':{positions[i]:{**head,'native_note':i} for i,head in heads.items()
+            group['native_coordinates']=[{'chunk':number,'lane_spacing_pixels':spacing,'heads':{positions[i]:{**head,'native_note':i} for i,head in heads.items()
                                          if i in positions},'neighbor_heads':{i:head for i,head in heads.items()if i not in positions}}
                                          for number,heads in coordinate_support['chunks'].items()
                                          if any(i in positions for i in heads)]

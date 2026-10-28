@@ -21,7 +21,7 @@ def scenario():
         groups.append({'notes':indices,'targets':[targets[i]for i in indices],
                        'errors':[.13 if i==3 else .001 for i in indices],
                        'bpm':120,'origin':0,'native_coordinates':[
-                           {'chunk':1,'heads':{j:heads[i]for j,i in enumerate(indices)},
+                           {'chunk':1,'lane_spacing_pixels':40.,'heads':{j:heads[i]for j,i in enumerate(indices)},
                             'neighbor_heads':{i:h for i,h in heads.items()if i not in indices}}]})
     return groups
 
@@ -35,7 +35,7 @@ class NeighborReferenceTest(unittest.TestCase):
         for ids in (list(range(6)),list(range(6,9)),list(range(9,12))):
             group={'notes':ids,'targets':[targets[i]for i in ids],'errors':[.001]*len(ids),'bpm':120,'origin':0}
             if ids[0]==0:
-                group['native_coordinates']=[{'chunk':0,'heads':{i:heads[i]for i in ids},
+                group['native_coordinates']=[{'chunk':0,'lane_spacing_pixels':40.,'heads':{i:heads[i]for i in ids},
                                               'neighbor_heads':{i:h for i,h in heads.items()if i not in ids}}]
             groups.append(group)
         result=fit_phase(groups,0);fit=result['fits'][0]
@@ -48,7 +48,7 @@ class NeighborReferenceTest(unittest.TestCase):
         data=local_scenario();heads=prepare(data,40)['chunks'][0]
         group={'notes':list(range(9)),'targets':[n['target_seconds']for n in data['notes']],
                'errors':[n['prediction_uncertainty_seconds']for n in data['notes']],
-               'bpm':120,'origin':1,'native_coordinates':[{'chunk':0,'heads':heads,
+               'bpm':120,'origin':1,'native_coordinates':[{'chunk':0,'lane_spacing_pixels':40.,'heads':heads,
                    'neighbor_heads':{9:{'offset':1000,'lane':0,'native_note':9}}}]}
         neighbor={'notes':[9],'targets':[2.125],'errors':[.001],'bpm':120,'origin':1}
         result=fit_phase([group,neighbor],0)
@@ -111,7 +111,7 @@ class NeighborReferenceTest(unittest.TestCase):
         heads={i:{'offset':40+500*t,'lane':i%3,'native_note':i}for i,t in enumerate(targets)}
         for group in groups:
             ids=group['notes']
-            group['native_coordinates']=[{'chunk':0,'heads':{j:heads[i]for j,i in enumerate(ids)},
+            group['native_coordinates']=[{'chunk':0,'lane_spacing_pixels':40.,'heads':{j:heads[i]for j,i in enumerate(ids)},
                                          'neighbor_heads':{i:h for i,h in heads.items()if i not in ids}}]
         groups[1]['targets'][0]+=.125
         notes=[{'lane':i%3,'status':'estimated','target_seconds':t+(.125 if i==4 else 0),

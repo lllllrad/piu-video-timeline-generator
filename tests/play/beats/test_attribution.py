@@ -26,7 +26,7 @@ class SpacingAttributionTest(unittest.TestCase):
     def test_unattributed_or_contradictory_models_keep_both_heads_unresolved(self):
         notes=[{'target_seconds':0},{'target_seconds':1}]
         def model(offsets,chunk=0):
-            return {'chunk':chunk,'peer_offsets_pixels':offsets,'maximum_reference_error_pixels':0,
+            return {'chunk':chunk,'lane_spacing_pixels':40.,'peer_offsets_pixels':offsets,'maximum_reference_error_pixels':0,
                     'offset_at_origin_pixels':0,'origin_seconds':0,'velocity_pixels_per_second':10}
         for models in ([],[model([.75,9.25])],[model([0,13]),model([3,10],1)],[{}]):
             rejected,_=attributed_heads(0,1,notes,models)

@@ -28,14 +28,14 @@ def constrain(options, step, origin, blocks):
                 target = origin+a*step
                 if origin+lo*step-radius <= target <= origin+hi*step+radius:
                     references.append({'note': head.get('native_note',peer), 'target_seconds': target, **head})
-            model = fit(references)
+            model = fit(references,block['lane_spacing_pixels'])
             if model is None:
                 continue
             lower, upper = model['reference_target_range']
             # A model cannot refute candidates outside its independent anchors.
             if not lower <= origin+lo*step <= origin+hi*step <= upper:
                 continue
-            error = COORDINATE_FORMAT['maximum_native_error_pixels']+model['maximum_reference_error_pixels']
+            error = COORDINATE_FORMAT['maximum_native_error_spacing']*model['lane_spacing_pixels']+model['maximum_reference_error_pixels']
             velocity = model['velocity_pixels_per_second'];offset = heads[index]['offset']
             time = model['origin_seconds']+(offset-model['offset_at_origin_pixels'])/velocity
             allowed = (max(lo, math.ceil((max(lower,time-error/velocity)-origin)/step-1e-8)),

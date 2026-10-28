@@ -122,7 +122,7 @@ class BeatChordTest(unittest.TestCase):
         self.assertEqual(data,original)
 
     def test_fine_rows_still_reject_total_distance_outside_native_chord_bound(self):
-        proof={'indices':[0,1],'minimum_velocity_pixels_per_second':500.}
+        proof={'indices':[0,1],'lane_spacing_pixels':40.,'minimum_velocity_pixels_per_second':500.}
         # Each fine row is only 1.25 pixels apart; twelve rows are still a
         # measurable 15-pixel contradiction, even though one row is not.
         result,used=constrain([(400,400),(412,412),(450,450)],.0025,[proof])
@@ -131,7 +131,7 @@ class BeatChordTest(unittest.TestCase):
         self.assertEqual(used,[proof])
 
     def test_fine_rows_keep_all_pixel_compatible_candidates_without_forcing_equality(self):
-        proof={'indices':[0,1],'minimum_velocity_pixels_per_second':500.}
+        proof={'indices':[0,1],'lane_spacing_pixels':40.,'minimum_velocity_pixels_per_second':500.}
         result,used=constrain([(400,400),(400,405)],.0025,[proof])
         self.assertEqual(result,[(400,400),(400,402)])
         self.assertEqual(used,[proof])
@@ -139,6 +139,6 @@ class BeatChordTest(unittest.TestCase):
         self.assertEqual(result,[(500,500),(503,503)])
 
     def test_bounded_concurrency_propagates_between_peers_without_collapsing_their_rows(self):
-        proofs=[{'indices':pair,'minimum_velocity_pixels_per_second':500.}for pair in ([0,1],[1,2])]
+        proofs=[{'indices':pair,'lane_spacing_pixels':40.,'minimum_velocity_pixels_per_second':500.}for pair in ([0,1],[1,2])]
         result,_=constrain([(10,10),(10,20),(14,14)],.0025,proofs)
         self.assertEqual(result,[(10,10),(12,12),(14,14)])

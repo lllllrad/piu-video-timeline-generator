@@ -59,3 +59,16 @@ in this repository exercise general geometry, native-time integrity, natural
 beat subdivisions, ambiguity and failure behavior using synthetic observations.
 Song/chart facts belong in the separate editable UCS repository. If a reusable
 artifact fits neither repository, discuss a storage location before tracking it.
+
+
+`tests/play/beats/fixtures.py` generates native observation records from an
+independent list of expected chart times and lanes. Its stored-JSON pipeline
+matrix covers triplet/quarter rhythms, simultaneous heads, close staggers,
+Single/Double lane counts, three geometry sizes and 30/60/120 fps. It runs the
+actual beat reconstruction and UCS timing-row transcription, asserting no lost
+ordinary heads, original timestamps/positions and correct expected row times.
+Unresolved close staggers must fail explicitly rather than become false chords.
+Separate geometry cases retain scaled noise, contradictory references and
+measurement uncertainty across JSON round trips. This validates consumption of
+native observations; it does not cover arbitrary skins, image acquisition,
+hold appearance or the complete four-channel evidence combination.

@@ -73,7 +73,7 @@ class BeatCoordinateTest(unittest.TestCase):
         data=fixture();support=prepare(data,40)
         refs=[{'note':i,'target_seconds':data['notes'][i]['target_seconds'],**head}
               for i,head in support['chunks'][0].items()if i not in (4,5)]
-        self.assertIsNotNone(fit(refs))
+        self.assertIsNotNone(fit(refs,40))
         for kind in ('bad_row','speed_change','one_lane','one_time'):
             changed=deepcopy(refs)
             if kind=='bad_row':changed[2]['target_seconds']+=.08
@@ -83,7 +83,7 @@ class BeatCoordinateTest(unittest.TestCase):
                 for r in changed:r['lane']=0
             if kind=='one_time':
                 for r in changed:r['target_seconds']=1
-            self.assertIsNone(fit(changed),kind)
+            self.assertIsNone(fit(changed,40),kind)
 
     def test_conflicting_source_coordinates_cannot_count_as_native_pair_support(self):
         data=fixture();record=data['head_registration']['notes'][4]

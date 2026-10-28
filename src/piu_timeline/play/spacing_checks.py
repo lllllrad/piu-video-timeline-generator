@@ -7,8 +7,8 @@ from piu_timeline.play.beats.coordinates import predictions
 from piu_timeline.play.beats.coordinates import FORMAT as COORDINATE_FORMAT
 
 
-SPACING_FORMAT={'schema':1,'pair_selection':'native_pixel_resolvable_neighbors',
-                'minimum_gap_pixels':CHORD_FORMAT['maximum_gap_pixels']+2*CHORD_FORMAT['coordinate_error_pixels']}
+SPACING_FORMAT={'schema':1,'pair_selection':'native_lane_relative_neighbors',
+                'minimum_gap_spacing':CHORD_FORMAT['maximum_gap_spacing']+2*CHORD_FORMAT['coordinate_error_spacing']}
 
 
 def attributed_heads(a,b,notes,models):
@@ -20,7 +20,7 @@ def attributed_heads(a,b,notes,models):
         errors=[offset-(model['offset_at_origin_pixels']+model['velocity_pixels_per_second']*
                        (notes[i]['target_seconds']-model['origin_seconds']))
                 for i,offset in zip((a,b),model['peer_offsets_pixels'],strict=True)]
-        tolerance=COORDINATE_FORMAT['maximum_native_error_pixels']+model['maximum_reference_error_pixels']
+        tolerance=COORDINATE_FORMAT['maximum_native_error_spacing']*model['lane_spacing_pixels']+model['maximum_reference_error_pixels']
         bad=[i for i,error in zip((a,b),errors)if abs(error)>tolerance+1e-6]
         rejected.update(bad)
         proof.append({'chunk':model['chunk'],'peer_position_errors_pixels':errors,
@@ -90,7 +90,7 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
             baseline=[p for p in points if p[1]in baseline_indices]
             neighbors.extend(pair for pair in zip(baseline,baseline[1:])if pair not in neighbors)
         for (ya,a),(yb,b) in neighbors:
-            if yb-ya>SPACING_FORMAT['minimum_gap_pixels']:pairs[(a,b)].append((time,yb-ya))
+            if yb-ya>SPACING_FORMAT['minimum_gap_spacing']*spacing:pairs[(a,b)].append((time,yb-ya))
     failed=[]
     for (a,b),samples in pairs.items():
         if changed_indices is not None and a not in changed_indices and b not in changed_indices:continue
@@ -99,7 +99,7 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
         ca,cb=first.get('motion_clock'),second.get('motion_clock')
         gaps=np.array([gap for _,gap in samples]);gap=float(np.median(gaps))
         scatter=float(np.median(abs(gaps-gap)))
-        if scatter>1.5:continue
+        if scatter>COORDINATE_FORMAT['maximum_native_error_spacing']*spacing:continue
         if motion is None:
             predicted=((second['target_seconds']-first['target_seconds'])*ca['velocity'] if ca and cb and ca==cb else None)
         else:
@@ -119,7 +119,7 @@ def spacing_failures(notes, spacing, motion=None, coordinate_support=None, diagn
             if diagnostics is not None:diagnostics.append({'peer_notes':[a,b],'observed_gap_pixels':gap,
                 'comparison_gap_pixels':comparison_gap,'comparison_basis':'independent_registered_offsets','models':models})
         elif not ca or not cb:continue
-        tolerance=max(1.,3*scatter)
+        tolerance=max(COORDINATE_FORMAT['maximum_reference_error_spacing']*spacing,3*scatter)
         conversion=clock_conversion(first,second)if motion is not None and predicted is not None and not models else None
         comparison=tolerance+(conversion['position_error_pixels']if conversion else 0.)
         if conversion and diagnostics is not None:

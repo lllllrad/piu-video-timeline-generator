@@ -79,7 +79,7 @@ class PartialBeatTest(unittest.TestCase):
         self.assertEqual(result['reason'],'ambiguous_or_unsupported_song_phase')
 
     def test_conflicting_chord_component_does_not_erase_independent_unique_rows(self):
-        proof={'indices':[0,1],'minimum_velocity_pixels_per_second':500.}
+        proof={'indices':[0,1],'lane_spacing_pixels':40.,'minimum_velocity_pixels_per_second':500.}
         result=fit_grid([1.,1.03125,1.125,1.25],[.001]*4,120,0,
                         splits=[16],native_chords=[proof])
         self.assertEqual(result['status'],'partial')
