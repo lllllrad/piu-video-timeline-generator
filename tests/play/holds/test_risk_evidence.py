@@ -8,6 +8,7 @@ import unittest
 from piu_timeline.play.holds.risk_evidence import derive
 from piu_timeline.play.holds.risk_cache import context,prepare
 from piu_timeline.play.holds.risk_ownership import account_interval
+from piu_timeline.play.holds.input_risk import pre_hold_accounting
 from piu_timeline.play.deferred_words import recover
 from piu_timeline.play.skins.held import FORMAT as HELD_FORMAT
 from piu_timeline.play.skins.anchors import FORMAT as ANCHOR_FORMAT
@@ -55,6 +56,28 @@ class NativeBodyRiskTest(unittest.TestCase):
         self.assertEqual(cause['vertical_range_pixels'],[26,54])
         self.assertEqual(cause['ownership']['minimum_head_top_pixels'],27.)
         self.assertEqual(result['counts'],{'approaching':1})
+
+    def test_temporal_neighborhood_cannot_override_missing_or_conflicting_native_ownership(self):
+        data=self.data
+        data['skin_detector']['contract']['held_body']=HELD_FORMAT
+        data['skin_detector']['missing_template_roles']=[]
+        data['notes']=[{'status':'estimated','velocity_pixels_per_second':-1000}for _ in range(2)]
+        data['median_frame_interval_seconds']=.02
+        data['hold_analysis']['holds'][0]['start_range']=[1.03,1.05]
+        result=derive(data,self.native,self.bank);result['contract']=context(data)
+        data['body_risk_evidence']=result
+        self.assertIsNotNone(pre_hold_accounting(data,.9,.917))
+        for mode in ('missing','stale','unowned','ambiguous','unresolved','extra-cause'):
+            with self.subTest(mode=mode):
+                changed=deepcopy(data);evidence=changed['body_risk_evidence']
+                cause=evidence['frames'][0]['causes'][0]
+                if mode=='missing':changed.pop('body_risk_evidence')
+                elif mode=='stale':evidence['contract']['source']['media']['size']+=1
+                elif mode=='unowned':cause.pop('owner_hold')
+                elif mode=='ambiguous':cause['candidate_holds']=[0,1]
+                elif mode=='unresolved':cause['state']='unresolved'
+                else:evidence['frames'][0]['causes'].append({'state':'unresolved'})
+                self.assertIsNone(pre_hold_accounting(changed,.9,.917))
 
     def test_missing_conflicting_or_different_frame_geometry_remains_unresolved(self):
         for case in ('missing','ambiguous','pts','bounds','registration','uncertainty','motion','method','at_receptor'):

@@ -105,18 +105,15 @@ def pre_hold_accounting(data,lo,hi,extent_spacing=1.):
     if not relevant:return None
     records=[];used=set();maximum=0;accounted=[]
     for interval in relevant:
-        owners=[(h,g)for h,g in guards if risk_hi<h['start_range'][0]-g
-                and h['start_range'][0]-g<=interval['start_seconds']
-                and interval['end_seconds']<=h['end_range'][1]+g]
         from piu_timeline.play.holds.risk_ownership import account_interval
         geometric=account_interval(data,interval,guards,risk_hi)
-        if geometric is not None:
-            owners=[(h,g)for h,g in guards if h['id']in geometric['holds']]
-            accounted.append((interval['start_seconds'],interval['end_seconds']))
+        if geometric is None:return None
+        owners=[(h,g)for h,g in guards if h['id']in geometric['holds']]
+        accounted.append((interval['start_seconds'],interval['end_seconds']))
         if not owners:return None
         used.update(h['id']for h,_ in owners);maximum=max(maximum,*(g for _,g in owners))
         records.append({**interval,'accounted_holds':[h['id']for h,_ in owners],
-                        **({'native_image_ownership':geometric}if geometric else {})})
+                        'native_image_ownership':geometric})
     if hold_overlap(data,risk_lo,risk_hi,maximum,accounted):return None
     return {'method':'before_accounted_native_hold_regions','holds':sorted(used),
             'maximum_cap_guard_seconds':maximum,'native_risk_intervals':records,

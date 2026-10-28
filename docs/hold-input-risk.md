@@ -28,9 +28,9 @@ geometry are available, a second pass can reconsider that refresh only when:
 - The target has a confirmed tap role. Hold components, MISS candidates and
   already assigned notes remain unavailable.
 - The image profile provides current receptor-body observations. Every nearby
-  risk flag responsible for the initial exclusion fits within a known future
-  hold's measured interval and cap neighborhood, or has exact native image
-  ownership establishing that the hold is still approaching.
+  risk flag responsible for the initial exclusion has exact native image
+  ownership establishing that the hold is still approaching. Temporal proximity
+  to a known hold cannot replace missing, stale or conflicting image ownership.
 - All known holds have uncensored image endpoints, repeated body evidence and
   measured endpoint motion. The word precedes every relevant held-state interval.
   A failed musical beat assignment does not invalidate native geometry: an
