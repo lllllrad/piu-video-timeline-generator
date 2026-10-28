@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {nativeScene} from './fixtures.ts';
 import {crossing} from '../../src/piu_timeline/derived/clocks.ts';
 import {frameBounds} from '../../src/piu_timeline/derived/frame_bounds.ts';
+import {processingPaths} from '../../src/piu_timeline/derived/scroll.ts';
 
 for(const fps of [30,60,120])for(const spacing of [20,40,80])test(`repeated native frames retain the full crossing ambiguity: ${fps} fps / spacing ${spacing}`,()=>{
   const hiddenTarget=1+.5/fps;
@@ -90,4 +91,21 @@ print(json.dumps({'notes':notes,'result':r}))`;
   assert.equal(r.result.status,'failed','usable bounds do not certify a recovered subframe clock');
   assert.deepEqual(w.crossing_source_pts_seconds,n.crossing_source_pts_seconds);
   assert.deepEqual([w.visible_start_seconds,w.visible_end_seconds],n.crossing_capture_range);
+});
+
+for(const spacing of [20,40,80])test(`transferred coordinates without an affine clock retain their measured processing path: spacing ${spacing}`,()=>{
+  const data=nativeScene([[1.01,0]],spacing,60,5,{end:1.4,renderTime:t=>t<1?t:t+.12});
+  const n=data.notes[0],phase=n.motion_target_phase;
+  Object.assign(n,{motion_clock:null,coordinate_bridge:{from_chunk:7,to_chunk:0},clock_target_phase:phase,
+    timing_reconstruction:{status:'restored'},velocity_pixels_per_second:-spacing*6});
+  const original=structuredClone(data);
+  const path=processingPaths([n],data,spacing*1.3,spacing,1)[0];
+  assert.equal(path.supported,true);assert.equal(path.basis,'registered_native_displacement');
+  const samples=data.scroll_motion.samples,i=samples.findIndex((a,j)=>j<samples.length-1&&a.phase<=phase&&phase<samples[j+1].phase);
+  assert.ok(i>=0);
+  const measured=-(samples[i+1].phase-samples[i].phase)/(samples[i+1].time-samples[i].time);
+  assert.equal(path.velocity,measured,'use the destination observation, not the old block average');
+  assert.notEqual(path.velocity,n.velocity_pixels_per_second);
+  assert.equal(path.position_model.phase,phase);assert.equal(path.position_model.chunk,0);
+  assert.equal(n.motion_clock,null);assert.deepEqual(data,original);
 });

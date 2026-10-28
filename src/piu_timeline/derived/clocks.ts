@@ -192,7 +192,7 @@ export class MotionClock {
       if (!(after[0].phase < translated && translated <= after.at(-1).phase)) continue;
       const r = this.crossing(after[0], translated, error + Math.max(.75, disagreement));
       if (!r || !(0 <= r.target_seconds - sample.time && r.target_seconds - sample.time <= .25)) continue;
-      choices.push({...r, fit_method: 'shared_scroll_registered_block_transfer', coordinate_bridge: {from_chunk: sample.chunk, to_chunk: record.chunk,
+      choices.push({...r, crossing_method: r.fit_method, fit_method: 'shared_scroll_registered_block_transfer', coordinate_bridge: {from_chunk: sample.chunk, to_chunk: record.chunk,
         anchor_notes: anchors.map(Number).sort((a, b) => a - b), phase_offset_pixels: shift, maximum_anchor_disagreement_pixels: disagreement, intermediate_source_pts_seconds: proof}, clock_target_phase: translated});
     }
     return choices.length === 1 ? choices[0] : null;

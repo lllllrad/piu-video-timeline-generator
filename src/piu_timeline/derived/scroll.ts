@@ -94,7 +94,11 @@ export function processingPaths(notes: RecordData[], data: RecordData, receptor:
     const chunk = bridge.to_chunk ?? note.motion_chunk, samples = chunks.get(chunk) ?? [];
     if (phase != null && samples.length && note.timing_reconstruction?.status !== 'failed') {
       const i = samples.findIndex((a, j) => j < samples.length - 1 && a.phase <= phase && phase < samples[j + 1].phase && 0 < samples[j + 1].time - a.time && samples[j + 1].time - a.time <= .05);
-      const velocity = (Object.keys(bridge).length ? -note.motion_clock.velocity : (note.velocity_pixels_per_second ?? 0)) * scale;
+      // A transferred coordinate block can bound a crossing without any affine
+      // clock. Its own measured phase step still supplies a display-path slope.
+      const transferred = i >= 0 ? -(samples[i + 1].phase - samples[i].phase) / (samples[i + 1].time - samples[i].time) : 0;
+      const transferVelocity = note.motion_clock ? -note.motion_clock.velocity : transferred;
+      const velocity = (Object.keys(bridge).length ? transferVelocity : (note.velocity_pixels_per_second ?? 0)) * scale;
       if (i >= 0 && velocity < -spacing) {
         const a = samples[i], b = samples[i + 1], target = a.time + (phase - a.phase) / (b.phase - a.phase) * (b.time - a.time);
         return {supported: true, basis: 'registered_native_displacement', velocity, target,
