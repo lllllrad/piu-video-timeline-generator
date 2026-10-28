@@ -23,7 +23,6 @@ export function boundedRefreshes(data:RecordData,choices:RecordData,events:Recor
   // Chords need one established row and distinct lanes, not just nearby centers.
   const target=notes[compatible[0]].target_seconds;
   if(compatible.some(i=>Math.abs(notes[i].target_seconds-target)>1e-8)||new Set(compatible.map(i=>notes[i].lane)).size!==compatible.length)continue;
-  if(compatible.every(i=>targetInWindow({...notes[i],prediction_uncertainty_seconds:0},c.lower_seconds,c.upper_seconds,delay)))continue;
   if(compatible.some(i=>{
    const options=choices[i]??[];
    return ![['combo',ci],['judgment',ji]].every(([source,index])=>options.some(o=>o.source===source&&o.event===index&&o.alternative_rows===1))||

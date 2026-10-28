@@ -48,9 +48,8 @@ source PTS. See [motion clocks](motion-clocks.md) for support requirements and f
 The default association tolerance is 45 ms around the observed update interval. A monotone sequence
 alignment compares rows and counter updates in time order, so close successive notes do not all get
 discarded merely because their search windows overlap. Near-equal competing alignments remain
-excluded. When an acquired target interval overlaps a synchronized counter and
-non-MISS judgment refresh but its representative time misses the window, saved-data
-recovery can use that interval. It requires a uniquely compatible tap row, both
+excluded. Saved-data recovery can use the carried target interval of an unassigned row
+that overlaps a synchronized counter and non-MISS judgment refresh. It requires a uniquely compatible tap row, both
 refreshes, no competing unowned refresh, and no hold or processing conflict. Chords
 need one established target row and distinct lanes. The match retains the original
 refresh brackets, target estimate, source target range and compatible target range;

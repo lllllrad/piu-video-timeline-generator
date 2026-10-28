@@ -97,3 +97,12 @@ test('bounded popup anchors do not displace a row with an independent receptor o
  assert.ok(matches.some(m=>m.note===0&&m.recovery_method==='exclusive_bounded_target_with_synchronized_refreshes'));
  assert.ok(!matches.some(m=>m.note===2));
 });
+
+for(const chord of[false,true])test(`an exclusive synchronized row can resolve a point-compatible unassigned refresh: chord=${chord}`,()=>{
+ const d=scene(40,60,chord);d.notes.forEach(n=>{n.target_seconds=1;});
+ d.combo_events[0].lower_seconds=d.judgment_events[0].lower_seconds=1.01;
+ d.combo_events[0].upper_seconds=d.judgment_events[0].upper_seconds=1.027;
+ const[matches,recovered]=recoverRows(d);
+ assert.deepEqual(recovered,chord?[0,1]:[0]);assert.equal(matches.length,chord?2:1);
+ for(const m of matches){assert.equal(m.combo_event,0);assert.equal(m.judgment_event,0);assert.equal(m.target_seconds,1);}
+});

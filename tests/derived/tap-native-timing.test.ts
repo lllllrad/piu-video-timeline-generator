@@ -50,3 +50,16 @@ test('a previously omitted native tap remains a competing row instead of permitt
  assert.ok(present(omitted).matches.some(m=>m.note===1));
  assert.ok(!present(d).matches.some(m=>m.note===1),'both plausible rows must participate in exclusivity checks');
 });
+
+test('failed beat placement can use an exclusive synchronized refresh without a receptor onset',()=>{
+ const d=scene();d.visual_channels.receptors.events=[];
+ d.combo_events=[{lower_seconds:.99,upper_seconds:1,delta:1,status:'excluded',reason:'ambiguous_note_or_combo_association'}];
+ const before=structuredClone(d),view=present(d),m=view.matches.find(m=>m.note===0);
+ assert.ok(m);assert.equal(m.recovery_method,'exclusive_bounded_target_with_synchronized_refreshes');
+ assert.equal(m.combo_event,0);assert.equal(m.judgment_event,0);assert.equal(m.judgment_label,'PERFECT');
+ assert.deepEqual(m.source_target_range,[.99,1.01]);assert.deepEqual([m.observation_lower_seconds,m.observation_upper_seconds],[.99,1]);
+ assert.equal(view.notes[0].beat_reconstruction.status,'failed');assert.equal(view.notes[0].target_timing_basis,'native_motion');
+ assert.ok(recognition(view,{notes:{}}).warnings.some(w=>w.note===0&&w.reason==='beat_timing_reconstruction_failed'));
+ const[,evidence]=draft(template(),view,{song_start_seconds:0,uncertainty_seconds:0});
+ assert.ok(!evidence.placements.some(p=>p.note===0));assert.deepEqual(d,before);
+});
