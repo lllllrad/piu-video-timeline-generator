@@ -18,8 +18,5 @@ def evidence(samples,receptor,spacing,minimum_coverage):
 
 def after_refresh(event,upper,guard=0):
     """Flag a measured ordering conflict; do not manufacture a replacement input."""
-    proof=event.get('passage_evidence')
-    if event['status']!='passed_target'or not proof:return None
-    lo,hi=proof['range']
-    if 0<hi-lo<=.05 and lo>upper+max(.075,guard):return proof
-    return None
+    from piu_timeline.derived import call
+    return call('evidence.afterRefresh',event,upper,guard)

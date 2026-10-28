@@ -1,5 +1,5 @@
 import {median} from './math.ts';
-import {bracket, disputedRefresh, onsetOverlaps, partition, processingConflicts, processingSupport, receptorEvidence} from './evidence.ts';
+import {afterRefresh, bracket, disputedRefresh, onsetOverlaps, partition, processingConflicts, processingEvidence, processingSupport, receptorEvidence} from './evidence.ts';
 import type {Interval, RecordData} from './types.ts';
 export const EARLY = .25, LATE = .5;
 export const targetOffsets = (data, local) => [...new Set<number>([(data.display_delay_correction_ms ?? 0) / 1000, local])].sort((a, b) => a - b);
@@ -48,6 +48,7 @@ export function candidates(input: RecordData, events: RecordData[]): [Record<str
       const target = note.target_seconds, uncertainty = note.prediction_uncertainty_seconds, overlap = intersectWindow([lo, hi], associationWindow(note, correction));
       if (!overlap) { reject(index, 'outside_association_window'); continue; }
       const [supportLo, supportHi] = overlap;
+      if (processingEvidence(data).some(p => p.note === index && afterRefresh(p, supportHi, frame * 2))) { reject(index, 'head_observed_after_refresh'); continue; }
       if (processingConflicts(data, index, supportLo, supportHi, frame * 2)) { reject(index, 'contradicts_observed_note_disappearance'); continue; }
       const lane = note.lane;
       if (owned.length && owned.some(o => Math.abs(o.target - target) > .025 || notes[o.note].lane === lane)) { reject(index, 'refresh_already_assigned_to_another_row'); continue; }

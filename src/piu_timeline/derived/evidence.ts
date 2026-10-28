@@ -50,7 +50,7 @@ export function afterRefresh(event: RecordData, upper: number, guard = 0): Recor
   const p = event.passage_evidence;
   if (event.status !== 'passed_target' || !p) return null;
   const [lo, hi] = p.range;
-  return 0 < hi - lo && hi - lo <= .05 && lo > upper + Math.max(.075, guard) ? p : null;
+  return 0 < hi - lo && hi - lo <= .05 && lo > upper + Math.max(.075, guard) + 1e-9 ? p : null;
 }
 export function annotateMatches(data: RecordData): RecordData {
   if (!data.visual_channels || !Object.keys(data.visual_channels).length) return partition(data);

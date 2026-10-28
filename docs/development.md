@@ -352,7 +352,10 @@ checks every co-observed neighboring head, including chords and close staggers,
 against independent coordinate references; a small relative gap cannot exempt a
 shared absolute timing error. It uses prepared official UCS timing and verified
 alignment to test natural subdivisions. Missing references, failed shared
-support and ambiguous beat rows remain explicit review states. Native video,
+support and ambiguous beat rows remain explicit review states. Candidate refresh
+selection also rejects a head independently observed moving sufficiently after
+the refresh, using the same guarded passage check as confirmed associations.
+Unverified, broad or temporally overlapping passage never proves this conflict. Native video,
 frame traces and pixel caches are reusable across these derived-rule changes.
 
 ## Measuring scroll-speed changes
