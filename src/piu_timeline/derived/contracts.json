@@ -1,4 +1,13 @@
 {
+  "fragments": {
+    "schema": 1,
+    "revision": 1,
+    "registered_anchor": "intersection_of_all_native_reference_bands",
+    "minimum_references": 4,
+    "minimum_span_seconds": 0.065,
+    "maximum_reference_error_spacing": 0.15,
+    "maximum_continuation_error_spacing": 0.12
+  },
   "coordinates": {
     "schema": 1,
     "revision": 10,

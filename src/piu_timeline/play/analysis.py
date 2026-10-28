@@ -25,6 +25,7 @@ from piu_timeline.play.layout import (validate_layout, receptor_centers, locate_
                                      combine_receptor_observations, recover_layout)
 from piu_timeline.play.fonts import previous_digit_reader, bootstrap_digits
 
+from piu_timeline.play.fragments import FORMAT as FRAGMENT_FORMAT
 from piu_timeline.play.shared_timing import FORMAT as SHARED_TIMING_FORMAT
 from piu_timeline.play.head_registration import FORMAT as HEAD_REGISTRATION_FORMAT
 from piu_timeline.play.object_roles import FORMAT as OBJECT_FORMAT, current as objects_current, apply as interpret_objects
@@ -32,7 +33,7 @@ from piu_timeline.play.counter_pixels import READER_FORMAT
 from piu_timeline.play.beats.timing import current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':5,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'object_roles':OBJECT_FORMAT}
+TIMING_FORMAT = {'schema':1,'counter_revision':5,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'object_roles':OBJECT_FORMAT,'fragment_identity':FRAGMENT_FORMAT}
 FRAME_OBSERVATION_VERSION = 4
 
 

@@ -153,6 +153,7 @@ class NoteTracker:
                 if note.get('fit_method') not in ('shared_scroll_clock', 'shared_scroll_interpolation'):
                     note['fit_method'] = 'corroborated_fragments'
                 note['source_track_fragments'] = fragments
+                if getattr(track,'fragment_connections',None):note['fragment_connections']=track.fragment_connections
             notes.append(note)
             tracks.append(track)
         from piu_timeline.play.shared_timing import restore

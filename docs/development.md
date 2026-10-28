@@ -346,8 +346,16 @@ decoding or OCR; replay refreshes an older diagnostic contract through report
 generation. Generic timing exclusions do not suppress these checks.
 
 Python adapters prepare acquisition objects for TypeScript `derived/tracks.ts`,
-`derived/registration.ts` and `derived/clocks.ts`, which rebuild displacement
-and subframe clocks from registered trajectory identities. `derived/beats/`
+`derived/registration.ts`, `derived/fragments.ts` and `derived/clocks.ts`, which rebuild displacement
+and subframe clocks from registered trajectory identities. Gap stitching and
+its uniqueness checks run in TypeScript; Python only adapts acquisition tracks.
+For a registered HUD gap, all intact approach coordinates constrain one shared
+anchor interval. Every initial reappearance must intersect that same interval
+under its own existing coordinate budget. A noisy endpoint cannot select the
+anchor alone, and separate feasible anchors for separate frames do not prove
+continuity. Conflicting references and competing successors remain separate.
+Accepted registered connections retain their reference/reappearance coordinates,
+original source PTS and common offset range in `fragment_connections`. `derived/beats/`
 checks every co-observed neighboring head, including chords and close staggers,
 against independent coordinate references; a small relative gap cannot exempt a
 shared absolute timing error. It uses prepared official UCS timing and verified
