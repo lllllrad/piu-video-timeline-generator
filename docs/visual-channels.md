@@ -76,6 +76,10 @@ reject every shape at every possible center, with sufficient visible coverage
 and no white-effect ambiguity at any center. Record the selected comparison's
 vertical offset in feature pixels without changing the predicted head position
 or its native timestamp.
+Select presence among comparisons that satisfy both the 0.65 color-overlap
+minimum and the existing white fraction below 0.45. A higher-scoring comparison
+with a flash at another crop's edge cannot veto a clear supported comparison.
+If none qualifies, retain the ordinary unknown/absence checks across all shapes.
 
 Follow the expected location using corroborated peer displacement when available,
 or the supported local velocity. This channel depends on motion identity;

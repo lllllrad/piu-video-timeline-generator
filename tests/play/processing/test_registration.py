@@ -5,6 +5,7 @@ import numpy as np
 
 from piu_timeline.play.processing.registration import centers
 from piu_timeline.play.processing.poses import compare
+from tests.play.processing.fixtures import edge_flash_frame
 
 
 def reference():
@@ -13,6 +14,22 @@ def reference():
 
 
 class ProcessingRegistrationTest(unittest.TestCase):
+    def test_a_clear_registered_shape_is_not_vetoed_by_another_crops_flash(self):
+        for radius in (6,8,10):
+            with self.subTest(radius=radius):
+                color,light,ref,y,r,spacing=edge_flash_frame(radius)
+                before=color.copy(),light.copy()
+                event=compare(color,light,ref,y,r,spacing)
+                self.assertEqual(event['state'],'present')
+                self.assertEqual(event['template_vertical_offset_pixels'],1)
+                self.assertAlmostEqual(event['score'],.8)
+                self.assertTrue(np.array_equal(color,before[0])and np.array_equal(light,before[1]))
+                # Shape support and a clear crop are both required.
+                weak=color.copy();weak[:round(y)+r-2]=False
+                self.assertNotEqual(compare(weak,light,ref,y,r,spacing)['state'],'present')
+                flash=compare(color,~color,ref,y,r,spacing)
+                self.assertEqual(flash['unknown_reason'],'white_effect')
+
     def test_direction_comes_from_source_phase_and_never_exceeds_one_pixel(self):
         self.assertEqual(centers(20.2,{}),[20])
         self.assertEqual(centers(20.2,{'anchor_y_pixels':12.6,'crop_center_y_pixels':13}),[20,21])

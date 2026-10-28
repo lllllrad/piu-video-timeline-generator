@@ -6,6 +6,20 @@ from piu_timeline.play.processing import ReceptorPixels
 from piu_timeline.play.pixel_cache import native_measurements,source_contract
 
 
+def edge_flash_frame(radius=6):
+    """A flash clips one possible crop, beside a still-visible moving shape."""
+    size=2*radius+1;center=3*radius+2
+    mask=np.zeros((size,size),dtype=bool);mask[-6:-1,3:-3]=True
+    color=np.zeros((6*radius+5,size),dtype=bool)
+    color[center-radius:center+radius+1]=mask
+    light=np.zeros_like(color)
+    light[center-radius:center-radius+int(np.ceil(.45*size))]=True
+    assert not (color&light).any()
+    reference={'mask':mask,'poses':[{'mask':mask,'evidence':{
+        'anchor_y_pixels':12.6,'crop_center_y_pixels':13}}]}
+    return color,light,reference,center+.2,radius,radius/.45
+
+
 def fixture(root,animated=False,hud=True):
     source=root/'source.mkv';source.write_bytes(b'unchanged recording')
     layout={'lanes':[{'x':.2+.1*i,'color':'blue'}for i in range(5)],'receptor_y':.142,

@@ -3,7 +3,8 @@ import cv2
 import numpy as np
 from piu_timeline.play.processing.registration import FORMAT as REGISTRATION_FORMAT,centers
 
-FORMAT={'schema':1,'minimum_support_frames':3,'minimum_similarity':.65,
+FORMAT={'schema':1,'revision':2,'presence_selection':'best_clear_supported_shape',
+        'minimum_support_frames':3,'minimum_similarity':.65,
         'minimum_displacement_spacing':.5,'registration':REGISTRATION_FORMAT}
 
 
@@ -46,7 +47,11 @@ def compare(color,light,reference,y,radius,spacing):
                              'white':white,'template':template,'offset':center-round(y)})
     result={'state':'unknown','score':None,'unknown_reason':'image_boundary'}
     if not measured:return result
-    best=max(measured,key=lambda p:p['score']);coverage=best['coverage']
+    # Presence needs one supported, clear comparison. The highest color score
+    # may use a different crop with a white flash along its edge; that crop
+    # cannot veto another registered shape which meets both existing limits.
+    positive=[p for p in measured if p['score']>=.65 and p['white'].mean()<.45]
+    best=max(positive or measured,key=lambda p:p['score']);coverage=best['coverage']
     if best['white'].mean()>=.45:
         result.update(unknown_reason='white_effect')
     else:
