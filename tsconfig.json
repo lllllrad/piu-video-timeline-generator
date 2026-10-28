@@ -19,6 +19,7 @@
     "src/piu_timeline/derived/**/*.ts",
     "formats/**/*.ts",
     "tests/**/*.ts",
-    "src/piu_timeline/play/report*.js"
+    "src/piu_timeline/play/report*.js",
+    "src/piu_timeline/play/inspector/*.js"
   ]
 }

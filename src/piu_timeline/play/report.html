@@ -1,16 +1,37 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>__TITLE__ · Play timing</title>
+<title>__TITLE__ · Evidence inspector</title>
 <style>__STYLE__</style>
 <main>
-<div class="eyebrow">Video evidence / experimental play analysis</div><h1>__TITLE__</h1>
-<p class="muted">Visible note trajectories compared with confirmed combo and judgment display changes. Source media and original frame timestamps are preserved.</p>
-<p class="warning">Combo and judgment refreshes are input-time proxies. MISS is failure evidence and has no press timestamp. Physical switch timing and display latency are not measured. Offsets include display latency until you supply an external correction. No authoritative chart file is loaded. Long-note recognition is sustained-state evidence; hold ticks are not new presses.</p>
-<details class="panel" id="exclusionWarnings" hidden style="border-color:#ffbd59"><summary id="exclusionWarningSummary"></summary><p>These detections were visible but could not be retained as chart notes. They include uncertain short/noise candidates. No chart exception covers them. Select an entry to inspect its original recording frames.</p><div id="exclusionWarningRows"></div><button id="moreExclusionWarnings" hidden>Show more excluded tracks</button></details>
+<header><div class="eyebrow">Play evidence inspector</div><h1>__TITLE__</h1>
+<p class="muted">Follow the original frames through independent observations, reconstructed notes, UCS transcription and judgment association.</p></header>
 <div class="stats" id="stats"></div>
-<div class="playback-grid"><section class="panel video-panel"><h2>Original recording</h2><video id="video" controls preload="metadata" src="__MEDIA__"></video>
-<label>Choose the original file if this browser cannot open its relative path <input id="file" type="file" accept="video/*,.mkv"></label><small>The file stays in this browser. Unsupported codecs may require another browser. Nothing is uploaded or re-encoded.</small>
-<div class="row"><button id="begin">Go to play start</button><button id="previous">Previous match</button><button id="next">Next match</button><span id="clock" class="pill"></span></div></section>
+<div class="playback-grid">
+<aside class="video-panel panel">
+<h2>Original recording</h2>
+<div class="source-stage"><video id="video" controls preload="metadata" src="__MEDIA__"></video><svg id="sourceOverlay" viewBox="0 0 1920 1080" aria-label="Observed positions and documented game regions" role="img"></svg></div>
+<label><input id="showOverlay" type="checkbox" checked> Overlay observed positions and screen regions</label>
+<small id="overlayStatus"></small>
+<label>Highlight channel <select id="channelFocus"><option value="all">All channels</option><option value="popup">Combo / judgment popup</option><option value="receptors">Receptor effects</option><option value="motion">Moving notes / bodies</option><option value="processing">Note processing</option></select></label>
+<p id="framePosition" class="muted" aria-live="off"></p>
+<div id="channelSnapshot" class="channel-snapshot"><p id="snapshot-popup"></p><p id="snapshot-receptors"></p><p id="snapshot-motion"></p><p id="snapshot-processing"></p></div>
+<div class="row"><button id="framePrevious">Previous observed frame</button><button id="frameNext">Next observed frame</button></div>
+<div class="row"><button id="begin">Play start</button><button id="previous">Previous match</button><button id="next">Next match</button><span id="clock" class="pill"></span></div>
+<label>Recording position <input id="position" type="range" step="0.001" style="width:100%"></label>
+<details><summary>Open the original file</summary><input id="file" type="file" accept="video/*,.mkv"><p class="muted">Local playback only. Source time is never trimmed or retimed. Unsupported codecs may require another browser.</p></details>
+<p class="muted">Overlays show saved detections, not every visible object. Display changes and receptor light are observations, not physical switch measurements. MISS has no press timestamp; holds describe sustained recognition.</p>
+</aside>
+<div class="inspector-workspace">
+<div class="selection-bar"><strong id="selectionLabel"></strong><label>Inspect note / track <select id="inspectNote"></select></label><button id="followTime">Inspect observations at playback position</button></div>
+<nav class="tabs" role="tablist" aria-label="Evidence layers">
+<button id="tab-chart" role="tab" aria-controls="panel-chart" aria-selected="true">Notes &amp; judgment</button>
+<button id="tab-channels" role="tab" aria-controls="panel-channels" aria-selected="false" tabindex="-1">Channel observations</button>
+<button id="tab-analysis" role="tab" aria-controls="panel-analysis" aria-selected="false" tabindex="-1">Derivation</button>
+<button id="tab-ucs" role="tab" aria-controls="panel-ucs" aria-selected="false" tabindex="-1">UCS transcription</button>
+<button id="tab-warnings" role="tab" aria-controls="panel-warnings" aria-selected="false" tabindex="-1">Warnings <span id="warningCount"></span></button>
+<button id="tab-data" role="tab" aria-controls="panel-data" aria-selected="false" tabindex="-1">Data &amp; setup</button>
+</nav>
+<section id="panel-chart" role="tabpanel" aria-labelledby="tab-chart">
 <section class="panel chart">
 <div class="row chart-controls">
 <h2>Vertical note chart</h2>
@@ -23,30 +44,15 @@
 <label>
 <input id="candidates" type="checkbox"> Show candidate connections</label>
 </div>
-<p class="muted">Earlier ↑ · later ↓. Fixed colored squares: notes. Lime left: chart target range. Magenta right: input range. Matched inputs are shown by default; candidate connections are optional (early ≤250 ms, late ≤500 ms). Long bodies: holds; magenta strips: sustained recognition. Conditional neighbor bounds appear only in the table. The green line follows video playback.</p>
+<p class="muted">Earlier ↑ · later ↓. Lime: target range. Magenta: display-based input or sustained hold recognition. Select a note to inspect its evidence.</p>
 <div class="row"><button id="previousNote">Previous note</button><button id="nextNote">Next note</button><span id="chartPosition" class="pill"></span></div>
-<label>Recording position <input id="position" type="range" step="0.001" style="width:100%"></label>
+
 <div class="chart-viewport">
 <svg id="lanes" viewBox="0 0 1000 680" role="img" style="height:680px" aria-label="Vertical note chart: time increases downward, lanes from left to right">
 </svg>
 </div>
-<small>
-<span style="color:#b6ff59">● Left: chart target range</span> · <span style="color:#ff70dd">● Right: input range (optional dashed connections = candidates)</span>
-<br>Click a note or input range to select the note and seek the recording. Scroll through time with the recording-position slider, or play the video to follow the chart. White outlines mark the selected note. Gray crosses are excluded endpoints, not fitted timings. Long bodies are holds; magenta spans show recognized held states, not repeated presses. Rolls and unreliable motion remain
-unresolved.</small>
-</section>
-</div>
-<details class="panel">
-<summary>How to read the vertical chart</summary>
-<p class="muted">Read from top to bottom: earlier notes above, later notes below. Columns follow the original lane order. Note size and spacing are independent. Notes fit the available width automatically so all lanes and both timing ranges remain visible; the size label indicates when fitting reduces your chosen size. Play the video on the left to follow the same recording position in this chart.
-Colored squares retain a fixed size as spacing changes. Lime points and capped lines on the left show chart target ranges. Magenta points and capped lines on the right show input ranges. Enable Show candidate connections to see dashed links from notes to alternative input ranges, limited to 250 ms early and 500 ms late. Unlinked candidate windows and hold envelopes are hidden. Both ranges remain
-visible when their times overlap. Points at interval centers are visual guides, not subframe measurements. A magenta mark above its note is early; below is late. The green line follows the recording.</p>
-</details>
-<section class="panel"><h2>Timing evidence</h2><label>Display latency correction: <output id="delayValue"></output> ms<br><input id="delay" type="range" min="-500" max="500" step="1"></label>
-<button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
-<div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="timing-ranges.json">Per-note timing ranges</a> · <a href="holds.json">Long-note geometry and held-state evidence</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section>
-<section class="panel chart"><h2>Observed timing offsets</h2><svg id="timing" viewBox="0 0 1200 290" role="img"></svg><small>Each bar compares the input estimate with the note target range, including both frame-bracket and fitted-target uncertainty. Blue: earlier; amber: later; green: overlapping ranges. Click to select a note and seek the recording. This is display-based evidence, not a judgment-window score.</small></section>
-<section class="panel chart">
+<small>Fixed squares: notes. Bodies: holds. White outline: selection. Dashed candidate links are optional; unknown inputs remain unconfirmed.</small>
+</section><section class="panel chart">
 <h2>Selected note: target vs input</h2>
 <p class="muted">Select a note in the table or chart. Lime is the video-estimated target range; magenta is the input estimate from a display refresh, after the latency correction above. Both use the same time axis, centered on the fitted target. These are uncertainty ranges, not game judgment windows or authoritative chart timestamps.</p>
 <svg id="comparison" viewBox="0 0 1200 180" role="img" style="height:180px">
@@ -54,16 +60,7 @@ visible when their times overlap. Points at interval centers are visual guides, 
 <div id="comparisonDetails" aria-live="polite">
 </div>
 </section>
-<section class="panel" id="nativeEvidence">
-<h2>Selected note: four observation channels</h2>
-<p>Original recording time, before latency correction. Green means observed presence/light; red means clear absence/off; gray means unknown. Disappearance does not by itself establish a successful input. Click a mark or frame time to seek the recording.</p>
-<label>Time around target <select id="evidenceWindow"><option value="0.3">±0.3 s</option><option value="0.6" selected>±0.6 s</option><option value="1.5">±1.5 s</option></select></label>
-<p id="evidenceSummary"></p>
-<svg id="evidenceTimeline" viewBox="0 0 1200 280" role="img" aria-label="Popup, receptor effect, moving note and processing observations on one recording timeline" style="height:280px"></svg>
-<div class="scroll native-evidence-frames"><table><thead><tr><th>Recording / source PTS</th><th>Combo / confidence</th><th>Judgment / confidence</th><th>Receptor / white fraction</th><th>Moving heads in lane (y pixels)</th><th>Processing / score / reason</th></tr></thead><tbody id="evidenceFrames"></tbody></table></div>
-<p><a href="visual-channels.json">All channel observations (JSON)</a></p>
-</section>
-<section class="panel">
+<details class="panel"><summary>All notes and display refreshes</summary><section class="panel">
 <h2>Note timing comparison</h2>
 <p class="muted">Times are absolute recording positions. Input − target includes uncertainty in both ranges: negative is early, positive is late. Overlapping ranges do not establish an early/late result. Unmatched notes show alternative observed refresh ranges or conditional bounds from neighboring processed rows; these do not establish an input assignment. When evidence is absent, the input stays
 unconfirmed; a possible MISS never supplies one. Chord heads share a refresh bracket; aggregate brackets can span several rows.</p>
@@ -84,7 +81,10 @@ unconfirmed; a possible MISS never supplies one. Chord heads share a refresh bra
 </div>
 </section>
 <section class="panel"><h2>Coverage and exclusions</h2><div id="exclusions"></div><ul id="limitations"></ul></section>
-<section class="panel"><h2>Observed combo updates, including unassigned evidence</h2><p class="muted">One increment represents a judged row. Chords share that row; counter jumps can contain several rows or hold ticks. An unassigned update is still observed evidence. Resets do not identify missed presses.</p><div class="scroll"><table><thead><tr><th>Observed bracket</th><th>Counter</th><th>Rows advanced</th><th>Association</th></tr></thead><tbody id="comboEvents"></tbody></table></div></section>
+<section class="panel"><h2>Observed combo updates, including unassigned evidence</h2><p class="muted">One increment represents a judged row. Chords share that
+row; counter jumps can contain several rows or hold ticks. An unassigned update is still observed evidence. Resets do not identify missed presses.</p><div
+class="scroll"><table><thead><tr><th>Observed bracket</th><th>Counter</th><th>Rows advanced</th><th>Association</th></tr></thead><tbody
+id="comboEvents"></tbody></table></div></section>
 <section class="panel">
 <h2>Observed judgments, including counter-free evidence</h2>
 <p class="muted">Word changes, reappearance after a confirmed blank, and animation restarts can establish display refreshes before combo 4 or after a break. A persistent word is not counted repeatedly. MISS is failure evidence, never a press timestamp.</p>
@@ -103,6 +103,45 @@ unconfirmed; a possible MISS never supplies one. Chord heads share a refresh bra
 </table>
 </div>
 </section>
+</details>
+</section>
+<section id="panel-channels" role="tabpanel" aria-labelledby="tab-channels" hidden>
+<details class="panel"><summary>Channel definitions and video highlights</summary><p>Inspect a note, warning or playback position. Each row retains its own recording time and original source PTS. Unknown means unmeasured or obscured; absence is shown only where the channel explicitly establishes it.</p><div id="channelCards" class="provenance-grid"></div></details>
+<section class="panel" id="nativeEvidence">
+<h2>Observation timeline at review position</h2>
+<p>Original recording time, before latency correction. Green means observed presence/light; red means clear absence/off; gray means unknown. Disappearance does not by itself establish a successful input. Click a mark or frame time to seek the recording.</p>
+<label>Window around review position <select id="evidenceWindow"><option value="0.3">±0.3 s</option><option value="0.6" selected>±0.6 s</option><option value="1.5">±1.5 s</option></select></label>
+<p id="evidenceSummary"></p>
+<svg id="evidenceTimeline" viewBox="0 0 1200 280" role="img" aria-label="Popup, receptor effect, moving note and processing observations on one recording timeline" style="height:280px"></svg>
+<div class="scroll native-evidence-frames"><table><thead><tr><th>Recording / source PTS</th><th>Combo / confidence</th><th>Judgment / confidence</th><th>Receptor / white fraction</th><th>Moving heads in lane (y pixels)</th><th>Processing / score / reason</th></tr></thead><tbody id="evidenceFrames"></tbody></table></div>
+<p><a href="visual-channels.json">All channel observations (JSON)</a></p>
+</section>
+<div class="panel"><h2>Tracked observations at review position</h2><p id="frameTrackSummary"></p><div id="frameTracks" class="row"></div></div>
+<details class="panel"><summary>Selected captured frame · raw channel values</summary><pre id="frameData"></pre></details>
+</section>
+<section id="panel-analysis" role="tabpanel" aria-labelledby="tab-analysis" hidden>
+<div class="panel"><h2>How this note was derived</h2><p id="derivationSummary"></p><div id="derivationChain" class="provenance-grid"></div></div>
+<div id="derivationDetails"></div>
+</section>
+<section id="panel-ucs" role="tabpanel" aria-labelledby="tab-ucs" hidden>
+<div class="panel"><h2>UCS transcription</h2><p id="ucsStatus"></p><p class="muted">Transcription uses visible chart geometry. Actual input timing may support
+joining short sustained spans, but does not supply missing chart notes. A generated draft cannot validate its own source observations.</p><div
+id="ucsSelection"></div><div class="scroll"><table><thead><tr><th>Source note / lane</th><th>UCS section / row</th><th>Song
+time</th><th>Placement</th></tr></thead><tbody id="ucsRows"></tbody></table></div><button id="moreUcs" hidden>Show next 100 placements</button></div>
+<details class="panel"><summary>Saved UCS text</summary><pre id="ucsText"></pre></details>
+</section>
+<section id="panel-warnings" role="tabpanel" aria-labelledby="tab-warnings" hidden>
+<div class="panel"><h2>Unresolved evidence</h2><p>Every item keeps its diagnostic record. Jump to the observed interval, then compare native channels, reconstruction and association. An excluded detection remains reviewable even without a fitted target.</p>
+<div class="row"><label>Filter <input id="warningSearch" type="search" placeholder="Reason, lane, note…"></label><label>Scope <select id="warningScope"><option value="all">All items</option><option value="selected">Selected note / hold</option></select></label></div>
+<p id="warningSummary" aria-live="polite"></p><div id="warningRows"></div><button id="moreWarnings" hidden>Show next 50 warnings</button></div>
+<details class="panel" id="chartPolicyPanel" hidden><summary>Applied chart regions and effects</summary><div id="chartPolicyDetails"></div></details>
+</section>
+<section id="panel-data" role="tabpanel" aria-labelledby="tab-data" hidden>
+<div class="panel"><h2>Artifacts and stage dependencies</h2><p>Saved observations → geometry / clocks / beats → holds / policies → timing association and diagnostics → this inspector. HTML rendering does not decode video or rerun recognition.</p><div id="artifactLinks" class="provenance-grid"></div><details><summary>Retained stage manifest</summary><pre id="stageManifest"></pre></details></div>
+<section class="panel"><h2>Timing evidence</h2><label>Display latency correction: <output id="delayValue"></output> ms<br><input id="delay" type="range" min="-500" max="500" step="1"></label>
+<button id="center">Center observed median (relative alignment)</button><p class="muted">Positive correction subtracts a presumed display delay. Centering the median is a visualization aid, not a physical latency calibration. Associations stay fixed; use <code>--display-delay-ms</code> to rerun them.</p>
+<div id="quality"></div><p><a href="analysis.json">Analysis JSON</a> · <a href="timing-ranges.json">Per-note timing ranges</a> · <a href="holds.json">Long-note geometry and held-state evidence</a> · <a href="frames.jsonl">Native-frame observations</a> · <a href="evidence/bootstrap.json">Digit-template evidence</a> · <a href="judgments.jsonl">Judgment observations</a> · <a href="evidence/judgments/bootstrap.json">Word-template evidence</a></p></section>
+<section class="panel chart"><h2>Observed timing offsets</h2><svg id="timing" viewBox="0 0 1200 290" role="img"></svg><small>Each bar compares the input estimate with the note target range, including both frame-bracket and fitted-target uncertainty. Blue: earlier; amber: later; green: overlapping ranges. Click to select a note and seek the recording. This is display-based evidence, not a judgment-window score.</small></section>
 <details class="panel">
 <summary>Inspect or correct calibration</summary>
 <p>Check receptor centers and combo crop against the original game panel. Download an edited layout and rerun with <code>--layout layout.json</code>. Geometry changes require reanalysis.</p>
@@ -117,6 +156,8 @@ unconfirmed; a possible MISS never supplies one. Chord heads share a refresh bra
 <span id="layoutError">
 </span>
 </details>
-</main><script id="data" type="application/json">__DATA__</script>
-<details class="panel" id="chartPolicyPanel" hidden><summary>Chart region handling</summary><div id="chartPolicyDetails"></div></details>
+
+</section>
+</div></div></main>
+<script id="data" type="application/json">__DATA__</script>
 <script>__SCRIPT__</script></html>

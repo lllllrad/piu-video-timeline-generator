@@ -11,7 +11,10 @@ def prepare_report(data,path,final_directory=None):
     pending = path.with_name('presentation-input.build.json')
     pending.write_text(json.dumps(request, ensure_ascii=False, allow_nan=False)+'\n')
     pending.replace(path.with_name('presentation-input.json'))
+    source = data
     data = call('presentation.prepare', request, str(path.parent))
+    from piu_timeline.play.observations.inspector import snapshot
+    data['inspector_artifacts'] = snapshot(source, path.parent)
     artifacts = {'visual-support.json': data.get('visual_support'),
                  'object-interpretation.json': data.get('object_interpretation', {}),
                  'visibility-diagnostics.json': data['visibility_diagnostics'],
@@ -51,3 +54,22 @@ def build_report(data,path,final_directory=None):
     pending.write_text(json.dumps(summary)+'\n')
     pending.replace(path.with_name('report-summary.json'))
     return result
+
+
+def refresh_registration(data, directory):
+    """Refresh saved registration provenance after chart registration, without analysis."""
+    from piu_timeline.play.observations.inspector import snapshot
+    from piu_timeline.play.report import write_report
+    directory = Path(directory)
+    prepared = directory/'report-data.json'
+    if not prepared.is_file():
+        return
+    view = json.loads(prepared.read_text())
+    artifacts = snapshot(data, directory)
+    if artifacts == view.get('inspector_artifacts'):
+        return
+    view['inspector_artifacts'] = artifacts
+    pending = directory/'report-data.build.json'
+    pending.write_text(json.dumps(view, ensure_ascii=False)+'\n')
+    write_report(view, directory/'report.html')
+    pending.replace(prepared)

@@ -2,32 +2,13 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
+import {createDOM, descendants} from '../derived/browser-dom.ts';
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const payload = html.match(/<script id="data" type="application\/json">(.*?)<\/script>/s)[1];
 const runtime = html.match(/<script>\s*(.*?)<\/script>/s)[1];
 assert.ok(!html.includes('<canvas'),'report must not contain canvas elements');
-let createdNodes=0;
 const activeAnimations=new Set<{currentTime: number; keyframes: unknown; options: unknown; cancel(): void}>();
-function element(tag): Record<string, any> {
-  createdNodes++;
-  return {tag,style:{},attributes:{},children:[],textContent:'',value:'',
-    clientWidth:1200,clientHeight:350,complete:false,files:[],paused:true,ended:false,currentTime:0,playbackRate:1,handlers:{},
-    setAttribute(name,value){this.attributes[name]=String(value);if(['x','y','x1','y1','x2','y2','cx','cy','width','height','r'].includes(name))assert.ok(Number.isFinite(Number(value)),name+' has invalid geometry')},
-    getAttribute(name){return this.attributes[name]??null},
-    appendChild(node){node.parentElement=this;this.children.push(node);return node},
-    replaceChildren(){this.children=[]},
-    addEventListener(event,callback){(this.handlers[event]??=[]).push(callback)},
-    getBoundingClientRect(){return {left:0,top:0,width:this.clientWidth,height:this.clientHeight}},
-    closest(selector){if(selector==='[data-note]'&&this.getAttribute('data-note')!==null)return this;return this.parentElement?.closest(selector)??null},
-    animate(keyframes,options){const animation={currentTime:0,keyframes,options,cancel(){activeAnimations.delete(this)}};activeAnimations.add(animation);return animation},
-    getContext(){throw Error('canvas rendering is forbidden')},
-  };
-}
-const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>[match[1],element(match[1])]));
-for(const match of html.matchAll(/<svg id="([^"]+)" viewBox="0 0 (\d+) (\d+)"/g)){
-  const root=elements.get(match[1]);root.setAttribute('viewBox',`0 0 ${match[2]} ${match[3]}`);root.clientWidth=Number(match[2]);root.clientHeight=Number(match[3]);
-}
-const descendants=node=>node.children.flatMap(child=>[child,...descendants(child)]);
+const dom=createDOM(html,activeAnimations),{elements,element}=dom;
 const squares=()=>descendants(elements.get('lanes')).filter(node=>node.getAttribute('data-kind')==='note-square');
 elements.get('data').textContent = payload;
 elements.get('spacingScale').value = '1';
@@ -40,10 +21,7 @@ const video=elements.get('video');
 video.requestVideoFrameCallback=callback=>{const id=++callbackId;videoCallbacks.set(id,callback);return id};
 video.cancelVideoFrameCallback=id=>videoCallbacks.delete(id);
 const dispatch=event=>{for(const handler of video.handlers[event]||[])handler()};
-const context = vm.createContext({document: {
-  getElementById(id) { assert.ok(elements.has(id), 'missing element '+id); return elements.get(id); },
-  createElement: element,createElementNS(namespace,tag){assert.equal(namespace,'http://www.w3.org/2000/svg');return element(tag)},
-}, URL, Blob, setTimeout,
+const context = vm.createContext({document: dom.document, URL, Blob, setTimeout,
 Element: class {static [Symbol.hasInstance](node: unknown) {return node !== null && typeof node === "object" && "closest" in node}},
 ResizeObserver:class {constructor(callback){resizeCallback=callback}observe(canvas){assert.equal(canvas,elements.get('lanes'))}},
 requestAnimationFrame:callback=>{const id=++callbackId;animationCallbacks.set(id,callback);return id},
@@ -164,14 +142,14 @@ elements.get('spacingScale').value = '8';elements.get('spacingScale').oninput();
 const tableRowBeforePlayback=elements.get('events').children[0];
 video.currentTime=12.1;dispatch('seeked');video.paused=false;dispatch('play');dispatch('play');
 assert.equal(videoCallbacks.size,1,'only one frame clock should run');
-const motionBefore=evaluate('chartScene.key'),nodeCount=createdNodes;
+const motionBefore=evaluate('chartScene.key'),nodeCount=dom.nodeCount();
 const retainedScene=elements.get('lanes').children.at(-2);
 assert.equal(activeAnimations.size,1,'one CSS transform animation should move the SVG scene');
 for(const animation of activeAnimations)animation.currentTime=25;
 let [id,callback]=videoCallbacks.entries().next().value;videoCallbacks.delete(id);callback(0,{mediaTime:12.125});
 assert.equal(evaluate('playhead'),12.125);
 assert.equal(elements.get('chartPosition').textContent,'0:12.125');
-assert.equal(createdNodes,nodeCount,'ordinary video frames must not create SVG or HTML nodes');
+assert.equal(dom.nodeCount(),nodeCount,'ordinary video frames must not create SVG or HTML nodes');
 assert.equal(evaluate('chartScene.key'),motionBefore);
 assert.equal(elements.get('lanes').children.at(-2),retainedScene);
 video.playbackRate=.5;video.currentTime=12.125;dispatch('ratechange');
@@ -179,7 +157,7 @@ assert.equal(evaluate('chartScene.rate'),.5);
 for(const animation of activeAnimations)animation.currentTime=250;
 [id,callback]=videoCallbacks.entries().next().value;videoCallbacks.delete(id);callback(0,{mediaTime:12.25});
 assert.equal(evaluate('playhead'),12.25,'use presented media time, independently of playback speed');
-assert.equal(createdNodes,nodeCount,'rate changes must reuse retained SVG');
+assert.equal(dom.nodeCount(),nodeCount,'rate changes must reuse retained SVG');
 video.currentTime=12.25;dispatch('waiting');assert.equal(activeAnimations.size,0,'buffering freezes CSS motion');
 dispatch('playing');assert.equal(activeAnimations.size,1);
 video.paused=true;dispatch('pause');assert.equal(videoCallbacks.size,0);assert.equal(activeAnimations.size,0);
@@ -193,10 +171,10 @@ video.currentTime=24.25;
 assert.equal(evaluate('playhead'),24.25);
 video.paused=true;dispatch('pause');assert.equal(animationCallbacks.size,0);assert.equal(activeAnimations.size,0);
 // Older browsers still move the retained SVG group rather than rebuilding it.
-vm.runInContext('chartScene.motion.animate=undefined',context);const fallbackNodes=createdNodes;
+vm.runInContext('chartScene.motion.animate=undefined',context);const fallbackNodes=dom.nodeCount();
 video.currentTime=24.3;video.paused=false;dispatch('play');
 [id,callback]=animationCallbacks.entries().next().value;animationCallbacks.delete(id);callback(0);
-assert.equal(createdNodes,fallbackNodes);assert.ok(evaluate('chartScene.motion.style.transform').includes('translateY('));
+assert.equal(dom.nodeCount(),fallbackNodes);assert.ok(evaluate('chartScene.motion.style.transform').includes('translateY('));
 video.paused=true;dispatch('pause');
 assert.equal(elements.get('events').children[0],tableRowBeforePlayback,'playback must not rebuild the note table');
 assert.deepEqual(evaluate('data'), data, 'embedded evidence changed');

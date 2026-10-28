@@ -72,26 +72,23 @@ just play VIDEO --segment 1
 just play VIDEO --all
 ```
 
-Open `.local/data/SOURCE_ID/play/segment-001/report.html`. The local HTML report shows a vertical
-lane chart with notes ordered from top to bottom, target and input time ranges, source-video seek
-links and exclusions. Video on the left and a synchronized SVG chart on the right support
-simultaneous review. Browser animations move retained chart elements through CSS transforms;
-ordinary playback does not redraw notes or rebuild the table. Adjust note size separately and
-fine-tune spacing in 0.01 steps. Fixed-size colored square notes retain their shape at every
-spacing. Lime capped lines and points on the left show chart target ranges; magenta lines and points
-on the right show input ranges, with unresolved candidate connections hidden by default. Enable Show
-candidate connections to inspect dashed links, limited to 250 ms early and 500 ms late. Both ranges
-remain visible when their times overlap. Long bodies show holds and adjacent magenta strips show
-sustained recognition. A spacing multiplier changes time separation without resizing notes; a
-recording-position slider and note buttons navigate the chart. Select a note to compare both ranges
-on the same axis; target ranges come from visible motion and input ranges from display refreshes.
-PERFECT/GREAT/GOOD/BAD refreshes also supply timing evidence before combo 4 or after a break; MISS
-remains failure evidence without a press timestamp. Display refresh is a proxy for input timing;
-physical switch timing and display latency are not measured. Chords share one judged-row
-observation. Long notes appear as bodies with sustained recognition spans; their ticks are not
-counted as new presses. Unreadable endpoints, rolls and nonlinear motion remain unresolved. `--all`
-writes a linked overview at `.local/data/SOURCE_ID/play/index.html`. See [play
-analysis](docs/play-analysis.md) for calibration, latency correction and limited windows.
+Open `.local/data/SOURCE_ID/play/segment-001/report.html` for the **Play evidence inspector**.
+One original recording stays beside six tabs: notes and judgment, channel observations,
+derivation, UCS transcription, warnings, and data/setup. Selecting a note or warning
+shares its identity and recording position across tabs. Channel overlays map saved
+head/body positions and documented popup/receptor regions onto the source video.
+Frame navigation retains both recording time and source PTS.
+
+The synchronized SVG chart keeps fixed-size colored notes while spacing changes.
+Lime ranges show reconstructed targets; magenta ranges show display-based input
+estimates or sustained hold recognition. Candidate connections are optional and
+limited to 250 ms early / 500 ms late. MISS never supplies a press timestamp.
+Warnings open their observed interval even when a track has no reconstructed target.
+The derivation tab exposes selected observations, clock/beat results, processing,
+policy and association records. UCS placements appear only from a saved draft;
+source-note links require exact saved-analysis and unchanged UCS identities.
+The inspector does not upload, re-encode or change media. `--all` writes a linked
+`play/index.html` overview. See [the inspector](docs/evidence-inspector.md) and [play analysis](docs/play-analysis.md).
 
 Saved-data modeling and report consumers run in TypeScript; Python handles media,
 OCR and native image evidence. Registered coordinates and prepared report data

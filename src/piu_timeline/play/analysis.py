@@ -364,7 +364,7 @@ def run(source, segment_number=1, force=False, **options):
                     and digit_cache_current(cached,final,LOCAL_DATA)
                     and ((judgments_current := judgment_cache_current(cached,root,final))
                          or judgment_observations_current(cached,root,final))):
-                from piu_timeline.play.presentation import build_report as write_report
+                from piu_timeline.play.presentation import build_report as write_report, refresh_registration
                 from piu_timeline.play.holds.analysis import augment_holds
                 refresh_fields=('judgment_cache','hold_analysis','visual_channels','association_view_format',
                                 'matches','conflicted_matches','coverage','skin_detector')
@@ -386,6 +386,7 @@ def run(source, segment_number=1, force=False, **options):
                 print('Reusing saved note trajectories and compatible word/long-note evidence; no OCR.')
                 from piu_timeline.charts.data import auto_register
                 auto_register(cached, final)
+                refresh_registration(cached, final)
                 print(final / 'report.html')
                 return final / 'report.html'
         if not force and not can_refit and document.get('media'):
@@ -415,7 +416,7 @@ def run(source, segment_number=1, force=False, **options):
             raise ValueError('Source changed during play analysis')
         result['segment_number'] = segment_number
         (pending / 'analysis.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
-        from piu_timeline.play.presentation import build_report as write_report
+        from piu_timeline.play.presentation import build_report as write_report, refresh_registration
         write_report(result, pending / 'report.html', final)
         from piu_timeline.storage import relocate_evidence
         relocate_evidence(pending, final)
@@ -430,6 +431,7 @@ def run(source, segment_number=1, force=False, **options):
             raise
         from piu_timeline.charts.data import auto_register
         auto_register(result, final)
+        refresh_registration(result, final)
         print(final / 'report.html')
         return final / 'report.html'
 

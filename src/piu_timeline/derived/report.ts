@@ -1,8 +1,8 @@
 /** Pure HTML presentation. The input document has already been analyzed. */
 import {readFileSync} from 'node:fs';
 const resource = name => readFileSync(new URL(`../play/${name}`, import.meta.url), 'utf8');
-const template = resource('report.html').replace('__STYLE__', () => resource('report.css'))
-  .replace('__SCRIPT__', () => resource('report-evidence.js') + '\n' + resource('report.js'));
+const template = resource('report.html').replace('__STYLE__', () => resource('report.css') + '\n' + resource('inspector/workspace.css'))
+  .replace('__SCRIPT__', () => ['report-evidence.js', 'inspector/navigation.js', 'inspector/provenance.js', 'inspector/overlay.js', 'report.js'].map(resource).join('\n'));
 const escape = (value: string) => value.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;'}[c]));
 
 export function render(dataJSON: string, song: string, chart: string, media: string): string {
@@ -20,8 +20,8 @@ export function index(entries): string {
     return `<tr><td>${number}</td>${cells.map((cell, i) => `<td>${i === 0 ? cell : escape(String(cell))}</td>`).join('')}</tr>`;
   });
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Play timing reports</title><style>body{font:16px/1.6 system-ui;max-width:1200px;margin:40px auto;padding:20px;background:#101719;color:#e5efeb}
+<title>Play evidence inspector</title><style>body{font:16px/1.6 system-ui;max-width:1200px;margin:40px auto;padding:20px;background:#101719;color:#e5efeb}
 a{color:#9cddbe}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #314448}.scroll{overflow:auto}</style>
-<h1>Play timing reports</h1><p>Each report compares visible note trajectories with observed combo and judgment refreshes. A chord is one judged row and may contain several heads. Counts are partial reconstruction, not a complete chart or physical switch measurement. Open a report for excluded motion and unassigned counter evidence.</p>
+<h1>Play evidence inspector</h1><p>Each play compares visible note trajectories with observed combo and judgment refreshes. A chord is one judged row and may contain several heads. Counts are partial reconstruction, not a complete chart or physical switch measurement. Open a play for excluded motion and unassigned counter evidence.</p>
 <div class="scroll"><table><thead><tr><th>Segment</th><th>Play</th><th>Reconstructed heads</th><th>Long notes</th><th>Heads with tap timing</th><th>Matched combo refreshes</th><th>Judgment-only timed heads</th><th>Readable counter frames</th><th>Analyzer version</th></tr></thead><tbody>${rows.join('')}</tbody></table></div></html>`;
 }

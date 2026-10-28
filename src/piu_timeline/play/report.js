@@ -18,26 +18,6 @@ const reconstruction=data.timing_reconstruction;
 if(reconstruction?.status==='failed')text('p','Timing reconstruction FAILED: '+reconstruction.failed_notes+' trajectories have rejected timing. Consult warnings and original observations.',$('quality'));
 const visibility=data.visibility_diagnostics;
 if(visibility)text('p','Visibility audit: '+visibility.warnings.length+' warnings / '+visibility.known_occlusions.length+' explained occlusion intervals / '+(visibility.known_motion_effects?.length||0)+' observed configured motion records / '+visibility.accounted_exits.length+' accounted detector exits or continued detections.',$('quality'));
-const excludedTracks=[...(data.exclusion_diagnostics?.warnings||[]),...(data.recognition_diagnostics?.warnings||[])];
-if(excludedTracks.length){
-  $('exclusionWarnings').hidden=false;
-  $('exclusionWarningSummary').textContent='Warning: '+excludedTracks.length+' unresolved recognition items / excluded tracks';
-  let shownExclusions=0;
-  const showExclusions=()=>{
-    const end=Math.min(shownExclusions+100,excludedTracks.length);
-    for(;shownExclusions<end;shownExclusions++){
-      const item=excludedTracks[shownExclusions],row=document.createElement('p'),jump=document.createElement('button');
-      jump.textContent=fmt(item.visible_start_seconds)+' … '+fmt(item.visible_end_seconds)+' / lane '+(item.lane+1)+' / '+item.reason.replaceAll('_',' ')+(item.processing_reason?' / '+item.processing_reason.replaceAll('_',' '):'')+' / '+item.observed_points+' observations'
-        +(item.missing_frames!=null?' / '+item.missing_frames+' missing source frames':'')
-        +(item.velocity_before_pixels_per_second!=null?' / velocity '+item.velocity_before_pixels_per_second.toFixed(1)+' → '+item.velocity_after_pixels_per_second.toFixed(1)+' px/s':'')
-        +(item.stationary_duration_seconds!=null?' / stationary '+(1000*item.stationary_duration_seconds).toFixed(0)+' ms':'');
-      jump.onclick=()=>seek(item.visible_start_seconds,-1,item.note??null);row.appendChild(jump);$('exclusionWarningRows').appendChild(row);
-    }
-    $('moreExclusionWarnings').hidden=shownExclusions>=excludedTracks.length;
-  };
-  $('exclusionWarnings').addEventListener('toggle',()=>{if($('exclusionWarnings').open&&!shownExclusions)showExclusions()});
-  $('moreExclusionWarnings').onclick=showExclusions;
-}
 if(data.chart_policy){
   $('chartPolicyPanel').hidden=false;
   if(data.chart_policy.status==='invalid'){
@@ -134,7 +114,7 @@ row.onclick=()=>seek(e.upper_seconds)}
 text('p','Labeled timing heads: '+(data.coverage?.judgment_labeled_note_heads??matches.filter(m=>m.judgment_label).length)+'. Judgment unknown: '+(data.coverage?.unlabeled_timed_note_heads??matches.filter(m=>!m.judgment_label).length)+'. Labels from post-combo word frames: '+(data.coverage?.combo_frame_labeled_note_heads||0)+'.',$('quality'));
 text('p','Judgment-only timed heads: '+(data.coverage?.judgment_only_note_heads||0)+'. Learned words: '+(data.judgment_template_labels||[]).join(', ')+'. Unlearned: '+((data.judgment_missing_labels||[]).join(', ')||'none')+'. New judgment OCR crops: '+(data.judgment_bootstrap_ocr_images||0)+'.',$('quality'));
 for(const limitation of data.limitations)text('li',limitation,$('limitations'));
-function seek(t,index=-1,noteIndex=null){playhead=t;selected=index;if(noteIndex!==null)selectedNote=noteIndex;else if(index>=0)selectedNote=matches[index].note;try{video.currentTime=t}catch(_){}draw()}
+function seek(t,index=-1,noteIndex=null){if(!Number.isFinite(t))return;if(!inspectorNavigating&&(noteIndex!==null||index>=0)){evidenceAnchor=null;evidenceLane=null;selectedWarning=null}playhead=t;selected=index;if(noteIndex!==null)selectedNote=noteIndex;else if(index>=0)selectedNote=matches[index].note;try{video.currentTime=t}catch(_){}draw();refreshInspector()}
 $('file').onchange=()=>{if(objectUrl)URL.revokeObjectURL(objectUrl);if($('file').files[0]){objectUrl=URL.createObjectURL($('file').files[0]);stopPlaybackClock();video.src=objectUrl;video.load()}};
 $('begin').onclick=()=>seek(data.start_seconds);$('previous').onclick=()=>{if(matches.length){selected=Math.max(0,selected-1);seek(matches[selected].target_seconds,selected)}};
 $('next').onclick=()=>{if(matches.length){selected=Math.min(matches.length-1,selected+1);seek(matches[selected].target_seconds,selected)}};
@@ -200,7 +180,7 @@ function cancelChartAnimation(){if(chartScene?.animation){chartScene.animation.c
 function syncChartMotion(force=false){
 if(!chartScene)return;
 const scene=chartScene,transform=t=>`translateY(${(scene.origin-t)*scene.pps}px)`;
-const running=!video.paused&&!video.ended&&!video.seeking&&!playbackWaiting&&!playbackSeeking&&(video.playbackRate||1)>0;
+const running=activeInspectorTab==='chart'&&!video.paused&&!video.ended&&!video.seeking&&!playbackWaiting&&!playbackSeeking&&(video.playbackRate||1)>0;
 if(!running){cancelChartAnimation();scene.motion.style.transform=transform(playhead);return}
 const rate=video.playbackRate||1;
 if(!force&&scene.animation&&scene.rate===rate){
@@ -391,7 +371,7 @@ text('td',m?
   :'Input unknown / '+(rangeByNote[index]?.reason||'no_nearby_positive_refresh').replaceAll('_',' '),row);
 row.onclick=()=>seek(note.target_seconds,linked?.index??-1,index);
 }}
-function drawPlayback(){updateEvidenceCursor(playhead);$('position').value=playhead;$('chartPosition').textContent=fmt(playhead);$('clock').textContent=fmt(playhead);lanes();if(timingPlayhead){const x=60+1080*(playhead-data.start_seconds)/(data.end_seconds-data.start_seconds);timingPlayhead.setAttribute('x1',x);timingPlayhead.setAttribute('x2',x)}}
+function drawPlayback(){updateEvidenceCursor(playhead);updateInspectorFrame(playhead);$('position').value=playhead;$('chartPosition').textContent=fmt(playhead);$('clock').textContent=fmt(playhead);if(!inspectorReady||activeInspectorTab==='chart')lanes();if(timingPlayhead){const x=60+1080*(playhead-data.start_seconds)/(data.end_seconds-data.start_seconds);timingPlayhead.setAttribute('x1',x);timingPlayhead.setAttribute('x2',x)}}
 function draw(){$('delayValue').textContent=delay.value;drawPlayback();timing();comparison()}
 delay.oninput=()=>{table();draw()};$('center').onclick=()=>{delay.value=String(Math.round(median(matches.map(mid))));table();draw()};$('excluded').onchange=draw;$('candidates').onchange=draw;
 $('layout').value=JSON.stringify(data.layout,null,2);$('download').onclick=()=>{try{const value=JSON.parse($('layout').value),url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='layout.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('layoutError').textContent=''}catch(e){$('layoutError').textContent=e.message}};
@@ -401,4 +381,4 @@ line(root,0,data.layout.receptor_y*h,w,data.layout.receptor_y*h,'#9cddbe',2);
 for(const lane of data.layout.lanes)line(root,lane.x*w,data.layout.receptor_y*h,lane.x*w,h*.95,'#9cddbe',2);
 for(const [roi,color] of [[data.layout.combo_roi,'#f1c478'],[data.judgment_roi,'#75bdea']])if(roi){const [x,y,rw,rh]=roi;svgNode('rect',{x:x*w,y:y*h,width:rw*w,height:rh*h,fill:'none',stroke:color,'stroke-width':2},root)}
 }
-$('preview').onload=overlay;if($('preview').complete&&$('preview').naturalWidth)overlay();table();draw();
+$('preview').onload=overlay;if($('preview').complete&&$('preview').naturalWidth)overlay();table();draw();initializeInspector();

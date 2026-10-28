@@ -1,0 +1,40 @@
+/* The recording stays visible while a shared selection moves through evidence layers. */
+[hidden]{display:none!important}
+.playback-grid{grid-template-columns:minmax(300px,.85fr) minmax(0,1.45fr);gap:18px}
+.inspector-workspace{min-width:0}
+.video-panel{top:12px;max-height:calc(100vh - 24px);overflow:auto}
+.source-stage{position:relative;background:#080d0e;aspect-ratio:16/9}
+.source-stage video{display:block;width:100%;height:100%;max-height:none;object-fit:contain}
+.source-stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.selection-bar{padding:14px;background:#1b2e31;border:1px solid var(--edge);border-radius:10px;margin:18px 0 8px}
+.selection-bar label{margin:8px 0}
+.selection-bar select{max-width:100%;width:100%}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;background:var(--bg);padding:8px 0;position:sticky;top:0;z-index:2}
+.tabs button{flex:1 0 auto;padding:10px 12px;border-radius:6px}
+.tabs button[aria-selected=true]{background:var(--green);border-color:var(--green);color:#101719}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+[role=tabpanel]>.panel:first-child{margin-top:8px}
+.provenance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:10px}
+.provenance-card,.warning-card{padding:14px;border:1px solid var(--edge);border-radius:8px;min-width:0}
+h3{font-size:15px;margin:0 0 8px}
+.provenance-card p,.warning-card p{margin:6px 0 12px}
+.warning-card{margin:10px 0;border-left:3px solid var(--amber)}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:440px;overflow:auto;font:12px/1.55 ui-monospace,monospace;background:#101719;padding:12px;border-radius:6px}
+#derivationDetails>details{padding:12px;border-bottom:1px solid var(--edge)}
+summary{cursor:pointer}
+.channel-snapshot{font-size:12px;border-left:2px solid var(--edge);padding-left:10px}
+.channel-snapshot p{margin:4px 0}
+.video-panel .row{gap:6px}
+.video-panel button{font-size:13px}
+@media(max-width:1000px){.playback-grid{grid-template-columns:1fr}.video-panel{position:static;max-height:none}.source-stage{max-width:720px;margin:auto}.tabs{position:static}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+header h1{font-size:28px;margin:2px 0}
+header p{margin:4px 0 10px;font-size:13px}
+.stats{gap:8px}
+.stat{padding:8px 12px;font-size:12px}
+.stat strong{font-size:22px}
+.selection-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px}
+.selection-bar>strong{font-size:13px}
+.selection-bar>label{flex:1 1 220px;font-size:12px;margin:0}
+.selection-bar>button{font-size:12px}
+.provenance-grid{margin-top:10px}

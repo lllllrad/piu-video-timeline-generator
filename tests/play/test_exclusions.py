@@ -10,7 +10,7 @@ from piu_timeline.play.exclusions import exclusion_diagnostics, recognition_diag
 
 
 class ExclusionWarningTest(unittest.TestCase):
-    def test_report_shows_warning_above_video_and_prints_final_report_path(self):
+    def test_inspector_retains_warning_tab_artifact_and_final_output_path(self):
         from piu_timeline.play.presentation import build_report as write_report
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); data = self.sample()
@@ -19,7 +19,8 @@ class ExclusionWarningTest(unittest.TestCase):
             with redirect_stderr(stderr):
                 write_report(data, root/'report.html', root/'final')
             content = (root/'report.html').read_text()
-            self.assertLess(content.index('id="exclusionWarnings"'), content.index('id="video"'))
+            self.assertIn('id="tab-warnings"', content)
+            self.assertIn('id="warningRows"', content)
             self.assertIn(str(root/'final/report.html'), stderr.getvalue())
             self.assertEqual(json.loads((root/'excluded-trajectories.json').read_text())['counts']['unaccounted_excluded_tracks'],1)
 

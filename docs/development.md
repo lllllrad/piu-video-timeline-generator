@@ -66,9 +66,10 @@ checkout root; cache and model paths are independent of module depth.
 `play/layout.py` owns fixed and observed receptor geometry; `play/fonts.py`
 owns counter-font acquisition and validation. `play/words.py` reads judgment
 word pixels and animation refreshes, while `play/judgments.py` owns their
-acquisition/cache orchestration and note association. Report markup, styles
-and browser code live in `play/report.html`, `play/report.css` and
-`play/report.js`; `play/report.py` embeds them in each standalone HTML result.
+acquisition/cache orchestration and note association. The evidence inspector shell and SVG renderer live in `play/report.html`,
+`play/report.css` and `play/report.js`; `play/inspector/` owns tab navigation,
+provenance, channel overlays and workspace styling. `play/report.py` renders
+prepared data into each standalone HTML result.
 These resources are included in built Python wheels.
 
 `play/channels.py` exposes the four retained visual evidence channels and match

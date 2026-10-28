@@ -9,22 +9,24 @@ function updateEvidenceCursor(time){
   evidenceScene.cursor.setAttribute('x1',x);evidenceScene.cursor.setAttribute('x2',x);
 }
 function renderEvidence(noteIndex){
-  const channel=data.visual_channels,note=data.notes[noteIndex],panel=$('nativeEvidence');
-  if(!channel?.timeline||!note){panel.hidden=true;return}
+  const channel=data.visual_channels,selectedRecord=data.notes[noteIndex],panel=$('nativeEvidence');
+  const anchor=evidenceAnchor??selectedRecord?.target_seconds??selectedRecord?.points?.[0]?.[0]??playhead;
+  const note={target_seconds:anchor,lane:evidenceLane??selectedRecord?.lane??null};
+  if(!channel?.timeline){panel.hidden=false;$('evidenceSummary').textContent='No retained channel timeline is available.';return}
   panel.hidden=false;
-  const control=$('evidenceWindow'),span=Number(control.value)||.6,key=noteIndex+':'+span;
+  const control=$('evidenceWindow'),span=Number(control.value)||.6,key=noteIndex+':'+span+':'+anchor+':'+note.lane;
   if(evidenceScene?.key===key){updateEvidenceCursor(playhead);return}
   control.onchange=()=>{evidenceScene=null;renderEvidence(selectedNote)};
   const lo=note.target_seconds-span,hi=note.target_seconds+span,x=t=>180+1000*(t-lo)/(hi-lo);
   const root=svgRoot('evidenceTimeline',1200,280),rows=$('evidenceFrames');rows.replaceChildren();
-  const processing=channel.processing.notes.find(e=>e.note===noteIndex),states=new Map((processing?.samples||[]).map(s=>[s.time.toFixed(6),s]));
-  const riskFrames=new Map((channel.motion.hold_risk?.frames||[]).map(f=>[f.playback_seconds.toFixed(6),f.causes]));
+  const processing=channel.processing?.notes?.find(e=>e.note===noteIndex),states=new Map((processing?.samples||[]).map(s=>[s.time.toFixed(6),s]));
+  const riskFrames=new Map((channel.motion?.hold_risk?.frames||[]).map(f=>[f.playback_seconds.toFixed(6),f.causes]));
   const known=state=>state===true?'on':state===false?'off':'unknown';
   const color=state=>state==='present'||state===true?'#9cddbe':state==='absent'||state===false?'#ff8e9b':'#99a5ae';
   const confidence=value=>Number.isFinite(value)?Number(value).toFixed(2):'?';
   const height=data.analysis_height||1,receptor=(data.layout.receptor_y||0)*height;
-  const bodyScale=height/(channel.processing.pixel_coordinates?.height||height);
-  $('evidenceSummary').textContent='Note '+(noteIndex+1)+' / lane '+(note.lane+1)+' · Processing: '+(processing?processing.status+' / '+processing.reason:'unavailable')+(processing?.range?' / '+formatRange(processing.range):'')+(processing?.visibility_loss?' / Visibility loss (processing unconfirmed): '+formatRange(processing.visibility_loss.range):'')
+  const bodyScale=height/(channel.processing?.pixel_coordinates?.height||height);
+  $('evidenceSummary').textContent=(selectedRecord?'Note '+(noteIndex+1):'Frame review')+' / '+(note.lane===null?'all lanes':'lane '+(note.lane+1))+' · Processing: '+(processing?processing.status+' / '+processing.reason:'unavailable')+(processing?.range?' / '+formatRange(processing.range):'')+(processing?.visibility_loss?' / Visibility loss (processing unconfirmed): '+formatRange(processing.visibility_loss.range):'')
     +(processing?.motion_basis?' / Motion basis: '+processing.motion_basis:'')+'. Positions use the '+(data.analysis_width||'?')+'×'+height+' game crop, with y increasing downward. Click a frame to inspect its original timestamp.';
   /** @type {[string, number][]} */
   const channelRows=[['Popup',45],['Receptor effect',105],['Moving heads',165],['Note processing',225]];
@@ -43,10 +45,10 @@ function renderEvidence(noteIndex){
   const observations=[];
   for(let i=0;i<channel.timeline.frames.length;i++){
     const [time,pts]=channel.timeline.frames[i];if(time<lo||time>hi)continue;
-    const popup=channel.popup.observations[i],effect=channel.receptors.observations[i],motion=channel.motion.observations[i]||[],sample=states.get(time.toFixed(6));
-    const bodies=(channel.processing.body_observations?.[i]||[]).filter(b=>b[0]===note.lane);
+    const popup=channel.popup?.observations?.[i]||[],effect=channel.receptors?.observations?.[i]||[[],[]],motion=channel.motion?.observations?.[i]||[],sample=states.get(time.toFixed(6));
+    const bodies=(channel.processing?.body_observations?.[i]||[]).filter(b=>note.lane===null||b[0]===note.lane);
     const bodyText=bodies.map(b=>'body '+Number(b[1]*bodyScale).toFixed(1)+'…'+Number(b[2]*bodyScale).toFixed(1)+' px'+(!b[3]?' / head clipped':'')+(!b[4]?' / tail clipped':'')).join('; ');
-    const heads=motion.filter(n=>n[0]===note.lane),state=effect[0][note.lane],fraction=effect[1]?.[note.lane];
+    const heads=motion.filter(n=>note.lane===null||n[0]===note.lane),state=effect[0][note.lane],fraction=effect[1]?.[note.lane];
     const risks=riskFrames.get(time.toFixed(6))||[];
     const riskText=risks.map(c=>'lane '+(c.lane+1)+' proximity '+c.vertical_range_pixels.join('…')+' px / '+c.state+(c.owner_hold!=null?' / hold '+c.owner_hold:' / unowned')).join('; ');
     const word=popup[2]||(popup[4]?'blank':'unknown'),stateText=known(state)+(effect[2]?' (common flash)':'');
@@ -66,7 +68,7 @@ function renderEvidence(noteIndex){
     const values=[(popup[0]??'unknown')+' / '+confidence(popup[1])+provenance,word+' / '+confidence(popup[3]),stateText+' / '+confidence(fraction),(heads.length?heads.map(h=>(h[2]*height).toFixed(1)).join(', '):'No detected head')+(riskText?' / '+riskText:''),processingText+(bodyText?' / '+bodyText:'')];
     for(const value of values)text('td',value,row);rows.appendChild(row);observations.push({time,pts,values});
   }
-  for(const [events,y,stroke] of [[channel.popup.combo_events,30,'#9cddbe'],[channel.popup.judgment_events,60,'#88dfff']]){
+  for(const [events,y,stroke] of [[channel.popup?.combo_events||[],30,'#9cddbe'],[channel.popup?.judgment_events||[],60,'#88dfff']]){
     for(const event of events){if(event.upper_seconds<lo||event.lower_seconds>hi)continue;
       line(root,x(Math.max(lo,event.lower_seconds)),y,x(Math.min(hi,event.upper_seconds)),y,stroke,4);
       label(root,event.label||String(event.before)+'→'+String(event.after),Math.min(1100,x(Math.max(lo,event.lower_seconds))),y-5,stroke);

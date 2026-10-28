@@ -20,15 +20,10 @@ frame decoding or OCR; `--force` rebuilds it. Completed output is preserved if a
 continuing past individual failures and reporting them at the end. It cannot be combined with
 `--start` or `--duration`.
 
-Open `.local/data/SOURCE_ID/play/segment-001/report.html` locally. The report embeds its data and uses no external scripts, fonts or services. It includes:
-
-- the original recording, with seek links from the charts and event table;
-- a vertical lane chart with earlier notes above later notes, showing target and input ranges;
-- a note-by-note comparison table, including unmatched targets, and two aligned range bars for the selected note;
-- combo and judgment-word refresh brackets, their evidence source and timing offsets;
-- coverage, unreadable digits, excluded trajectories and ambiguous events;
-- a receptor/combo overlay and an editable, downloadable layout;
-- display-latency correction and relative median centering.
+Open `.local/data/SOURCE_ID/play/segment-001/report.html` for the standalone
+[Play evidence inspector](evidence-inspector.md). Its six tabs share one recording
+and note selection: notes/judgment, channels, derivation, UCS, warnings and data/setup.
+The page embeds its data and uses no external scripts, fonts or services.
 
 If the browser cannot read the relative media path, select the original file in the page. Playback depends on browser codec/container support. The tool never transcodes, trims, retimes or overwrites that recording. The page does not upload selected files.
 
@@ -70,8 +65,8 @@ The report separates reconstructed note heads, heads with timing evidence, and m
 
 The report and command output warn when visible detections are excluded from the reconstructed chart
 without an explicit chart-region exception. `excluded-trajectories.json` lists their original
-visible time spans, lanes and reasons, including short uncertain/noise tracks. The warning panel
-appears above playback and provides source-video seek buttons. A duplicate owned by a retained note
+visible time spans, lanes and reasons, including short uncertain/noise tracks. The Warnings tab
+provides source-video and derived-data navigation. A duplicate owned by a retained note
 or a fragment represented by a reconstructed hold is accounted for separately. A general region
 annotation does not suppress warnings: an explicit timing-processing/check exception must contain
 the whole observed trajectory when no trustworthy target exists. Partly overlapping exceptions leave
