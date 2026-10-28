@@ -26,5 +26,6 @@ export interface CoordinateSupport {
   frames: Record<string, number>;
   observed: Record<string, number[]>;
   reference_notes: number[];
+  native_measurements?: RecordData;
   recovery_reference_sets?: RecordData[];
 }

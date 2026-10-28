@@ -1,6 +1,7 @@
 /** Independent chart events sampled into the saved native-observation contract. */
 import type {RecordData} from '../../src/piu_timeline/derived/types.ts';
 import {parse} from '../../src/piu_timeline/derived/charts/ucs.ts';
+import {contracts} from '../../src/piu_timeline/derived/contracts.ts';
 
 export function template(split = 48, rows = 384) {
   return parse(`:Format=1\n:Mode=Single\n:BPM=120\n:Delay=0\n:Beat=4\n:Split=${split}\n` + '.....\n'.repeat(rows));
@@ -37,6 +38,24 @@ export function nativeScene(events: [number, number][], spacing = 40, fps = 60, 
     notes, head_registration: {notes: registrations},
     scroll_motion: {samples: times.map(time => ({time, source_pts: 80 + time, phase: velocity * rendered(time), variance: 0, support: lanes, chunk: 0})),
       coordinate_registration: {chunks: [{chunk: 0, status: 'fitted', head_offsets: offsets}]}}};
+}
+
+/** Certified endpoint errors explain a raster gap differing from its fitted value. */
+export function measuredGapScene(spacing=40,fps=60){
+  const data=nativeScene([[.85,0],[1.1,1]],spacing,fps,5,{end:1.3}),scale=spacing/40;
+  const uncertainty=Math.max(contracts.native_anchor.coordinate_uncertainty_pixels,contracts.native_anchor.coordinate_uncertainty_pixels*scale);
+  data.notes.forEach((n,i)=>{
+    const error=(i===0?1:-1)*.75*scale;
+    n.points=n.points.map(([t,y])=>[t,y+error]);n.fit_method='shared_scroll_clock';n.residual_pixels=Math.abs(error);
+    n.prediction_uncertainty_seconds=Math.max(.5/fps,Math.max(contracts.local_clock.position_floor_pixels,2*Math.abs(error))/(spacing*6));
+    n.timing_reconstruction={status:'restored'};
+    Object.assign(n.motion_clock,{residual:0,window:[.2,1.3]});
+  });
+  data.head_registration={format:{native_cap_registration:structuredClone(contracts.native_anchor)},
+    notes:data.notes.map((n,i)=>({note:i,coordinate_method:'native_image_anchors',status:'measured',
+      observations:n.points.map(([time,y])=>({time,source_pts_seconds:80+time,native_y_pixels:y,
+        template:`generated-cap-${i}`,native_cap_reference_scale_y:scale,native_cap_coordinate_uncertainty_pixels:uncertainty}))}))};
+  return data;
 }
 
 /** A broad crossing initially fits a coarse row, then loses native support. */

@@ -115,6 +115,13 @@
     "purpose": "similar_judgments_and_continuous_held_state",
     "hold_tick_equivalence": "unverified"
   },
+  "native_gap_validation": {
+    "schema": 1,
+    "revision": 2,
+    "comparison": "intersection_of_declared_native_endpoint_errors",
+    "minimum_frames": 4,
+    "minimum_span_seconds": 0.065
+  },
   "native_anchor": {
     "schema": 1,
     "method": "source_bound_native_cap_center",

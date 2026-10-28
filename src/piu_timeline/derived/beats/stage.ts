@@ -9,6 +9,7 @@ import {recover,validateRecovery} from './recovery.ts';
 import {validate, spacingSupportedNotes} from './validation.ts';
 import type {Note, RecordData} from '../types.ts';
 import {validateBeatInput} from '../validate.ts';
+import {resolve as nativeGaps} from '../native_gaps.ts';
 
 export interface BeatInput {
   schema: 1;
@@ -20,14 +21,14 @@ export interface BeatInput {
 
 export function reconstruct(input: BeatInput): RecordData {
   validateBeatInput(input);
-  const {data, reference: ref, preparation} = input;
+  const {reference: ref, preparation} = input,native=nativeGaps(input.data),data={...input.data,...native};
   const result: RecordData = {contract: {format: contracts.timing, reference: ref}, status: ref.status, warnings: [], groups: []};
   if (preparation) result.reference_preparation = preparation;
   if (ref.status !== 'available') {
     result.warnings = [{lane: 0, reason: 'beat_reference_unavailable', check: 'timing_reconstruction',
       failure_detail: preparation?.status === 'failed' ? preparation.reason : ref.reason, observed_points: 0,
       visible_start_seconds: data.start_seconds ?? 0, visible_end_seconds: data.end_seconds ?? data.start_seconds ?? 0}];
-    return {beat_timing: result};
+    return {...native,beat_timing: result};
   }
   if (typeof input.timing_text !== 'string') throw new Error('Available beat reference requires timing text');
   const doc = parse(input.timing_text), officialGrid = grid(doc), settings: Record<string, string> = {}, sections: number[][] = [];
@@ -56,7 +57,7 @@ export function reconstruct(input: BeatInput): RecordData {
   if (!groups.size) {
     Object.assign(result, {status: 'failed', warnings: [{lane: 0, reason: 'no_supported_note_targets', check: 'timing_reconstruction', observed_points: 0,
       visible_start_seconds: data.start_seconds ?? 0, visible_end_seconds: data.end_seconds ?? data.start_seconds ?? 0}]});
-    return {beat_timing: result};
+    return {...native,beat_timing: result};
   }
   const lanes = data.layout?.lanes ?? [], spacing = lanes.length >= 2 ? (lanes[1].x - lanes[0].x) * data.analysis_width : null;
   const chords = spacing ? chordSupport(data, spacing) : [];

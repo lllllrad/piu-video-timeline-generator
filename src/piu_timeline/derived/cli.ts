@@ -15,8 +15,13 @@ import {timingRanges} from './ranges.ts';
 import {continuity} from './visibility.ts';
 import {interpret as effects} from './effects.ts';
 import {sustained as holdState} from './hold_state.ts';
+import {resolve as nativeGaps} from './native_gaps.ts';
 
 export function derive(stage: string, input): unknown {
+  if(stage==='native-gaps'){
+    if(input?.schema!==1||!Array.isArray(input.data?.notes))throw new Error('Native gap input requires schema 1 and data.notes');
+    return nativeGaps(input.data);
+  }
   if (stage === 'presentation') return prepare(input);
   if (stage === 'hold-view') return preview(input);
   if (stage === 'ranges') return timingRanges(input);

@@ -2,6 +2,7 @@ import {contracts} from '../contracts.ts';
 import {equal, median} from '../math.ts';
 import {predictions} from './coordinates.ts';
 import {clip} from './line_bounds.ts';
+import {NativeGapMeasurements} from '../native_gaps.ts';
 import type {CoordinateSupport, Note, RecordData} from '../types.ts';
 const C = contracts.coordinates, K = contracts.clock_conversion;
 
@@ -62,6 +63,7 @@ export function clockConversion(first: Note, second: Note): RecordData | null {
 
 export function spacingFailures(notes: Note[], spacing: number, motion: RecordData | null = null, support: CoordinateSupport | null = null,
   diagnostics: RecordData[] | null = null, baseline: number[] | null = null, changed: number[] | null = null): RecordData[] {
+  const native=support?.native_measurements?new NativeGapMeasurements({notes,scroll_motion:motion,head_registration:support.native_measurements}):null;
   const offsets = {}, frames = {}, at = new Map<number, number[][]>(), pairs = new Map<string, number[][]>();
   for (const r of motion?.coordinate_registration?.chunks ?? []) if (r.status === 'fitted') offsets[r.chunk] = Object.fromEntries((r.head_offsets ?? []).map(h => [h.note, h.offset_pixels]));
   for (const s of motion?.samples ?? []) frames[s.time] = s.chunk;
@@ -109,17 +111,22 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
     const tolerance = Math.max(C.maximum_reference_error_spacing * spacing, 3 * scatter);
     const conversion = motion !== null && predicted !== null && !models.length ? clockConversion(first, second) : null;
     const comparison = tolerance + (conversion?.position_error_pixels ?? 0);
+    const measured=!models.length&&predicted!==null&&native?native.compare({peer_notes:[a,b],reconstructed_gap_pixels:predicted,prediction_uncertainty_pixels:conversion?.position_error_pixels??0,
+      visible_start_seconds:samples[0][0],visible_end_seconds:samples.at(-1)[0]}):null;
+    const qualified=measured?.reason==='declared_native_endpoint_errors';
+    if(qualified)diagnostics?.push({peer_notes:[a,b],comparison_basis:'native_endpoint_intervals',native_gap_measurements:measured});
     if (conversion) diagnostics?.push({peer_notes: [a, b], observed_gap_pixels: gap, reconstructed_gap_pixels: predicted, clock_conversion: conversion});
     const [rejected, attribution] = attributedHeads(a, b, notes, models);
     // Independent references constrain each coordinate. A difference of two
     // bounded measurements cannot reuse a single-coordinate error budget, and
     // a correct difference alone cannot validate two equally shifted heads.
-    if (models.length ? !rejected.length : predicted !== null && Math.abs(predicted - comparisonGap) <= comparison + 1e-6) continue;
+    if (models.length ? !rejected.length : qualified?measured.status==='explained':predicted !== null && Math.abs(predicted - comparisonGap) <= comparison + 1e-6) continue;
     for (const i of rejected) failed.push({note: i, lane: notes[i].lane, reason: predicted !== null ? 'shared_spacing_reconstruction_conflict' : 'shared_spacing_model_unavailable',
       check: 'timing_reconstruction', visible_start_seconds: samples[0][0], visible_end_seconds: samples.at(-1)[0], observed_points: samples.length,
       peer_notes: [a, b], observed_gap_pixels: gap, reconstructed_gap_pixels: predicted,
       ...(models.length ? {comparison_gap_pixels: comparisonGap, comparison_basis: 'independent_registered_offsets'} : {}), tolerance_pixels: tolerance,
       ...(conversion ? {clock_conversion: conversion, comparison_tolerance_pixels: comparison} : {}),
+      ...(qualified?{comparison_basis:'native_endpoint_intervals',native_gap_measurements:measured}:{}),
       ...(models.length ? {independent_coordinate_models: models, native_position_attribution: attribution} : {})});
   }
   return failed;

@@ -14,7 +14,8 @@ CONTRACTS['chords'].update(native_cap_registration=CONTRACTS['native_anchor'],im
 for _name in ('domains','recovery'):CONTRACTS[_name]['measurement_limits']=CONTRACTS['coordinates']
 CONTRACTS['timing'].update(clock_conversion=CONTRACTS['clock_conversion'],spacing_checks=CONTRACTS['spacing'],
     independent_coordinates=CONTRACTS['coordinates'],native_chords=CONTRACTS['chords'],
-    native_row_domains=CONTRACTS['domains'],native_recovery=CONTRACTS['recovery'])
+    native_row_domains=CONTRACTS['domains'],native_recovery=CONTRACTS['recovery'],
+    native_gap_validation=CONTRACTS['native_gap_validation'])
 _process = None
 _owner = None
 _sequence = 0

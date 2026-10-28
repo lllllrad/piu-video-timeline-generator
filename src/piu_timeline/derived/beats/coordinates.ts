@@ -1,6 +1,7 @@
 import {contracts, RECOVERABLE} from '../contracts.ts';
 import {entries, median} from '../math.ts';
 import type {CoordinateModel, CoordinateSupport, Interval, Note, RecordData, Reference} from '../types.ts';
+import {measurementInput} from '../native_gaps.ts';
 import {domain} from './line_bounds.ts';
 const F = contracts.coordinates;
 
@@ -35,7 +36,7 @@ export function prepare(data: RecordData, spacing: number, includeFailed = false
     chunks[record.chunk] = heads;
   }
   return {lane_spacing_pixels: spacing, chunks, frames: Object.fromEntries([...samples].map(([t, s]) => [t, s.chunk])),
-    observed, reference_notes: data.notes.flatMap((n, i) => n.status === 'estimated' ? [i] : [])};
+    observed, native_measurements:measurementInput(data.head_registration), reference_notes: data.notes.flatMap((n, i) => n.status === 'estimated' ? [i] : [])};
 }
 
 export function fit(references: Reference[], spacing: number): CoordinateModel | null {

@@ -54,6 +54,25 @@ possible models for each head do not establish a consistent pair. If the model
 can include zero/reverse velocity, inverse timing is not identifiable and fails.
 Missing model bounds fail explicitly instead of reverting to a point estimate.
 
+`derived/native_gaps.ts` validates source gap failures against acquired image-cap
+measurement errors before musical reconstruction. Every co-observed endpoint
+needs a qualified native center, declared registration uncertainty and matching
+original PTS. Intersect all observed gap intervals, propagating both endpoints'
+errors; a passing median cannot erase a contradictory frame. A qualified source
+clock rejected only by explained gap checks retains its original target, with
+additional calibrated position error propagated into its time uncertainty.
+Other failed native checks and unsupported clocks keep their warnings.
+
+The same interval comparison applies to later registered-gap checks. When target
+times change, propagate the qualified shared clock slope error into a prediction
+interval and compare that interval with the acquired gap intersection. Prediction
+uncertainty cannot repair an empty intersection of acquired measurements. Independent
+absolute coordinate models retain their separate bounds. Missing measurement
+proof does not enlarge the existing fallback tolerance. Native resolutions and
+original warnings remain in `timing_reconstruction.native_gap_validation`.
+This component does not require a musical reference. A restored native interval
+can trigger reassociation while beat verification remains explicitly unavailable.
+
 A confirmed tap can retain its independently restored native crossing interval
 when musical-row assignment fails. The presentation/association view marks it
 with `target_timing_basis: native_motion` and `chart_timing_status: unresolved`;
@@ -90,8 +109,12 @@ Replay a prepared input without Python, OCR or video decoding:
 just derive beats .local/data/SOURCE/play/segment-001/beat-input.json .local/tmp/beats.json
 ```
 
-The same command supports `coordinates`, `clocks`, `speed` and `ucs`:
+The same command supports `native-gaps`, `coordinates`, `clocks`, `speed` and `ucs`:
 
+* `native-gaps`: schema 1 with `data` containing saved notes, registration, shared
+  motion and timing diagnostics. An existing `beat-input.json` is accepted; the
+  reference and timing text are unused. Output is a native-timing patch, before
+  musical-row fitting.
 * `coordinates`: `tracks`, `timeline`, `height`, `spacing`, `receptor`, `bottom`.
 * `clocks`: `state` (samples, geometry and registration evidence), `tracks`,
   `receptor`, `layout`.

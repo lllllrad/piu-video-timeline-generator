@@ -87,7 +87,8 @@ def apply(data,directory):
 
 def reassociate(data, display_delay_ms):
     """Changed chart times must be associated before reading judgment words."""
-    if data['beat_timing']['status'] not in ('restored','failed'):
+    if (data['beat_timing']['status'] not in ('restored','failed')
+            and not data.get('timing_reconstruction',{}).get('native_gap_validation',{}).get('restored_notes')):
         return data
     from types import SimpleNamespace
     from piu_timeline.play.analysis import resolve_timing
