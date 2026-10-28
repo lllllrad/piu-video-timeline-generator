@@ -9,18 +9,19 @@ def signature(fits):
     return tuple((f['status'],f['split'],tuple(f['rows']))if f['status']in('restored','partial')else('failed',)for f in fits)
 
 
-def fit_groups(groups, phase):
+def fit_groups(groups, phase, consistent_notes=None):
     """Freeze unique neighbors before using them across a measure boundary."""
     def run(group, blocks):
         if group.get('invalid'):return {'status':'failed','reason':group['invalid']}
         return fit_grid(group['targets'],group['errors'],group['bpm'],group['origin']+phase,
                         native_chords=group.get('native_chords',()),native_coordinates=blocks)
     initial=[run(g,g.get('native_coordinates',()))for g in groups]
+    qualified=set(consistent_notes(initial))if consistent_notes else None
     unique={}
     for group,fit in zip(groups,initial,strict=True):
         if fit['status']not in('restored','partial'):continue
         for note,target in zip(group.get('notes',()),fit['targets']):
-            if target is not None:unique[note]=(target,group['bpm'])
+            if target is not None and(qualified is None or note in qualified):unique[note]=(target,group['bpm'])
     results=[]
     for group in groups:
         blocks=[]
@@ -57,7 +58,7 @@ def fit_phase(groups, uncertainty, consistent_notes=None):
     phases=[0.] if uncertainty==0 else [-uncertainty+2*uncertainty*i/steps for i in range(steps+1)]
     best=None;winners=[];trials=[]
     for phase in phases:
-        fits=fit_groups(groups,phase)
+        fits=fit_groups(groups,phase,consistent_notes)
         count=sum(sum(t is not None for t in f['targets'])for f in fits if f['status']in('restored','partial'))
         complexity=sum(f['split']*sum(t is not None for t in f['targets'])for f in fits if f['status']in('restored','partial'))
         supported=tuple(sorted(consistent_notes(fits)))if consistent_notes else None
@@ -72,7 +73,7 @@ def fit_phase(groups, uncertainty, consistent_notes=None):
             {'status':'failed','reason':g.get('invalid','ambiguous_or_unsupported_song_phase')} for g in groups],
                 'phase_trials':trials}
     lo,hi=winners[0][0],winners[-1][0];phase=(lo+hi)/2
-    fits=fit_groups(groups,phase)
+    fits=fit_groups(groups,phase,consistent_notes)
     unstable=('unstable_song_phase_assignment'if signature(fits)!=winners[0][2]else
               'unstable_spatial_song_phase'if consistent_notes and tuple(sorted(consistent_notes(fits)))!=winners[0][3]else None)
     if unstable:

@@ -257,3 +257,11 @@ those notes. Final joint validation and reference invalidation still run after
 all proposals are considered. Proofs record `complete_native_block`, all reference
 identities and any failed pre-promotion checks. This extends available evidence,
 rather than the temporal or positional error budget.
+
+Before freezing initial rows for cross-group reconstruction at each song phase,
+run the same independent native-spacing and concurrency checks used to score
+the final assignment. An initially unique row which already fails those checks
+cannot constrain another group's domains. Rebuild neighbor models using only
+the surviving initial rows, without promoting newly resolved rows into that
+reference set. Later reference changes and failures still invalidate dependent
+proofs. A unique row alone is insufficient evidence for use as a neighbor anchor.

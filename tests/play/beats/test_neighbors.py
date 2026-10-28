@@ -104,3 +104,32 @@ class NeighborReferenceTest(unittest.TestCase):
                 fit=result['fits'][0]
                 self.assertNotEqual(fit['status'],'restored')
                 if fit['status']=='partial':self.assertIsNone(fit['targets'][3])
+
+    def test_spatially_refuted_initial_row_cannot_poison_neighbor_domain_reconstruction(self):
+        from piu_timeline.play.beats.timing import spacing_supported_notes
+        groups=scenario();targets=[1.5+i*.125 for i in range(8)];times=[.4+i*.02 for i in range(10)]
+        heads={i:{'offset':40+500*t,'lane':i%3,'native_note':i}for i,t in enumerate(targets)}
+        for group in groups:
+            ids=group['notes']
+            group['native_coordinates']=[{'chunk':0,'heads':{j:heads[i]for j,i in enumerate(ids)},
+                                         'neighbor_heads':{i:h for i,h in heads.items()if i not in ids}}]
+        groups[1]['targets'][0]+=.125
+        notes=[{'lane':i%3,'status':'estimated','target_seconds':t+(.125 if i==4 else 0),
+                'points':[(s,40+500*(t-s))for s in times],
+                'motion_clock':{'origin':0,'velocity':500,'intercept':-62.5 if i==4 else 0},
+                'motion_target_phase':500*t}for i,t in enumerate(targets)]
+        motion={'samples':[{'time':s,'source_pts':80+s,'phase':500*s,'chunk':0}for s in times],
+                'coordinate_registration':{'chunks':[{'chunk':0,'status':'fitted','head_offsets':[
+                    {'note':i,'offset_pixels':h['offset']}for i,h in heads.items()]}]}}
+        data={'notes':notes,'scroll_motion':motion,'analysis_height':1600,
+              'layout':{'receptor_y':40/1600},'head_registration':{'notes':[
+                  {'note':i,'status':'registered','observations':[{'time':s}for s in times]}for i in range(8)]}}
+        support=prepare(data,40);before=deepcopy((data,groups))
+        validate=lambda fits:spacing_supported_notes(notes,groups,fits,40,motion,support)
+        result=fit_phase(groups,0,consistent_notes=validate)
+        self.assertEqual(result['fits'][0]['targets'],targets[:4])
+        self.assertEqual(result['fits'][1]['targets'],[None]+targets[5:])
+        self.assertEqual(result['consistent_notes'],[0,1,2,3,5,6,7])
+        for proof in result['fits'][0].get('native_coordinate_constraints',()):
+            self.assertNotIn(4,[r['note']for r in proof['model']['references']])
+        self.assertEqual((data,groups),before)
