@@ -100,6 +100,12 @@ calibration. See [note-skin images](note-skin-images.md).
 - `play/holds/analysis.py` orchestrates hold analysis and projects a hold-aware chart without
 converting ticks into presses. `play/holds/features.py` acquires and caches native-frame pixels;
 `play/holds/geometry.py` resolves head/body/tail geometry in explicit pixel coordinates;
+image start/body/end connectivity is measured independently of endpoint clocks.
+`hold_analysis.image_connections` retains unique connected image objects even
+when endpoint timing fails. Timed `holds` reference them by `image_connection_id`;
+missing or contradictory endpoint times emit `hold_endpoint_timing_unresolved`
+and never become invented timing bounds or UCS placements. Body gaps, competing
+endpoints and interior tap conflicts remain geometry failures.
 `play/holds/state.py` attaches independent sustained recognition and receptor-light transitions.
 Geometry does not depend on a successful input match. TypeScript `derived/candidates.ts` constrains review
 alternatives using refresh ownership, processed-row order and per-lane receptor evidence.

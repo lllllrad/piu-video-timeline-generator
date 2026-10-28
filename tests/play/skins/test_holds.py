@@ -11,7 +11,7 @@ CAP_REFERENCES={'hold_start':[[0,20]],'hold_end':[[15,35]],'hold_body':[]}
 
 
 def reconstruct_images(data,receptors,native,warnings,*,references=REFERENCES):
-    return reconstruct(data,receptors,native,warnings,references=references,cap_references=CAP_REFERENCES)
+    return reconstruct(data,receptors,native,warnings,references=references,cap_references=CAP_REFERENCES)['holds']
 
 
 def scenario():

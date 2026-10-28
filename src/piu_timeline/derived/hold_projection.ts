@@ -10,7 +10,10 @@ export function observedTailRoles(data: RecordData): RecordData[] {
     const obs = r.observations, roles = unique<string>(obs.map(o => o.role).filter(r => r !== 'unknown'));
     if (!obs.length || roles.length !== 1 || roles[0] !== 'hold_end') return [];
     const supported = obs.filter(o => o.role === 'hold_end');
-    return [{tail_note: r.note, head_note: null, lane: data.notes[r.note].lane, status: 'observed_image_tail_timing_unresolved',
+    const connections=(data.hold_analysis?.image_connections??[]).filter(c=>c.tail_note===r.note);
+    const connection=connections.length===1?connections[0]:null;
+    return [{tail_note: r.note, head_note: connection?.head_note??null,
+      ...(connection?{image_connection_id:connection.id}:{}),lane: data.notes[r.note].lane, status: 'observed_image_tail_timing_unresolved',
       visible_start_seconds: Math.min(...supported.map(o => o.playback_seconds)), visible_end_seconds: Math.max(...supported.map(o => o.playback_seconds)),
       source_pts_seconds: supported.map(o => o.source_pts_seconds), image_evidence: supported}];
   });

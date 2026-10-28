@@ -9,8 +9,12 @@ import numpy as np
 
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.detector import SkinDetector,FORMAT
-from piu_timeline.play.skins.holds import reconstruct_images
+from piu_timeline.play.skins.holds import reconstruct_images as reconstruct
 from tests.play.skins.test_detector import examples
+
+
+def reconstruct_images(*args,**kwargs):
+    return reconstruct(*args,**kwargs)['holds']
 
 
 def fixture(root,tap=False):

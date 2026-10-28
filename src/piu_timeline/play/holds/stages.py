@@ -18,16 +18,17 @@ def geometry(data, directory, frames, reconstruct):
 
     def build():
         from piu_timeline.play.object_roles import filter_frames
-        unresolved = []
+        unresolved = [];image_connections=[]
         if data.get('skin_detector'):
             from piu_timeline.play.skins.holds import reconstruct_images
             import json
             with native_path.open() as stream:
                 native = filter_frames(data, [json.loads(line) for line in stream])
-            holds = reconstruct_images(data, frames, native, unresolved, include_state=False)
+            images=reconstruct_images(data,frames,native,unresolved,include_state=False)
+            holds,image_connections=images['holds'],images['image_connections']
         else:
             holds = reconstruct(data, frames, unresolved, include_state=False)
-        return {'holds': holds, 'unresolved_tracks': unresolved}
+        return {'holds':holds,'image_connections':image_connections,'unresolved_tracks':unresolved}
 
     return cached(directory, 'hold-geometry', inputs, build)
 

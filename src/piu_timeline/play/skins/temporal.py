@@ -14,7 +14,7 @@ def displacement(before,after,motion,positions,notes,spacing):
     if a and b and a['chunk']==b['chunk']and b['support']:
         value=b['phase']-a['phase'];basis='registered_frame_displacement'
     else:
-        first={i:y for i,y,role in positions[before]if role!='barrier'and notes[i]['status']=='estimated'}
+        first={i:y for i,y,role in positions[before]if role!='barrier'}
         values=[first[i]-y for i,y,role in positions[after]if i in first and role!='barrier']
         if not values or max(values)-min(values)>1:return None
         value=float(np.median(values));basis='identified_cap_displacement'
@@ -82,7 +82,6 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
         heads={i for i,role in tags if role=='head'};tails={i for i,role in tags if role=='tail'}
         if len(heads)!=1 or len(tails)!=1:continue
         head,tail=next(iter(heads)),next(iter(tails));first,last=data['notes'][head],data['notes'][tail]
-        if first['status']!='estimated'or last['status']!='estimated'or last['target_seconds']<=first['target_seconds']:continue
         times={n['time']for n in component}
         if len(times)<4 or max(times)-min(times)<.065:continue
         body_times={n['time']for n in component if n['body_template_support']}

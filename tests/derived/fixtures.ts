@@ -59,3 +59,24 @@ export function coordinateReferenceScene(spacing = 40, biases = [1,-1,-1,-1,-1,-
     offset:data.scroll_motion.coordinate_registration.chunks[0].head_offsets[i].offset_pixels}));
   return {data,references,velocity:spacing*6,intercept:spacing*1.3+spacing*6*.5,error};
 }
+
+/** Image-role observations of a rigid hold, independent of endpoint clocks. */
+export function imageHoldScene(scale=1,fps=50){
+ const layout={receptor_y:.05,lanes:Array.from({length:5},(_,i)=>({x:.1+i*.1,color:'blue'}))};
+ const data:RecordData={analysis_width:200*scale,analysis_height:300*scale,start_seconds:0,end_seconds:2,
+  game_roi:[0,0,200*scale,300*scale],layout,skin_detector:{contract:{schema:1}},notes:[]};
+ const native:RecordData[]=Array.from({length:Math.round(.18*fps)+1},(_,i)=>{
+  const time=i/fps,y=100-100*time;
+  const shapes=[['hold_start',y,[10,y-10,30,y+25]],['hold_end',y+60,[10,y+35,30,y+70]],['hold_body',y+35,[16,y+20,24,y+50]]];
+  return {playback_seconds:time,source_pts_seconds:80+time,skin_observations:shapes.map(([role,anchor,box])=>({
+   lane:0,x:.1,y:Number(anchor)/300,role,template:role,skin:'synthetic',region_errors:{cap:0,connection:0},
+   bounds_pixels:(box as number[]).map(v=>v*scale)}))};
+ });
+ for(const [offset,target]of [[0,.85],[60,1.45]])data.notes.push({lane:0,status:'estimated',target_seconds:target,
+  prediction_uncertainty_seconds:.01,velocity_pixels_per_second:-100*scale,
+  points:native.map(f=>[f.playback_seconds,(100-100*f.playback_seconds+offset)*scale])});
+ const rows={hold_start:[[0,35]],hold_end:[[0,35]],hold_body:[[0,30]]};
+ const caps={hold_start:[[0,20]],hold_end:[[15,35]],hold_body:[]};
+ const scaled=r=>Object.fromEntries(Object.entries(r).map(([role,runs])=>[role,(runs as number[][]).map(run=>run.map(v=>v*scale))]));
+ return {data,native,references:scaled(rows),cap_references:scaled(caps)};
+}
