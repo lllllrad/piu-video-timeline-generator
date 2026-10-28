@@ -23,16 +23,19 @@ insufficiently measured and unregistered candidates cannot supply this proof.
 ## Resolving a domain
 
 For each proposed natural Split, multiply its row duration by the measured speed
-lower bound. Equality is usable only if that minimum row distance exceeds three
-pixels: one pixel of observed pair separation plus one pixel of uncertainty for
-each cap. Otherwise distinct rows cannot be distinguished at this resolution,
-and the observation does not constrain their domains.
+lower bound. Divide the three-pixel concurrency bound (one pixel of observed
+pair separation plus one pixel of uncertainty for each cap) by that distance
+and take the integer floor. This is the maximum compatible difference between
+the two row indices. If one row already exceeds three pixels, the difference
+must be zero; finer rows retain a bounded difference instead of losing the
+constraint entirely. A small row duration cannot hide a large total gap.
 
-Intersect the integer row domains of all connected equality constraints. Every
-member must retain exactly one row. Two shared alternatives remain ambiguous;
-an empty intersection refutes that subdivision. A finer natural subdivision
-may explain a previously incompatible coarse grid, but cannot be used to choose
-between unresolved alternatives. Ordinary time intervals and common song-phase
+Intersect each head's domain with the peer domain expanded by that maximum
+row difference, propagating changes through the connected constraints. Retain
+all compatible rows; multiple alternatives remain ambiguous. An inconsistent
+connected component fails while unrelated independently unique rows can remain
+supported. A finer natural subdivision may explain a coarse-grid failure but
+must satisfy the same native-distance bound. Ordinary time intervals and common song-phase
 requirements remain unchanged. No grades, counter increments, input onsets,
 existing chart note rows or result-count quotas supply these constraints.
 

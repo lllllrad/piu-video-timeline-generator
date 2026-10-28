@@ -108,6 +108,6 @@ class PartialBeatTest(unittest.TestCase):
         self.assertEqual(data,before)
         self.assertEqual([n['target_seconds']for n in result['notes']],[None,None,1.125,1.25])
         self.assertEqual({w['note']for w in result['beat_timing']['warnings']},{0,1})
-        self.assertTrue(all(w.get('failure_detail',w['reason'])in
-                            ('native_chord_domains_incompatible','beat_grid_conflicts_with_native_chord')
+        self.assertEqual(result['beat_timing']['groups'][0]['split'],16)
+        self.assertTrue(all(w['failure_detail']=='native_chord_domains_incompatible'
                             for w in result['beat_timing']['warnings']))

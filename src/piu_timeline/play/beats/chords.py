@@ -1,12 +1,13 @@
 """Constrain beat domains with independently measured concurrent cap positions."""
 from collections import defaultdict
 from itertools import combinations
+import math
 
 import numpy as np
 from piu_timeline.play.skins.anchors import FORMAT as ANCHOR_FORMAT
 from piu_timeline.play.skins.coordinates import FORMAT as IMAGE_COORDINATE_FORMAT
 
-FORMAT={'schema':1,'revision':5,'image_support':'qualified_native_centers_or_identical_cap_reference','native_cap_registration':ANCHOR_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'minimum_frames':4,'minimum_span_seconds':.065,
+FORMAT={'schema':1,'revision':6,'domain_constraint':'bounded_native_pixel_distance','image_support':'qualified_native_centers_or_identical_cap_reference','native_cap_registration':ANCHOR_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'minimum_frames':4,'minimum_span_seconds':.065,
         'maximum_gap_pixels':1.,'maximum_motion_residual_pixels':1.5,
         'minimum_displacement_spacing':.8,'coordinate_error_pixels':1.}
 
@@ -72,22 +73,25 @@ def prepare(data,spacing):
 
 
 def constrain(domains,step,constraints):
-    """Intersect equality domains only when distinct rows are pixel-resolvable."""
-    parents=list(range(len(domains)));used=[]
-    def root(i):
-        while parents[i]!=i:parents[i]=parents[parents[i]];i=parents[i]
-        return i
+    """Keep every row pair within the measured native concurrency bound."""
     threshold=FORMAT['maximum_gap_pixels']+2*FORMAT['coordinate_error_pixels']
-    for constraint in constraints:
-        if step*constraint['minimum_velocity_pixels_per_second']<=threshold:continue
-        a,b=constraint['indices'];parents[root(a)]=root(b);used.append(constraint)
-    groups=defaultdict(list)
-    for i in range(len(domains)):groups[root(i)].append(i)
-    result=list(domains)
-    for members in groups.values():
-        domain=max(domains[i][0]for i in members),min(domains[i][1]for i in members)
-        for i in members:result[i]=domain
-    return result,used
+    edges=[(proof,math.floor(threshold/(step*proof['minimum_velocity_pixels_per_second'])+1e-9))
+           for proof in constraints]
+    result=list(domains);used=set();changed=True
+    while changed:
+        changed=False
+        for index,(proof,limit)in enumerate(edges):
+            a,b=proof['indices'];first,second=result[a],result[b]
+            if first[0]>first[1]or second[0]>second[1]:
+                narrowed=[(1,0),(1,0)]
+            else:
+                narrowed=[(max(first[0],second[0]-limit),min(first[1],second[1]+limit)),
+                          (max(second[0],first[0]-limit),min(second[1],first[1]+limit))]
+                if any(lo>hi for lo,hi in narrowed):narrowed=[(1,0),(1,0)]
+            if limit==0 or narrowed!=[first,second]:used.add(index)
+            if narrowed!=[first,second]:
+                result[a],result[b]=narrowed;changed=True
+    return result,[proof for i,(proof,_)in enumerate(edges)if i in used]
 
 
 def conflicts(notes,constraints):
