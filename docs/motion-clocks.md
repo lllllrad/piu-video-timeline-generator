@@ -93,3 +93,19 @@ native targets, exact clocks and independent native-reference models retain the
 original image gate. A wrong row outside the combined bound still fails. No
 additional beat candidate, input association or missing image is created by this
 conversion check.
+
+## Observed reverse movement
+
+The ordinary approach moves upward (decreasing image y). A clearly downward
+native trajectory must remain a motion warning even if its speed is constant
+or it already has a target/input association. Use the same four-observation
+windows and capture-gap checks as speed-change measurement, outside known HUD
+occlusion and receptor/bottom exclusion areas. Require the lower signed-velocity
+bound, including fitted residual and two pixels of endpoint uncertainty, to be
+strictly positive. Merge consecutive supported windows and retain their source
+PTS, direction, count and velocity bounds as `reverse_scroll_motion`.
+Stationary raster jitter, an unsupported slope or a capture gap does not prove
+reverse movement. This observation alone does not establish a playable reverse
+scroll gimmick, decorative art, a press or a successful judgment. Those require
+their own source evidence and concrete chart handling.
+

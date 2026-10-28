@@ -120,3 +120,20 @@ class MotionWarningTest(unittest.TestCase):
             ys=[300-10*(i//2) if duplicate else 300-5*i for i in range(31)]
             data,frames=fixture(ys)
             self.assertEqual(motion_warnings(data,frames),[])
+
+    def test_constant_downward_motion_warns_even_when_timing_and_input_are_matched(self):
+        data,frames=fixture([110+300*i/60 for i in range(31)])
+        before=deepcopy((data,frames));warnings=motion_warnings(data,frames)
+        reverse=[w for w in warnings if w['reason']=='reverse_scroll_motion']
+        self.assertEqual(len(reverse),1)
+        self.assertGreater(reverse[0]['velocity_lower_bound_pixels_per_second'],0)
+        self.assertEqual(reverse[0]['source_pts_seconds'],
+                         [10+reverse[0]['visible_start_seconds'],10+reverse[0]['visible_end_seconds']])
+        self.assertGreaterEqual(reverse[0]['observed_points'],4)
+        self.assertEqual((data,frames),before)
+
+    def test_quantized_stationary_jitter_and_capture_gaps_do_not_prove_reverse_motion(self):
+        data,frames=fixture([200+.5*(i%2)for i in range(31)])
+        self.assertFalse(any(w['reason']=='reverse_scroll_motion'for w in motion_warnings(data,frames)))
+        data['notes'][0]['points']=[[0,110],[.02,116],[.2,170],[.22,176]]
+        self.assertFalse(any(w['reason']=='reverse_scroll_motion'for w in motion_warnings(data,frames)))

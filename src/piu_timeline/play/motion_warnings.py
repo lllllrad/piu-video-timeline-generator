@@ -1,4 +1,4 @@
-"""Warn about observed stops and speed changes independently of fitting success."""
+"""Warn about observed stops, reversals and speed changes independently of fitting success."""
 from piu_timeline.play.frames import TIME_EPSILON
 
 import numpy as np
@@ -48,6 +48,18 @@ def motion_warnings(data, frames):
             residual=y-(slope*x+intercept)
             error=3*np.sqrt(np.dot(residual,residual)/max(1,len(x)-2)/max(np.sum((x-x.mean())**2),1e-9))+2/span
             windows.append((float(block[0,0]),float(block[-1,0]),float(slope),float(error)))
+        reverse=[]
+        for window in windows:
+            if window[2]<=window[3]:continue
+            if not reverse or window[0]-reverse[-1][-1][1]>.05+TIME_EPSILON:
+                reverse.append([])
+            reverse[-1].append(window)
+        for run in reverse:
+            result.append(record('reverse_scroll_motion',run[0][0],run[-1][1],
+                                 direction='downward',observed_points=4*len(run),
+                                 direction_windows=len(run),
+                                 velocity_lower_bound_pixels_per_second=min(w[2]-w[3]for w in run),
+                                 velocity_upper_bound_pixels_per_second=max(w[2]+w[3]for w in run)))
         changes=[]
         for before,after in zip(windows,windows[1:]):
             if after[0]-before[1]>.05+TIME_EPSILON or abs(after[2]-before[2])<=before[3]+after[3]:

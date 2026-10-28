@@ -272,7 +272,7 @@ player's absolute speed setting or prove that BPM alone caused the change.
 Concrete metadata may authorize a piecewise displacement clock only where a
 head's own pixels agree with that model. Sparse support, ramps, reverse motion,
 multiple nearby changes and inconsistent positions remain explicit review cases.
-See [the measurement workflow](development.md#measuring-scroll-speed-changes).
+See [the measurement workflow](development.md#measuring-scroll-speed-changes) and [reverse-motion evidence](motion-clocks.md#observed-reverse-movement).
 
 When simultaneous heads enter the receptor exclusion area together, independent
 peer detections may end shortly before receptor alignment. A stable shared clock

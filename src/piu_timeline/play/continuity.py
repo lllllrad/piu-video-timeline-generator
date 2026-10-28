@@ -6,7 +6,7 @@ import numpy as np
 
 from piu_timeline.play.screen_regions import note_occluders, overlapping_occluders
 
-FORMAT = {'schema':1, 'revision':3}
+FORMAT = {'schema':1, 'revision':4}
 
 
 def continuity_diagnostics(data, frames):
