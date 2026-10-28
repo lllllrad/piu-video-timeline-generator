@@ -85,3 +85,13 @@ nominal display correction and observed local offset before comparing refresh
 alternatives. A distant candidate from the wider review window cannot veto a
 refresh it could never replace. Multiple temporally plausible refreshes remain
 alternatives even if only one has independently confirmed lane evidence.
+
+## Sustained-response bounds with unresolved beat rows
+
+The response window uses the reconstructed hold's endpoint ranges. A missing
+musical target on its source tail is not playback zero and cannot move the
+window back to an earlier note. Following observed caps still bound the trailing
+response guard, including caps with failed beat placement but valid native timing.
+Unknown native timing cannot supply such a bound. Recognition still requires
+actual retained receptor support; this calculation cannot turn a window into
+an observed press, release or held state by itself.

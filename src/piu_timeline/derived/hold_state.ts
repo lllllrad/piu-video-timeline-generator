@@ -5,6 +5,7 @@ import {Store, implementation, artifactCurrent} from './pipeline/store.ts';
 import {readFileSync, existsSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {parseData} from './json.ts';
+import {inputNotes} from './holds/input.ts';
 export interface Geometry {receptor: number; spacing: number; note_scale: number; edge_tolerance: number}
 type Context = Record<string, RecordData[]>;
 
@@ -15,8 +16,11 @@ export function recognitionWindow(data: RecordData, hold: RecordData, geometry: 
   if (tail != null) {
     const speed = Math.abs(data.notes[tail].velocity_pixels_per_second ?? 0) * geometry.note_scale;
     if (speed > 0) upper += geometry.edge_tolerance * geometry.spacing / speed;
-    const following = data.notes.flatMap((n, index) => n.status === 'estimated' && n.lane === hold.lane && !hold.covered_notes.includes(index) &&
-      n.target_seconds > data.notes[tail].target_seconds ? [n.target_seconds - n.prediction_uncertainty_seconds] : []);
+    const notes = inputNotes(data.notes), end = hold.end_range;
+    const tailTarget = end ? (end[0] + end[1]) / 2 : notes[tail].target_seconds;
+    const following = Number.isFinite(tailTarget) ? notes.flatMap((n, index) => n.status === 'estimated' && Number.isFinite(n.target_seconds) &&
+      n.lane === hold.lane && !hold.covered_notes.includes(index) && n.target_seconds > tailTarget
+      ? [n.target_seconds - n.prediction_uncertainty_seconds] : []) : [];
     if (following.length) upper = Math.min(upper, ...following);
   }
   return [lower, Math.max(lower, upper)];

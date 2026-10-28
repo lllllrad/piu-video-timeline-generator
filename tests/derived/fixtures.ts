@@ -26,7 +26,7 @@ export function nativeScene(events: [number, number][], spacing = 40, fps = 60, 
     const points = times.map(t => [t, receptor + velocity * (target - rendered(t))])
       .filter(([, y]) => receptor + .85 * spacing < y && y < .95 * height - .55 * spacing);
     notes.push({lane, status: 'estimated', target_seconds: target, prediction_uncertainty_seconds: .5 / fps, points,
-      motion_clock: {origin: 0, velocity, intercept: 0}, motion_target_phase: velocity * target});
+      velocity_pixels_per_second: -velocity, motion_clock: {origin: 0, velocity, intercept: 0}, motion_target_phase: velocity * target});
     registrations.push({note: index, status: 'registered', coordinate_method: 'native_cap_measurements', coordinate_uncertainty_pixels: .025 * spacing,
       observations: points.map(([time]) => ({time, source_pts_seconds: 80 + time}))});
     offsets.push({note: index, offset_pixels: receptor + velocity * target});
