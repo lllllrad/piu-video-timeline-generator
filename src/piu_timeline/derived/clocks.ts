@@ -1,5 +1,6 @@
 /** Subframe clocks from retained displacement. Source frames are never resampled. */
 import {contracts} from './contracts.ts';
+import {frameBounds} from './frame_bounds.ts';
 import {compare, linear, lowerBound, median, rms} from './math.ts';
 import type {RecordData} from './types.ts';
 const F = contracts.local_clock;
@@ -84,6 +85,7 @@ export class MotionClock {
     const before = chunk[lower], stationary = lower < index - 1;
     if (after.phase <= before.phase) return null;
     const fraction = (phase - before.phase) / (after.phase - before.phase), interpolated = before.time + fraction * (after.time - before.time);
+    const sourcePhaseError = phaseError;
     phaseError += Math.sqrt(Math.max(0, after.variance - sample.variance));
     if (!this.clocks.has(sample.chunk)) this.clocks.set(sample.chunk, clock(chunk, this.state.spacing));
     let c = this.clocks.get(sample.chunk), capture = 0, rejected = null;
@@ -95,14 +97,16 @@ export class MotionClock {
       if (!(before.time - capture <= proposed && proposed <= after.time + capture)) { rejected = {clock: c, target_seconds: proposed}; c = null; }
     }
     if (!c) { const [local, error] = this.local(chunk, interpolated, phase, phaseError, before, after, cadence); if (local) { c = local; capture = error; } }
-    if (!c && this.state.strict_clock) return null;
-    const time = c ? c.origin + (phase - c.intercept) / c.velocity : interpolated;
-    const velocity = (after.phase - before.phase) / (after.time - before.time);
-    let uncertainty = c ? Math.max(cadence / 2, (phaseError + c.residual) / c.velocity) : Math.max(cadence / 2, phaseError / Math.max(velocity, 1));
+    if (!c) {
+      const bounded = frameBounds(chunk, sample, phase, sourcePhaseError, cadence);
+      return bounded ? {...bounded, ...(rejected ? {rejected_chunk_clock: rejected} : {})} : null;
+    }
+    const time = c.origin + (phase - c.intercept) / c.velocity;
+    let uncertainty = Math.max(cadence / 2, (phaseError + c.residual) / c.velocity);
     // Repeated positions cannot identify when motion resumed within the capture interval.
     // Keep the original frames: a pause and a stale captured image remain alternatives.
     if (stationary) uncertainty = Math.max(uncertainty, Math.max(time - before.time, after.time - time) + capture);
-    return {target_seconds: time, prediction_uncertainty_seconds: uncertainty, fit_method: c ? 'shared_scroll_clock' : 'shared_scroll_interpolation', motion_clock: c,
+    return {target_seconds: time, prediction_uncertainty_seconds: uncertainty, fit_method: 'shared_scroll_clock', motion_clock: c,
       ...(rejected ? {rejected_chunk_clock: rejected} : {}),
       ...(stationary ? {stationary_phase_interval: {recording_seconds: [before.time, lastBefore.time],
         source_pts_seconds: [before.source_pts, lastBefore.source_pts], phase: lastBefore.phase,

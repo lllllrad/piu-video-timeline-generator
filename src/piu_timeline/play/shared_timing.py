@@ -65,6 +65,12 @@ def restore(notes, tracks, timeline, layout, width, height):
                              'failure_detail':failure})
         else:
             note.update(**fitted,timing_reconstruction={'status':'restored','format':FORMAT})
+            if fitted.get('native_clock_warning'):
+                warnings.append({'note':index,'lane':track.lane,'check':'timing_reconstruction',
+                                 **fitted['native_clock_warning'],
+                                 'visible_start_seconds':fitted['crossing_capture_range'][0],
+                                 'visible_end_seconds':fitted['crossing_capture_range'][1],
+                                 'crossing_source_pts_seconds':fitted['crossing_source_pts_seconds']})
     from piu_timeline.play.spacing_checks import spacing_failures
     conflicts=spacing_failures(notes,spacing,motion)
     warnings.extend(conflicts)

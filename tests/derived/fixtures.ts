@@ -10,16 +10,17 @@ export interface NativeCapture {
   end?: number;
   repeated?: [number, number][];
   dropped?: number[];
+  renderTime?: (recordingTime: number) => number;
 }
 export function nativeScene(events: [number, number][], spacing = 40, fps = 60, lanes = 5, capture: NativeCapture = {}): RecordData {
   const width = spacing * 16.25, height = spacing * 9.125, receptor = spacing * 1.3, velocity = spacing * 6;
   const times = Array.from({length: Math.round(((capture.end ?? 1.05) - .2) * fps) + 1}, (_, i) => .2 + i / fps).filter((_, i) => !capture.dropped?.includes(i));
   const rendered = (time: number) => {
     const interval = capture.repeated?.find(([lo, hi]) => lo - 1e-9 <= time && time <= hi + 1e-9);
-    if (!interval) return time;
+    if (!interval) return capture.renderTime?.(time) ?? time;
     const before = times.filter(t => t < interval[0] - 1e-9).at(-1);
     if (before === undefined) throw Error('Repeated frame requires an earlier captured image');
-    return before;
+    return capture.renderTime?.(before) ?? before;
   };
   const notes = [], registrations = [], offsets = [];
   events.forEach(([target, lane], index) => {

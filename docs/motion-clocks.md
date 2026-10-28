@@ -41,8 +41,18 @@ samples. Prefer the nearer center only when precision and support are tied.
 Retain its bounds, selection method, trimmed-frame count and bracket-phase
 errors. A distant pause or speed change cannot veto a
 separately supported neighborhood. A discontinuous or poorly supported crossing
-remains an explicit reconstruction failure. No failed clock silently becomes a
-local per-note estimate or interpolated timing in registered reconstruction.
+retains an explicit precision warning. When a qualified registered displacement
+block actually crosses the target, its retained frames can instead bound the
+crossing without a constant-speed clock. Expand both phase boundaries by native
+position error and accumulated displacement uncertainty, include a repeated-image
+plateau from its first copy, and keep half the measured capture cadence outside
+the boundary frames. Every intervening source interval must be at most 50 ms;
+unobserved error boundaries or reversed movement cannot supply this bound.
+`shared_scroll_frame_bounds` uses the interval midpoint only as a representative,
+with uncertainty covering the entire interval. It supplies no subframe
+interpolation or motion clock. `shared_subframe_clock_unresolved` stays visible
+even when the bounded target is usable. Independent motion warnings also remain.
+Without supported boundaries, reconstruction still fails explicitly.
 
 Capture cadence, displacement error and clock residual remain in the target
 range. Heads last observed in the HUD retain their bounded shared-motion

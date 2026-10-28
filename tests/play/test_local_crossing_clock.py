@@ -41,7 +41,11 @@ class LocalCrossingClockTest(unittest.TestCase):
     def test_crossing_inside_the_remote_phase_discontinuity_remains_unresolved(self):
         motion=fixture()
         # The phase jump itself is not a measured constant-speed crossing.
-        self.assertIsNone(motion.crossing(motion.at_time[4.8],1208,.75))
+        result=motion.crossing(motion.at_time[4.8],1208,.75)
+        self.assertEqual(result['fit_method'],'shared_scroll_frame_bounds')
+        self.assertIsNone(result['motion_clock'])
+        self.assertEqual(result['native_clock_warning']['reason'],'shared_subframe_clock_unresolved')
+        self.assertEqual(result['crossing_frame_seconds'],[299/60,5])
 
     def test_remote_repeated_frames_do_not_erase_a_supported_moving_crossing(self):
         motion=ScrollMotion(400,40);motion.strict_clock=True;motion.chunks=[[]]
@@ -63,8 +67,11 @@ class LocalCrossingClockTest(unittest.TestCase):
         self.assertGreater(clock['window'][0],.2)
         self.assertGreaterEqual(clock['window'][1]-clock['window'][0],.3)
         self.assertEqual(result['crossing_source_pts_seconds'],[800+38/60,800+.65])
-        # The stationary interval itself and a sparse moving flank remain failures.
-        self.assertIsNone(motion.crossing(motion.at_time[.1],48,.75))
+        # The stationary interval has only a broad bound; it still has no clock.
+        bounded=motion.crossing(motion.at_time[.1],48,.75)
+        self.assertIsNone(bounded['motion_clock'])
+        self.assertGreater(bounded['prediction_uncertainty_seconds'],.1)
+        self.assertIn('native_clock_warning',bounded)
         self.assertEqual(motion.samples,original)
         keep=[s for s in motion.samples if not .4<s['time']<.9 or s['time']in(.5,38/60,.65)]
         motion.chunks=[keep];motion.samples=keep;motion.clocks={}

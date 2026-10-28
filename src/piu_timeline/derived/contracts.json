@@ -87,14 +87,15 @@
   },
   "local_clock": {
     "schema": 1,
-    "revision": 2,
+    "revision": 3,
     "selection": "precision_then_native_support",
     "position_floor_pixels": 0.75,
     "maximum_radius_seconds": 0.5,
     "windows": "all_contiguous_bracketing",
     "bracket_validation": "phase_within_capture_and_position_error",
     "stationary_phase_epsilon_pixels": 1e-06,
-    "capture_bracket": "first_stationary_sample_to_next_distinct_phase"
+    "capture_bracket": "first_stationary_sample_to_next_distinct_phase",
+    "unfitted_crossing": "measured_phase_error_bracket_with_explicit_precision_warning"
   },
   "speed": {
     "schema": 1,
