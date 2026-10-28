@@ -80,6 +80,7 @@ from piu_timeline.play.shared_timing import restore
 s=json.load(sys.stdin);tracks=[Track(n['lane'],n['points'])for n in s['notes']]
 before=deepcopy(tracks);timeline=deepcopy(s['scroll_motion']['samples'])
 notes=[fit_track(t,52,40)for t in tracks]
+for n in notes:n.update(native_clock_warning={'reason':'preliminary_only'},crossing_method='preliminary_only')
 m,r=restore(notes,tracks,timeline,s['layout'],s['analysis_width'],s['analysis_height'])
 assert tracks==before and timeline==s['scroll_motion']['samples']
 print(json.dumps({'notes':notes,'result':r}))`;
@@ -91,6 +92,13 @@ print(json.dumps({'notes':notes,'result':r}))`;
   assert.equal(r.result.status,'failed','usable bounds do not certify a recovered subframe clock');
   assert.deepEqual(w.crossing_source_pts_seconds,n.crossing_source_pts_seconds);
   assert.deepEqual([w.visible_start_seconds,w.visible_end_seconds],n.crossing_capture_range);
+  const affine=r.notes.filter(n=>n.status==='estimated'&&n.motion_clock);assert.ok(affine.length);
+  for(const note of affine){assert.equal(note.native_clock_warning,undefined);assert.equal(note.crossing_method,undefined);}
+  const failed=r.notes.filter(n=>n.timing_reconstruction.status==='failed');assert.ok(failed.length);
+  for(const note of failed){
+    assert.equal(note.native_clock_warning,undefined);assert.equal(note.crossing_method,undefined);
+    assert.equal(note.timing_reconstruction.unaccepted_previous_estimate.native_clock_warning.reason,'preliminary_only');
+  }
 });
 
 for(const spacing of [20,40,80])test(`transferred coordinates without an affine clock retain their measured processing path: spacing ${spacing}`,()=>{

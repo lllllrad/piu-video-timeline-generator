@@ -5,7 +5,7 @@ import numpy as np
 
 from piu_timeline.play.motion import ScrollMotion, LOCAL_CLOCK_FORMAT
 
-FORMAT = {'schema':1,'revision':15,'method':'registered_peer_displacement','local_clock':LOCAL_CLOCK_FORMAT}
+FORMAT = {'schema':1,'revision':16,'method':'registered_peer_displacement','local_clock':LOCAL_CLOCK_FORMAT}
 
 
 def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
@@ -51,11 +51,15 @@ def restore(notes, tracks, timeline, layout, width, height):
             direct=fit_track(track,receptor,spacing)
             if direct['status']=='estimated':
                 fitted={**direct,'fit_method':'isolated_native_track'}
+        previous={k:note.get(k) for k in ('target_seconds','prediction_uncertainty_seconds','fit_method',
+                                         'native_clock_warning','crossing_method')}
+        # Preliminary online fits do not own the final registered clock state.
+        for key in ('native_clock_warning','crossing_method'):
+            if not fitted or key not in fitted:note.pop(key,None)
         if fitted is None:
             visible=[motion.at_time[t] for t,y in track.points if receptor+.85*spacing<y<layout.get('note_y_max',.95)*height-.55*spacing]
             failure=motion.coordinate_failures.get(visible[-1]['chunk']) if visible else None
             failure=failure or 'insufficient_or_inconsistent_shared_motion'
-            previous={k:note.get(k) for k in ('target_seconds','prediction_uncertainty_seconds','fit_method')}
             note.update(status='excluded',reason='shared_timing_reconstruction_failed',target_seconds=None,
                         timing_reconstruction={'status':'failed','reason':failure,
                                                'unaccepted_previous_estimate':previous})
