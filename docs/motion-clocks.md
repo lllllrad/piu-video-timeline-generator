@@ -109,3 +109,20 @@ reverse movement. This observation alone does not establish a playable reverse
 scroll gimmick, decorative art, a press or a successful judgment. Those require
 their own source evidence and concrete chart handling.
 
+
+## Repeated captured positions
+
+A series of source frames can retain exactly the same registered displacement
+before the next distinct phase. It can represent a real scroll pause or repeated
+capture of an older rendered image; frame timestamps alone cannot distinguish them.
+When the target lies beyond that stationary phase, the crossing bracket starts at
+the first contiguous stationary sample, rather than its final duplicate. The clock
+may supply an estimate inside that bracket, but its uncertainty must cover the
+whole unresolved capture interval. `stationary_phase_interval` retains the original
+recording/source-PTS endpoints and explicitly records both interpretations.
+
+This does not synthesize images or timestamps, discard repeated frames, change
+pixel-error limits, or exempt stop/motion warnings. Missing or invalid source gaps
+cannot be bridged by the plateau search. Ordinary non-repeated captures retain
+their existing precision. Synthetic stored-observation scenes vary capture rate,
+scale, repeated images and dropped frames independently of chart-event truth.

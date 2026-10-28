@@ -73,12 +73,14 @@
   },
   "local_clock": {
     "schema": 1,
-    "revision": 1,
+    "revision": 2,
     "selection": "precision_then_native_support",
     "position_floor_pixels": 0.75,
     "maximum_radius_seconds": 0.5,
     "windows": "all_contiguous_bracketing",
-    "bracket_validation": "phase_within_capture_and_position_error"
+    "bracket_validation": "phase_within_capture_and_position_error",
+    "stationary_phase_epsilon_pixels": 1e-06,
+    "capture_bracket": "first_stationary_sample_to_next_distinct_phase"
   },
   "speed": {
     "schema": 1,

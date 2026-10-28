@@ -327,6 +327,11 @@ const button=text('button',observation.kind+' / '+fmt(observation.playback_secon
 button.onclick=()=>seek(observation.playback_seconds,-1,selectedNote);
 }
 if(channels){const event=channels.processing.notes.find(e=>e.note===selectedNote);text('p','Visual evidence: '+(match?.visual_evidence||['motion:'+selectedNote]).join(', ')+' · Processing: '+(event?event.status+' / '+event.reason:'unavailable')+(event?.range?' / '+formatRange(event.range):'')+(event?.visibility_loss?' / Visibility loss: '+formatRange(event.visibility_loss.range):''),$('comparisonDetails'))}
+if(note.stationary_phase_interval){
+const pause=note.stationary_phase_interval;
+text('p','Repeated native position: '+formatRange(pause.recording_seconds)+'. A scroll pause and a repeated captured image remain indistinguishable. The target range includes the unresolved crossing interval.',$('comparisonDetails'));
+text('button','Review repeated native frames',$('comparisonDetails')).onclick=()=>inspectAt(pause.recording_seconds[0],selectedNote,note.lane);
+}
 if(note.fit_method?.startsWith('shared_scroll_'))text('p','Target uses registered movement of visible notes and a fractional-frame crossing. The range retains source-frame, position and capture-cadence uncertainty.',$('comparisonDetails'));
 if(note.coordinate_bridge)text('p','Target uses a registered coordinate transfer through '+note.coordinate_bridge.anchor_notes.length+' independent heads. Every intervening source frame has an observed anchor; the destination movement clock supplies the crossing.',$('comparisonDetails'));
 if(hold){

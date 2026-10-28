@@ -112,3 +112,13 @@ test('warnings page without suppressing records, group original copies and retai
   const untimed=inspector({recognition_diagnostics:{warnings:[{reason:'missing_source_time'}]}});untimed.elements.get('tab-warnings').onclick();
   assert.equal(descendants(untimed.elements.get('warningRows')).filter(n=>n.tag==='button').length,0);
 });
+
+
+test('uncertain repeated-frame crossings expose their source interval in the inspector',()=>{
+  const {elements,evaluate,run}=inspector();
+  run("data.notes[0].stationary_phase_interval={recording_seconds:[9.98,10],source_pts_seconds:[99.98,100]};seek(10,-1,0)");
+  const details=elements.get('comparisonDetails').children;
+  assert.ok(details.some(n=>n.textContent.includes('scroll pause and a repeated captured image')));
+  details.find(n=>n.tag==='button'&&n.textContent==='Review repeated native frames').onclick();
+  assert.equal(elements.get('video').currentTime,9.98);assert.equal(evaluate('activeInspectorTab'),'channels');
+});

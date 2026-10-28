@@ -77,7 +77,11 @@ export class MotionClock {
     const chunk = this.chunks.get(sample.chunk), index = lowerBound(chunk.map(s => s.phase), phase);
     if (index >= chunk.length) return this.bridge(sample, phase, phaseError) ?? this.extrapolated(sample, phase, phaseError);
     if (index <= 0) return null;
-    const before = chunk[index - 1], after = chunk[index];
+    const lastBefore = chunk[index - 1], after = chunk[index];
+    let lower = index - 1;
+    while (lower > 0 && Math.abs(chunk[lower - 1].phase - lastBefore.phase) <= F.stationary_phase_epsilon_pixels &&
+      0 < chunk[lower].time - chunk[lower - 1].time && chunk[lower].time - chunk[lower - 1].time <= .05 + 1e-6) lower--;
+    const before = chunk[lower], stationary = lower < index - 1;
     if (after.phase <= before.phase) return null;
     const fraction = (phase - before.phase) / (after.phase - before.phase), interpolated = before.time + fraction * (after.time - before.time);
     phaseError += Math.sqrt(Math.max(0, after.variance - sample.variance));
@@ -94,9 +98,15 @@ export class MotionClock {
     if (!c && this.state.strict_clock) return null;
     const time = c ? c.origin + (phase - c.intercept) / c.velocity : interpolated;
     const velocity = (after.phase - before.phase) / (after.time - before.time);
-    const uncertainty = c ? Math.max(cadence / 2, (phaseError + c.residual) / c.velocity) : Math.max(cadence / 2, phaseError / Math.max(velocity, 1));
+    let uncertainty = c ? Math.max(cadence / 2, (phaseError + c.residual) / c.velocity) : Math.max(cadence / 2, phaseError / Math.max(velocity, 1));
+    // Repeated positions cannot identify when motion resumed within the capture interval.
+    // Keep the original frames: a pause and a stale captured image remain alternatives.
+    if (stationary) uncertainty = Math.max(uncertainty, Math.max(time - before.time, after.time - time) + capture);
     return {target_seconds: time, prediction_uncertainty_seconds: uncertainty, fit_method: c ? 'shared_scroll_clock' : 'shared_scroll_interpolation', motion_clock: c,
-      ...(rejected ? {rejected_chunk_clock: rejected} : {}), crossing_source_pts_seconds: [before.source_pts, after.source_pts],
+      ...(rejected ? {rejected_chunk_clock: rejected} : {}),
+      ...(stationary ? {stationary_phase_interval: {recording_seconds: [before.time, lastBefore.time],
+        source_pts_seconds: [before.source_pts, lastBefore.source_pts], phase: lastBefore.phase,
+        frames: index - lower, interpretation: 'scroll_pause_or_repeated_capture'}} : {}), crossing_source_pts_seconds: [before.source_pts, after.source_pts],
       crossing_frame_seconds: [before.time, after.time], crossing_capture_range: [before.time - capture, after.time + capture]};
   }
   fit(track, receptor, layout = null): RecordData | null {
