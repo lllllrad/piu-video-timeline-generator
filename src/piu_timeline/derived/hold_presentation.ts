@@ -78,7 +78,7 @@ export function present(input: RecordData, preHoldProofs: Record<string, RecordD
       judgment_observations: proof.observations.map(o => ({...o})), evidence_source: (m.evidence_source ?? 'combo') + '+judgment'});
   }
   let validated = annotateMatches({...data, notes, matches}); matches = validated.matches; data = {...data, conflicted_matches: validated.conflicted_matches};
-  // Every new anchor still needs the same independent lane/processing proof.
+  // Every generation repeats the same independent evidence and ownership checks.
   // Confirmed notes grow monotonically, so closure takes at most notes.length passes.
   for (let generation=2;;generation++) {
     const assigned=new Set(matches.map(m=>m.note));
@@ -104,6 +104,8 @@ export function present(input: RecordData, preHoldProofs: Record<string, RecordD
   const excluded = {}; for (const n of notes) if (n.status === 'excluded') { const reason = String(n.reason ?? null); excluded[reason] = (excluded[reason] ?? 0) + 1; }
   return {...data, notes, matches, limitations, excluded_notes: excluded, miss_candidates: (data.miss_candidates ?? []).filter(c => !suppressed.has(c.note)),
     combo_events: events('combo_events'), judgment_events: labeled.judgment_events, hold_tick_ambiguous_notes: ambiguous.filter(i => !laneRecovered.includes(i) && !preHoldRecovered.includes(i)),
-    recovered_pre_hold_notes: preHoldRecovered, recovered_dense_notes: recovered, recovered_lane_supported_notes: laneRecovered, hold_analysis: view.hold_analysis, coverage,
+    recovered_pre_hold_notes: preHoldRecovered, recovered_dense_notes: recovered,
+    recovered_bounded_target_notes:matches.filter(m=>m.recovery_method==='exclusive_bounded_target_with_synchronized_refreshes').map(m=>m.note),
+    recovered_lane_supported_notes:laneRecovered.filter(i=>!matches.some(m=>m.note===i&&m.recovery_method==='exclusive_bounded_target_with_synchronized_refreshes')), hold_analysis: view.hold_analysis, coverage,
     note_type_diagnostics: projectTypes(data, notes, projected)};
 }

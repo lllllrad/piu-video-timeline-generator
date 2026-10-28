@@ -4,7 +4,7 @@ import {implementation} from './store.ts';
 export const processingProducer = (): string => implementation(new URL('../scroll.ts', import.meta.url));
 export const pick = (data: RecordData, keys: readonly string[]): RecordData => Object.fromEntries(keys.filter(k => Object.hasOwn(data, k)).map(k => [k, data[k]]));
 export const viewFields = ['notes', 'matches', 'limitations', 'excluded_notes', 'miss_candidates', 'combo_events', 'judgment_events',
-  'hold_tick_ambiguous_notes', 'recovered_pre_hold_notes', 'recovered_dense_notes', 'recovered_lane_supported_notes', 'hold_analysis',
+  'hold_tick_ambiguous_notes', 'recovered_pre_hold_notes', 'recovered_dense_notes', 'recovered_lane_supported_notes','recovered_bounded_target_notes', 'hold_analysis',
   'coverage', 'note_type_diagnostics', 'conflicted_matches', 'association_view_format'];
 export function processingChannel(data: RecordData): RecordData {
   const channel = data.visual_channels?.processing ?? {};

@@ -1,6 +1,7 @@
-/** Recover only exclusive rows from independent lane evidence, preserving refresh bounds. */
+/** Recover exclusive rows from bounded visual evidence, preserving refresh bounds. */
 import {candidates, targetInWindow, targetOffsets} from './candidates.ts';
 import {bracket, disputedRefresh, onsetOverlaps, partition, processingSupport, receptorEvidence} from './evidence.ts';
+import {boundedRefreshes} from './bounded_refresh.ts';
 import {entries, median} from './math.ts';
 import type {RecordData} from './types.ts';
 
@@ -127,5 +128,8 @@ export function recoverRows(input: RecordData): [RecordData[], number[]] {
   for (const m of matches) if (recovered.includes(m.note)) m.row_note_count = matches.filter(other => Math.abs(other.target_seconds - m.target_seconds) < .025 &&
     (m.combo_event != null && other.combo_event === m.combo_event || m.judgment_event != null && other.judgment_event === m.judgment_event)).length;
   const [result, aggregated] = recoverAggregates({...data, matches});
-  return [result, [...recovered, ...aggregated]];
+  // Conditional clock evidence cannot displace an independently supported row.
+  const pending=partition({...data,matches:result}),[remaining]=candidates(pending,events);
+  const bounded=boundedRefreshes(pending,remaining,events,(lo,hi)=>holdOverlap(pending,lo,hi,guard));
+  return [[...result,...bounded], [...recovered, ...aggregated,...bounded.map(m=>m.note)]];
 }

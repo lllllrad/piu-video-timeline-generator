@@ -48,7 +48,14 @@ source PTS. See [motion clocks](motion-clocks.md) for support requirements and f
 The default association tolerance is 45 ms around the observed update interval. A monotone sequence
 alignment compares rows and counter updates in time order, so close successive notes do not all get
 discarded merely because their search windows overlap. Near-equal competing alignments remain
-excluded. The counter advances per judged row, not per head: a multi-head chord shares one increment
+excluded. When an acquired target interval overlaps a synchronized counter and
+non-MISS judgment refresh but its representative time misses the window, saved-data
+recovery can use that interval. It requires a uniquely compatible tap row, both
+refreshes, no competing unowned refresh, and no hold or processing conflict. Chords
+need one established target row and distinct lanes. The match retains the original
+refresh brackets, target estimate, source target range and compatible target range;
+it does not turn the latter into a new chart clock. Clock and beat warnings remain.
+The counter advances per judged row, not per head: a multi-head chord shares one increment
 and one observed bracket. If a counter jump spans multiple consecutive rows, every associated row
 retains the original aggregate bracket; individual timestamps are never invented. The row span must
 fit inside the observed bracket plus 20 ms of fitting tolerance. Unassigned updates remain visible

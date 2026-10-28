@@ -69,6 +69,6 @@ def presentation(data):
     result=call('holdPresentation.present',source,prepare_risk_proofs(data))
     fields=('notes','matches','limitations','excluded_notes','miss_candidates','combo_events','judgment_events',
             'hold_tick_ambiguous_notes','recovered_pre_hold_notes','recovered_dense_notes',
-            'recovered_lane_supported_notes','hold_analysis','coverage','note_type_diagnostics',
+            'recovered_lane_supported_notes','recovered_bounded_target_notes','hold_analysis','coverage','note_type_diagnostics',
             'conflicted_matches','association_view_format')
     return {**data,**{k:result[k]for k in fields if k in result}}
