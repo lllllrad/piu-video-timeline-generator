@@ -17,7 +17,7 @@ const joined = (a: RecordData, b: RecordData) => ({lane:a.lane, points:[...a.poi
 export function interleaved(tracks: RecordData[], spacing: number, motion: RecordData | null): Result {
   const origins=tracks.map((_,i)=>[i]);
   if (motion?.evidence_format?.method!=='registered_peer_displacement') return [tracks,origins];
-  const at=new Map<number,RecordData>((motion.samples??[]).map(s=>[s.time,s])), outgoing=new Map<number,number[]>(), incoming=new Map<number,number[]>();
+  const at=new Map<number,RecordData>((motion.samples??[]).map(s=>[s.time,s])), outgoing=new Map<number,number[]>(), incoming=new Map<number,number[]>(),proofs=new Map<string,RecordData>();
   const link=(map,key,value)=>{if(!map.has(key))map.set(key,[]);map.get(key).push(value);};
   for(const indices of lanes(tracks).values()){
     const ordered=indices.filter(i=>tracks[i].points.length>=4).sort((a,b)=>tracks[a].points[0][0]-tracks[b].points[0][0]);
@@ -26,18 +26,28 @@ export function interleaved(tracks: RecordData[], spacing: number, motion: Recor
       for(const b of ordered.slice(pos+1)){
         const second=tracks[b],begin=second.points[0][0],stop=second.points.at(-1)[0];
         if(begin>=end)break;
-        if(!(start<begin&&begin<end&&end<stop)||end-begin>.1+1e-6)continue;
+        if(!(start<begin&&begin<Math.min(end,stop))||Math.min(end,stop)-begin>.1+1e-6)continue;
         const times=new Set(first.points.map(p=>p[0]));if(second.points.some(p=>times.has(p[0])))continue;
         const anchor=at.get(begin);if(!anchor||Object.hasOwn(motion.coordinate_failures??{},anchor.chunk))continue;
-        const offsets=[];
+        const captured=[...first.points,...second.points].sort((a,b)=>a[0]-b[0]);
+        if(captured.some(([t],i)=>!Number.isFinite(at.get(t)?.source_pts)||
+          i>0&&at.get(t).source_pts<=at.get(captured[i-1][0])?.source_pts))continue;
+        const offsets=[],references=[],error=F.maximum_reference_error_spacing*spacing;let lower=-Infinity,upper=Infinity;
         for(const track of [first,second]){
           const points=track.points.filter(([t])=>at.get(t)?.chunk===anchor.chunk);
-          if(points.length<4||points.at(-1)[0]-points[0][0]<.065)break;
+          if(points.length<F.minimum_references||points.at(-1)[0]-points[0][0]<F.minimum_span_seconds||
+            at.get(points.at(-1)[0]).phase-at.get(points[0][0]).phase<=2*error)break;
           const values=points.map(([t,y])=>y+at.get(t).phase),center=median(values);
           if(Math.max(...values.map(v=>Math.abs(v-center)))>F.maximum_reference_error_spacing*spacing)break;
+          lower=Math.max(lower,...values.map(v=>v-error));upper=Math.min(upper,...values.map(v=>v+error));
+          references.push(...points.map(([t,y])=>({time:t,y,phase:at.get(t).phase,source_pts_seconds:at.get(t).source_pts})));
           offsets.push(center);
         }
-        if(offsets.length===2&&Math.abs(offsets[0]-offsets[1])<=F.maximum_continuation_error_spacing*spacing){link(outgoing,a,b);link(incoming,b,a);}
+        if(offsets.length===2&&lower<=upper&&Math.abs(offsets[0]-offsets[1])<=F.maximum_continuation_error_spacing*spacing){
+          link(outgoing,a,b);link(incoming,b,a);
+          proofs.set(`${a},${b}`,{format:F,method:'joint_interleaved_native_bands',chunk:anchor.chunk,lane_spacing_pixels:spacing,
+            reference_error_pixels:error,common_offset_range_pixels:[lower,upper],references});
+        }
       }
     });
   }
@@ -49,7 +59,8 @@ export function interleaved(tracks: RecordData[], spacing: number, motion: Recor
   tracks.forEach((track,i)=>{
     if(used.has(i))return;
     const pair=pairs.get(i);
-    if(pair){result.push(joined(tracks[pair[0]],tracks[pair[1]]));sources.push(pair);pair.forEach(j=>used.add(j));}
+    if(pair){const track=joined(tracks[pair[0]],tracks[pair[1]]);track.fragment_connections=[...(track.fragment_connections??[]),proofs.get(pair.join(','))];
+      result.push(track);sources.push(pair);pair.forEach(j=>used.add(j));}
     else{result.push(track);sources.push([i]);}
   });
   return [result,sources];

@@ -88,6 +88,31 @@ revalidated note retires its original timing-failure warning; other motion or
 visibility warnings remain.
 
 
+## Fragment identity before clock fitting
+
+A tracker can briefly alternate two identities for the same physical head.
+Their time spans may overlap even though they never appear in the same native
+frame. Such fragments may be joined only with one corroborated registered-motion
+chunk, short overlap (at most 100 ms), a consistent pixel offset, sufficient
+observations on both identities, and a unique partner. Co-observed heads,
+competing partners, different paths and unsupported motion stay separate.
+A short fragment can also lie entirely inside a longer fragment's time span:
+the longer identity may disappear, briefly reappear, then continue after the
+shorter one ends. Temporal containment alone does not establish a second note.
+For either topology, matching references must share a supported motion chunk and
+one common interval of `y + displacement`, obtained by intersecting every
+lane-scaled registration-error band. Individually acceptable median offsets do
+not prove a common identity. Each fragment's observed displacement must exceed
+twice that registration allowance; stationary repeats are insufficient. Missing,
+duplicated or non-monotone source PTS cannot establish the relation. The proof
+retains every reference position, displacement and original PTS. Earlier points
+from another motion chunk retain their existing identity and source coordinates;
+their displacement origin is different and cannot constrain this common interval.
+Each fragment still needs sufficient repeated references inside the shared chunk.
+Joining sorts and retains every original point and source-fragment identity;
+it does not synthesize a detection in a missing frame. Final shared timing and
+visibility checks still apply to the joined trajectory.
+
 ## Converting beat corrections to pixel gaps
 
 Native relative positions keep their existing pixel tolerance. When no independent
