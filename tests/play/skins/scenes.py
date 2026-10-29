@@ -93,13 +93,13 @@ def appearance_bank(root,phases,margin,cap_only,skin):
     return load_bank(root/'bank.json')
 
 
-def render(objects,time,width,height,seed,mode,frame,skin=None,appearance=0):
+def render(objects,time,width,height,seed,mode,frame,skin=None,appearance=0,speed=80):
     rng=np.random.default_rng(seed)
     image=np.full((height,width,3),BACKGROUND,dtype='uint8')
     image+=rng.integers(0,3,image.shape,dtype='uint8')
     for obj in objects:
-        lane=obj['lane'];x=40+lane*20;head=round(obj['y']-80*time)
-        tail=round(obj.get('end_y',obj['y'])-80*time)
+        lane=obj['lane'];x=40+lane*20;head=round(obj['y']-speed*time)
+        tail=round(obj.get('end_y',obj['y'])-speed*time)
         if obj['kind']=='hold' and not(mode=='contradictory_roles'and frame==3):
             half=8 if skin=='shouldered'else 4
             image[head:tail+1,x-half:x+half]=COLORS[lane%5]
@@ -115,6 +115,9 @@ def render(objects,time,width,height,seed,mode,frame,skin=None,appearance=0):
 
 def acquire(spec,root,bank):
     scale,fps,lanes=spec['scale'],spec['fps'],spec['lanes']
+    speed=spec.get('scroll_lane_spacings_per_second',4)
+    if type(speed)not in(int,float)or not np.isfinite(speed)or speed<=0:
+        raise ValueError('Scene scroll speed must be a positive finite lane-spacing rate')
     appearances=spec.get('appearance_phases',1)
     if type(appearances)is not int or not 1<=appearances<=4:raise ValueError('Scene appearance count must be 1..4')
     base_width,base_height=(lanes+4)*20,300
@@ -124,7 +127,7 @@ def acquire(spec,root,bank):
             'lanes':[{'x':(40+i*20)/base_width,'color':('blue','red','yellow','red','blue')[i%5]}for i in range(lanes)]}
     tracker=NoteTracker(layout,width,height,skin_bank=bank);native=[]
     images=[render(spec['objects'],i/fps,base_width,base_height,i+spec['seed'],spec.get('mode'),i,
-                   spec.get('skin_profile'),(i//2)%appearances)for i in range(round(.2*fps)+1)]
+                   spec.get('skin_profile'),(i//2)%appearances,speed*20)for i in range(round(.2*fps)+1)]
     if spec.get('capture')=='encoded':
         from tests.play.skins.capture import encoded
         captures,expected_pts,preserved=encoded(images,fps,root,width)

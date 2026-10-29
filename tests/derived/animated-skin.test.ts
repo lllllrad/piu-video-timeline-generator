@@ -12,6 +12,11 @@ for(const skin of [undefined,'shouldered'])scenes.push({
  id:`missing-appearance-${skin??'flat'}`,skin_profile:skin,scale:1,reference_appearance_phases:1,
  objects:[{kind:'hold',lane:0,y:80,end_y:skin?102:160},{kind:'tap',lane:1,y:100}]});
 for(const s of scenes)Object.assign(s,{lanes:5,fps:60,seed:71,appearance_phases:4});
+for(const skin of [undefined,'shouldered'])for(const [scale,fps]of [[.5,30],[1,60],[1.5,120]])scenes.push({
+ id:`fast-animated-${skin??'flat'}-${scale}-${fps}`,skin_profile:skin,scale,fps,
+ lanes:5,seed:71,appearance_phases:4,scroll_lane_spacings_per_second:13.2,
+ objects:[{kind:'hold',lane:0,y:110,end_y:skin?132:150},
+  {kind:'hold',lane:2,y:130,end_y:190},{kind:'tap',lane:1,y:100}]});
 const results:RecordData[]=JSON.parse(execFileSync('sh',[
  'scripts/run.sh','.venv/bin/python','-m','tests.play.skins.scenes'],{
  input:JSON.stringify(scenes),encoding:'utf8',maxBuffer:32*1024*1024}));
@@ -26,7 +31,7 @@ for(const scene of scenes.filter(s=>!s.reference_appearance_phases))test(`known 
  for(const [i,frame]of r.frames.entries()){
   assert.equal(frame.caps.length,endpoints.length);
   for(const e of endpoints){
-   const expected=Math.round(e.y-80*i/scene.fps)*scene.scale;
+   const expected=Math.round(e.y-20*(scene.scroll_lane_spacings_per_second??4)*i/scene.fps)*scene.scale;
    const found=frame.caps.filter(c=>c.lane===e.lane&&Math.abs(c.y*300*scene.scale-expected)<1e-6);
    assert.equal(found.length,1);assert.equal(found[0].role,e.role);
   }

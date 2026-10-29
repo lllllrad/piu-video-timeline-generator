@@ -91,6 +91,11 @@ parallel execution does not change their native frame order or expected results.
 `tests/derived/animated-skin.test.ts` adds four generated cap appearances with
 changing internal artwork and brightness, independently of the body's geometry.
 Flat and cut-corner scenes cover taps and both hold endpoints at 0.5/1/1.5 scales.
+The generator accepts scroll speed in reference lane spacings per second, before
+image scaling. Ordinary animation checks cover 4 and 13.2 spacings per second;
+the faster cases also vary capture cadence across 30/60/120 fps. The expected
+positions come from the scene's independent speed and frame index. No fitted
+motion or neighboring detection supplies missing frame positions.
 Complete reference sets must retain every visible endpoint, one identity per cap,
 hold ownership and source PTS across appearance changes. Incomplete reference
 controls expose frame gaps and warnings; nearby recognized poses cannot invent

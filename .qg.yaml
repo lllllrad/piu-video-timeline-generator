@@ -22,6 +22,7 @@ checks:
   - name: derived-tests
     type: node-test
     files: ["tests/**/*.test.ts"]
+    timeoutMs: 300000
     message: "Fix the derived-data regression tests before committing."
   - name: native-tests
     command: sh
