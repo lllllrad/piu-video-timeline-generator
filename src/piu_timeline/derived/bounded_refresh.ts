@@ -1,5 +1,6 @@
 /** Recover a uniquely owned synchronized refresh using acquired target bounds. */
 import {synchronizedRefreshes} from './association.ts';
+import {fixedRefreshRow} from './fixed_refresh_rows.ts';
 import {targetInWindow} from './candidates.ts';
 import {bracket,disputedRefresh} from './evidence.ts';
 import type {RecordData} from './types.ts';
@@ -8,8 +9,8 @@ export function boundedRefreshes(data:RecordData,choices:RecordData,events:Recor
  const matches=data.matches??[],notes=data.notes??[],delay=(data.display_delay_correction_ms??0)/1000;
  const assigned=new Set([...matches.map(m=>m.note),...(data.miss_candidates??[]).map(m=>m.note)]);
  const words=(data.judgment_events??[]).map(e=>({...e,status:e.detection_status==='excluded'||e.label==='MISS'?'excluded':'candidate'}));
- const result=[];
- for(const[ji,ci]of synchronizedRefreshes(data,words)){
+ const result=[],pairs=synchronizedRefreshes(data,words);
+ for(const[ji,ci]of pairs){
   const owners=matches.filter(m=>m.combo_event===ci||m.judgment_event===ji);
   if(owners.some(m=>m.combo_event!==ci||m.judgment_event!==ji))continue;
   const c=data.combo_events[ci],j=words[ji];
@@ -17,9 +18,12 @@ export function boundedRefreshes(data:RecordData,choices:RecordData,events:Recor
     j.anchor_combo_event!=null&&j.anchor_combo_event!==ci)continue;
   const lo=Math.min(c.lower_seconds,j.lower_seconds),hi=Math.max(c.upper_seconds,j.upper_seconds);
   if(holdRisk(lo,hi))continue;
-  const compatible=notes.flatMap((n,i)=>n.status==='estimated'&&targetInWindow(n,c.lower_seconds,c.upper_seconds,delay)&&
+  const possible=notes.flatMap((n,i)=>n.status==='estimated'&&targetInWindow(n,c.lower_seconds,c.upper_seconds,delay)&&
     targetInWindow(n,j.lower_seconds,j.upper_seconds,delay)?[i]:[]);
-  const pending=compatible.filter(i=>!assigned.has(i));
+  const pending=possible.filter(i=>!assigned.has(i));
+  const fixed=possible.flatMap(i=>assigned.has(i)&&!owners.some(m=>m.note===i)?
+   [fixedRefreshRow(data,i,pending,pairs,lo,hi)].filter(Boolean):[]);
+  const compatible=possible.filter(i=>!fixed.some(p=>p.note===i));
   if(!pending.length||owners.some(m=>!compatible.includes(m.note))||compatible.some(i=>assigned.has(i)&&!owners.some(m=>m.note===i)||notes[i].type_status!=='tap'||notes[i].note_type==='hold'||
     notes[i].timing_reconstruction?.status!=='restored'||!(notes[i].prediction_uncertainty_seconds>0)))continue;
   // Chords need one established row and distinct lanes, not just nearby centers.
@@ -42,6 +46,7 @@ export function boundedRefreshes(data:RecordData,choices:RecordData,events:Recor
     combo_lower_seconds:c.lower_seconds,combo_upper_seconds:c.upper_seconds,observation_lower_seconds:c.lower_seconds,observation_upper_seconds:c.upper_seconds,
     raw_offset_lower_ms:1000*(c.lower_seconds-notes[i].target_seconds),raw_offset_upper_ms:1000*(c.upper_seconds-notes[i].target_seconds),
     recovery_method:'exclusive_bounded_target_with_synchronized_refreshes',association_target_range:range,
+    ...(fixed.length?{fixed_refresh_rows:fixed}:{}),
     source_target_range:[notes[i].target_seconds-notes[i].prediction_uncertainty_seconds,notes[i].target_seconds+notes[i].prediction_uncertainty_seconds]});
    assigned.add(i);
   }

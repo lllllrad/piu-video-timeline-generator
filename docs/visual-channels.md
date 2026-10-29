@@ -318,6 +318,17 @@ row ownership without asserting a separately observed lane onset. The reported
 row size includes existing and newly connected heads, including when word
 recovery establishes the pair in a later association generation.
 
+An already assigned neighboring row can stop competing for another refresh
+only when its separate synchronized counter/word pair has an exclusive lane
+onset or independently observed disappearance. Original PTS must validate that
+physical bracket. At least four co-observed positions over 65 ms in fitted
+native coordinate blocks must separate the rows beyond both positional errors,
+with observed height order agreeing with target and disjoint display order.
+Unknown types, shared onsets, missing source frames and hold risk keep the
+competition unresolved. `fixed_refresh_rows` retains the conditional ownership,
+physical bracket and native separation samples; source timing bounds, display
+brackets and prior associations remain unchanged.
+
 ## Note type evidence and contradictions
 
 A failed hold reconstruction does not establish a tap. The `note_types`
