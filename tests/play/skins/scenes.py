@@ -74,7 +74,7 @@ def bank_at(root,clearance_rows=4,connection_rows=6,margin=4,cap_only=False):
     return load_bank(path)
 
 
-def render(objects,time,width,height,seed,mode,frame):
+def render(objects,time,width,height,seed,mode,frame,skin=None):
     rng=np.random.default_rng(seed)
     image=np.full((height,width,3),BACKGROUND,dtype='uint8')
     image+=rng.integers(0,3,image.shape,dtype='uint8')
@@ -82,11 +82,15 @@ def render(objects,time,width,height,seed,mode,frame):
         lane=obj['lane'];x=40+lane*20;head=round(obj['y']-80*time)
         tail=round(obj.get('end_y',obj['y'])-80*time)
         if obj['kind']=='hold' and not(mode=='contradictory_roles'and frame==3):
-            image[head:tail+1,x-4:x+4]=COLORS[lane%5]
+            half=8 if skin=='shouldered'else 4
+            image[head:tail+1,x-half:x+half]=COLORS[lane%5]
         if mode=='opaque_connection':image[head+10:tail-10,x-5:x+5]=255
         if mode=='body_only':continue
         for y in ([head,tail]if obj['kind']=='hold'else[head]):
-            image[y-10:y+10,x-10:x+10]=cap(lane%5)
+            if skin=='shouldered':
+                from tests.play.skins.shoulders import stamp
+                stamp(image,cap(lane%5),x,y)
+            else:image[y-10:y+10,x-10:x+10]=cap(lane%5)
     return image
 
 
@@ -98,7 +102,7 @@ def acquire(spec,root,bank):
             'judgment_roi':[0,0,0,0],'combo_roi':[0,0,0,0],
             'lanes':[{'x':(40+i*20)/base_width,'color':('blue','red','yellow','red','blue')[i%5]}for i in range(lanes)]}
     tracker=NoteTracker(layout,width,height,skin_bank=bank);native=[]
-    images=[render(spec['objects'],i/fps,base_width,base_height,i+spec['seed'],spec.get('mode'),i)for i in range(round(.2*fps)+1)]
+    images=[render(spec['objects'],i/fps,base_width,base_height,i+spec['seed'],spec.get('mode'),i,spec.get('skin_profile'))for i in range(round(.2*fps)+1)]
     if spec.get('capture')=='encoded':
         from tests.play.skins.capture import encoded
         captures,expected_pts,preserved=encoded(images,fps,root,width)
@@ -131,12 +135,16 @@ def acquire_task(task):
 def main():
     specs=json.load(sys.stdin)
     with tempfile.TemporaryDirectory()as tmp:
-        root=Path(tmp);banks={(4,False):(root,bank_at(root))};tasks=[]
+        root=Path(tmp);banks={(4,False,None):(root,bank_at(root))};tasks=[]
         for spec in specs:
-            margin=spec.get('reference_margin',4);cap_only=spec.get('reference_profile')=='cap_only';profile=margin,cap_only
+            margin=spec.get('reference_margin',4);cap_only=spec.get('reference_profile')=='cap_only';skin=spec.get('skin_profile');profile=margin,cap_only,skin
             if profile not in banks:
-                directory=root/f'context-{margin}-{cap_only}';directory.mkdir()
-                banks[profile]=directory,bank_at(directory,margin=margin,cap_only=cap_only)
+                directory=root/f'context-{margin}-{cap_only}-{skin}';directory.mkdir()
+                if skin=='shouldered':
+                    from tests.play.skins.shoulders import bank_at as shouldered_bank
+                    bank=shouldered_bank(directory,[cap(i)for i in range(5)],COLORS,BACKGROUND)
+                else:bank=bank_at(directory,margin=margin,cap_only=cap_only)
+                banks[profile]=directory,bank
             directory,bank=banks[profile];tasks.append((spec,directory,bank))
         available=len(os.sched_getaffinity(0))if hasattr(os,'sched_getaffinity')else(os.cpu_count()or 1)
         workers=min(4,max(1,available))

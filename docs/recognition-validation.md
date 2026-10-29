@@ -125,6 +125,17 @@ holes, explicit context extraction and unavailable support. This establishes
 the tested decoder/measurement boundary, not lossy codec/chroma variation,
 arbitrary background/skin animation, full timing, input association or UCS.
 
+`tests/derived/shouldered-recognition.test.ts` adds 27 generated scenes based on
+the observed short-hold structure: cut-corner caps, a wider stem exposed beside
+cap borders, and a connector only one tenth of the cap height. The artwork is
+synthetic. Same-spacing disconnected taps, long holds, chords and neighboring
+intervals test role and ownership independently of proximity. All five lane
+kinds are checked, with selected 0.5/1/1.5/2 scaling combinations and two actual
+decoder cases. Separate hidden-connector cases must retain unknown roles and
+cannot produce a complete hold. Reference context may include the opposite cap
+for interpolation; only declared comparison regions supply geometry. These
+checks cover this structural interaction, not a complete real-skin validation.
+
 ## Promotion order
 
 For each processor change, first reproduce the failure in a generic synthetic
