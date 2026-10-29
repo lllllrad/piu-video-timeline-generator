@@ -24,6 +24,11 @@ export function evidence(data: RecordData): RecordData {
 export function interpretation(data: RecordData, riskAvailable: boolean): RecordData {
   const result: RecordData = {...evidence(data), ...pick(data, ['notes', 'hold_analysis', 'skin_detector', 'limitations', 'counter_judgment_labels', 'deferred_matches']),
     native_body_risk_available: riskAvailable};
+  Object.assign(result,pick(data,['analysis_width','analysis_height']));
+  if(data.layout)result.layout={...pick(data.layout,['receptor_y','note_y_max']),lanes:(data.layout.lanes??[]).map(l=>pick(l,['x']))};
+  result.scroll_motion={samples:(data.scroll_motion?.samples??[]).map(s=>pick(s,['time','source_pts','chunk'])),
+    coordinate_registration:{chunks:(data.scroll_motion?.coordinate_registration?.chunks??[]).map(c=>({
+      ...pick(c,['chunk','status']),head_offsets:(c.head_offsets??[]).map(h=>pick(h,['note']))}))}};
   result.visual_channels = {...result.visual_channels, ...pick(data.visual_channels ?? {}, ['note_types', 'timeline'])};
   return result;
 }

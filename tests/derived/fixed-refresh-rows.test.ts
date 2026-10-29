@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type {RecordData} from '../../src/piu_timeline/derived/types.ts';
+import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {prepare,type PresentationInput} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
 import {nativeScene} from './fixtures.ts';
 import {recoverRows} from '../../src/piu_timeline/derived/recovery.ts';
 
@@ -79,4 +83,29 @@ test(`fixed row proof retains source and order requirements: ${mode}`,()=>{
  if(mode==='stale_match_target')d.matches[0].target_seconds+=.05;
  if(mode==='aggregate_owner')d.matches[0].aggregate_row_count=2;
  assert.deepEqual(recoverRows(d)[1],[]);
+});
+
+
+test('the cached report pipeline carries the native proof and invalidates only consumed inputs',()=>{
+ const d=scene();d.notes[1].prediction_uncertainty_seconds=.07;
+ const frames=d.scroll_motion.samples.map(s=>({playback_seconds:s.time,source_pts_seconds:s.source_pts,notes:[],combo:null,combo_confidence:0}));
+ const request:PresentationInput={schema:1,data:d,observations:{frames,visibility_frames:structuredClone(frames),occluders:[],
+  native_body_risk_available:true,pre_hold_proofs:{}}};
+ const directory=mkdtempSync(join(tmpdir(),'piu-fixed-rows-'));
+ const stage=()=>JSON.parse(readFileSync(join(directory,'derived-stages/manifest.json'),'utf8')).stages.find(s=>s.stage==='hold-view');
+ try{
+  const before=structuredClone(request),view=prepare(request,directory);
+  assert.equal(view.matches.length,2,'consumer projection must retain the fixed-row observation proof');
+  assert.equal(view.matches.find(m=>m.note===0).fixed_refresh_rows[0].note,1);
+  assert.deepEqual(request,before);assert.equal(stage().reused,false);
+  prepare(request,directory);assert.equal(stage().reused,true);
+  d.scroll_motion.samples[0].phase+=7;
+  prepare(request,directory);assert.equal(stage().reused,true,'unused displacement phase is not a row-identity input');
+  const frame=d.scroll_motion.samples.find(s=>s.time===d.hold_analysis.receptor_runs[0].onset_range[0]);
+  frame.source_pts+=.001;
+  const changed=prepare(request,directory);
+  assert.equal(stage().reused,false,'the actual source-frame identity must invalidate the proof');
+  assert.ok(!changed.matches.some(m=>m.note===0));
+  assert.ok(changed.recognition_diagnostics.warnings.some(w=>w.note===0&&w.reason==='timing_evidence_unresolved'));
+ }finally{rmSync(directory,{recursive:true,force:true});}
 });
