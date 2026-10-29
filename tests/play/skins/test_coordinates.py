@@ -34,7 +34,7 @@ def fixture(root):
 
 
 class ImageCoordinateTest(unittest.TestCase):
-    def test_independent_spacing_uses_image_measurements_and_keeps_absolute_calibration_unverified(self):
+    def test_unregistered_image_origins_fail_spacing_without_inventing_calibration(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);data,frames=fixture(root);original=deepcopy((data,frames))
             (root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n'for f in frames))
@@ -46,11 +46,11 @@ class ImageCoordinateTest(unittest.TestCase):
             self.assertTrue(all(r['status']=='measured'and 'coordinate_uncertainty_pixels'not in r for r in registration['notes']))
             self.assertTrue(any(w['peer_notes']==[4,5]for w in spacing_failures(data['notes'],20,data['scroll_motion'])))
             checks=[];support=prepare(measured,20)
-            self.assertEqual(spacing_failures(data['notes'],20,data['scroll_motion'],support,checks),[])
-            model=next(c for c in checks if c['peer_notes']==[4,5])['models'][0]
-            self.assertAlmostEqual(model['predicted_gap_pixels'],30.)
-            self.assertNotIn(4,[r['note']for r in model['references']])
-            self.assertEqual(model['references'][0]['source_pts_range'],[80.5,80.68])
+            failures=spacing_failures(data['notes'],20,data['scroll_motion'],support,checks)
+            self.assertTrue(failures)
+            self.assertTrue(all(w['failure_detail']=='incompatible_coordinate_origins'for w in failures))
+            self.assertTrue(all(not heads for heads in support['chunks'].values()))
+            self.assertFalse(any('models'in check for check in checks))
             self.assertEqual((data,frames),original)
             self.assertFalse(measured['skin_detector']['registration_reviewed'])
             self.assertEqual(json.loads((root/'head-registration.json').read_text()),registration)

@@ -166,3 +166,14 @@ errors and source PTS; unsupported or conflicting positions remain warnings.
 Legacy positions without these source-certified per-frame bounds retain the
 strict point-gap check. All duration, displacement, motion, domain uniqueness
 and reference requirements still apply.
+
+Beat-spacing validation also checks coordinate conventions between trajectories.
+An unregistered matching origin cannot be subtracted from a certified cap center,
+even when both trajectories have smooth motion. Such a pair records an explicit
+`incompatible_coordinate_origins` failure on the unsupported track; it cannot
+reject a source-certified neighbor. Unregistered image tracks cannot supply
+independent affine reference coordinates or recovery anchors. Relative checks
+between unregistered tracks require the same unchanged image reference throughout
+both trajectories, so the matching-origin offset cancels. Certified coordinate
+contradictions still fail the ordinary spacing checks. These checks use native
+positions and source PTS, independently of input and judgment timestamps.

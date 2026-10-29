@@ -1,6 +1,7 @@
 import {contracts} from '../contracts.ts';
 import {equal, median} from '../math.ts';
 import {predictions} from './coordinates.ts';
+import {CoordinateBases} from './coordinate_basis.ts';
 import {clip} from './line_bounds.ts';
 import {NativeGapMeasurements} from '../native_gaps.ts';
 import type {CoordinateSupport, Note, RecordData} from '../types.ts';
@@ -63,8 +64,9 @@ export function clockConversion(first: Note, second: Note): RecordData | null {
 
 export function spacingFailures(notes: Note[], spacing: number, motion: RecordData | null = null, support: CoordinateSupport | null = null,
   diagnostics: RecordData[] | null = null, baseline: number[] | null = null, changed: number[] | null = null): RecordData[] {
+  const bases=support?.native_measurements?new CoordinateBases(notes,support.native_measurements,motion):null;
   const native=support?.native_measurements?new NativeGapMeasurements({notes,scroll_motion:motion,head_registration:support.native_measurements}):null;
-  const offsets = {}, frames = {}, at = new Map<number, number[][]>(), pairs = new Map<string, number[][]>();
+  const offsets = {}, frames = {}, at = new Map<number, number[][]>(), pairs = new Map<string, number[][]>(), additionalPairs = new Map<string, number[][]>();
   for (const r of motion?.coordinate_registration?.chunks ?? []) if (r.status === 'fitted') offsets[r.chunk] = Object.fromEntries((r.head_offsets ?? []).map(h => [h.note, h.offset_pixels]));
   for (const s of motion?.samples ?? []) frames[s.time] = s.chunk;
   notes.forEach((n, i) => {
@@ -86,7 +88,16 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
       if (!pairs.has(key)) pairs.set(key, []);
       pairs.get(key).push([time, yb - ya]);
     }
+    const centers=bases?points.filter(p=>bases.calibrated(p[1])):[];
+    for(let i=1;i<centers.length;i++){
+      const [ya,a]=centers[i-1],[yb,b]=centers[i],key=`${a},${b}`;
+      if(!additionalPairs.has(key))additionalPairs.set(key,[]);
+      additionalPairs.get(key).push([time,yb-ya]);
+    }
   }
+  // An unsupported origin cannot hide two calibrated neighbors. Preserve the
+  // original sampling window when they already have a direct adjacency check.
+  for(const [key,samples]of additionalPairs)if(!pairs.has(key))pairs.set(key,samples);
   const failed = [];
   for (const [key, samples] of pairs) {
     const [a, b] = key.split(',').map(Number);
@@ -95,6 +106,15 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
     const first = notes[a], second = notes[b], ca = first.motion_clock, cb = second.motion_clock;
     const gaps = samples.map(s => s[1]), gap = median(gaps), scatter = median(gaps.map(g => Math.abs(g - gap)));
     if (scatter > C.maximum_native_error_spacing * spacing) continue;
+    const incompatible=bases?.incompatible(a,b)??[];
+    if(incompatible.length){
+      const proof={peer_notes:[a,b],comparison_basis:'incompatible_coordinate_origins',
+        coordinate_bases:[bases.basis(a),bases.basis(b)],visible_start_seconds:samples[0][0],visible_end_seconds:samples.at(-1)[0]};
+      diagnostics?.push(proof);
+      for(const i of incompatible)failed.push({...proof,note:i,lane:notes[i].lane,reason:'shared_spacing_model_unavailable',
+        failure_detail:'incompatible_coordinate_origins',check:'timing_reconstruction',observed_points:samples.length});
+      continue;
+    }
     let predicted = motion === null ? (ca && cb && Object.keys(ca).length && Object.keys(cb).length && equal(ca, cb) ? (second.target_seconds - first.target_seconds) * ca.velocity : null) :
       (ca && cb ? registeredGap(first, second, samples, offsets, frames, a, b) : null);
     const models = predictions(a, b, notes, [samples[0][0], samples.at(-1)[0]], support);

@@ -11,7 +11,8 @@
   },
   "coordinates": {
     "schema": 1,
-    "revision": 10,
+    "revision": 11,
+    "coordinate_basis": "source_certified_cap_centers_only",
     "reference_models": "joint_affine_constraints_without_reference_discard",
     "target_uncertainty": "all_feasible_positive_velocity_models",
     "minimum_references": 5,
@@ -78,7 +79,8 @@
   },
   "spacing": {
     "schema": 1,
-    "revision": 3,
+    "revision": 4,
+    "coordinate_basis": "qualified_centers_or_identical_matching_reference",
     "pair_selection": "all_coobserved_native_neighbors_including_chords",
     "minimum_unregistered_gap_spacing": 0.075,
     "independent_validation": "each_head_against_reference_coordinate_bounds"

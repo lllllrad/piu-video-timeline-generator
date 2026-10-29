@@ -59,9 +59,10 @@ export class NativeGapMeasurements {
 /** Only acquisition fields needed to validate physical endpoint intervals. */
 export function measurementInput(registration:RecordData):RecordData{
   const keys=['time','source_pts_seconds','native_y_pixels','template','native_cap_registration_status',
-    'native_cap_coordinate_uncertainty_pixels','native_cap_reference_scale_y'];
+    'native_cap_coordinate_uncertainty_pixels','native_cap_reference_scale_y','cap_reference_sha256',
+    'native_cap_projection_uncertainty_pixels','native_cap_reference_template'];
   return {format:{native_cap_registration:registration.format?.native_cap_registration},
-    notes:(registration.notes??[]).map(r=>({note:r.note,coordinate_method:r.coordinate_method,
+    notes:(registration.notes??[]).map(r=>({note:r.note,coordinate_method:r.coordinate_method,coordinate_status:r.coordinate_status,
       observations:r.observations.map(o=>Object.fromEntries(keys.filter(k=>Object.hasOwn(o,k)).map(k=>[k,o[k]])))}))};
 }
 

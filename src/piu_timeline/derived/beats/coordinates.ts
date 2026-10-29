@@ -2,18 +2,21 @@ import {contracts, RECOVERABLE} from '../contracts.ts';
 import {entries, median} from '../math.ts';
 import type {CoordinateModel, CoordinateSupport, Interval, Note, RecordData, Reference} from '../types.ts';
 import {measurementInput} from '../native_gaps.ts';
+import {CoordinateBases} from './coordinate_basis.ts';
 import {domain} from './line_bounds.ts';
 const F = contracts.coordinates;
 
 export function prepare(data: RecordData, spacing: number, includeFailed = false): CoordinateSupport | null {
   const motion = data.scroll_motion ?? {}, samples = new Map<number, RecordData>((motion.samples ?? []).map(s => [s.time, s]));
+  const bases=new CoordinateBases(data.notes,data.head_registration,motion);
   const observed: Record<string, number[]> = {};
   for (const r of data.head_registration?.notes ?? []) {
+    if(r.coordinate_method==='native_image_anchors'&&!bases.calibrated(r.note))continue;
     if (r.status === 'registered' || ['native_cap_measurements', 'native_image_anchors'].includes(r.coordinate_method)) {
       observed[r.note] = r.observations.filter(s => s.native_cap_registration_status !== 'conflicting').map(s => s.time);
     }
   }
-  if (!Object.keys(observed).length) return null;
+  if (!data.head_registration?.notes?.length) return null;
   const height = data.analysis_height, receptor = data.layout.receptor_y * height;
   const bottom = (data.layout.note_y_max ?? .95) * height, chunks = {};
   for (const record of motion.coordinate_registration?.chunks ?? []) {
