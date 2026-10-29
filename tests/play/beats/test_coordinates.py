@@ -13,7 +13,7 @@ def fixture():
             'motion_clock':{'origin':0,'velocity':244 if i==4 else 240,'intercept':0},
             'motion_target_phase':240*(1+i*.125)}for i in range(9)]
     return {'analysis_height':600,'layout':{'receptor_y':40/600},'notes':notes,
-            'head_registration':{'notes':[{'note':i,'status':'registered',
+            'head_registration':{'notes':[{'note':i,'status':'registered','coordinate_method':'native_cap_measurements',
                 'observations':[{'time':t}for t in times]}for i in range(9)]},
             'scroll_motion':{'samples':[{'time':t,'source_pts':80+t,'phase':240*t,'chunk':0}for t in times],
                 'coordinate_registration':{'chunks':[{'chunk':0,'status':'fitted','head_offsets':[
@@ -56,7 +56,7 @@ class BeatCoordinateTest(unittest.TestCase):
             data=fixture()
             if kind=='outlier':
                 t,y=data['notes'][4]['points'][0];data['notes'][4]['points'][0]=(t,y+3)
-            if kind=='unverified':data['head_registration']['notes'][4]['status']='unresolved'
+            if kind=='unverified':data['head_registration']['notes'][4].update(status='unresolved',coordinate_method='unverified')
             if kind=='short':data['head_registration']['notes'][4]['observations']=data['head_registration']['notes'][4]['observations'][:3]
             if kind=='failed_block':data['scroll_motion']['coordinate_registration']['chunks'][0]['status']='failed'
             self.assertEqual(predictions(4,5,data['notes'],(.5,.68),prepare(data,40)),[],kind)

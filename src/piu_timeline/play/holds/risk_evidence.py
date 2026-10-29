@@ -2,29 +2,29 @@
 from collections import Counter,defaultdict
 import math
 
+from piu_timeline.play.observations.coordinates import image_measurements
 from piu_timeline.play.skins.detector import SkinDetector
 from piu_timeline.play.skins.held import BodyAtReceptor,CAUSE_FORMAT
 from piu_timeline.play.skins.anchors import FORMAT as ANCHOR_FORMAT
 from piu_timeline.play.holds.input_risk import complete_image_hold
 
-FORMAT={'schema':1,'revision':2,'causes':CAUSE_FORMAT,'ownership':'same_native_temporal_image_component',
+FORMAT={'schema':1,'revision':3,'causes':CAUSE_FORMAT,'ownership':'same_native_temporal_image_component',
         'native_cap_registration':ANCHOR_FORMAT}
 
 
-def head_position(data,bank,hold,point,frame):
+def head_position(data,bank,hold,point,frame,measurements):
     if data.get('head_registration',{}).get('format',{}).get('native_cap_registration')!=ANCHOR_FORMAT:return None
     record=next((r for r in data['head_registration']['notes']if r['note']==hold['head_note']),None)
     if record is None:return None
     for sample in record['observations']:
         if sample['time']!=frame['playback_seconds']or sample['source_pts_seconds']!=frame['source_pts_seconds']:continue
-        if sample.get('native_cap_registration_status')=='conflicting':continue
         if sample.get('native_cap_reference_template')not in bank['anchor_registrations']:continue
-        uncertainty,scale=sample.get('native_cap_coordinate_uncertainty_pixels'),sample.get('native_cap_reference_scale_y')
-        if any(type(v)not in(int,float)or not math.isfinite(v)or v<=0 for v in(uncertainty,scale)):continue
-        if abs(uncertainty-max(ANCHOR_FORMAT['coordinate_uncertainty_pixels'],ANCHOR_FORMAT['coordinate_uncertainty_pixels']*scale))>1e-9:continue
-        y=sample['native_y_pixels'];lo,hi=point['covered_bounds_pixels']
-        if not math.isfinite(y):continue
-        if not lo<=y<=hi or 'head_y'in point and abs(point['head_y']-y)>1e-5:continue
+        position=measurements.get((hold['head_note'],sample['time']),{})
+        if position.get('kind')!='native_cap_center':continue
+        y,uncertainty=position['yPixels'],position['uncertaintyPixels'];lo,hi=point['covered_bounds_pixels']
+        detected=sample.get('detected_y_pixels')
+        if not isinstance(detected,(int,float))or not math.isfinite(detected):continue
+        if not lo<=y<=hi or 'head_y'in point and abs(point['head_y']-detected)>1e-5:continue
         link=point.get('motion_link',{})
         if link.get('method')!='registered_frame_displacement':continue
         displacement=link.get('displacement_pixels',0)
@@ -37,6 +37,7 @@ def head_position(data,bank,hold,point,frame):
 
 def derive(data,native,bank):
     if bank['contract']!=data['skin_detector']['contract']['bank']:raise ValueError('Risk bank differs from acquired images')
+    measurements=image_measurements(data.get('head_registration',{}))
     detector=SkinDetector(bank,data['layout'],data['analysis_width'],data['analysis_height'])
     held=BodyAtReceptor(detector)
     extent=max(held.spacing,*[abs(y-t['anchor'][1])for t in detector.templates if t['role']!='hold_body'
@@ -67,7 +68,7 @@ def derive(data,native,bank):
             if len(owners)==1:
                 identifier=next(iter(owners));record['owner_hold']=identifier
                 for hold,point in owners[identifier]:
-                    head=head_position(data,bank,hold,point,frame)
+                    head=head_position(data,bank,hold,point,frame,measurements)
                     if head is None:continue
                     top=head['y_pixels']-extent-head['coordinate_uncertainty_pixels']
                     if top<=held.receptor or a<=held.receptor:continue

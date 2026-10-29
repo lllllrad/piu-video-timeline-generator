@@ -15,7 +15,7 @@ def risk_proofs(data, directory):
     bank_extent = cap_extent_spacing(data) if native_body_risk_available(data) else None
     contract = {'data': {k: data[k] for k in fields if k in data}, 'verified_bank_extent': bank_extent,
                 'producer': producer('play/observations/presentation.py', 'play/deferred_words.py', 'play/holds/input_risk.py',
-                                     'derived/holds/risk.ts', 'derived/holds/input.ts', 'play/holds/risk_cache.py', 'play/holds/risk_ownership.py', 'play/holds/risk_evidence.py', 'play/skins/held.py')}
+                                     'derived/holds/risk.ts', 'derived/holds/input.ts', 'play/holds/risk_cache.py', 'play/holds/risk_ownership.py', 'play/holds/risk_evidence.py', 'play/observations/coordinates.py', 'derived/coordinates/measurements.ts', 'play/skins/held.py')}
     return cached(directory, 'risk-proofs', contract, lambda: prepare_risk_proofs(data))
 
 

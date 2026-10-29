@@ -11,7 +11,7 @@
   },
   "coordinates": {
     "schema": 1,
-    "revision": 11,
+    "revision": 12,
     "coordinate_basis": "source_certified_cap_centers_only",
     "reference_models": "joint_affine_constraints_without_reference_discard",
     "target_uncertainty": "all_feasible_positive_velocity_models",
@@ -25,7 +25,7 @@
   },
   "chords": {
     "schema": 1,
-    "revision": 7,
+    "revision": 8,
     "domain_constraint": "bounded_native_lane_distance",
     "image_support": "qualified_native_centers_or_identical_cap_reference",
     "minimum_frames": 4,
@@ -121,7 +121,7 @@
   },
   "native_gap_validation": {
     "schema": 1,
-    "revision": 2,
+    "revision": 3,
     "comparison": "intersection_of_declared_native_endpoint_errors",
     "minimum_frames": 4,
     "minimum_span_seconds": 0.065
@@ -144,7 +144,7 @@
   },
   "visibility": {
     "schema": 1,
-    "revision": 4
+    "revision": 5
   },
   "natural_splits": [
     1,

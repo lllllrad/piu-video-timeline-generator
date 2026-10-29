@@ -1,6 +1,7 @@
 """Measure a head's outline-to-silhouette offset from retained native pixels."""
 from collections import defaultdict
 import json
+from piu_timeline.play.observations.coordinates import detection_points
 
 import cv2
 import numpy as np
@@ -72,7 +73,7 @@ def measure(data,path):
         for i,(time,lane)in enumerate(zip(times,lanes,strict=True)):by[round(float(time),6),int(lane)].append(i)
         for ni,note in enumerate(data['notes']):
             samples=[]
-            for time,y in note.get('detected_points',note.get('points',[])):
+            for time,y in detection_points(note):
                 options=sorted((abs(float(ys[i])-y),i)for i in by.get((round(time,6),note['lane']),[]))
                 if not options or options[0][0]>1e-5 or len(options)>1 and options[1][0]<1:continue
                 i=options[0][1];anchor=patch_offset(masks[i],columns,spacing)
@@ -101,7 +102,7 @@ def measure(data,path):
             # A short track with every point measured needs no inferred offset.
             # Other short/noisy tracks already have explicit tracking failures.
             note=data['notes'][record['note']]
-            points=note.get('detected_points',note.get('points',[]))
+            points=detection_points(note)
             if (len(points)>len(record['observations']) and len(points)>=4
                     and points[-1][0]-points[0][0]>=.065):
                 warnings.append({'note':record['note'],'lane':record['lane'],
@@ -158,7 +159,7 @@ def refit_coordinates(data,registration,measured,display_delay_ms):
     spacing=float(np.median(np.diff([l['x']*width for l in data['layout']['lanes']])))
     tracks=[];notes=[]
     for i,original in enumerate(data['notes']):
-        raw=original.get('detected_points',original['points']);record=measured.get(i)
+        raw=detection_points(original);record=measured.get(i)
         points=project_coordinates(raw,record)if record else raw
         track=Track(original['lane'],points)
         track.registration_uncertainty_pixels=record['coordinate_uncertainty_pixels']if record else 0

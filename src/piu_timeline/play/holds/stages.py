@@ -14,7 +14,7 @@ def geometry(data, directory, frames, reconstruct):
     if image:values['notes']=[{k:n[k]for k in ('lane','points','detected_points','duplicate_of')if k in n}for n in data['notes']]
     modules=['play/holds/stages.py','play/skins/holds.py','play/skins/temporal.py','play/skins/coverage.py',
              'play/skins/observations.py','play/skins/extents.py','play/skins/detector.py','play/skins/bank.py',
-             'derived/holds/extent.ts','play/object_roles.py']if image else[
+             'derived/holds/extent.ts','derived/holds/image_motion.ts','derived/coordinates/measurements.ts','derived/contracts.json','play/observations/coordinates.py','play/object_roles.py']if image else[
              'play/holds/stages.py','play/holds/reconstruction.py','play/holds/geometry.py','play/holds/continuity.py',
              'derived/holds/input.ts','play/object_roles.py']
     from piu_timeline.play.pixel_cache import source_contract

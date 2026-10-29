@@ -38,6 +38,9 @@ The diagram groups responsibilities; it does not imply four independent workers
 or one immutable file per box. Some associations are calculated provisionally
 and then rebuilt after target times or hold interpretations change.
 
+See [coordinate frames and stage inputs](coordinate-model.md) for position units,
+anchor conventions, typed views and consumer permissions.
+
 ## Data boundaries
 
 | Stage | Code ownership | Principal stored data |

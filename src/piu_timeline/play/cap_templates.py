@@ -1,5 +1,6 @@
 """Register connected caps against independently observed isolated silhouettes."""
 from collections import defaultdict
+from piu_timeline.play.observations.coordinates import detection_points
 
 import cv2
 import numpy as np
@@ -107,7 +108,7 @@ def augment(data,path,records,fit_offset):
             if not banks.get(note['lane']):continue
             samples=list(known.get(ni,{}).get('observations',[]))
             measured={s['time']for s in samples}
-            for time,y in note.get('detected_points',note.get('points',[])):
+            for time,y in detection_points(note):
                 if time in measured:continue
                 options=[i for i in lookup.get((round(time,6),note['lane']),[])if abs(float(pixels['ys'][i])-y)<1e-5]
                 if len(options)!=1:continue

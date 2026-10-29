@@ -1,7 +1,8 @@
 import {contracts} from '../contracts.ts';
 import {equal, median} from '../math.ts';
 import {predictions} from './coordinates.ts';
-import {CoordinateBases} from './coordinate_basis.ts';
+import {TrajectoryCoordinates} from '../coordinates/trajectories.ts';
+import {fitTrajectory} from '../coordinates/points.ts';
 import {clip} from './line_bounds.ts';
 import {NativeGapMeasurements} from '../native_gaps.ts';
 import type {CoordinateSupport, Note, RecordData} from '../types.ts';
@@ -34,8 +35,8 @@ export function attributedHeads(a: number, b: number, notes: Note[], models: Rec
 }
 
 export function registeredGap(first: Note, second: Note, samples: number[][], offsets: RecordData, frames: RecordData, a: number, b: number): number | null {
-  const secondPoints = new Map(second.points), gaps = [];
-  const times = first.points.map(p => p[0]).filter(t => secondPoints.has(t) && samples[0][0] <= t && t <= samples.at(-1)[0]).sort((a, b) => a - b);
+  const secondPoints = new Map(fitTrajectory(second).points), gaps = [];
+  const times = fitTrajectory(first).points.map(p => p[0]).filter(t => secondPoints.has(t) && samples[0][0] <= t && t <= samples.at(-1)[0]).sort((a, b) => a - b);
   for (const t of times) {
     const chunk = frames[t], heads = offsets[chunk];
     if (heads && Object.hasOwn(heads, a) && Object.hasOwn(heads, b)) gaps.push([t, heads[b] - heads[a]]);
@@ -64,14 +65,14 @@ export function clockConversion(first: Note, second: Note): RecordData | null {
 
 export function spacingFailures(notes: Note[], spacing: number, motion: RecordData | null = null, support: CoordinateSupport | null = null,
   diagnostics: RecordData[] | null = null, baseline: number[] | null = null, changed: number[] | null = null): RecordData[] {
-  const bases=support?.native_measurements?new CoordinateBases(notes,support.native_measurements,motion):null;
+  const bases=support?.native_measurements?new TrajectoryCoordinates(notes,support.native_measurements,motion):null;
   const native=support?.native_measurements?new NativeGapMeasurements({notes,scroll_motion:motion,head_registration:support.native_measurements}):null;
   const offsets = {}, frames = {}, at = new Map<number, number[][]>(), pairs = new Map<string, number[][]>(), additionalPairs = new Map<string, number[][]>();
   for (const r of motion?.coordinate_registration?.chunks ?? []) if (r.status === 'fitted') offsets[r.chunk] = Object.fromEntries((r.head_offsets ?? []).map(h => [h.note, h.offset_pixels]));
   for (const s of motion?.samples ?? []) frames[s.time] = s.chunk;
   notes.forEach((n, i) => {
     if (n.status !== 'estimated' || n.fit_method === 'isolated_native_track') return;
-    for (const [t, y] of n.points) { if (!at.has(t)) at.set(t, []); at.get(t).push([y, i]); }
+    for (const [t, y] of fitTrajectory(n).points) { if (!at.has(t)) at.set(t, []); at.get(t).push([y, i]); }
   });
   for (const [time, points] of [...at].sort((a, b) => a[0] - b[0])) {
     points.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
@@ -88,7 +89,7 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
       if (!pairs.has(key)) pairs.set(key, []);
       pairs.get(key).push([time, yb - ya]);
     }
-    const centers=bases?points.filter(p=>bases.calibrated(p[1])):[];
+    const centers=bases?points.filter(p=>bases.hasCapCenter(p[1])):[];
     for(let i=1;i<centers.length;i++){
       const [ya,a]=centers[i-1],[yb,b]=centers[i],key=`${a},${b}`;
       if(!additionalPairs.has(key))additionalPairs.set(key,[]);

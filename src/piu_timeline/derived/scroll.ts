@@ -1,3 +1,4 @@
+import {fitTrajectory} from './coordinates/points.ts';
 /** Evaluate concrete pause and relative-speed models against saved native tracks. */
 import {linear, rms} from './math.ts';
 import {fitTrack} from './tracks.ts';
@@ -13,7 +14,7 @@ export function models(data: RecordData, kind: 'pause' | 'speed'): RecordData[] 
 export const movingTime = (times: number[], pauses: RecordData[]): number[] => times.map(t => pauses.reduce((v, p) => v - Math.min(Math.max(t - p.start, 0), p.end - p.start), t));
 
 export function pausePath(note: RecordData, data: RecordData, receptor: number, spacing: number, scale: number): RecordData | null {
-  let points = note.points ?? [], pauses = data.scroll_pause_model ?? [];
+  let points = fitTrajectory(note).points, pauses = data.scroll_pause_model ?? [];
   if (points.length < 4 || !pauses.length) return null;
   pauses = pauses.filter(p => points[0][0] <= p.end && points.at(-1)[0] >= p.start).sort((a, b) => a.start - b.start);
   if (!pauses.length) return null;
@@ -39,7 +40,7 @@ export function pausePath(note: RecordData, data: RecordData, receptor: number, 
 }
 
 export function speedPath(note: RecordData, data: RecordData, receptor: number, spacing: number, scale: number): RecordData | null {
-  const points = note.points ?? [];
+  const points = fitTrajectory(note).points;
   if (points.length < 8) return null;
   const owners = (data.scroll_speed_model ?? []).filter(m => points[0][0] < m.transition_range[0] && points.at(-1)[0] > m.transition_range[1]);
   if (!owners.length) return null;
@@ -88,7 +89,7 @@ export function processingPaths(notes: RecordData[], data: RecordData, receptor:
   return notes.map(note => {
     const configured = pausePath(note, data, receptor, spacing, scale) ?? speedPath(note, data, receptor, spacing, scale);
     if (configured) return configured;
-    const points = note.points ?? [], failed = {supported: false, basis: 'unsupported_native_trajectory', velocity: 0, target: null};
+    const points = fitTrajectory(note).points, failed = {supported: false, basis: 'unsupported_native_trajectory', velocity: 0, target: null};
     if (points.length < 4) return failed;
     const bridge = note.coordinate_bridge ?? {}, phase = Object.hasOwn(note, 'clock_target_phase') ? note.clock_target_phase : note.motion_target_phase;
     const chunk = bridge.to_chunk ?? note.motion_chunk, samples = chunks.get(chunk) ?? [];

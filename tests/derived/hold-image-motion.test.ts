@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
+import {fitTrajectory} from '../../src/piu_timeline/derived/coordinates/points.ts';
 import {steps} from '../../src/piu_timeline/derived/holds/image_motion.ts';
 const timeline = [{time: 1, source_pts: 41}, {time: 1.025, source_pts: 41.025}];
-const peer = (delta = 5) => ({points: [[1, 150], [1.025, 150 - delta]] as [number, number][]});
+const peer = (delta = 5) => ({motion_trajectory:fitTrajectory({points:[[1,150],[1.025,150-delta]]})});
 test('motion uses cap identity independently of tap/hold classification or successful timing', () => {
   assert.deepEqual(steps([peer()], [], timeline, 20), [{time: 1.025,
     method: 'identified_cap_displacement', displacement_pixels: 5, source_pts_range: [41, 41.025], source_notes: [0]}]);
@@ -11,7 +12,7 @@ test('motion uses cap identity independently of tap/hold classification or succe
 test('conflicting cap motion, duplicate identities, absent peers and capture gaps cannot supply a link', () => {
   assert.deepEqual(steps([peer(), peer(8)], [], timeline, 20), []);
   assert.deepEqual(steps([{...peer(), duplicate_of: 0}], [], timeline, 20), []);
-  assert.deepEqual(steps([{points: [[1, 150]]}, {points: [[1.025, 145]]}], [], timeline, 20), []);
+  assert.deepEqual(steps([{motion_trajectory:fitTrajectory({points:[[1,150]]})}, {motion_trajectory:fitTrajectory({points:[[1.025,145]]})}], [], timeline, 20), []);
   assert.deepEqual(steps([peer()], [], [timeline[0], {time: 1.1, source_pts: 41.1}], 20), []);
   assert.deepEqual(steps([peer(-2)], [], timeline, 20), []);
   assert.deepEqual(steps([peer(20)], [], timeline, 20), []);

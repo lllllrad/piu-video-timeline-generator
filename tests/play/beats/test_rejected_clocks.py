@@ -74,7 +74,7 @@ class RejectedClockRecoveryTest(unittest.TestCase):
                 for g in groups[1:]:g['unconstrained_row_domains']=[[a,b+1]for a,b in g['unconstrained_row_domains']]
             elif case=='phase_boundary':phase_range=[-.002,.002]
             elif case=='insufficient':
-                for i in(0,1,2):data['head_registration']['notes'][i]['status']='unresolved'
+                for i in(0,1,2):data['head_registration']['notes'][i].update(status='unresolved',coordinate_method='unverified')
             elif case=='contradiction':
                 data['notes'][0]['points']=[(t,y+10)for t,y in data['notes'][0]['points']]
                 data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'][0]['offset_pixels']+=10
@@ -101,14 +101,14 @@ class RejectedClockRecoveryTest(unittest.TestCase):
                         'points':[(s,40+240*(t-s))for s in times],
                         'motion_clock':{'origin':0,'velocity':240,'intercept':0},'motion_target_phase':240*t,
                         'timing_reconstruction':{'status':'restored'}}for i,t in enumerate(targets)]
-        data['head_registration']['notes']=[{'note':i,'status':'registered','observations':[{'time':t}for t in times]}for i in range(32)]
+        data['head_registration']['notes']=[{'note':i,'status':'registered','coordinate_method':'native_cap_measurements','observations':[{'time':t}for t in times]}for i in range(32)]
         data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets']=[{'note':i,'offset_pixels':40+240*t}for i,t in enumerate(targets)]
         if unregistered_neighbor:
             data['notes'].append({'lane':2,'status':'estimated','target_seconds':1.25,
                 'prediction_uncertainty_seconds':.001,'points':[(t,40+240*(.9-t))for t in times],
                 'motion_clock':{'origin':0,'velocity':240,'intercept':0},'motion_target_phase':240*.9,
                 'timing_reconstruction':{'status':'restored'}})
-            data['head_registration']['notes'].append({'note':32,'status':'unresolved','observations':[{'time':t}for t in times]})
+            data['head_registration']['notes'].append({'note':32,'status':'unresolved','coordinate_method':'unverified','observations':[{'time':t}for t in times]})
             data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'].append({'note':32,'offset_pixels':40+240*.9})
         data['notes'][12]['target_seconds']+=1/48
         data['timing_reconstruction']={'status':'failed','restored_notes':len(data['notes']),
@@ -122,9 +122,10 @@ class RejectedClockRecoveryTest(unittest.TestCase):
         self.assertEqual(result['notes'][12]['target_seconds'],2.75)
         self.assertEqual(result['notes'][12]['fit_method'],'native_beat_coordinate_interpolation')
         if unregistered_neighbor:
-            self.assertEqual(result['notes'][0]['status'],'excluded')
+            self.assertEqual(result['notes'][0]['status'],'estimated')
+            self.assertTrue(any(w.get('note')==32 and w.get('failure_detail')=='incompatible_coordinate_origins'for w in result['beat_timing']['warnings']))
             proof=next(p for p in result['beat_timing']['native_coordinate_recovery']if p['note']==12)
-            self.assertTrue(all(0 not in[r['note']for r in m['model']['references']]for m in proof['models']))
+            self.assertTrue(all(32 not in[r['note']for r in m['model']['references']]for m in proof['models']))
         else:self.assertEqual(result['beat_timing']['warnings'],[])
         self.assertEqual(result['timing_reconstruction']['warnings'],original['timing_reconstruction']['warnings'])
         self.assertEqual(result['timing_reconstruction']['restored_notes'],len(data['notes']))

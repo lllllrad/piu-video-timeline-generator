@@ -1,3 +1,4 @@
+import {fitTrajectory} from './coordinates/points.ts';
 /** Separate a physically corroborated fixed row from another refresh's candidates. */
 import {contracts} from './contracts.ts';
 import {bracket,onsetOverlaps,processingSupport,receptorEvidence} from './evidence.ts';
@@ -44,10 +45,10 @@ export function fixedRefreshRow(data:RecordData,index:number,pending:number[],pa
  const top=data.layout.receptor_y*height+.85*spacing,bottom=(data.layout.note_y_max??.95)*height-.55*spacing;
  const chunks=new Map<number,Set<number>>((data.scroll_motion?.coordinate_registration?.chunks??[])
   .filter(c=>c.status==='fitted').map(c=>[c.chunk,new Set<number>(c.head_offsets.map(h=>h.note))]));
- const fixed=new Map<number,number>(n.points),separation=[];
+ const fixed=new Map<number,number>(fitTrajectory(n).points),separation=[];
  for(const i of pending){
   const direction=Math.sign(n.target_seconds-notes[i].target_seconds);
-  const samples=notes[i].points.flatMap(([time,y])=>{
+  const samples=fitTrajectory(notes[i]).points.flatMap(([time,y])=>{
    const other=fixed.get(time),frame=timeline.get(time),heads=chunks.get(frame?.chunk);
    return other!=null&&top<y&&y<bottom&&top<other&&other<bottom&&heads?.has(i)&&heads.has(index)?
     [{time,source_pts_seconds:frame.source_pts,candidate_y_pixels:y,fixed_y_pixels:other,ordered_gap_pixels:direction*(other-y)}]:[];

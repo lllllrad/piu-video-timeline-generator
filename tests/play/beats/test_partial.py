@@ -40,7 +40,7 @@ class PartialBeatTest(unittest.TestCase):
         self.assertEqual(group,original)
 
     def test_application_warns_on_the_ambiguous_head_and_preserves_all_unique_neighbors(self):
-        data=scenario();data['head_registration']['notes'][4]['status']='unresolved'
+        data=scenario();data['head_registration']['notes'][4].update(status='unresolved',coordinate_method='unverified')
         original=deepcopy(data)
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);timing=root/'timing.ucs'

@@ -16,7 +16,10 @@ export interface CoordinateModel {
 export interface Note extends RecordData {
   lane: number;
   status: string;
+  /** Wire trajectory for fitting. Its origin is qualified by coordinates/trajectories.ts. */
   points: Interval[];
+  /** Original image-matching/outline positions before any coordinate projection. */
+  detected_points?: Interval[];
   target_seconds: number | null;
   prediction_uncertainty_seconds: number;
 }

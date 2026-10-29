@@ -88,8 +88,8 @@ class NativeTimingRecoveryTest(unittest.TestCase):
         for case in ('few_references','unmeasured','bad_reference','unbracketed','no_phase','tempo_boundary'):
             data=scenario();note=data['notes'][4]
             if case=='few_references':
-                for i in (0,1,2,3):data['head_registration']['notes'][i]['status']='unresolved'
-            elif case=='unmeasured':data['head_registration']['notes'][4]['status']='unresolved'
+                for i in (0,1,2,3):data['head_registration']['notes'][i].update(status='unresolved',coordinate_method='unverified')
+            elif case=='unmeasured':data['head_registration']['notes'][4].update(status='unresolved',coordinate_method='unverified')
             elif case=='bad_reference':
                 data['notes'][2]['points']=[(t,y+10)for t,y in data['notes'][2]['points']]
                 data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'][2]['offset_pixels']+=10

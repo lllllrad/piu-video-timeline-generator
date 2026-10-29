@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import shutil
 from statistics import median
+from piu_timeline.play.observations.coordinates import detection_points
 
 import numpy as np
 
@@ -33,7 +34,7 @@ def proposal(bank,template,data,records):
     sample=samples[0]
     if evidence.get('qualified_cap_measurement',sample)!=sample:
         raise ValueError('different_declared_native_measurement')
-    raw=data['notes'][index].get('detected_points',data['notes'][index]['points'])
+    raw=detection_points(data['notes'][index])
     points=[y for time,y in raw if abs(time-sample['time'])<=1e-6]
     if len(points)!=1 or abs(points[0]-sample['detected_y_pixels'])>1e-5:
         raise ValueError('measurement_differs_from_original_detection')

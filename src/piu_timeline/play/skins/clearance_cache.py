@@ -1,6 +1,7 @@
 """Cache opt-in image-role evidence without changing native detections."""
 from hashlib import sha256
 import json
+from piu_timeline.play.observations.coordinates import detection_points
 
 from piu_timeline.play.pixel_cache import FORMAT as PIXEL_FORMAT,read_chunks,source_contract
 from piu_timeline.play.skins.clearance import FORMAT,derive
@@ -22,7 +23,7 @@ def prepare(data,directory):
     contract={'format':FORMAT,'profile':profile,'skin':data['skin_detector']['contract'],
               'source':source_contract(data),'analysis_dimensions':[data['analysis_width'],data['analysis_height']],
               'frame_count':data['frame_count'],'object_effects':data.get('object_interpretation',{}).get('effects',[]),
-              'native_trajectories':sha256(json.dumps([[n['lane'],n.get('detected_points',n.get('points',[]))]
+              'native_trajectories':sha256(json.dumps([[n['lane'],detection_points(n)]
                                        for n in data['notes']],sort_keys=True).encode()).hexdigest(),
               'inputs':{str(p.relative_to(directory)):[p.stat().st_size,p.stat().st_mtime_ns]if p.is_file()else None for p in inputs}}
     path=directory/'skin-role-evidence.json'

@@ -1,7 +1,9 @@
 import {contracts} from '../contracts.ts';
+import {imagePosition} from '../coordinates/measurements.ts';
+import {fitTrajectory} from '../coordinates/points.ts';
 import {equal, linear} from '../math.ts';
 import type {Interval, Note, RecordData} from '../types.ts';
-const F = contracts.chords, A = F.native_cap_registration;
+const F = contracts.chords;
 
 export function prepare(data: RecordData, spacing: number): RecordData[] {
   const at = new Map<number, RecordData[]>();
@@ -9,28 +11,22 @@ export function prepare(data: RecordData, spacing: number): RecordData[] {
     const image = record.coordinate_method === 'native_image_anchors';
     if (!image && (record.coordinate_method !== 'native_cap_measurements' ||
       (record.coordinate_uncertainty_pixels ?? Infinity) > F.coordinate_error_spacing * spacing)) continue;
-    const index = record.note, note = data.notes[index], points = new Map<number, number>(note.points);
+    const index = record.note, note = data.notes[index], points = new Map<number, number>(fitTrajectory(note).points);
     for (const sample of record.observations) {
       if (image && sample.native_cap_registration_status === 'conflicting') continue;
       const time = sample.time;
       if (!points.has(time)) continue;
-      let model = ['calibrated', null], endpointError = 0;
+      let model = ['native_cap_center', null], endpointError = 0;
       if (image) {
-        if (!sample.template || Math.abs(sample.native_y_pixels - points.get(time)) > 1e-5) {
-          throw new Error('Image chord coordinates disagree with native reference anchors');
-        }
-        const uncertainty = sample.native_cap_coordinate_uncertainty_pixels;
-        if (uncertainty != null) {
-          const scale = sample.native_cap_reference_scale_y;
-          if (!equal(data.head_registration?.format?.native_cap_registration, A) ||
-            [uncertainty, scale].some(v => typeof v !== 'number' || !Number.isFinite(v) || v <= 0) ||
-            Math.abs(uncertainty - A.coordinate_uncertainty_pixels * scale) > 1e-9) {
-            throw new Error('Image chord has an unsupported native anchor registration');
-          }
-        }
-        if (uncertainty != null && uncertainty <= F.coordinate_error_spacing * spacing) endpointError = uncertainty;
-        if (uncertainty == null || uncertainty > F.coordinate_error_spacing * spacing) {
-          model = sample.cap_reference_sha256 ? ['image_reference', sample.cap_reference_sha256] : ['image_template', sample.template];
+        const position=imagePosition(sample,points.get(time),data.head_registration?.format);
+        if(position.kind==='unavailable')throw new Error(`Invalid image chord coordinate: ${position.reason}`);
+        if(position.kind==='conflicting_center_projection')continue;
+        if(position.kind==='native_cap_center'&&position.uncertaintyPixels<=F.coordinate_error_spacing*spacing){
+          endpointError=position.uncertaintyPixels;
+        }else{
+          // A projected center and its raw matching anchor are distinct frames,
+          // including when a large uncertainty prevents a certified chord.
+          model=[position.kind==='native_cap_center'?'center_reference':`image_${position.reference.kind==='sha256'?'reference':'template'}`,position.reference.value];
         }
       }
       if (!at.has(time)) at.set(time, []);
@@ -70,8 +66,8 @@ export function prepare(data: RecordData, spacing: number): RecordData[] {
     const templates = [...new Set(samples.flatMap(s => s.slice(4, 6)).filter(v => v != null))].sort();
     result.push({lane_spacing_pixels: spacing, peer_notes: [a, b], observed_points: samples.length, maximum_gap_pixels: gap,
       ...(gapRange ? {native_gap_range_pixels: gapRange, endpoint_uncertainty_pixels: samples.map(s => s.slice(6, 8))} : {}),
-      ...(['image_reference', 'image_template'].includes(model[0]) ? {measurement_basis: 'shared_image_reference', reference_identity: model[1], reference_templates: templates} : {}),
-      ...(model[0] === 'calibrated' && templates.length ? {measurement_basis: 'source_bound_native_cap_centers', registered_image_templates: templates} : {}),
+      ...(['image_reference', 'image_template', 'center_reference'].includes(model[0]) ? {measurement_basis: model[0]==='center_reference'?'shared_center_reference':'shared_image_reference', reference_identity: model[1], reference_templates: templates} : {}),
+      ...(model[0] === 'native_cap_center' && templates.length ? {measurement_basis: 'source_bound_native_cap_centers', registered_image_templates: templates} : {}),
       visible_start_seconds: samples[0][0], visible_end_seconds: samples.at(-1)[0], source_pts_seconds: samples.map(s => s[3]),
       minimum_velocity_pixels_per_second: lower, maximum_motion_residual_pixels: error});
   }

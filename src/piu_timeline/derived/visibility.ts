@@ -1,6 +1,7 @@
 /** Audit measured source trajectories independently of chart and input acceptance. */
 import {equal, linear, lowerBound, mean, median, rms, sum, upperBound} from './math.ts';
 import {classify} from './scroll.ts';
+import {detectionTrajectory,fitTrajectory} from './coordinates/points.ts';
 import {contracts} from './contracts.ts';
 import type {RecordData} from './types.ts';
 export const FORMAT = contracts.visibility;
@@ -17,7 +18,7 @@ export function motionWarnings(data: RecordData, frames: RecordData[], regions: 
   if ((layout.lanes ?? []).length < 2) return result;
   const height = data.analysis_height, spacing = laneSpacing(data), pts = new Map(frames.map(f => [f.playback_seconds, f.source_pts_seconds]));
   (data.notes ?? []).forEach((note, ni) => {
-    const points = (note.points ?? []).filter(([t, y]) => layout.receptor_y * height + .85 * spacing < y && y < (layout.note_y_max ?? .95) * height - .55 * spacing && !occluders(data, note.lane, y, spacing, regions).length);
+    const points = fitTrajectory(note).points.filter(([t, y]) => layout.receptor_y * height + .85 * spacing < y && y < (layout.note_y_max ?? .95) * height - .55 * spacing && !occluders(data, note.lane, y, spacing, regions).length);
     if (points.length < 4) return;
     const record = (reason, lo, hi, measurements) => ({note: ni, lane: note.lane, reason, check: 'scroll_motion', visible_start_seconds: lo, visible_end_seconds: hi, observed_points: points.length,
       source_pts_seconds: [pts.get(lo) ?? null, pts.get(hi) ?? null], ...measurements});
@@ -69,7 +70,7 @@ export function continuity(data: RecordData, frames: RecordData[], regions: Reco
   const peers = new Map<number, RecordData>((data.scroll_motion?.samples ?? []).map(s => [s.time, s]));
   const processing = new Map<number, RecordData>((data.visual_channels?.processing?.notes ?? []).map(p => [p.note, p]));
   (data.notes ?? []).forEach((note, ni) => {
-    const points = note.detected_points ?? note.points ?? [];
+    const points = detectionTrajectory(note).points;
     if (!points.length) return;
     const observed = new Set(points.map(p => p[0])), pending = [];
     points.forEach(([t, y], pi) => {

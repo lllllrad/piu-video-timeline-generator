@@ -3,6 +3,7 @@ from hashlib import sha256
 from copy import deepcopy
 import json
 
+from piu_timeline.derived import call
 from piu_timeline.play.holds.risk_evidence import FORMAT,derive
 
 
@@ -12,7 +13,7 @@ def digest(value):
 
 def context(data):
     fields=('id','lane','head_note','tail_note','start_censored','end_censored','body_frames','body_evidence','image_connection_evidence')
-    contract={'format':FORMAT,'source':{k:data[k]for k in('media','layout','game_roi','analysis_width','analysis_height','frame_count')},
+    contract={'format':FORMAT,'coordinate_reader':call('stageInputs.coordinateProducer'),'source':{k:data[k]for k in('media','layout','game_roi','analysis_width','analysis_height','frame_count')},
               'skin':data['skin_detector']['contract'],'head_registration':digest(data.get('head_registration',{})),
               'geometry':digest([{k:h.get(k)for k in fields}for h in data.get('hold_analysis',{}).get('holds',[])]),
               'object_roles':data.get('object_interpretation',{}).get('effects',[]),

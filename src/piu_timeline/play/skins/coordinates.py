@@ -1,5 +1,6 @@
 """Retain native reference anchors without claiming absolute game calibration."""
 from collections import defaultdict
+from piu_timeline.play.observations.coordinates import detection_points
 
 import numpy as np
 
@@ -84,7 +85,7 @@ def measure(data,frames):
     scale=float(np.median(np.diff([lane['x']*data['analysis_width']for lane in data['layout']['lanes']])))/bank['spacing_pixels']
     expected=defaultdict(list);samples=[[]for _ in data['notes']];conflicts=defaultdict(list)
     for index,note in enumerate(data['notes']):
-        for time,y in note.get('detected_points',note['points']):expected[time].append((index,note['lane'],y))
+        for time,y in detection_points(note):expected[time].append((index,note['lane'],y))
     source_pts={s['time']:s['source_pts']for s in data.get('scroll_motion',{}).get('samples',[])}
     last=None
     for frame in frames:

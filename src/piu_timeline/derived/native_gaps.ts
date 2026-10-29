@@ -1,4 +1,6 @@
 /** Revalidate native gap failures with acquired endpoint measurement bounds. */
+import {imagePosition} from './coordinates/measurements.ts';
+import {fitTrajectory} from './coordinates/points.ts';
 import {contracts} from './contracts.ts';
 import {equal} from './math.ts';
 import type {RecordData} from './types.ts';
@@ -27,22 +29,19 @@ export class NativeGapMeasurements {
     if(records.some(r=>r?.coordinate_method!=='native_image_anchors'))return failed('missing_image_coordinates');
     if(records.some(r=>new Set(r.observations.map(o=>o.time)).size!==r.observations.length))return failed('duplicate_measurement_time');
     const measurements=w.peer_notes.map(i=>{if(!this.observations.has(i))this.observations.set(i,new Map(this.records.get(i).observations.map(o=>[o.time,o])));return this.observations.get(i);});
-    if(!this.points.has(b))this.points.set(b,new Map(this.data.notes[b].points));
+    if(!this.points.has(b))this.points.set(b,new Map(fitTrajectory(this.data.notes[b]).points));
     const second=this.points.get(b),timeline=this.timeline;
-    const points=this.data.notes[a].points.filter(([t])=>second.has(t)&&w.visible_start_seconds<=t&&t<=w.visible_end_seconds);
+    const points=fitTrajectory(this.data.notes[a]).points.filter(([t])=>second.has(t)&&w.visible_start_seconds<=t&&t<=w.visible_end_seconds);
     if(points.length<F.minimum_frames||points.at(-1)[0]-points[0][0]<F.minimum_span_seconds)return failed('insufficient_coobserved_positions');
     let lo=-Infinity,hi=Infinity;const samples=[];
     for(const [time,y]of points){
       const positions=[y,second.get(time)],observed=measurements.map(m=>m.get(time)),errors=[];
       for(const [i,o]of observed.entries()){
-        if(!o||o.native_cap_registration_status==='conflicting'||!o.template||!Number.isFinite(o.native_y_pixels)||Math.abs(o.native_y_pixels-positions[i])>EPS)
-          return failed('unqualified_native_position');
-        const e=o.native_cap_coordinate_uncertainty_pixels,scale=o.native_cap_reference_scale_y;
-        if(![e,scale].every(v=>typeof v==='number'&&Number.isFinite(v)&&v>0)||Math.abs(e-A.coordinate_uncertainty_pixels*scale)>EPS)
-          return failed('unqualified_position_uncertainty');
-        if(!Number.isFinite(o.source_pts_seconds)||!Number.isFinite(timeline.get(time))||Math.abs(o.source_pts_seconds-timeline.get(time))>1e-6)
-          return failed('source_pts_conflict');
-        errors.push(e);
+        const position=imagePosition(o,positions[i],registration.format);
+        if(position.kind==='unavailable')return failed(position.reason);
+        if(position.kind!=='native_cap_center')return failed('unqualified_native_position');
+        if(!Number.isFinite(timeline.get(time))||Math.abs(position.sourcePtsSeconds-timeline.get(time))>1e-6)return failed('source_pts_conflict');
+        errors.push(position.uncertaintyPixels);
       }
       const gap=positions[1]-positions[0],error=errors[0]+errors[1];
       lo=Math.max(lo,gap-error);hi=Math.min(hi,gap+error);

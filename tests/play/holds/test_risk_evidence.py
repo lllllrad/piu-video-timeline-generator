@@ -26,7 +26,7 @@ def scenario(root):
     hold={'id':0,'lane':0,'head_note':0,'tail_note':1,'start_censored':False,'end_censored':False,
           'start_range':[1.1,1.12],'end_range':[1.4,1.42],'body_frames':8,
           'body_evidence':'skin_temporal_image_regions','image_connection_evidence':[point]}
-    sample={'time':1.,'source_pts_seconds':11.,'native_y_pixels':48.,
+    sample={'time':1.,'source_pts_seconds':11.,'native_y_pixels':48.,'detected_y_pixels':48.,'template':'tap',
             'native_cap_reference_template':'tap','native_cap_coordinate_uncertainty_pixels':1.,
             'native_cap_reference_scale_y':1.}
     data={'media':{'size':123},'game_roi':[0,0,200,300],'frame_count':1,'start_seconds':.5,'end_seconds':2.,

@@ -78,10 +78,11 @@ class ImageHoldTest(unittest.TestCase):
                 image['bounds_pixels'][1]+=offset;image['bounds_pixels'][3]+=offset
                 records[i]['observations'].append({'time':time,'source_pts_seconds':frame['source_pts_seconds'],
                     'native_y_pixels':y+offset,'native_cap_coordinate_uncertainty_pixels':1.,
-                    'native_cap_reference_template':image['template']})
+                    'native_cap_reference_template':image['template'],'template':image['template'],'native_cap_reference_scale_y':1.})
         # Image connection alone cannot resolve inconsistent endpoint coordinates.
         self.assertEqual(reconstruct_images(data,receptors,native,[]),[])
-        data['head_registration']={'notes':records}
+        from piu_timeline.play.skins.anchors import FORMAT as ANCHOR_FORMAT
+        data['head_registration']={'format':{'native_cap_registration':ANCHOR_FORMAT},'notes':records}
         warnings=[];holds=reconstruct_images(data,receptors,native,warnings)
         self.assertEqual(len(holds),1)
         proof=holds[0]['endpoint_extent_evidence']

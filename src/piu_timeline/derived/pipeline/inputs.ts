@@ -2,6 +2,7 @@
 import type {RecordData} from '../types.ts';
 import {measurementInput} from '../native_gaps.ts';
 import {implementation} from './store.ts';
+export const coordinateProducer = (): string => implementation(new URL('../coordinates/measurements.ts', import.meta.url));
 export const processingProducer = (): string => implementation(new URL('../scroll.ts', import.meta.url));
 export const pick = (data: RecordData, keys: readonly string[]): RecordData => Object.fromEntries(keys.filter(k => Object.hasOwn(data, k)).map(k => [k, data[k]]));
 export const viewFields = ['notes', 'matches', 'limitations', 'excluded_notes', 'miss_candidates', 'combo_events', 'judgment_events',
@@ -41,7 +42,7 @@ export function processing(data: RecordData): RecordData {
 }
 export function visibility(data: RecordData): RecordData {
   return {...pick(data, ['layout', 'analysis_width', 'analysis_height', 'scroll_pause_model', 'scroll_speed_model']),
-    notes: (data.notes ?? []).map(n => pick(n, ['lane', 'points', 'detected_points'])),
+    notes: (data.notes ?? []).map(n => pick(n, ['lane', 'points', 'detected_points', 'head_registration'])),
     scroll_motion: {samples: (data.scroll_motion?.samples ?? []).map(s => pick(s, ['time', 'phase', 'chunk', 'coordinate_status', 'support']))},
     visual_channels: {processing: processingChannel(data)}};
 }

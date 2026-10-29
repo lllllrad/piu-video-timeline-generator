@@ -1,3 +1,4 @@
+import {detectionTrajectory} from './coordinates/points.ts';
 import {assignments, processingEvidence} from './evidence.ts';
 import {entries} from './math.ts';
 import type {RecordData} from './types.ts';
@@ -11,14 +12,14 @@ export function exclusions(native: RecordData, projected: RecordData): RecordDat
     return (h.covered_notes ?? []).includes(i) && ['registered_cap', 'inside_connected_body'].includes(p.kind) && distinct(p.source_pts_seconds) >= 4;
   });
   (native.notes ?? []).forEach((n, i) => {
-    const points = n.points ?? [];
+    const points = detectionTrajectory(n).points;
     if (!points.length) return;
     const view = projected.notes[i];
     if (view.reason === 'long_note_body_or_tail' && represented(i)) { accounted.push({note: i, reason: 'represented_by_reconstructed_hold'}); return; }
     if (n.status !== 'excluded' && view.status !== 'excluded') return;
     const duplicate = n.duplicate_of;
     if (n.reason === 'duplicate_head_component' && Number.isInteger(duplicate) && 0 <= duplicate && duplicate < projected.notes.length) {
-      const owner = projected.notes[duplicate], positions = new Map<number, number>(owner.points ?? []), errors = points.filter(([t]) => positions.has(t)).map(([t, y]) => Math.abs(y - positions.get(t)));
+      const owner = projected.notes[duplicate], positions = new Map<number, number>(detectionTrajectory(owner).points), errors = points.filter(([t]) => positions.has(t)).map(([t, y]) => Math.abs(y - positions.get(t)));
       const same = n.lane === owner.lane && errors.length >= 4 && errors.filter(e => e <= 2).length >= .8 * errors.length;
       if (same && (owner.status === 'estimated' || owner.reason === 'long_note_body_or_tail' && represented(duplicate))) {
         accounted.push({note: i, reason: 'represented_by_duplicate_owner', represented_by: duplicate}); return;

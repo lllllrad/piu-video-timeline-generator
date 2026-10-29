@@ -1,5 +1,6 @@
 """Prove tap clearance around matched cap images from native spatial masks."""
 from collections import defaultdict
+from piu_timeline.play.observations.coordinates import detection_points
 
 import cv2
 import numpy as np
@@ -97,7 +98,7 @@ def derive(data,native,samples,bank,profile):
     detector=SkinDetector(bank,data['layout'],width,height);templates={key(t):t for t in detector.templates}
     owners=defaultdict(list);proofs=defaultdict(list);already_taps=set()
     for i,note in enumerate(data['notes']):
-        for time,y in note.get('detected_points',note.get('points',[])):
+        for time,y in detection_points(note):
             owners[time,note['lane'],round(y,5)].append(i)
     previous=None
     for frame,(pts,time,planes,_)in zip(native,samples,strict=True):

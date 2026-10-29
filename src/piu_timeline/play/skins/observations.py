@@ -1,5 +1,6 @@
 """Join independent image-role measurements to native track identities."""
 from collections import Counter
+from piu_timeline.play.observations.coordinates import detection_points
 
 
 FORMAT = {'schema': 1, 'revision': 2, 'evidence': 'native_image_trace_references'}
@@ -10,7 +11,7 @@ def observe(data, native):
     height = data['analysis_height']
     for index, note in enumerate(data['notes']):
         observations = []
-        for time, y in note.get('detected_points', note.get('points', [])):
+        for time, y in detection_points(note):
             frame = by_time.get(time)
             if frame is None:
                 raise ValueError('Image track observation has no native source frame')

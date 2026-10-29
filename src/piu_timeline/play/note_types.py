@@ -1,6 +1,7 @@
 """Per-frame shape evidence; failing to prove a hold never proves a tap."""
 from bisect import bisect_left
 from collections import Counter
+from piu_timeline.play.observations.coordinates import detection_points
 
 import cv2
 import numpy as np
@@ -159,7 +160,7 @@ def observe_appearance(data, path, frames):
     for index,note in enumerate(data['notes']):
         observations = []
         x = data['layout']['lanes'][note['lane']]['x']
-        for time,y in note.get('detected_points',note.get('points',[])):
+        for time,y in detection_points(note):
             if not data['layout']['receptor_y']*height+1.3*spacing < y < data['layout'].get('note_y_max',.95)*height-.8*spacing:
                 continue
             if any(rx <= x <= rx+rw and ry*height-.8*spacing <= y <= (ry+rh)*height+.8*spacing

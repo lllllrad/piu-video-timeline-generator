@@ -2,16 +2,17 @@ import {contracts, RECOVERABLE} from '../contracts.ts';
 import {entries, median} from '../math.ts';
 import type {CoordinateModel, CoordinateSupport, Interval, Note, RecordData, Reference} from '../types.ts';
 import {measurementInput} from '../native_gaps.ts';
-import {CoordinateBases} from './coordinate_basis.ts';
+import {TrajectoryCoordinates} from '../coordinates/trajectories.ts';
+import {fitTrajectory} from '../coordinates/points.ts';
 import {domain} from './line_bounds.ts';
 const F = contracts.coordinates;
 
 export function prepare(data: RecordData, spacing: number, includeFailed = false): CoordinateSupport | null {
   const motion = data.scroll_motion ?? {}, samples = new Map<number, RecordData>((motion.samples ?? []).map(s => [s.time, s]));
-  const bases=new CoordinateBases(data.notes,data.head_registration,motion);
+  const bases=new TrajectoryCoordinates(data.notes,data.head_registration,motion);
   const observed: Record<string, number[]> = {};
   for (const r of data.head_registration?.notes ?? []) {
-    if(r.coordinate_method==='native_image_anchors'&&!bases.calibrated(r.note))continue;
+    if(!bases.hasCapCenter(r.note))continue;
     if (r.status === 'registered' || ['native_cap_measurements', 'native_image_anchors'].includes(r.coordinate_method)) {
       observed[r.note] = r.observations.filter(s => s.native_cap_registration_status !== 'conflicting').map(s => s.time);
     }
@@ -28,7 +29,7 @@ export function prepare(data: RecordData, spacing: number, includeFailed = false
       if (note.status !== 'estimated' && !(includeFailed && [...RECOVERABLE, 'beat_timing_reconstruction_failed',
         'beat_grid_conflicts_with_spatial_spacing', 'beat_grid_conflicts_with_native_chord'].includes(note.reason))) continue;
       const times = new Set(observed[i]);
-      const points = note.points.filter(([t, y]) => times.has(t) && samples.has(t) && samples.get(t).chunk === record.chunk &&
+      const points = fitTrajectory(note).points.filter(([t, y]) => times.has(t) && samples.has(t) && samples.get(t).chunk === record.chunk &&
         receptor + .85 * spacing < y && y < bottom - .55 * spacing);
       if (points.length < 4 || points.at(-1)[0] - points[0][0] < .065) continue;
       const error = Math.max(...points.map(([t, y]) => Math.abs(y + samples.get(t).phase - head.offset_pixels)));
@@ -72,8 +73,8 @@ export function fit(references: Reference[], spacing: number): CoordinateModel |
 export function predictions(a: number, b: number, notes: Note[], interval: Interval, support: CoordinateSupport | null, radius = F.reference_radius_seconds): RecordData[] {
   if (!support) return [];
   const ta = notes[a].target_seconds, tb = notes[b].target_seconds;
-  const bp = new Set(notes[b].points.map(p => p[0])), ao = new Set(support.observed[a] ?? []), bo = new Set(support.observed[b] ?? []);
-  const common = notes[a].points.map(p => p[0]).filter(t => bp.has(t) && ao.has(t) && bo.has(t));
+  const bp = new Set(fitTrajectory(notes[b]).points.map(p => p[0])), ao = new Set(support.observed[a] ?? []), bo = new Set(support.observed[b] ?? []);
+  const common = fitTrajectory(notes[a]).points.map(p => p[0]).filter(t => bp.has(t) && ao.has(t) && bo.has(t));
   const models = [], eligible = new Set(support.reference_notes);
   for (const [number, heads] of entries(support.chunks)) {
     if (!heads[a] || !heads[b]) continue;

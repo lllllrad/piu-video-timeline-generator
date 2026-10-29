@@ -123,7 +123,7 @@ class NeighborReferenceTest(unittest.TestCase):
                     {'note':i,'offset_pixels':h['offset']}for i,h in heads.items()]}]}}
         data={'notes':notes,'scroll_motion':motion,'analysis_height':1600,
               'layout':{'receptor_y':40/1600},'head_registration':{'notes':[
-                  {'note':i,'status':'registered','observations':[{'time':s}for s in times]}for i in range(8)]}}
+                  {'note':i,'status':'registered','coordinate_method':'native_cap_measurements','observations':[{'time':s}for s in times]}for i in range(8)]}}
         support=prepare(data,40);before=deepcopy((data,groups))
         validate=lambda fits:spacing_supported_notes(notes,groups,fits,40,motion,support)
         result=fit_phase(groups,0,consistent_notes=validate)

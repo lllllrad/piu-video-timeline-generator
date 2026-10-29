@@ -43,8 +43,8 @@ class NativeRowDomainTest(unittest.TestCase):
         for case in ('four_references','unmeasured_head','bad_reference','extrapolation','fine_ambiguous'):
             data=scenario()
             if case=='four_references':
-                for r in data['head_registration']['notes'][5:]:r['status']='unresolved'
-            elif case=='unmeasured_head':data['head_registration']['notes'][4]['status']='unresolved'
+                for r in data['head_registration']['notes'][5:]:r.update(status='unresolved',coordinate_method='unverified')
+            elif case=='unmeasured_head':data['head_registration']['notes'][4].update(status='unresolved',coordinate_method='unverified')
             elif case=='bad_reference':
                 data['notes'][2]['points']=[(t,y+12)for t,y in data['notes'][2]['points']]
                 data['scroll_motion']['coordinate_registration']['chunks'][0]['head_offsets'][2]['offset_pixels']+=12

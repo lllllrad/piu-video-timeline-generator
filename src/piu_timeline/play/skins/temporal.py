@@ -1,5 +1,6 @@
 """Join positive image regions through measured motion, including clipped holds."""
 from collections import defaultdict
+from piu_timeline.play.observations.coordinates import detection_points,fit_trajectory
 
 from piu_timeline import derived
 from piu_timeline.play.skins.coverage import image_spans
@@ -7,7 +8,7 @@ from piu_timeline.play.skins.coverage import image_spans
 
 def measured_steps(data,native):
     layout=data['layout'];spacing=(layout['lanes'][1]['x']-layout['lanes'][0]['x'])*data['analysis_width']
-    notes=[{k:n[k]for k in ('points','duplicate_of')if k in n}for n in data['notes']]
+    notes=[{'motion_trajectory':fit_trajectory(n),**({'duplicate_of':n['duplicate_of']}if 'duplicate_of'in n else{})}for n in data['notes']]
     timeline=[{'time':f['playback_seconds'],'source_pts':f['source_pts_seconds']}for f in native]
     return {s['time']:s for s in derived.call('holdMotion.steps',notes,
             data.get('scroll_motion',{}).get('samples',[]),timeline,spacing)}
@@ -23,7 +24,7 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
         role=('head'if roles[i]=={'hold_start'}else'tail'if roles[i]=={'hold_end'}
               else'barrier'if 'tap'in roles[i]else None)
         if role:
-            for time,y in note.get('detected_points',note['points']):
+            for time,y in detection_points(note):
                 known[time,note['lane']].append((i,y,role))
     steps=measured_steps(data,native)
     spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
@@ -78,9 +79,9 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
         if len(times)<4 or max(times)-min(times)<.065:continue
         body_times={n['time']for n in component if n['body_template_support']}
         if len(body_times)<4 or max(body_times)-min(body_times)<.065:continue
-        observed=[y for t,y in first['points']if t in times]
+        observed=[y for t,y in detection_points(first)if t in times]
         if len(observed)<2 or max(observed)-min(observed)<.5*spacing:continue
-        before,after=dict(first.get('detected_points',first['points'])),dict(last.get('detected_points',last['points']))
+        before,after=dict(detection_points(first)),dict(detection_points(last))
         gaps=[after[t]-before[t]for t in before.keys()&after.keys()]
         if gaps and (min(gaps)<=0 or max(gaps)-min(gaps)>2 and length_checks.check(head,tail)['status']!='consistent'):continue
         by_time=defaultdict(list)
