@@ -18,6 +18,7 @@ def cap_reference(bank,template):
     specification={'spacing_pixels':bank['spacing_pixels'],'lane_kind':template['lane_kind'],
                    'anchor':template['anchor_pixels'],'shape':template['rgb'].shape,
                    'cap_box':cap['box'],'cap_maximum_error':cap.get('maximum_error',.015)}
+    if 'native_center_pixels'in template:specification['native_center_pixels']=template['native_center_pixels']
     if 'comparison_boxes'in cap:specification['comparison_boxes']=cap['comparison_boxes']
     if template.get('cap_features'):
         specification['cap_features']=[{**r,'maximum_error':r.get('maximum_error',.015)}
@@ -47,7 +48,7 @@ def native_geometry(bank,template,sample,crop):
     if abs(sample['offset_pixels'])>FORMAT['maximum_offset_spacing']*bank['spacing_pixels']:
         raise ValueError('Anchor proof native offset exceeds the measurement limit')
     expected=sample['detected_y_pixels']+sample['offset_pixels']-crop[1]
-    if abs(template['anchor_pixels'][1]-expected)>1e-6:
+    if abs(template.get('native_center_pixels',template['anchor_pixels'])[1]-expected)>1e-6:
         raise ValueError('Reference anchor disagrees with the measured native center')
     if 'template'in sample:
         similarity,alternative=sample.get('similarity'),sample.get('alternative_similarity')
@@ -70,7 +71,8 @@ def validate(bank,template,proof):
             raise ValueError('Native anchor proof needs source artifact and RGB frame identities')
     native_geometry(bank,template,proof['native_measurement'],proof['source_crop'])
     return {'coordinate_uncertainty_pixels':FORMAT['coordinate_uncertainty_pixels'],
-            'cap_reference_sha256':proof['cap_reference_sha256']}
+            'cap_reference_sha256':proof['cap_reference_sha256'],
+            'center_offset_y_pixels':template.get('native_center_pixels',template['anchor_pixels'])[1]-template['anchor_pixels'][1]}
 
 
 def certificate(bank,template,sample,crop,artifact_sha256,frame_sha256):

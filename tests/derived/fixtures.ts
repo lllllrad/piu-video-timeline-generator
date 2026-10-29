@@ -43,7 +43,7 @@ export function nativeScene(events: [number, number][], spacing = 40, fps = 60, 
 /** Certified endpoint errors explain a raster gap differing from its fitted value. */
 export function measuredGapScene(spacing=40,fps=60){
   const data=nativeScene([[.85,0],[1.1,1]],spacing,fps,5,{end:1.3}),scale=spacing/40;
-  const uncertainty=Math.max(contracts.native_anchor.coordinate_uncertainty_pixels,contracts.native_anchor.coordinate_uncertainty_pixels*scale);
+  const uncertainty=contracts.native_anchor.coordinate_uncertainty_pixels*scale;
   data.notes.forEach((n,i)=>{
     const error=(i===0?1:-1)*.75*scale;
     n.points=n.points.map(([t,y])=>[t,y+error]);n.fit_method='shared_scroll_clock';n.residual_pixels=Math.abs(error);

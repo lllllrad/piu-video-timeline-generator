@@ -43,7 +43,7 @@ for mode in ('contained','unsupported_hole','outside','other_lane','alternative_
  assert out['role']=='hold_body' and out['bounds_pixels']==b['bounds_pixels']
  results[mode]=bool(out.get('cap_subfeature'))
 template={'mask':np.ones((8,8)), 'regions':[{'name':'cap','maximum_error':.002}],'lane_kind':0}
-bank={'anchor_registrations':{'cap':{'coordinate_uncertainty_pixels':1.}}}
+bank={'anchor_registrations':{'cap':{'coordinate_uncertainty_pixels':1.,'center_offset_y_pixels':0.}}}
 sample={'template':'cap','y':.5,'region_errors':{'cap':0.},'reference_scale_y':1.5,'sampling_phase_pixels':[.5,.5]}
 registration,_=registered_comparison(sample,bank,{'cap':template},0,50,100,1.5)
 invalid=False

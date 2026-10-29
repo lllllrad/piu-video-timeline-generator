@@ -4,7 +4,7 @@ from collections import defaultdict
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 17, 'method': 'independent_image_hold_proof',
+FORMAT = {'schema': 1, 'revision': 18, 'method': 'independent_image_hold_proof',
           'interior_caps':'separate_observed_objects',
           'motion_peers':'all_observed_cap_identities',
           'cap_coverage':'all_qualified_cap_comparisons'}
@@ -30,11 +30,11 @@ def image_pairs(data, native, roles, references, cap_references, lengths):
     for head, first in enumerate(data['notes']):
         if roles[head] != {'hold_start'}:
             continue
-        before = dict(first['points'])
+        before = dict(first.get('detected_points',first['points']))
         for tail, last in enumerate(data['notes']):
             if roles[tail] != {'hold_end'} or last['lane'] != first['lane']:
                 continue
-            after = dict(last['points'])
+            after = dict(last.get('detected_points',last['points']))
             proof, missing = [], []
             for time in sorted(before.keys() & after.keys()):
                 a, b = before[time], after[time]
@@ -84,10 +84,10 @@ def image_pairs(data, native, roles, references, cap_references, lengths):
     positions=defaultdict(list)
     for i,note in enumerate(data['notes']):
         if note.get('duplicate_of')is not None or not roles[i]&{'tap','hold_start','hold_end'}:continue
-        for time,y in note['points']:positions[time,note['lane']].append((i,y))
+        for time,y in note.get('detected_points',note['points']):positions[time,note['lane']].append((i,y))
     for head,tail,proof,_ in proposals:
         first,last=data['notes'][head],data['notes'][tail]
-        before,after=dict(first['points']),dict(last['points']);seen=set()
+        before,after=dict(first.get('detected_points',first['points'])),dict(last.get('detected_points',last['points']));seen=set()
         for point in proof:
             time=point['time'];bounds=point.get('covered_bounds_pixels')
             lo=before.get(time,bounds[0]if bounds else None);hi=after.get(time,bounds[1]if bounds else None)

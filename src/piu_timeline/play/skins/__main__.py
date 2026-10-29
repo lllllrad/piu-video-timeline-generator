@@ -72,6 +72,10 @@ def main():
     anchors.add_argument('--analysis', type=Path, required=True)
     anchors.add_argument('--registration', type=Path, required=True)
     anchors.add_argument('--output', type=Path, required=True)
+    centers = commands.add_parser('register-centers')
+    centers.add_argument('bank', type=Path)
+    centers.add_argument('--profile', choices=['bright-piu'], required=True)
+    centers.add_argument('--output', type=Path, required=True)
     references = commands.add_parser('review-bank')
     references.add_argument('bank', type=Path)
     references.add_argument('--output', type=Path, required=True)
@@ -94,6 +98,9 @@ def main():
         print(build(args.specification, args.output))
     elif args.command == 'register-anchors':
         print(register_anchors(args.bank,args.analysis,args.registration,args.output))
+    elif args.command == 'register-centers':
+        from piu_timeline.play.skins.source_centers import prepare
+        print(prepare(args.bank,args.output))
     elif args.command == 'review-bank':
         print(review_bank(args.bank,args.output,args.lane_kind))
     else:

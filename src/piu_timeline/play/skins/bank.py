@@ -55,6 +55,11 @@ def load_bank(path):
         if (len(anchor) != 2 or not all(finite_number(x) for x in anchor)
                 or not 0 <= anchor[0] < width or not 0 <= anchor[1] < height):
             raise ValueError('Skin template anchor must lie inside its image')
+        if 'native_center_pixels'in entry:
+            center=entry['native_center_pixels']
+            if (not isinstance(center,list)or len(center)!=2 or not all(finite_number(v)for v in center)
+                    or not 0<=center[0]<width or not 0<=center[1]<height or entry['role']=='hold_body'):
+                raise ValueError('Native cap center must lie inside a cap reference image')
         if 'lane_centers_x'in evidence:
             centers=evidence['lane_centers_x'];dimensions=evidence.get('reference_dimensions',[])
             crop=evidence.get('source_crop',[])

@@ -38,7 +38,7 @@ export class NativeGapMeasurements {
         if(!o||o.native_cap_registration_status==='conflicting'||!o.template||!Number.isFinite(o.native_y_pixels)||Math.abs(o.native_y_pixels-positions[i])>EPS)
           return failed('unqualified_native_position');
         const e=o.native_cap_coordinate_uncertainty_pixels,scale=o.native_cap_reference_scale_y;
-        if(![e,scale].every(v=>typeof v==='number'&&Number.isFinite(v)&&v>0)||Math.abs(e-Math.max(A.coordinate_uncertainty_pixels,A.coordinate_uncertainty_pixels*scale))>EPS)
+        if(![e,scale].every(v=>typeof v==='number'&&Number.isFinite(v)&&v>0)||Math.abs(e-A.coordinate_uncertainty_pixels*scale)>EPS)
           return failed('unqualified_position_uncertainty');
         if(!Number.isFinite(o.source_pts_seconds)||!Number.isFinite(timeline.get(time))||Math.abs(o.source_pts_seconds-timeline.get(time))>1e-6)
           return failed('source_pts_conflict');

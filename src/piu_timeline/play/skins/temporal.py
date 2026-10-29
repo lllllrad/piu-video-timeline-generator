@@ -23,7 +23,7 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
         role=('head'if roles[i]=={'hold_start'}else'tail'if roles[i]=={'hold_end'}
               else'barrier'if 'tap'in roles[i]else None)
         if role:
-            for time,y in note['points']:
+            for time,y in note.get('detected_points',note['points']):
                 known[time,note['lane']].append((i,y,role))
     steps=measured_steps(data,native)
     spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
@@ -80,7 +80,7 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
         if len(body_times)<4 or max(body_times)-min(body_times)<.065:continue
         observed=[y for t,y in first['points']if t in times]
         if len(observed)<2 or max(observed)-min(observed)<.5*spacing:continue
-        before,after=dict(first['points']),dict(last['points'])
+        before,after=dict(first.get('detected_points',first['points'])),dict(last.get('detected_points',last['points']))
         gaps=[after[t]-before[t]for t in before.keys()&after.keys()]
         if gaps and (min(gaps)<=0 or max(gaps)-min(gaps)>2 and length_checks.check(head,tail)['status']!='consistent'):continue
         by_time=defaultdict(list)

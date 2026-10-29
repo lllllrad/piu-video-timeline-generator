@@ -12,7 +12,7 @@ import {recoverRows} from '../../src/piu_timeline/derived/recovery.ts';
 function scene(spacing=40,fps=60,earlier=false):RecordData{
  const fixed=earlier?.9:1.1,d=nativeScene([[1,0],[fixed,1]],spacing,fps,5,{end:1.4});
  d.notes.forEach(n=>Object.assign(n,{type_status:'tap',timing_reconstruction:{status:'restored'},prediction_uncertainty_seconds:.04}));
- const scale=spacing/40,error=Math.max(contracts.native_anchor.coordinate_uncertainty_pixels,contracts.native_anchor.coordinate_uncertainty_pixels*scale);
+ const scale=spacing/40,error=contracts.native_anchor.coordinate_uncertainty_pixels*scale;
  d.head_registration={format:{native_cap_registration:structuredClone(contracts.native_anchor)},notes:d.notes.map((n,i)=>({
   note:i,coordinate_method:'native_image_anchors',observations:n.points.map(([time,y])=>({time,source_pts_seconds:80+time,
    native_y_pixels:y,template:`generated-cap-${i}`,native_cap_coordinate_uncertainty_pixels:error,native_cap_reference_scale_y:scale}))}))};

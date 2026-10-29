@@ -32,7 +32,7 @@ def validate_origin(candidate,template,width,height,scale):
 
 
 def registered_comparison(image,bank,templates,lane,y,height,scale):
-    """Use a positive source-bound comparison at the unchanged measured row."""
+    """Project a positive comparison from its matching anchor to its native center."""
     choices=[]
     for index,candidate in enumerate([image,*image.get('alternatives',[])]):
         name=candidate['template']
@@ -53,18 +53,19 @@ def registered_comparison(image,bank,templates,lane,y,height,scale):
                     or candidate.get('sampling_kernel','area')not in SAMPLING_FORMAT['kernels']
                     or any(not any(abs(v-p)<1e-8 for p in phases(scale))for v in phase)):
                 raise ValueError('Registered comparison has incompatible reference sampling')
-        uncertainty=max(ANCHOR_FORMAT['coordinate_uncertainty_pixels'],
-                        bank['anchor_registrations'][name]['coordinate_uncertainty_pixels']*sy)
-        choices.append({'template':name,'comparison_index':index,'native_y_pixels':row,
+        uncertainty=bank['anchor_registrations'][name]['coordinate_uncertainty_pixels']*sy
+        center=row+bank['anchor_registrations'][name]['center_offset_y_pixels']*sy
+        choices.append({'template':name,'comparison_index':index,'detected_y_pixels':row,'native_y_pixels':center,
                         'cap_error':error,'scale_y':sy,'uncertainty_pixels':uncertainty})
     if not choices:return {},None
     lo=max(c['native_y_pixels']-c['uncertainty_pixels']for c in choices)
     hi=min(c['native_y_pixels']+c['uncertainty_pixels']for c in choices)
     if lo>hi+1e-6:return {},{'coordinate_intersection_pixels':[lo,hi],'comparisons':choices}
-    coincident=[c for c in choices if abs(c['native_y_pixels']-y)<1e-5]
+    coincident=[c for c in choices if abs(c['detected_y_pixels']-y)<1e-5]
     if not coincident:return {},None
     chosen=min(coincident,key=lambda c:(c['uncertainty_pixels'],c['comparison_index']))
-    return {'native_cap_coordinate_uncertainty_pixels':chosen['uncertainty_pixels'],
+    return {'native_y_pixels':chosen['native_y_pixels'],
+            'native_cap_coordinate_uncertainty_pixels':chosen['uncertainty_pixels'],
             'native_cap_reference_scale_y':chosen['scale_y'],'native_cap_reference_template':chosen['template'],
             'native_cap_reference_error':chosen['cap_error'],'native_cap_comparison_index':chosen['comparison_index']},None
 
@@ -81,7 +82,7 @@ def measure(data,frames):
     scale=float(np.median(np.diff([lane['x']*data['analysis_width']for lane in data['layout']['lanes']])))/bank['spacing_pixels']
     expected=defaultdict(list);samples=[[]for _ in data['notes']];conflicts=defaultdict(list)
     for index,note in enumerate(data['notes']):
-        for time,y in note['points']:expected[time].append((index,note['lane'],y))
+        for time,y in note.get('detected_points',note['points']):expected[time].append((index,note['lane'],y))
     source_pts={s['time']:s['source_pts']for s in data.get('scroll_motion',{}).get('samples',[])}
     last=None
     for frame in frames:
@@ -112,7 +113,7 @@ def measure(data,frames):
             if conflict:
                 conflicts[index].append({'time':time,'source_pts_seconds':pts,**conflict})
                 registration={'native_cap_registration_status':'conflicting'}
-            samples[index].append({'time':time,'source_pts_seconds':pts,'native_y_pixels':y,
+            samples[index].append({'time':time,'source_pts_seconds':pts,'native_y_pixels':y,'detected_y_pixels':y,
                                    'image_anchor':[image['x'],image['y']],'template':image['template'],
                                    'cap_error':error,'cap_reference_sha256':identities[image['template']],
                                    'classification_status':image['classification_status'],

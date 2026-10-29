@@ -139,7 +139,7 @@ class AnchorRegistrationTest(unittest.TestCase):
             self.assertEqual(prepare(enlarged,40),[])
             smaller=deepcopy(data);smaller['analysis_width']=100
             smaller['head_registration']=measure(smaller,frames)
-            self.assertEqual(smaller['head_registration']['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels'],1.)
+            self.assertEqual(smaller['head_registration']['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels'],.5)
             for record in data['head_registration']['notes']:
                 for sample in record['observations']:
                     sample.pop('native_cap_coordinate_uncertainty_pixels');sample.pop('native_cap_reference_scale_y')

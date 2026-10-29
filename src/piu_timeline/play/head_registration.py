@@ -8,7 +8,7 @@ import numpy as np
 from piu_timeline.play.note_types import cap_envelope, shape
 from piu_timeline.play.cap_templates import FORMAT as TEMPLATE_FORMAT
 
-FORMAT={'schema':1,'revision':9,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':10,'minimum_frames':8,'minimum_span_seconds':.12,
         'coordinate_projection':'per_frame_with_stable_offset_fallback',
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
         'numeric_epsilon_pixels':1e-9,
@@ -129,7 +129,15 @@ def apply(data,directory,display_delay_ms=0):
         with (directory/'frames.jsonl').open()as stream:
             registration=measure_images(data,(json.loads(line)for line in stream))
         (directory/'head-registration.json').write_text(json.dumps(registration)+'\n')
-        return {**data,'head_registration':registration}
+        measured={}
+        for r in registration['notes']:
+            observations=[{**o,'offset_pixels':o['native_y_pixels']-o['detected_y_pixels']}
+                          for o in r['observations']if 'native_cap_coordinate_uncertainty_pixels'in o]
+            if observations:
+                measured[r['note']]={**r,'status':'measured_only','offset_pixels':0,
+                    'coordinate_uncertainty_pixels':max(o['native_cap_coordinate_uncertainty_pixels']for o in observations),
+                    'observations':observations}
+        return refit_coordinates(data,registration,measured,display_delay_ms)
     from piu_timeline.play.appearance import acquire
     if not data.get('media',{}).get('video_streams'):
         return {**data,'head_registration':{'format':FORMAT,'notes':[],'status':'unavailable'}}
@@ -139,6 +147,10 @@ def apply(data,directory,display_delay_ms=0):
     registration=measure(data,path)
     (directory/'head-registration.json').write_text(json.dumps(registration)+'\n')
     measured={r['note']:r for r in registration['notes']}
+    return refit_coordinates(data,registration,measured,display_delay_ms)
+
+
+def refit_coordinates(data,registration,measured,display_delay_ms):
     if not measured:return {**data,'head_registration':registration}
     from piu_timeline.play.tracking import Track,fit_track
     from piu_timeline.play.shared_timing import restore
@@ -175,14 +187,5 @@ def apply(data,directory,display_delay_ms=0):
 
 def project_coordinates(raw,record):
     """Use each observed canonical center; infer an offset only if stable."""
-    samples={s['time']:s for s in record['observations']}
-    if len(samples)!=len(record['observations']):raise ValueError('Duplicate native cap measurements')
-    fallback=record['offset_pixels']if record['status']=='registered'else 0
-    points=[]
-    for time,y in raw:
-        sample=samples.get(time)
-        if sample and abs(sample['detected_y_pixels']-y)>1e-5:
-            raise ValueError('Native cap measurement differs from original detection')
-        points.append([time,y+(sample['offset_pixels']if sample else fallback)])
-    if set(samples)-{t for t,y in raw}:raise ValueError('Native cap measurement has no original frame')
-    return points
+    from piu_timeline.derived import call
+    return call('skinCenters.project',raw,record)
