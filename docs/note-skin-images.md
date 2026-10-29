@@ -104,6 +104,21 @@ when non-area, and `reference_scale_y`; anchors use the same transform.
 Body/connection coverage, receptor risk and native clearance use the matching
 kernel/phase's compared support, rather than another variant's rectangle or rows.
 
+A region may restrict its comparison to the union of `comparison_boxes` inside
+its outer `box`. This separates a shaped glyph from the surrounding source RGB
+needed for interpolation. Boxes use source-pixel coordinates; output centers
+select their membership, while the full kernel still needs known source pixels.
+Excluded corners and holes provide no cap/body coverage even when their RGB is
+known context. A narrow central crop must not stand in for a complete cap when
+the missing boundary rows are needed to establish hold connectivity or explain
+body-pattern matches inside the glyph. Keep distinct connection comparisons:
+matching a tap's lower corner is insufficient proof of a ribbon end without the
+continued stem above it.
+
+The bank contract declares this optional comparison geometry only when used.
+Its boxes participate in the reference hash and native cap identity. Banks
+without the field keep their existing comparison semantics and identities.
+
 A uniform body reference can also match the colored interior of a cap. When
 every positively compared pixel of every retained body alternative is contained
 in positively compared cap pixels in the same lane/frame, retain that body
@@ -294,6 +309,12 @@ The specification supplies `skin`, `spacing_pixels`, optional `analysis_width`,
 and `templates`. Each template supplies `id`, `lane_kind`, `role`,
 `source_image`, `crop` (`left, top, right, bottom`), `anchor_pixels` relative to
 that crop, and `regions` containing `name`, `box` and optional `maximum_error`.
+Each region can also supply nonempty `comparison_boxes`, a list of integer
+`[left, top, right, bottom]` boxes in the same crop coordinates. They must lie
+inside that region and select at least eight supported source pixels. Overlaps
+are a union. The builder transforms them with the complete source image before
+cropping, and the reference viewer draws the selected boxes. Invalid or vanished
+support fails explicitly.
 Optional `sampling_context` boxes use the same crop-relative coordinates. They
 declare actual surrounding source RGB needed by interpolation, without adding
 comparison regions or geometry coverage. Include sufficient context around a

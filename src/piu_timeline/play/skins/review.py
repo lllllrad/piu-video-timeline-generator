@@ -21,8 +21,9 @@ def review_bank(path, output, lane_kind=None):
             x0, y0, x1, y1 = region['box']
             name = region['name']
             color = '#ff6688' if name.startswith('connection') else '#38d8ff'
-            overlays.append(f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" '
-                            f'fill="none" stroke="{color}" stroke-width="0.35"/>')
+            for a,b,c,d in region.get('comparison_boxes',[region['box']]):
+                overlays.append(f'<rect x="{a}" y="{b}" width="{c-a}" height="{d-b}" '
+                                f'fill="none" stroke="{color}" stroke-width="0.35"/>')
             labels.append(escape(f'{name}: {region["box"]}; RGB MSE ≤ {region.get("maximum_error", .015)}'))
         overlays.append(f'<path d="M {ax-2} {ay} h 4 M {ax} {ay-2} v 4" '
                         'stroke="#78ff79" stroke-width="0.5"/>')
@@ -43,8 +44,9 @@ def review_bank(path, output, lane_kind=None):
             'li{font:12px monospace}p{max-width:900px}</style>'
             f'<h1>{title}: exact reference regions</h1>'
             '<p>Images show the original PNG alpha mask at 4× native size. Checkerboard pixels are excluded. '
-            'Cyan boxes mark cap, body or clearance regions; pink marks connection regions; green marks the anchor. '
-            'Only opaque pixels inside each box contribute to that region’s RGB comparison. '
+            'Cyan boxes mark selected cap, body or clearance areas; pink marks connections; green marks the anchor. '
+            'Only source-supported pixels inside the selected comparison boxes contribute to RGB comparison. '
+            'Unmarked context pixels do not supply geometry. '
             'These are reference coordinates; source-frame placements additionally scale with lane spacing.</p>'
             f'<main>{"".join(cards)}</main></html>')
     output.parent.mkdir(parents=True, exist_ok=True)

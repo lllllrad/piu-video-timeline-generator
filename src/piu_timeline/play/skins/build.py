@@ -37,7 +37,9 @@ def build(specification, output):
         def transform(box):
             return [round((x0+box[0])*sx)-left,round((y0+box[1])*sy)-top,
                     round((x0+box[2])*sx)-left,round((y0+box[3])*sy)-top]
-        regions = [{**r,'box':transform(r['box'])}for r in item['regions']]
+        regions = [{**r,'box':transform(r['box']),
+                    **({'comparison_boxes':[transform(box)for box in r['comparison_boxes']]}
+                       if 'comparison_boxes'in r else{})}for r in item['regions']]
         context=[transform(box)for box in item.get('sampling_context',[])]
         alpha = np.zeros(crop.shape[:2], dtype='uint8')
         for box in [*[r['box']for r in regions],*context]:

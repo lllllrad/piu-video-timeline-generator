@@ -18,6 +18,7 @@ def cap_reference(bank,template):
     specification={'spacing_pixels':bank['spacing_pixels'],'lane_kind':template['lane_kind'],
                    'anchor':template['anchor_pixels'],'shape':template['rgb'].shape,
                    'cap_box':cap['box'],'cap_maximum_error':cap.get('maximum_error',.015)}
+    if 'comparison_boxes'in cap:specification['comparison_boxes']=cap['comparison_boxes']
     fingerprint=sha256(json.dumps(specification,sort_keys=True).encode())
     # Full image bytes also bound resampling effects at the cap boundary.
     fingerprint.update(template['rgb'].tobytes());fingerprint.update(template['mask'].tobytes())

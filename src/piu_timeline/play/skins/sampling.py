@@ -56,6 +56,11 @@ def kernel_models(original,scale,kernel):
             # Regions select output locations. Their interpolation stencil may
             # include an adjacent declared region, never unsupported padding.
             valid=known&((cy>=b)&(cy<d))[:,None]&((cx>=a)&(cx<c))[None,:]
+            if 'comparison_boxes'in region:
+                selected=np.zeros_like(known)
+                for x0,y0,x1,y1 in region['comparison_boxes']:
+                    selected|=((cy>=y0)&(cy<y1))[:,None]&((cx>=x0)&(cx<x1))[None,:]
+                valid&=selected
             ys,xs=np.nonzero(valid)
             if not len(xs):
                 regions.append({**region,'box':[0,0,1,1],'mask':np.zeros((1,1),dtype='uint8')});continue

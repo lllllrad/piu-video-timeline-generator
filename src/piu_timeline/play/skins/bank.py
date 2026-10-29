@@ -8,6 +8,7 @@ import numpy as np
 
 ROLES = ('tap', 'hold_start', 'hold_body', 'hold_end')
 FORMAT = {'schema': 1, 'revision': 2, 'measurement': 'masked_rgb_regions'}
+COMPARISON_FORMAT = {'schema':1,'method':'source_pixel_box_union'}
 
 
 def finite_number(value):
@@ -62,6 +63,16 @@ def load_bank(path):
             x0, y0, x1, y1 = box
             if mask[y0:y1, x0:x1].sum() < 8:
                 raise ValueError('Each skin region needs at least eight supported image pixels')
+            if 'comparison_boxes'in region:
+                boxes=region['comparison_boxes'];selected=np.zeros((y1-y0,x1-x0),dtype=bool)
+                if not isinstance(boxes,list)or not boxes:raise ValueError('Comparison boxes must be a nonempty list')
+                for box in boxes:
+                    if (not isinstance(box,list)or len(box)!=4 or any(type(v)is not int for v in box)
+                            or not x0<=box[0]<box[2]<=x1 or not y0<=box[1]<box[3]<=y1):
+                        raise ValueError('Comparison box must stay inside its region')
+                    a,b,c,d=box;selected[b-y0:d-y0,a-x0:c-x0]=True
+                if np.count_nonzero(selected&mask[y0:y1,x0:x1])<8:
+                    raise ValueError('Comparison boxes need eight supported source pixels')
         if entry['role'] in ('hold_start', 'hold_end'):
             connection = next(r['box'] for r in regions if r['name'] == 'connection')
             if ((entry['role'] == 'hold_start' and connection[1] <= anchor[1])
@@ -81,6 +92,8 @@ def load_bank(path):
         raise ValueError('Skin bank contains no image templates')
     bank={'skin': document['skin'], 'spacing_pixels': spacing, 'templates': templates,
           'contract': {'format': FORMAT, 'sha256': fingerprint.hexdigest(), 'skin': document['skin']}}
+    if any('comparison_boxes'in r for t in templates for r in t['regions']):
+        bank['contract']['comparison_geometry']=COMPARISON_FORMAT
     from piu_timeline.play.skins.anchors import registered_anchors
     bank['anchor_registrations']=registered_anchors(bank)
     return bank
