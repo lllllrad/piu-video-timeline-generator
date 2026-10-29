@@ -85,7 +85,9 @@ def refresh(data, output, path):
         raise ValueError('Skin replay source no longer matches its acquisition identity')
     trace = output / 'frames.jsonl'
     backup = output / 'frames.outline.jsonl'
-    if not backup.exists():
+    if not data.get('skin_detector')and not backup.exists():
+        from piu_timeline.play.observations.cache import is_outline_trace
+        if not is_outline_trace(trace):raise ValueError('Unlabelled image observations cannot become an outline backup')
         shutil.copy2(trace, backup)
     target = output / 'frames.skin-build.jsonl'
     from piu_timeline.play.skins.reuse import reusable_groups, group, merge_observations

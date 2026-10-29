@@ -384,6 +384,10 @@ unverifiable old bank or changed detector rules require fresh acquisition.
 Missing native image observations or invalid source timestamps fail explicitly.
 The original contour trace is preserved in `frames.outline.jsonl` when switching
 an existing play to an image bank. Original media remains unchanged.
+Image-first acquisition has no original contour trace. Image-to-image updates
+must not create one from RGB-template observations. Removing that profile needs
+fresh contour acquisition unless a genuine contour backup is available; both
+cache selection and replay check the observation type rather than its filename.
 
 RGB frame detection uses separate CPU worker processes, defaulting to half the
 available CPU affinity, capped at eight. Set `PIU_SKIN_JOBS=1` for serial execution

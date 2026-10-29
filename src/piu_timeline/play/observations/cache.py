@@ -1,10 +1,41 @@
 """Select compatible immutable native-observation backups."""
 import json
+import math
 import re
 
 from piu_timeline.storage import read_analysis_header as cache_header
 
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
+
+
+def is_outline_trace(path):
+    """A filename alone cannot turn image-template observations into outlines."""
+    try:
+        with path.open()as stream:frame=json.loads(stream.readline())
+        return (isinstance(frame,dict)and isinstance(frame.get('notes'),list)
+                and 'skin_observations'not in frame
+                and all(n.get('method')!='skin_image'for n in frame['notes']))
+    except (OSError,ValueError,AttributeError,TypeError):return False
+
+
+def detector_replay_available(cached,directory,options):
+    return (options.get('note_skin')is not None or not cached.get('skin_detector')
+            or is_outline_trace(directory/'frames.outline.jsonl'))
+
+
+def validate_native_frame(frame,lane_count,*,allow_images=True):
+    try:
+        if (not math.isfinite(frame['source_pts_seconds'])or not math.isfinite(frame['playback_seconds'])
+                or not isinstance(frame['notes'],list)
+                or frame['combo']is not None and(type(frame['combo'])is not int or frame['combo']<0)
+                or any(type(n['lane'])is not int or not 0<=n['lane']<lane_count
+                       or not all(isinstance(n[k],(int,float))and math.isfinite(n[k])and 0<=n[k]<=1 for k in ('x','y'))
+                       for n in frame['notes'])):
+            raise ValueError('Unsupported saved native observation format')
+    except (KeyError,TypeError)as error:
+        raise ValueError('Unsupported saved native observation format')from error
+    if not allow_images and('skin_observations'in frame or any(n.get('method')=='skin_image'for n in frame['notes'])):
+        raise ValueError('Image-template observations cannot be replayed as contour observations')
 
 
 def observation_settings_match(cached, document, segment, start, end, options):
@@ -32,7 +63,8 @@ def find_saved_observations(root, final, document, segment, start, end, options)
                 cached=json.loads(path.read_text())
                 if (observation_settings_match(cached,document,segment,start,end,options)
                         and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
-                        and all(key in cached for key in ('layout','analysis_height','frame_count'))):
+                        and all(key in cached for key in ('layout','analysis_height','frame_count'))
+                        and detector_replay_available(cached,path.parent,options)):
                     return cached,path.parent
         except (OSError,ValueError):
             continue

@@ -12,7 +12,7 @@ import uuid
 import cv2
 import numpy as np
 
-from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, find_saved_observations
+from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, find_saved_observations, detector_replay_available, is_outline_trace, validate_native_frame
 from piu_timeline.vision.ocr import ocr_images
 from piu_timeline.play.frames import decode_frames, crop_region, TIME_EPSILON
 from piu_timeline.play.tracking import NoteTracker, DigitReader, ComboTracker, associate
@@ -143,7 +143,7 @@ def refit_saved(cached, previous, output, segment, display_delay_ms, note_skin=N
     if cached.get('skin_detector', {}).get('contract') != detector_contract(note_skin):
         if note_skin is None:
             outline = output / 'frames.outline.jsonl'
-            if not outline.is_file():
+            if not is_outline_trace(outline):
                 raise ValueError('Original contour observations are unavailable for detector reset')
             shutil.copy2(outline, output / 'frames.jsonl')
             shutil.copy2(outline, output / 'frames.base.jsonl')
@@ -162,16 +162,7 @@ def refit_saved(cached, previous, output, segment, display_delay_ms, note_skin=N
     combo, count, last = ComboTracker(), 0, None
     for line in (output / 'frames.jsonl').open():
         frame = json.loads(line)
-        try:
-            if (not math.isfinite(frame['source_pts_seconds']) or not math.isfinite(frame['playback_seconds'])
-                    or not isinstance(frame['notes'],list)
-                    or frame['combo'] is not None and (type(frame['combo']) is not int or frame['combo']<0)
-                    or any(type(note['lane']) is not int or not 0<=note['lane']<len(cached['layout']['lanes'])
-                           or not all(isinstance(note[key],(int,float)) and math.isfinite(note[key]) and 0<=note[key]<=1 for key in ('x','y'))
-                           for note in frame['notes'])):
-                raise ValueError('Unsupported saved native observation format')
-        except (KeyError,TypeError) as error:
-            raise ValueError('Unsupported saved native observation format') from error
+        validate_native_frame(frame,len(cached['layout']['lanes']),allow_images=note_skin is not None)
         seconds = frame['playback_seconds']
         if last is not None and seconds <= last:
             raise ValueError('Saved observation timestamps are not increasing')
@@ -347,7 +338,8 @@ def run(source, segment_number=1, force=False, **options):
             can_refit = (same_source and same_settings
                          and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
                          and all(key in cached for key in ('layout','analysis_height','frame_count'))
-                         and (final / 'frames.jsonl').is_file())
+                         and (final / 'frames.jsonl').is_file()
+                         and detector_replay_available(cached,final,options))
             upstream_current=(same_source and same_settings and cached.get('play_analysis_version') == VERSION
                     and cached.get('skin_detector',{}).get('contract') == skin_contract
                     and cached.get('timing_format') == TIMING_FORMAT and objects_current(cached,final))
