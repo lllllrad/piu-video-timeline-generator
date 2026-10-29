@@ -131,5 +131,9 @@ export function recoverRows(input: RecordData): [RecordData[], number[]] {
   // Conditional clock evidence cannot displace an independently supported row.
   const pending=partition({...data,matches:result}),[remaining]=candidates(pending,events);
   const bounded=boundedRefreshes(pending,remaining,events,(lo,hi)=>holdOverlap(pending,lo,hi,guard));
-  return [[...result,...bounded], [...recovered, ...aggregated,...bounded.map(m=>m.note)]];
+  const completed=result.map(m=>{
+    const chord=bounded.find(b=>b.target_seconds===m.target_seconds&&b.combo_event===m.combo_event&&b.judgment_event===m.judgment_event);
+    return chord?{...m,row_note_count:chord.row_note_count}:m;
+  });
+  return [[...completed,...bounded], [...recovered, ...aggregated,...bounded.map(m=>m.note)]];
 }

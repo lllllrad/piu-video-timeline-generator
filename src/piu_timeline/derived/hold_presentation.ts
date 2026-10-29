@@ -88,7 +88,11 @@ export function present(input: RecordData, preHoldProofs: Record<string, RecordD
     if(!fresh.length)break;
     const checked=annotateMatches({...data,notes,matches:[...matches,...fresh]});
     const accepted=checked.matches.filter(m=>!assigned.has(m.note));
-    matches=checked.matches;data={...data,conflicted_matches:checked.conflicted_matches};
+    matches=checked.matches.map(m=>{
+      const chord=accepted.find(a=>a.recovery_method==='exclusive_bounded_target_with_synchronized_refreshes'&&
+        a.target_seconds===m.target_seconds&&a.combo_event===m.combo_event&&a.judgment_event===m.judgment_event);
+      return chord?{...m,row_note_count:chord.row_note_count}:m;
+    });data={...data,conflicted_matches:checked.conflicted_matches};
     if(!accepted.length)break;
     laneRecovered.push(...accepted.map(m=>m.note));
     labeled=attachRecoveredLabels({...data,matches,combo_events:events('combo_events'),judgment_events:labeled.judgment_events});

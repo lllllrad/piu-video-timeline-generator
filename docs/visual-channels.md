@@ -307,6 +307,17 @@ moves notes or changes input brackets. A persistent readable word without a
 measured refresh does not supply this evidence; separate post-counter frame
 proof still requires its usual multiple distinct source frames.
 
+A synchronized counter/word pair may already belong to part of a visible chord.
+The remaining heads can share it only when every compatible head has the exact
+same reconstructed target and a distinct lane, every head is a confirmed tap
+with restored bounded timing, and no hold risk, alternative refresh, competing
+row or processing contradiction remains. Existing owners must belong to that
+same row and already own both channels. A nearby stagger is a different row.
+Retain original target uncertainty and both display brackets; this completes
+row ownership without asserting a separately observed lane onset. The reported
+row size includes existing and newly connected heads, including when word
+recovery establishes the pair in a later association generation.
+
 ## Note type evidence and contradictions
 
 A failed hold reconstruction does not establish a tap. The `note_types`
