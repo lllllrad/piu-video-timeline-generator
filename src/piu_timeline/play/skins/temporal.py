@@ -42,6 +42,7 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
     for frame in native:
         time=frame['playback_seconds'];lanes=defaultdict(list)
         for image in frame.get('skin_observations',[]):
+            if image.get('cap_subfeature'):continue
             lane=image['lane']
             owned=any(role!='barrier'and abs(y-image['y']*height)<1e-5 for i,y,role in known[time,lane])
             if image['role']in('hold_start','hold_end','hold_body'):rows=image_spans(image,references)

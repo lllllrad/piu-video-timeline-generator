@@ -3,6 +3,7 @@ import numpy as np
 
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.detector import SkinDetector
+from piu_timeline.play.skins.sampling import key
 
 
 def reference_rows(data, *, cap_only=False):
@@ -19,7 +20,7 @@ def reference_rows(data, *, cap_only=False):
             row=int(row)
             if runs and runs[-1][1]==row:runs[-1][1]=row+1
             else:runs.append([row,row+1])
-        result[template['id']]=runs
+        result[key(template)]=runs
     return result
 
 
@@ -30,4 +31,4 @@ def image_spans(image,references):
         patterns.extend(p for p in image.get('alternatives',[])
                         if p['role']==image['role'] and p.get('classification_status')=='full_pattern')
     return [(p['bounds_pixels'][1]+a,p['bounds_pixels'][1]+b)
-            for p in patterns for a,b in references[p['template']]]
+            for p in patterns for a,b in references[key(p)]]

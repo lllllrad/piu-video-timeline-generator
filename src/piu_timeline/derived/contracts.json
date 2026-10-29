@@ -134,7 +134,7 @@
   },
   "image_coordinates": {
     "schema": 1,
-    "revision": 4,
+    "revision": 5,
     "method": "native_image_anchors",
     "trace": "frames.jsonl"
   },

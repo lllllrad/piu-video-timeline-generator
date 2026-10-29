@@ -62,7 +62,7 @@ or object identities are supplied to acquisition. Temporary reference banks use
 the same declared glyph design, with separate cap/connection/clearance regions;
 frames vary position, background noise, lane count, integer scale and cadence.
 
-The passing matrix has 40 scenes: empty fields; isolated taps in all five lane
+The native matrix has 86 scenes: empty fields; isolated taps in all five lane
 kinds; Single/Double chords; staggered and repeated taps; long/short holds versus
 two taps; adjacent holds; real taps before/after holds; overlapping lanes;
 unobservable connections; orphan bodies; and contradictory tap/hold observations.
@@ -74,11 +74,19 @@ It does not establish their clocks, final held/input semantics, warning projecti
 or UCS output. Nor does it establish O09/O14/O18, realistic skin variation, named
 foreground combinations or the complete visibility/capture/channel matrix.
 
-Fractional whole-frame resampling remains a known failure: in a 1.5-scale scene,
-intact caps at some source-pixel phases are not detected with the same reference
-limits. Integer-scale success does not cover that case. Keep T05 incomplete and
-resolve the sampling/registration model before treating ordinary image support
-as established. Do not increase acceptance error merely to make this case pass.
+The matrix includes 0.5/1/1.5/2 scales and additional 1.25 and 4/3 short-hold,
+two-tap and adjacent-hold controls. Native coordinate acquisition consumes the
+same actual image comparisons. These cover the observed whole-frame sampling
+phase failure without changing reference error limits. Separate sampling tests
+compare source-cell areas with full-frame OpenCV resizing, exclude unsupported
+source rows and require complete same-lane cap support for body subfeatures.
+T05 remains incomplete for arbitrary crop origins, independently rounded axis
+scales, perspective and the downstream timing/UCS boundaries.
+It also remains incomplete through encoded-video decoding: the current FFmpeg
+decoder uses its default bicubic scaler, whereas this RGB matrix exercises area
+resampling. An encoded 1.5-scale short-hold scene still loses intact caps in some
+frames. Preserve that failure and cover the actual decoder kernel before corpus
+promotion; an area-only pass cannot establish the end-to-end native path.
 
 ## Promotion order
 

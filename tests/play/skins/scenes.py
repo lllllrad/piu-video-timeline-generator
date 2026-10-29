@@ -14,6 +14,7 @@ import numpy as np
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.holds import measure_connections
 from piu_timeline.play.skins.observations import observe
+from piu_timeline.play.skins.coordinates import measure
 from piu_timeline.play.tracking import NoteTracker
 
 
@@ -96,7 +97,9 @@ def acquire(spec,root,bank):
           'start_seconds':0,'end_seconds':.2,'skin_detector':{'bank_path':str(root/'bank.json'),'contract':{'bank':bank['contract']}}}
     warnings=[];connections=measure_connections(data,native,warnings)
     roles=observe(data,native)
-    return {'id':spec['id'],'notes':notes,'roles':roles['notes'],'connections':connections,'warnings':warnings,
+    coordinates=measure(data,native)
+    return {'id':spec['id'],'notes':notes,'roles':roles['notes'],'connections':connections,'warnings':warnings,'coordinates':coordinates,
+            'cap_subfeature_frames':sum(any(o.get('cap_subfeature')for o in f['skin_observations'])for f in native),
             'frames':[{'time':f['playback_seconds'],'pts':f['source_pts_seconds'],
                        'caps':[{k:o[k]for k in ('lane','y','role','classification_status')}for o in f['skin_observations']if o['role']!='hold_body']}
                       for f in native]}

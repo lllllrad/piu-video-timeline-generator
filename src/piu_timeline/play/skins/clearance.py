@@ -7,6 +7,7 @@ import numpy as np
 from piu_timeline.play.pixel_cache import FORMAT as PIXEL_FORMAT, measurements
 from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.skins.detector import SkinDetector
+from piu_timeline.play.skins.sampling import key
 
 FORMAT={'schema':1,'revision':1,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
         'minimum_frames':4,'minimum_span_seconds':.065,'maximum_gap_seconds':.05,
@@ -90,7 +91,7 @@ def derive(data,native,samples,bank,profile):
     if bank['contract']!=data['skin_detector']['contract']['bank']:
         raise ValueError('Clearance bank differs from acquired cap images')
     width,height=data['analysis_width'],data['analysis_height']
-    detector=SkinDetector(bank,data['layout'],width,height);templates={t['id']:t for t in detector.templates}
+    detector=SkinDetector(bank,data['layout'],width,height);templates={key(t):t for t in detector.templates}
     owners=defaultdict(list);proofs=defaultdict(list);already_taps=set()
     for i,note in enumerate(data['notes']):
         for time,y in note.get('detected_points',note.get('points',[])):
@@ -110,7 +111,7 @@ def derive(data,native,samples,bank,profile):
             if len(indices)!=1:continue
             if 'tap'in image.get('conflicting_roles',[image['role']]):already_taps.add(indices[0])
             for pattern in [image,*image.get('alternatives',[])]:
-                template=templates[pattern['template']]
+                template=templates[key(pattern)]
                 if (pattern.get('template_role',pattern['role'])!='tap'
                         or pattern['classification_status']!='cap_only'
                         or pattern['template']not in bank['anchor_registrations']):continue
@@ -123,6 +124,7 @@ def derive(data,native,samples,bank,profile):
                     'region_errors':{'cap':pattern['region_errors']['cap']},'bounds_pixels':pattern['bounds_pixels'],
                     'image_anchor':[pattern['x']*width,image['y']*height],
                     'classification_status':'cap_with_native_clearance','clearance_regions':regions,
+                    **{k:pattern[k]for k in ('sampling_phase_pixels','reference_scale_y')if k in pattern},
                     'clearance_pixel_dimensions':[PIXEL_FORMAT['width'],next(iter(planes.values())).shape[0]]})
                 break
     qualified={i:group for i,points in proofs.items()if(group:=qualify(points,detector.spacing))}

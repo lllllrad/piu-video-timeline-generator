@@ -97,7 +97,9 @@ def refresh(data, output, path):
         source=decode_frames(data['media'], data['start_seconds'], data['end_seconds'],
                              data['game_roi'], data['analysis_width'])
         decoded=classified_frames(source,selected,data['layout'],data['analysis_width'],data['analysis_height'])
-    at_receptor=BodyAtReceptor(SkinDetector(bank,data['layout'],data['analysis_width'],data['analysis_height']))
+    detector=SkinDetector(bank,data['layout'],data['analysis_width'],data['analysis_height'])
+    at_receptor=BodyAtReceptor(detector)
+    from piu_timeline.play.skins.subfeatures import account
     count,last = 0,None
     lifetime=closing(decoded)if decoded is not None else nullcontext()
     with trace.open() as source, target.open('w') as stream, lifetime:
@@ -118,6 +120,7 @@ def refresh(data, output, path):
             if abs(pts - native['source_pts_seconds']) > 1e-6 or abs(time - native['playback_seconds']) > 1e-6:
                 raise ValueError('Skin image replay differs from original PTS')
             observations=merge_observations(native,observations,reused)
+            observations=account(observations,detector.by_sampling,data['analysis_width'],data['analysis_height'])
             native.update(notes=[o for o in observations if o['role'] != 'hold_body'],
                           skin_observations=observations,
                           possible_hold_or_dense_stack=at_receptor(observations))

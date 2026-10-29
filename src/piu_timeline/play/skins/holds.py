@@ -4,7 +4,7 @@ from collections import defaultdict
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 14, 'method': 'independent_image_hold_proof',
+FORMAT = {'schema': 1, 'revision': 15, 'method': 'independent_image_hold_proof',
           'interior_caps':'separate_observed_objects'}
 
 def covered(lo, hi, boxes):
@@ -42,6 +42,7 @@ def image_pairs(data, native, roles, references, cap_references, lengths):
                 center = data['layout']['lanes'][first['lane']]['x'] * width
                 boxes = [span for o in frame.get('skin_observations', [])
                          if o['lane'] == first['lane'] and o['role'] in ('hold_start', 'hold_body', 'hold_end')
+                         and not o.get('cap_subfeature')
                          and o['bounds_pixels'][0] <= center <= o['bounds_pixels'][2]
                          and o['bounds_pixels'][1] <= b and o['bounds_pixels'][3] >= a
                          for span in image_spans(o,references)]
@@ -177,7 +178,7 @@ def measure_connections(data,native,diagnostics,*,references=None,cap_references
         for image in frame.get('skin_observations', []):
             owned=any(a <= image['y']*data['analysis_height'] <= b
                       for a,b in accounted[image['lane'],frame['playback_seconds']])
-            if image['role'] == 'hold_body' and not owned:
+            if image['role'] == 'hold_body' and not owned and not image.get('cap_subfeature'):
                 pending_bodies[image['lane']].append((frame['playback_seconds'], frame['source_pts_seconds'], image))
     for lane, observations in pending_bodies.items():
         diagnostics.append({'lane': lane, 'reason': 'unresolved_hold_geometry',

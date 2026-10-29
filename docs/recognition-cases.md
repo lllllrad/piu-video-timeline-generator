@@ -161,3 +161,25 @@ checks at the pixel, stored-observation and connected-stage boundaries. Do not m
 it verified from an unrelated unit test or a missing assertion. Implementing this
 matrix and discovering existing failures precede further recording-driven rule
 tuning. Recordings then test generalization and introduce new generic cases.
+
+## Mechanics after the ordinary baseline
+
+For gameplay-affecting mechanics, use recordings to identify the intended rule,
+its song-relative interval and concrete parameters. Then reproduce that rule in
+the synthetic scene generator before promoting its processor. Human-authored
+patterns commonly have structure; a list of unexplained exceptional frames is
+not an adequate mechanic model.
+
+Examples are a measured speed multiplier or ramp, stop duration, visibility
+period/phase/duty cycle, or a simultaneous judgment increment of a specified
+amount. Retain the source observations and uncertainty establishing those
+parameters. Motion, chart rows and input/display events remain independent scene
+inputs. Test entry/exit boundaries, neighboring ordinary objects, interacting
+holds/chords, capture gaps and a deliberately contradictory measurement.
+
+Chart metadata selects the region and parameters for a concrete handler shared
+by ordinary consumers. A supported effect must produce appropriate chart/timing,
+visibility and input semantics; its name alone cannot suppress diagnostics.
+Unidentified or contradictory behavior remains explicit. Decorative intervals
+without gameplay requirements use an explicit non-playable role and preserve
+their raw observations, rather than inventing notes or inputs.

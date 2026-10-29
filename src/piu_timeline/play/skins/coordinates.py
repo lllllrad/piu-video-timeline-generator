@@ -5,6 +5,7 @@ import numpy as np
 
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.anchors import cap_reference, FORMAT as ANCHOR_FORMAT
+from piu_timeline.play.skins.sampling import phases
 
 from piu_timeline.derived import CONTRACTS
 
@@ -28,6 +29,11 @@ def registered_comparison(image,bank,templates,lane,y,height,scale):
         row=candidate['y']*height
         if not np.isfinite(row):raise ValueError('Nonfinite registered comparison coordinate')
         original_height=template['mask'].shape[0];sy=max(2,round(original_height*scale))/original_height
+        if 'reference_scale_y'in candidate:
+            sy=candidate['reference_scale_y'];phase=candidate.get('sampling_phase_pixels',[0,0])
+            if (not np.isfinite(sy)or abs(sy-scale)>1e-8 or len(phase)!=2
+                    or any(not any(abs(v-p)<1e-8 for p in phases(scale))for v in phase)):
+                raise ValueError('Registered comparison has incompatible reference sampling')
         uncertainty=max(ANCHOR_FORMAT['coordinate_uncertainty_pixels'],
                         bank['anchor_registrations'][name]['coordinate_uncertainty_pixels']*sy)
         choices.append({'template':name,'comparison_index':index,'native_y_pixels':row,

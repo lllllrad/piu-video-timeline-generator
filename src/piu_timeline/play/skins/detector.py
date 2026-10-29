@@ -4,8 +4,10 @@ import numpy as np
 import math
 
 from piu_timeline.play.screen_regions import note_occluders
+from piu_timeline.play.skins.sampling import models,key,FORMAT as SAMPLING_FORMAT
+from piu_timeline.play.skins.subfeatures import account
 
-FORMAT = {'schema': 1, 'revision': 5, 'method': 'lane_masked_rgb_regions',
+FORMAT = {'schema': 1, 'revision': 6, 'method': 'lane_masked_rgb_regions','sampling':SAMPLING_FORMAT,
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor',
           'body_candidates': {'schema':1,'selection':'qualified_rows_horizontal_minima'}}
 
@@ -27,26 +29,10 @@ class SkinDetector:
         self.templates = []
         scale = self.spacing / bank['spacing_pixels']
         for original in bank['templates']:
-            h, w = original['mask'].shape
-            size = max(2, round(w * scale)), max(2, round(h * scale))
-            sx, sy = size[0] / w, size[1] / h
-            rgb = cv2.resize(original['rgb'], size, interpolation=cv2.INTER_AREA).astype('float32') / 255
-            mask = cv2.resize(original['mask'].astype('uint8'), size, interpolation=cv2.INTER_NEAREST)
-            regions = []
-            support = np.zeros(mask.shape, dtype=bool)
-            cap_support = np.zeros(mask.shape, dtype=bool)
-            for region in original['regions']:
-                x0, y0, x1, y1 = region['box']
-                box = round(x0 * sx), round(y0 * sy), round(x1 * sx), round(y1 * sy)
-                if box[0] >= box[2] or box[1] >= box[3] or not mask[box[1]:box[3], box[0]:box[2]].any():
-                    raise ValueError('Skin image region vanishes at the analysis scale')
-                regions.append({**region, 'box': box})
-                support[box[1]:box[3],box[0]:box[2]] |= mask[box[1]:box[3],box[0]:box[2]].astype(bool)
-                if region['name']=='cap':
-                    cap_support[box[1]:box[3],box[0]:box[2]] |= mask[box[1]:box[3],box[0]:box[2]].astype(bool)
-            self.templates.append({**original, 'rgb': rgb, 'mask': mask,
-                                   'anchor': [original['anchor_pixels'][0] * sx, original['anchor_pixels'][1] * sy],
-                                   'regions': regions, 'support': support,'cap_support':cap_support})
+            variants=list(models(original,scale))
+            if not variants:raise ValueError('Skin image region vanishes at the analysis scale')
+            self.templates.extend(variants)
+        self.by_sampling={key(t):t for t in self.templates}
 
     def detect(self, rgb):
         if rgb.shape != (self.height, self.width, 3):
@@ -71,7 +57,7 @@ class SkinDetector:
                 for region in template['regions']:
                     x0, y0, x1, y1 = region['box']
                     reference = template['rgb'][y0:y1, x0:x1]
-                    mask = template['mask'][y0:y1, x0:x1]
+                    mask = region['mask']
                     # Every region yields the same candidate-origin matrix.
                     area = search[y0:search.shape[0] - h + y1, x0:search.shape[1] - w + x1]
                     error = cv2.matchTemplate(area, reference, cv2.TM_SQDIFF, mask=mask) / (3 * max(1, int(mask.sum())))
@@ -99,6 +85,7 @@ class SkinDetector:
                     candidates.append({'lane': lane, 'x': x / self.width, 'y': y / self.height,
                                        'role': 'unknown'if cap_only else template['role'], 'template': template['id'],
                                        'template_role':template['role'], 'hud_region_overlap':hidden,
+                                       **({k:template[k]for k in ('sampling_phase_pixels','reference_scale_y')if k in template}),
                                        'classification_status':'cap_only'if cap_only else'full_pattern',
                                        **({'reason':'skin_tap_clearance_unresolved'if template['role']=='tap'
                                            else'skin_image_connection_unresolved'}if cap_only else{}),
@@ -118,8 +105,8 @@ class SkinDetector:
                 continue
             current = peers[0]
             fields=('role','template_role','classification_status','template','quality','region_errors',
-                    'x','y','bounds_pixels')
-            proof = {k: candidate[k] for k in fields}
+                    'x','y','bounds_pixels','sampling_phase_pixels','reference_scale_y')
+            proof = {k: candidate[k] for k in fields if k in candidate}
             current['alternatives'].append(proof)
             full={r['template_role']for r in (current,candidate)if r['classification_status']=='full_pattern'}
             full.update(current.get('conflicting_roles',[]))
@@ -127,7 +114,7 @@ class SkinDetector:
                 current.update(role='unknown',classification_status='conflict',
                                reason='contradictory_skin_role_images',conflicting_roles=sorted(full))
             elif current['classification_status']=='cap_only' and candidate['classification_status']=='full_pattern':
-                alternatives = [{k: current[k] for k in fields},
+                alternatives = [{k: current[k] for k in fields if k in current},
                                 *[r for r in current['alternatives'] if r is not proof]]
                 current.clear();current.update(candidate, alternatives=alternatives)
-        return sorted(retained, key=lambda r: (r['lane'], r['y']))
+        return account(sorted(retained, key=lambda r: (r['lane'], r['y'],r['role']=='hold_body')),self.by_sampling,self.width,self.height)

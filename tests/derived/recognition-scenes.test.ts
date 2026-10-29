@@ -22,9 +22,11 @@ const basic:[string,string[],ObjectTruth[],number][]=[
  ['tap-after-hold',['O12'],[hold(4,80,160),tap(4,200)],5],
  ['overlapping-lanes',['O13'],[hold(0),tap(1,100),hold(7,90,170)],10],
 ];
-const scenes:Scene[]=basic.flatMap(([name,cases,objects,lanes],i)=>[1,2].map(scale=>({
- id:`${name}-scale${scale}`,cases,objects,lanes,scale,fps:[30,60,120][(i+scale)%3],seed:100+i*7+scale})));
-const uncertain:Scene[]=['opaque_connection','body_only','contradictory_roles'].flatMap((mode,i)=>[1,2].map(scale=>({
+const scenes:Scene[]=basic.flatMap(([name,cases,objects,lanes],i)=>[.5,1,1.5,2].map((scale,j)=>({
+ id:`${name}-scale${scale}`,cases,objects,lanes,scale,fps:[30,60,120][(i+j)%3],seed:100+i*7+j})));
+for(const scale of [1.25,4/3])for(const [name,cases,objects,lanes]of basic.filter(b=>['short-hold','two-short-spaced-taps','adjacent-holds'].includes(b[0])))
+ scenes.push({id:`${name}-scale${scale}`,cases:[...cases,'T05'],objects,lanes,scale,fps:60,seed:41});
+const uncertain:Scene[]=['opaque_connection','body_only','contradictory_roles'].flatMap((mode,i)=>[.5,1,1.5,2].map(scale=>({
  id:`${mode}-scale${scale}`,cases:[['O15','O17','O16'][i]],objects:[hold(2)],lanes:5,scale,fps:60,seed:700+i,mode})));
 const acquired:RecordData[]=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-m','tests.play.skins.scenes'],{
  input:JSON.stringify([...scenes,...uncertain]),encoding:'utf8',maxBuffer:32*1024*1024}));
@@ -35,6 +37,7 @@ for(const scene of scenes)test(`${scene.cases.join('/')} native RGB -> tracks ->
  const endpoints=scene.objects.flatMap(o=>o.kind==='tap'?[{lane:o.lane,y:o.y,role:'tap'}]:[
   {lane:o.lane,y:o.y,role:'hold_start'},{lane:o.lane,y:o.end_y!,role:'hold_end'}]);
  assert.equal(result.notes.length,endpoints.length,'exact native cap-track count');
+ if(scene.id==='isolated-lane0-scale0.5')assert.ok(result.cap_subfeature_frames>0,'body-pattern matches inside cap art retain their explicit explanation');
  for(const frame of result.frames){
   assert.equal(frame.pts,42.125+frame.time);
   assert.equal(frame.caps.length,endpoints.length,'no missing or extra cap in a clear frame');
@@ -57,6 +60,8 @@ for(const scene of scenes)test(`${scene.cases.join('/')} native RGB -> tracks ->
    assert.ok(Math.abs(y-Math.round(e.y-80*time)*scene.scale)<1e-8);
   });
   assert.equal(result.roles[index].status,e.role==='tap'?'tap':'hold');
+  assert.deepEqual(result.coordinates.notes[index].observations.map(o=>[o.time,o.source_pts_seconds]),
+   result.frames.map(f=>[f.time,f.pts]),'native coordinate measurement retains every acquired source frame');
   assert.deepEqual(result.roles[index].observations.map(o=>[o.playback_seconds,o.source_pts_seconds,o.role]),
    result.frames.map(f=>[f.time,f.pts,e.role]),'role join preserves original per-frame provenance');
  }

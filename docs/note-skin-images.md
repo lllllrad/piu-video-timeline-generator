@@ -82,6 +82,33 @@ unrepresented animation phases can still produce missing or ambiguous matches.
 
 ## Source-bound native cap centers
 
+Reference scaling uses source pixel-cell area, retaining the fractional output
+origin instead of independently stretching a cropped image to rounded dimensions.
+Exact small rational scales enumerate their source-grid phases (denominator at
+most eight); other scales use a quarter-pixel phase catalogue. Every comparison
+still meets its original per-region RGB error limit. Catalogue selection is not
+proof of arbitrary skin animation or absolute game timing calibration.
+The encoded-video decoder currently uses FFmpeg's default bicubic scaling
+([scaler documentation](https://www.ffmpeg.org/ffmpeg-scaler.html)). Area-model
+validation does not cover that different kernel; encoded fractional-scale scenes
+remain an explicit validation gap.
+
+Only output pixels whose entire sampling footprint is supported within that
+comparison region contribute. Padding, alpha holes and neighboring regions do
+not supply missing evidence. Observations and alternatives retain
+`sampling_phase_pixels` and `reference_scale_y`; anchors use the same transform.
+Body/connection coverage, receptor risk and native clearance use the matching
+phase's compared support, rather than another variant's rectangle or row bounds.
+
+A uniform body reference can also match the colored interior of a cap. When
+every positively compared pixel of every retained body alternative is contained
+in positively compared cap pixels in the same lane/frame, retain that body
+measurement with `cap_subfeature` proof. It cannot supply independent body
+connectivity or receptor hold risk. Unsupported holes, extensions beyond the
+cap or a cap in another lane cannot explain it. Partial-group replay recomputes
+this relationship after merging both groups; stale ownership cannot survive a
+changed cap. Unexplained body images remain geometry warnings.
+
 A reference can carry `native_anchor_registration` for its vertical native cap
 center. This registers the same geometric convention as independent native cap
 measurements. It does not establish the game-engine target anchor, capture
