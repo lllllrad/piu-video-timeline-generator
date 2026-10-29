@@ -69,7 +69,7 @@ def kernel_models(original,scale,kernel):
             a,b,c,d=box
             regions.append({**region,'box':box,'mask':valid[b:d,a:c].astype('uint8')})
             support|=valid
-            if region['name']=='cap':cap_support|=valid
+            if region['name']in {'cap',*original.get('cap_features',[])}:cap_support|=valid
         if not (cap_support.any()if any(r['name']=='cap'for r in original['regions'])else support.any()):continue
         phase={}if len(options)==1 else {'sampling_phase_pixels':[px,py]}
         yield {**original,**phase,**({'sampling_kernel':kernel}if kernel!='area'else{}),'rgb':rgb,'mask':support.astype('uint8'),

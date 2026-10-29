@@ -440,3 +440,18 @@ Each alternative keeps its own reference, sampling phase and comparison origin.
 Only cap support is projected; a failed connection probe contributes no rows.
 Conflicted or unclassified alternatives supply no coverage. This preserves actual
 comparison pixels near a cap boundary without expanding a mask or filling a gap.
+
+## Independent cap features
+
+A long body can dominate the average error of a tail image even when the terminal
+border is absent. A reference may therefore name additional regions in
+`cap_features`, for example `"cap_features": ["terminal_border"]`. Each must be a
+separate, supported region inside the main `cap` box. Both the whole cap and every
+named feature must independently pass their declared RGB error bound before a
+cap candidate is acquired. A failed feature does not become an untyped cap; a
+passed cap with a failed connection still does.
+
+Use an actual distinguishing edge or shape, not an expected note count or timing.
+The feature regions retain their source geometry, pixels and sampling context.
+Bank contracts, cap-acquisition reuse and anchor certificates bind this selection;
+references without cap features keep their existing acquisition identity and rules.

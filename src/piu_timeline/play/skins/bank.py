@@ -73,6 +73,18 @@ def load_bank(path):
                     a,b,c,d=box;selected[b-y0:d-y0,a-x0:c-x0]=True
                 if np.count_nonzero(selected&mask[y0:y1,x0:x1])<8:
                     raise ValueError('Comparison boxes need eight supported source pixels')
+        features=entry.get('cap_features',[])
+        if (not isinstance(features,list)or any(not isinstance(v,str)for v in features)
+                or len(set(features))!=len(features)or any(v not in names or v in ('cap','connection','body','clear_above','clear_below')for v in features)
+                or features and entry['role']=='hold_body'):
+            raise ValueError('Cap features must name distinct additional cap image regions')
+        if features:
+            cap=next(r['box']for r in regions if r['name']=='cap')
+            for region in regions:
+                if region['name']in features:
+                    a,b,c,d=region['box']
+                    if not cap[0]<=a<c<=cap[2]or not cap[1]<=b<d<=cap[3]:
+                        raise ValueError('Cap feature must stay inside the cap region')
         if entry['role'] in ('hold_start', 'hold_end'):
             connection = next(r['box'] for r in regions if r['name'] == 'connection')
             if ((entry['role'] == 'hold_start' and connection[1] <= anchor[1])
@@ -94,6 +106,8 @@ def load_bank(path):
           'contract': {'format': FORMAT, 'sha256': fingerprint.hexdigest(), 'skin': document['skin']}}
     if any('comparison_boxes'in r for t in templates for r in t['regions']):
         bank['contract']['comparison_geometry']=COMPARISON_FORMAT
+    if any(t.get('cap_features')for t in templates):
+        bank['contract']['cap_features']={'schema':1,'method':'independently_required_cap_regions'}
     from piu_timeline.play.skins.anchors import registered_anchors
     bank['anchor_registrations']=registered_anchors(bank)
     return bank

@@ -69,8 +69,9 @@ class SkinDetector:
                     scores = normalized if scores is None else np.maximum(scores, normalized)
                 proposal_scores=scores
                 if 'cap'in errors:
-                    cap=next(r for r in template['regions']if r['name']=='cap')
-                    proposal_scores=errors['cap']/cap.get('maximum_error',.015)
+                    required={'cap',*template.get('cap_features',[])}
+                    proposal_scores=np.maximum.reduce([errors[r['name']]/r.get('maximum_error',.015)
+                        for r in template['regions']if r['name']in required])
                 allowed = np.isfinite(proposal_scores) & (proposal_scores <= 1)
                 # Caps need a localized origin; body tiles measure supported rows.
                 kernel=(1,3)if template['role']=='hold_body'else(3,3)

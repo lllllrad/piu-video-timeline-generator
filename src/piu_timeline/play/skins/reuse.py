@@ -15,6 +15,7 @@ def signatures(bank):
     result={'caps':[],'body':[]}
     for t in bank['templates']:
         value={k:t[k]for k in ('id','role','lane_kind','anchor_pixels','tap_clearance')}
+        if t.get('cap_features'):value['cap_features']=t['cap_features']
         value['regions']=[{'name':r['name'],'box':r['box'],'maximum_error':r.get('maximum_error',.015),
                            **({'comparison_boxes':r['comparison_boxes']}if 'comparison_boxes'in r else{})}for r in t['regions']]
         h=sha256(json.dumps(value,sort_keys=True).encode())
