@@ -39,7 +39,7 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
             owned=any(role!='barrier'and abs(y-image['y']*height)<1e-5 for i,y,role in known[time,lane])
             if image['role']in('hold_start','hold_end','hold_body'):rows=image_spans(image,references)
             elif image['role']=='unknown'and image.get('classification_status')=='cap_only'and owned:
-                rows=image_spans(image,cap_references)
+                rows=image_spans(image,cap_references,cap_only=True)
             else:continue
             lanes[lane].extend((a,b,image['role']=='hold_body')for a,b in rows)
         current=[]

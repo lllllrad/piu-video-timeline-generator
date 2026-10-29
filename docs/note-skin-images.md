@@ -433,3 +433,10 @@ batch. Peer-based image edges retain the contributing note IDs and original PTS
 pair. The native image connector still requires positively compared body regions,
 unique endpoints and sufficient observed travel. A peer motion estimate supplies
 no missing image pixels, cap classification, beat placement or input timestamp.
+
+For an endpoint whose cap matches but connection does not, cap-only geometry
+uses every positively matched cap alternative retained in that observation.
+Each alternative keeps its own reference, sampling phase and comparison origin.
+Only cap support is projected; a failed connection probe contributes no rows.
+Conflicted or unclassified alternatives supply no coverage. This preserves actual
+comparison pixels near a cap boundary without expanding a mask or filling a gap.

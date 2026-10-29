@@ -4,9 +4,10 @@ from collections import defaultdict
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 16, 'method': 'independent_image_hold_proof',
+FORMAT = {'schema': 1, 'revision': 17, 'method': 'independent_image_hold_proof',
           'interior_caps':'separate_observed_objects',
-          'motion_peers':'all_observed_cap_identities'}
+          'motion_peers':'all_observed_cap_identities',
+          'cap_coverage':'all_qualified_cap_comparisons'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -53,7 +54,7 @@ def image_pairs(data, native, roles, references, cap_references, lengths):
                              if o['lane']==first['lane'] and o['role']=='unknown'
                              and o.get('classification_status')=='cap_only'
                              and min(abs(o['y']*data['analysis_height']-a),abs(o['y']*data['analysis_height']-b))<1e-5
-                             for span in image_spans(o,cap_references))
+                             for span in image_spans(o,cap_references,cap_only=True))
                 if covered(a, b, boxes):
                     proof.append({'time': time, 'source_pts': frame['source_pts_seconds'], 'head_y': a, 'tail_y': b})
                 else:
