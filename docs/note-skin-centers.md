@@ -101,9 +101,12 @@ mise exec -- python -m piu_timeline.play.skins register-centers \
 
 This opt-in profile measures complete isolated bright cap envelopes inside
 supported reference pixels. Truncated, clipped, competing or height-inconsistent
-caps do not establish a center. Attached starts require complete cap RGB matches
-to those isolated references, with intersecting center bounds across all qualified
-comparisons. Hold ends have no automatic center model. The command independently
+caps do not establish a center. Attached starts use complete cap RGB matches
+or the leading boundary and dimensions measured from at least two independently
+sourced isolated caps. The dimension model requires matching full width and a
+visible lower glyph protrusion outside the stem; the body cannot define the cap
+height. Conflicting dimension/RGB estimates cannot supply a center. All supporting
+reference sources must independently pass original RGB/PTS verification. Hold ends have no automatic center model. The command independently
 checks the original source RGB, ROI, dimensions, PTS and unchanged media identity
 before issuing certificates. It saves measurement and verification artifacts,
 leaves unresolved references unregistered, and never uses beat rows, targets or
@@ -130,9 +133,15 @@ independent coordinate-model support; raw detections and comparisons remain.
 Pair support counts use only jointly qualified source-frame measurements.
 
 Timing fits use each qualified frame's projected center and retain the raw
-trajectory as `detected_points`. Frames without a proof keep their original
-detection; there is no lane-wide or neighboring-frame center correction.
-Reapplying registration starts from the raw trajectory. Image ownership, role
+trajectory as `detected_points`. A trajectory projects only when every frame has a qualified center hypothesis.
+A partially registered trajectory retains its entire original matching-anchor
+convention, with `image_center_registration_incomplete`; its unapplied measured
+centers remain inspectable. Mixing raw origins and corrected centers would create
+artificial motion. Conflicting localization hypotheses retain their explicit
+warning, a source-bound representative projection and an error covering every
+qualified hypothesis. They supply no independent chord/spacing coordinate proof.
+There is no lane-wide or neighboring-frame center correction. Reapplying
+registration starts from the raw trajectory. Image ownership, role
 joins and hold connectivity use raw matching positions and original PTS.
 
 Coordinates retain registration only for the reference that actually supplied

@@ -35,9 +35,13 @@ with tempfile.TemporaryDirectory()as tmp:
  assert set(verified['anchor_registrations'])=={'tap','hold_start'}
  assert all(t['anchor_pixels']==[20,18] and t['native_center_pixels']==[20,22]for t in verified['templates'])
  assert all(r['center_offset_y_pixels']==4 for r in verified['anchor_registrations'].values())
- changed=rgb.copy();changed[54,24,0]^=1
+ changed=rgb.copy();changed[54,74,0]^=1
  partial=load_bank(build('partial',changed))
- assert set(partial['anchor_registrations'])=={'hold_start'}
+ assert set(partial['anchor_registrations'])=={'tap'}
+ invalid_reference=rgb.copy();invalid_reference[54,24,0]^=1
+ try:build('invalid-reference',invalid_reference)
+ except ValueError:pass
+ else:raise AssertionError('unverified tap geometry supplied a hold center')
  for mode in ('wrong_pts','changed_media','overwritten_output'):
   try:
    if mode=='wrong_pts':build('wrong',pts=52.01)
@@ -46,6 +50,19 @@ with tempfile.TemporaryDirectory()as tmp:
    else:build('verified')
   except (ValueError,FileExistsError):pass
   else:raise AssertionError(mode+' reused an invalid source')
+ # Two independently sourced caps can measure a leading glyph beside a stem.
+ direct=load_bank(bank_path);duplicate=json.loads(json.dumps(document['templates'][0]));duplicate['id']='independent-tap'
+ duplicate['source_evidence']['source_pts_seconds']=53.;duplicate['source_evidence']['playback_seconds']=3.
+ bank_path.write_text(json.dumps({**document,'templates':[document['templates'][0],duplicate,document['templates'][1]]}))
+ leading=load_bank(bank_path)
+ # Change cap texture enough to rule out transferring a full RGB match while
+ # preserving independently measured bright glyph boundaries and shoulders.
+ leading['templates'][2]['rgb'][14:30,12:28]=[245,245,245]
+ result=proposals(leading)['hold_start'];assert result['basis']=='leading_cap_with_independently_measured_dimensions'
+ assert result['center_pixels']==[20,22] and result['lower_shoulder_pixels']>0
+ leading['templates'][2]['rgb'][30:32]=0
+ assert 'hold_start'not in proposals(leading),'a missing lower glyph boundary is not completed from its stem'
+ bank_path.write_text(json.dumps(document))
  # Incomplete or clipped glyphs do not define a center.
  broken=load_bank(bank_path);broken['templates'][0]['rgb'][:]=255
  assert proposals(broken)=={}

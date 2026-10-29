@@ -134,7 +134,8 @@
   },
   "image_coordinates": {
     "schema": 1,
-    "revision": 6,
+    "revision": 7,
+    "projection": "whole_trajectory_without_mixed_anchor_conventions",
     "uncertainty_units": "source_reference_pixels_scaled_to_analysis",
     "method": "native_image_anchors",
     "trace": "frames.jsonl"

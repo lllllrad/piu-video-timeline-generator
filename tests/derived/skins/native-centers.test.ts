@@ -56,6 +56,33 @@ with tempfile.TemporaryDirectory()as tmp:
  # Resizing changes physical uncertainty in the same units as measured positions.
  smaller=deepcopy(trace);smaller['analysis_width']/=2
  assert measure(smaller,frames)['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels']==.5
+ # A partially measurable trajectory must not alternate between two origins.
+ partial_document=json.loads(path.read_text());partial_document['templates'][1].pop('native_anchor_registration')
+ partial_path=path.parent/'partial-bank.json';partial_path.write_text(json.dumps(partial_document))
+ partial=deepcopy(raw);partial['skin_detector']={**partial['skin_detector'],'bank_path':str(partial_path),'contract':{'bank':load_bank(partial_path)['contract']}}
+ partial_frames=deepcopy(frames);partial_frames[0]['skin_observations'][0]['template']='hold_start'
+ partial_frames[0]['skin_observations'][0]['role']='unknown'
+ (root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n'for f in partial_frames))
+ unchanged=apply(partial,root)
+ assert unchanged['notes'][0]['points']==raw['notes'][0]['points']
+ record=unchanged['head_registration']['notes'][0]
+ assert record['coordinate_status']=='incomplete'
+ assert any(w['reason']=='image_center_registration_incomplete'for w in unchanged['head_registration']['warnings'])
+ assert all(o['native_y_pixels']==o['detected_y_pixels']for o in record['observations'])
+ assert record['observations'][1]['unapplied_center_measurement']['native_y_pixels']>record['observations'][1]['detected_y_pixels']
+ # Conflicting localization hypotheses retain their warning and bounded center
+ # projection, rather than inserting an arbitrary raw RGB origin into the fit.
+ competing=deepcopy(frames)
+ image=competing[4]['skin_observations'][0]
+ image['alternatives']=[{**image,'template':'hold_end','y':image['y']+3/raw['analysis_height']}]
+ (root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n'for f in competing))
+ bounded=apply(raw,root);record=bounded['head_registration']['notes'][0]
+ assert record['coordinate_status']=='projected'
+ assert record['observations'][4]['native_cap_registration_status']=='conflicting'
+ assert 'native_cap_coordinate_uncertainty_pixels'not in record['observations'][4]
+ assert record['observations'][4]['native_cap_projection_uncertainty_pixels']>=4-1e-9
+ assert all(t==a and abs(v-y-1)<1e-10 for(t,v),(a,y)in zip(bounded['notes'][0]['points'],raw['notes'][0]['points']))
+ assert bounded['head_registration']['warnings'][0]['reason']=='conflicting_registered_image_anchors'
  # Center metadata is bound to its original source certificate.
  changed=json.loads(path.read_text());changed['templates'][0]['native_center_pixels'][1]+=.5
  path.write_text(json.dumps(changed))

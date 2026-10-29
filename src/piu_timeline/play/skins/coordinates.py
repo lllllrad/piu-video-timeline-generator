@@ -60,14 +60,16 @@ def registered_comparison(image,bank,templates,lane,y,height,scale):
     if not choices:return {},None
     lo=max(c['native_y_pixels']-c['uncertainty_pixels']for c in choices)
     hi=min(c['native_y_pixels']+c['uncertainty_pixels']for c in choices)
-    if lo>hi+1e-6:return {},{'coordinate_intersection_pixels':[lo,hi],'comparisons':choices}
+    conflict={'coordinate_intersection_pixels':[lo,hi],'comparisons':choices}if lo>hi+1e-6 else None
     coincident=[c for c in choices if abs(c['detected_y_pixels']-y)<1e-5]
-    if not coincident:return {},None
+    if not coincident:return {},conflict
     chosen=min(coincident,key=lambda c:(c['uncertainty_pixels'],c['comparison_index']))
+    projection_error=max(abs(c['native_y_pixels']-chosen['native_y_pixels'])+c['uncertainty_pixels']for c in choices)
     return {'native_y_pixels':chosen['native_y_pixels'],
-            'native_cap_coordinate_uncertainty_pixels':chosen['uncertainty_pixels'],
+            'native_cap_projection_uncertainty_pixels':projection_error,
+            **({'native_cap_coordinate_uncertainty_pixels':chosen['uncertainty_pixels']}if not conflict else{}),
             'native_cap_reference_scale_y':chosen['scale_y'],'native_cap_reference_template':chosen['template'],
-            'native_cap_reference_error':chosen['cap_error'],'native_cap_comparison_index':chosen['comparison_index']},None
+            'native_cap_reference_error':chosen['cap_error'],'native_cap_comparison_index':chosen['comparison_index']},conflict
 
 
 def measure(data,frames):
@@ -112,7 +114,7 @@ def measure(data,frames):
             registration,conflict=registered_comparison(image,bank,templates,lane,y,height,scale)
             if conflict:
                 conflicts[index].append({'time':time,'source_pts_seconds':pts,**conflict})
-                registration={'native_cap_registration_status':'conflicting'}
+                registration={**registration,'native_cap_registration_status':'conflicting'}
             samples[index].append({'time':time,'source_pts_seconds':pts,'native_y_pixels':y,'detected_y_pixels':y,
                                    'image_anchor':[image['x'],image['y']],'template':image['template'],
                                    'cap_error':error,'cap_reference_sha256':identities[image['template']],
@@ -129,6 +131,24 @@ def measure(data,frames):
                'visible_end_seconds':evidence[-1]['time'],'observed_points':len(evidence),
                'source_pts_seconds':[e['source_pts_seconds']for e in evidence],
                'image_anchor_evidence':evidence,'trace':'frames.jsonl'}for i,evidence in conflicts.items()]
+    for record in records:
+        observed=record['observations'];projected=[o for o in observed if 'native_cap_projection_uncertainty_pixels'in o]
+        record['coordinate_status']='projected'if len(projected)==len(observed)else'incomplete'if projected else'unregistered'
+        if not projected or len(projected)==len(observed):continue
+        missing=[o for o in observed if 'native_cap_projection_uncertainty_pixels'not in o]
+        warnings.append({'note':record['note'],'lane':record['lane'],'reason':'image_center_registration_incomplete',
+            'check':'timing_reconstruction','visible_start_seconds':missing[0]['time'],
+            'visible_end_seconds':missing[-1]['time'],'observed_points':len(missing),
+            'source_pts_seconds':[o['source_pts_seconds']for o in missing],'trace':'frames.jsonl'})
+        # An unmeasured RGB origin cannot stand in for a measured cap center.
+        # Keep one raw convention for this entire trajectory and expose every proof.
+        for o in observed:
+            if 'native_cap_projection_uncertainty_pixels'not in o:continue
+            keys=[k for k in o if k.startswith('native_cap_')]
+            o['unapplied_center_measurement']={'native_y_pixels':o['native_y_pixels'],**{k:o[k]for k in keys}}
+            o['native_y_pixels']=o['detected_y_pixels']
+            for key in keys:
+                if key!='native_cap_registration_status':o.pop(key)
     return {'format':FORMAT,'status':'failed'if warnings else'native_image_anchors','notes':records,'warnings':warnings,
             'absolute_registration':'reviewed'if data['skin_detector'].get('registration_reviewed')else'unverified',
             'skin_contract':data['skin_detector']['contract'],'trace':'frames.jsonl'}

@@ -8,7 +8,7 @@ import numpy as np
 from piu_timeline.play.note_types import cap_envelope, shape
 from piu_timeline.play.cap_templates import FORMAT as TEMPLATE_FORMAT
 
-FORMAT={'schema':1,'revision':10,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':11,'minimum_frames':8,'minimum_span_seconds':.12,
         'coordinate_projection':'per_frame_with_stable_offset_fallback',
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
         'numeric_epsilon_pixels':1e-9,
@@ -132,10 +132,10 @@ def apply(data,directory,display_delay_ms=0):
         measured={}
         for r in registration['notes']:
             observations=[{**o,'offset_pixels':o['native_y_pixels']-o['detected_y_pixels']}
-                          for o in r['observations']if 'native_cap_coordinate_uncertainty_pixels'in o]
+                          for o in r['observations']if r.get('coordinate_status')=='projected']
             if observations:
                 measured[r['note']]={**r,'status':'measured_only','offset_pixels':0,
-                    'coordinate_uncertainty_pixels':max(o['native_cap_coordinate_uncertainty_pixels']for o in observations),
+                    'coordinate_uncertainty_pixels':max(o['native_cap_projection_uncertainty_pixels']for o in observations),
                     'observations':observations}
         return refit_coordinates(data,registration,measured,display_delay_ms)
     from piu_timeline.play.appearance import acquire
