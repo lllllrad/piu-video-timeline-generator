@@ -6,6 +6,29 @@ does not establish that ordinary gameplay is supported. The current suite has
 substantial consumer coverage, but does not yet establish complete ordinary
 image recognition across the supported skins and four visual channels.
 
+## Ground the ordinary model in recordings
+
+Before extending the scene matrix, inspect unobscured ordinary objects in the
+supported recording layout and skin. Compare several original frames of isolated
+taps, short/long holds, chords and neighboring objects with their retained native
+measurements. Establish cap silhouette, anchor convention, connector placement
+and how adjacent cap borders affect the visible connection. A central stem in a
+generated square glyph does not establish recognition of a skin whose short-hold
+connection is exposed at the shoulders between nearly touching caps.
+
+Use those observations to define generic rendering rules and independent expected
+results, then verify the processors with generated variations before replaying
+the inspected ordinary intervals. Keep recording-specific images and review
+identities outside the tracked test suite. Separate source intervals used to
+create references from intervals used to evaluate them.
+
+Record three distinct results: whether the visual rule was observed in recordings,
+whether generated cases pass, and whether the current processor passes the real
+ordinary intervals. None establishes the other two. Expand to occlusion and
+reappearance only after this ordinary comparison; their rules also require actual
+recording evidence. A successful decoder test is not a successful gameplay-skin
+or end-to-end transcription review.
+
 ## Test inputs and expected results
 
 [Basic recognition cases](recognition-cases.md) defines the support target and
