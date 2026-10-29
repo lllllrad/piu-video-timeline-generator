@@ -468,21 +468,5 @@ references without cap features keep their existing acquisition identity and rul
 
 ## Reviewing relative reference anchors
 
-Before activating a candidate bank, compare references that matched the same
-acquired cap:
-
-```sh
-mise exec -- python -m piu_timeline.play.skins compare-anchors \
-  .local/reports/image-review/observations.json \
-  --bank .local/cache/note-skins/example/bank.json \
-  --output .local/reports/image-review/anchor-pairs.json
-```
-
-This saved-data review checks bank identity and native timestamps without decoding
-video. It chooses each reference's strongest qualified cap comparison per acquired
-cap, including every required cap feature. It retains both witness coordinates,
-original PTS, observation index and the signed second-minus-first difference.
-Repeated relative offsets can reveal an inconsistent reference anchor. The tool
-reports the observed range without assigning an absolute calibration, widening
-coordinate limits or automatically moving any source point. Review source geometry
-before correcting the reference and replay acquisition when its anchor changes.
+Use [reference-anchor review](note-skin-anchor-review.md) to compare same-cap
+witnesses and align shared source-image landmarks before activating a candidate.
