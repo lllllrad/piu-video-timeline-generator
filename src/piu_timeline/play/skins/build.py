@@ -34,13 +34,14 @@ def build(specification, output):
         resized = cv2.resize(image, (reference_width, reference_height), interpolation=cv2.INTER_AREA)
         left, top, right, bottom = round(x0*sx), round(y0*sy), round(x1*sx), round(y1*sy)
         crop = resized[top:bottom, left:right]
-        regions = [{**r, 'box': [round((x0+r['box'][0])*sx)-left,
-                                round((y0+r['box'][1])*sy)-top,
-                                round((x0+r['box'][2])*sx)-left,
-                                round((y0+r['box'][3])*sy)-top]} for r in item['regions']]
+        def transform(box):
+            return [round((x0+box[0])*sx)-left,round((y0+box[1])*sy)-top,
+                    round((x0+box[2])*sx)-left,round((y0+box[3])*sy)-top]
+        regions = [{**r,'box':transform(r['box'])}for r in item['regions']]
+        context=[transform(box)for box in item.get('sampling_context',[])]
         alpha = np.zeros(crop.shape[:2], dtype='uint8')
-        for region in regions:
-            a, b, c, d = region['box']
+        for box in [*[r['box']for r in regions],*context]:
+            a,b,c,d=box
             if not 0 <= a < c <= crop.shape[1] or not 0 <= b < d <= crop.shape[0]:
                 raise ValueError('Reference support is outside its crop')
             alpha[b:d, a:c] = 255
@@ -49,7 +50,8 @@ def build(specification, output):
         entries.append({key: value for key, value in item.items() if key not in ('source_image', 'crop')}
                        | {'image': name, 'source_image': str(source), 'source_crop': item['crop'],
                           'regions': regions, 'anchor_pixels': [(x0+item['anchor_pixels'][0])*sx-left,
-                                                              (y0+item['anchor_pixels'][1])*sy-top]})
+                                                              (y0+item['anchor_pixels'][1])*sy-top],
+                          **({'sampling_context':context}if context else{})})
     (output / 'bank.json').write_text(json.dumps({'schema': 1, 'skin': spec['skin'],
         'spacing_pixels': spec['spacing_pixels']*sx, 'templates': entries}, indent=2) + '\n')
     load_bank(output / 'bank.json')

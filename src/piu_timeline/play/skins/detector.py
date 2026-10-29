@@ -60,7 +60,8 @@ class SkinDetector:
                     mask = region['mask']
                     # Every region yields the same candidate-origin matrix.
                     area = search[y0:search.shape[0] - h + y1, x0:search.shape[1] - w + x1]
-                    error = cv2.matchTemplate(area, reference, cv2.TM_SQDIFF, mask=mask) / (3 * max(1, int(mask.sum())))
+                    error = (cv2.matchTemplate(area, reference, cv2.TM_SQDIFF, mask=mask)/(3*int(mask.sum()))if mask.any()
+                             else np.full((search.shape[0]-h+1,search.shape[1]-w+1),np.inf,dtype='float32'))
                     error = np.maximum(error, 0)
                     errors[region['name']] = error
                     normalized = error / region.get('maximum_error', .015)
@@ -85,12 +86,14 @@ class SkinDetector:
                     candidates.append({'lane': lane, 'x': x / self.width, 'y': y / self.height,
                                        'role': 'unknown'if cap_only else template['role'], 'template': template['id'],
                                        'template_role':template['role'], 'hud_region_overlap':hidden,
-                                       **({k:template[k]for k in ('sampling_phase_pixels','reference_scale_y')if k in template}),
+                                       **({k:template[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel')if k in template}),
                                        'classification_status':'cap_only'if cap_only else'full_pattern',
                                        **({'reason':'skin_tap_clearance_unresolved'if template['role']=='tap'
                                            else'skin_image_connection_unresolved'}if cap_only else{}),
                                        'quality': float(1 - (proposal_scores[row,col]if cap_only else scores[row, col])),
-                                       'region_errors': {name: float(values[row, col]) for name, values in errors.items()},
+                                       'region_errors': {name: float(values[row,col])if np.isfinite(values[row,col])else None for name,values in errors.items()},
+                                       **({'unavailable_regions':[name for name,values in errors.items()if not np.isfinite(values[row,col])]}
+                                          if any(not np.isfinite(values[row,col])for values in errors.values())else{}),
                                        'bounds_pixels': bounds, 'method': 'skin_image', 'skin': self.bank['skin']})
         return self.resolve(candidates)
 
@@ -105,7 +108,7 @@ class SkinDetector:
                 continue
             current = peers[0]
             fields=('role','template_role','classification_status','template','quality','region_errors',
-                    'x','y','bounds_pixels','sampling_phase_pixels','reference_scale_y')
+                    'x','y','bounds_pixels','sampling_phase_pixels','reference_scale_y','sampling_kernel','unavailable_regions')
             proof = {k: candidate[k] for k in fields if k in candidate}
             current['alternatives'].append(proof)
             full={r['template_role']for r in (current,candidate)if r['classification_status']=='full_pattern'}

@@ -51,6 +51,7 @@ def clear_regions(data,pattern,template,planes):
     sx,sy=width/data['analysis_width'],height/data['analysis_height']
     regions=[r for r in template['regions']if r['name']in('clear_above','clear_below')]
     if len(regions)!=2:return None
+    if any(not r['mask'].any()for r in regions):return None
     left,top=pattern['bounds_pixels'][:2];result=[]
     # The positive cap must also be outside documented foreground footprints.
     cap=next(r['box']for r in template['regions']if r['name']=='cap')
@@ -124,7 +125,7 @@ def derive(data,native,samples,bank,profile):
                     'region_errors':{'cap':pattern['region_errors']['cap']},'bounds_pixels':pattern['bounds_pixels'],
                     'image_anchor':[pattern['x']*width,image['y']*height],
                     'classification_status':'cap_with_native_clearance','clearance_regions':regions,
-                    **{k:pattern[k]for k in ('sampling_phase_pixels','reference_scale_y')if k in pattern},
+                    **{k:pattern[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel')if k in pattern},
                     'clearance_pixel_dimensions':[PIXEL_FORMAT['width'],next(iter(planes.values())).shape[0]]})
                 break
     qualified={i:group for i,points in proofs.items()if(group:=qualify(points,detector.spacing))}

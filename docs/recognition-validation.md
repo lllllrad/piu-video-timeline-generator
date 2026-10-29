@@ -61,6 +61,9 @@ The expected objects come from the TypeScript scene definitions. No target times
 or object identities are supplied to acquisition. Temporary reference banks use
 the same declared glyph design, with separate cap/connection/clearance regions;
 frames vary position, background noise, lane count, integer scale and cadence.
+Independent in-memory RGB scenes run in up to four processes with fixed seeds
+and ordered results. Encoded scenes run serially to bound FFmpeg thread pools;
+parallel execution does not change their native frame order or expected results.
 
 The native matrix has 86 scenes: empty fields; isolated taps in all five lane
 kinds; Single/Double chords; staggered and repeated taps; long/short holds versus
@@ -82,11 +85,22 @@ compare source-cell areas with full-frame OpenCV resizing, exclude unsupported
 source rows and require complete same-lane cap support for body subfeatures.
 T05 remains incomplete for arbitrary crop origins, independently rounded axis
 scales, perspective and the downstream timing/UCS boundaries.
-It also remains incomplete through encoded-video decoding: the current FFmpeg
-decoder uses its default bicubic scaler, whereas this RGB matrix exercises area
-resampling. An encoded 1.5-scale short-hold scene still loses intact caps in some
-frames. Preserve that failure and cover the actual decoder kernel before corpus
-promotion; an area-only pass cannot establish the end-to-end native path.
+
+`tests/derived/encoded-recognition.test.ts` adds 26 encoded-source scenes. It
+creates lossless FFV1/NUT recordings, preserves a nonzero source offset, and runs
+the actual `decode_frames` path with FFmpeg's default scaling at 0.5/1.5/2 sizes.
+The oracle reads independent ffprobe frame integers and time bases. Assertions
+cover every cap, exact lane/role, persistent track, type join, native coordinate
+source PTS, hold ownership and per-frame connection evidence. Source bytes and
+mtime must remain unchanged. Cap-only reference controls retain unknown type
+instead of inventing a tap or hold. They use the shared glyph interior, excluding
+role-dependent edge interpolation. The ordinary references include declared
+source context beyond comparison regions; context never becomes geometry.
+
+Kernel checks separately cover known decoder coefficients, negative-tap alpha
+holes, explicit context extraction and unavailable support. This establishes
+the tested decoder/measurement boundary, not lossy codec/chroma variation,
+arbitrary background/skin animation, full timing, input association or UCS.
 
 ## Promotion order
 

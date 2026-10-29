@@ -59,8 +59,9 @@ inside such an area remains evidence under the same per-region RGB limits,
 with `hud_region_overlap` retained for review. A mismatching connection cannot
 be assumed present behind HUD. It leaves the cap role unknown. Missing patterns
 inside a potential occluder remain distinct from clear unexplained losses.
-Transparent padding and pixels outside comparison regions do not contribute
-image support or establish overlap.
+Transparent padding cannot contribute to a comparison. Declared surrounding
+source pixels may supply interpolation context; output outside comparison
+regions supplies no cap/body coverage or foreground-overlap evidence.
 The lower search limit applies to note anchors. Surrounding image context can
 extend beyond that limit while remaining inside the original game image; it is
 still subject to HUD support checks. A fully visible template must not be
@@ -82,23 +83,26 @@ unrepresented animation phases can still produce missing or ambiguous matches.
 
 ## Source-bound native cap centers
 
-Reference scaling uses source pixel-cell area, retaining the fractional output
-origin instead of independently stretching a cropped image to rounded dimensions.
+Reference scaling retains the fractional source-grid origin instead of
+independently stretching a cropped image to rounded dimensions. It models area
+resampling and the native decoder's bicubic kernel, with B=0 and C=0.6 as described
+in the [FFmpeg scaler documentation](https://www.ffmpeg.org/ffmpeg-scaler.html).
 Exact small rational scales enumerate their source-grid phases (denominator at
 most eight); other scales use a quarter-pixel phase catalogue. Every comparison
 still meets its original per-region RGB error limit. Catalogue selection is not
 proof of arbitrary skin animation or absolute game timing calibration.
-The encoded-video decoder currently uses FFmpeg's default bicubic scaling
-([scaler documentation](https://www.ffmpeg.org/ffmpeg-scaler.html)). Area-model
-validation does not cover that different kernel; encoded fractional-scale scenes
-remain an explicit validation gap.
 
-Only output pixels whose entire sampling footprint is supported within that
-comparison region contribute. Padding, alpha holes and neighboring regions do
-not supply missing evidence. Observations and alternatives retain
-`sampling_phase_pixels` and `reference_scale_y`; anchors use the same transform.
+An output pixel contributes only when its center belongs to a comparison region
+and every nonzero kernel tap has declared source support. Known adjacent regions
+and declared source context may participate in interpolation, but no alpha hole
+or unknown padding can be filled. Negative cubic coefficients cannot cancel an
+unknown source pixel into apparent support. A region with no supported outputs
+remains unavailable; a positive cap can survive with unknown type/context and
+`null` region errors instead of invented comparisons.
+Observations and alternatives retain `sampling_phase_pixels`, `sampling_kernel`
+when non-area, and `reference_scale_y`; anchors use the same transform.
 Body/connection coverage, receptor risk and native clearance use the matching
-phase's compared support, rather than another variant's rectangle or row bounds.
+kernel/phase's compared support, rather than another variant's rectangle or rows.
 
 A uniform body reference can also match the colored interior of a cap. When
 every positively compared pixel of every retained body alternative is contained
@@ -290,6 +294,11 @@ The specification supplies `skin`, `spacing_pixels`, optional `analysis_width`,
 and `templates`. Each template supplies `id`, `lane_kind`, `role`,
 `source_image`, `crop` (`left, top, right, bottom`), `anchor_pixels` relative to
 that crop, and `regions` containing `name`, `box` and optional `maximum_error`.
+Optional `sampling_context` boxes use the same crop-relative coordinates. They
+declare actual surrounding source RGB needed by interpolation, without adding
+comparison regions or geometry coverage. Include sufficient context around a
+cap and its clearance/connection probes; a crop at the cap edge may leave its
+resampled boundary unmeasurable. Context outside the source crop is rejected.
 Retain `source_evidence` with media identity, source PTS, playback time and game
 ROI for recording-derived examples. The builder preserves it in the bank.
 Output directories are never overwritten. PNGs, source frames and

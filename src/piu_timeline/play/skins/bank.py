@@ -39,6 +39,11 @@ def load_bank(path):
             raise ValueError('Skin references require RGBA PNG pixels and an explicit support mask')
         rgb, mask = image[:, :, :3][:, :, ::-1].copy(), image[:, :, 3] > 0
         height, width = mask.shape
+        for box in entry.get('sampling_context',[]):
+            if (not isinstance(box,list)or len(box)!=4 or not all(type(v)is int for v in box)
+                    or not 0<=box[0]<box[2]<=width or not 0<=box[1]<box[3]<=height
+                    or not mask[box[1]:box[3],box[0]:box[2]].all()):
+                raise ValueError('Sampling context needs declared source pixels inside the reference image')
         anchor = entry.get('anchor_pixels', [])
         if (len(anchor) != 2 or not all(finite_number(x) for x in anchor)
                 or not 0 <= anchor[0] < width or not 0 <= anchor[1] < height):

@@ -4,6 +4,9 @@ The caller supplies object truth. Acquisition creates tracks without receiving
 those identities or target times. This helper makes no recognition assertions.
 """
 import json
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -33,7 +36,7 @@ def cap(kind):
     return image
 
 
-def bank_at(root):
+def bank_at(root,clearance_rows=4,connection_rows=6,margin=4,cap_only=False):
     entries=[]
     for kind in range(5):
         glyph=cap(kind);color=COLORS[kind]
@@ -42,21 +45,31 @@ def bank_at(root):
                 rgb=np.full((12,8,3),color,dtype='uint8');anchor=[4,6]
                 regions=[('body',[0,0,8,12])]
             else:
-                h,offset=(28,4)if role=='tap'else(24,0)if role=='hold_start'else(24,4)
+                h,offset=(20+2*(clearance_rows+margin),clearance_rows+margin)if role=='tap'else(20+margin+connection_rows,margin)if role=='hold_start'else(20+margin+connection_rows,connection_rows)
                 rgb=np.full((h,20,3),BACKGROUND,dtype='uint8')
                 rgb[offset:offset+20]=glyph;anchor=[10,offset+10]
                 regions=[('cap',[0,offset,20,offset+20])]
-                if role=='tap':regions += [('clear_above',[6,0,14,3]),('clear_below',[6,25,14,28])]
+                if role=='tap':regions += [('clear_above',[6,margin,14,offset]),('clear_below',[6,offset+20,14,offset+20+clearance_rows])]
                 else:
-                    a,b=(20,24)if role=='hold_start'else(0,4)
+                    a,b=(offset+20,h)if role=='hold_start'else(0,connection_rows)
                     rgb[a:b,6:14]=color;regions.append(('connection',[6,a,14,b]))
-            alpha=np.zeros(rgb.shape[:2],dtype='uint8')
-            for _,(x0,y0,x1,y1)in regions:alpha[y0:y1,x0:x1]=255
+            # The reference scene supplies this surrounding RGB too. It is
+            # interpolation context, not extra cap/body comparison coverage.
+            alpha=np.full(rgb.shape[:2],255,dtype='uint8')
             name=f'{kind}-{role}'
             cv2.imwrite(str(root/(name+'.png')),np.dstack([rgb[:,:,::-1],alpha]))
             entries.append({'id':name,'role':role,'lane_kind':kind,'image':name+'.png',
-                            'anchor_pixels':anchor,'regions':[{'name':n,'box':b,'maximum_error':.002}for n,b in regions]})
+                            'anchor_pixels':anchor,'sampling_context':[[0,0,rgb.shape[1],rgb.shape[0]]],
+                            'regions':[{'name':n,'box':b,'maximum_error':.002}for n,b in regions]})
     path=root/'bank.json'
+    if cap_only:
+        entries=[t for t in entries if t['role']in('tap','hold_body')]
+        for t in entries:
+            if t['role']=='tap':
+                # Only the shared glyph interior is role-independent after
+                # interpolation; its edge can include a stem or background.
+                region=t['regions'][0];a,b,c,d=region['box']
+                t['regions']=[{**region,'box':[a+4,b+4,c-4,d-4]}]
     path.write_text(json.dumps({'schema':1,'skin':'generated-colored-caps','spacing_pixels':20,'templates':entries}))
     return load_bank(path)
 
@@ -85,10 +98,14 @@ def acquire(spec,root,bank):
             'judgment_roi':[0,0,0,0],'combo_roi':[0,0,0,0],
             'lanes':[{'x':(40+i*20)/base_width,'color':('blue','red','yellow','red','blue')[i%5]}for i in range(lanes)]}
     tracker=NoteTracker(layout,width,height,skin_bank=bank);native=[]
-    for i in range(round(.2*fps)+1):
-        time=i/fps;pts=42.125+time
-        image=render(spec['objects'],time,base_width,base_height,i+spec['seed'],spec.get('mode'),i)
-        image=cv2.resize(image,(width,height),interpolation=cv2.INTER_AREA)
+    images=[render(spec['objects'],i/fps,base_width,base_height,i+spec['seed'],spec.get('mode'),i)for i in range(round(.2*fps)+1)]
+    if spec.get('capture')=='encoded':
+        from tests.play.skins.capture import encoded
+        captures,expected_pts,preserved=encoded(images,fps,root,width)
+    else:
+        captures=[(42.125+i/fps,i/fps,cv2.resize(image,(width,height),interpolation=cv2.INTER_AREA))for i,image in enumerate(images)]
+        expected_pts=[42.125+i/fps for i in range(len(images))];preserved=True
+    for pts,time,image in captures:
         detections=tracker.detect(image);tracker.update(time,detections,pts)
         native.append({'playback_seconds':time,'source_pts_seconds':pts,'skin_observations':tracker.skin_observations})
     # Raw acquired tracks, not scene-supplied endpoints or fitted truth.
@@ -99,17 +116,38 @@ def acquire(spec,root,bank):
     roles=observe(data,native)
     coordinates=measure(data,native)
     return {'id':spec['id'],'notes':notes,'roles':roles['notes'],'connections':connections,'warnings':warnings,'coordinates':coordinates,
+            'expected_source_pts':expected_pts,'source_preserved':preserved,
             'cap_subfeature_frames':sum(any(o.get('cap_subfeature')for o in f['skin_observations'])for f in native),
             'frames':[{'time':f['playback_seconds'],'pts':f['source_pts_seconds'],
                        'caps':[{k:o[k]for k in ('lane','y','role','classification_status')}for o in f['skin_observations']if o['role']!='hold_body']}
                       for f in native]}
 
 
+def acquire_task(task):
+    spec,directory,bank=task
+    return acquire(spec,directory,bank)
+
+
 def main():
     specs=json.load(sys.stdin)
     with tempfile.TemporaryDirectory()as tmp:
-        root=Path(tmp);bank=bank_at(root)
-        json.dump([acquire(spec,root,bank)for spec in specs],sys.stdout)
+        root=Path(tmp);banks={(4,False):(root,bank_at(root))};tasks=[]
+        for spec in specs:
+            margin=spec.get('reference_margin',4);cap_only=spec.get('reference_profile')=='cap_only';profile=margin,cap_only
+            if profile not in banks:
+                directory=root/f'context-{margin}-{cap_only}';directory.mkdir()
+                banks[profile]=directory,bank_at(directory,margin=margin,cap_only=cap_only)
+            directory,bank=banks[profile];tasks.append((spec,directory,bank))
+        available=len(os.sched_getaffinity(0))if hasattr(os,'sched_getaffinity')else(os.cpu_count()or 1)
+        workers=min(4,max(1,available))
+        # Independent RGB scenes share immutable references and retain input
+        # order. Encoded scenes stay serial to bound FFmpeg thread pools.
+        if workers>1 and len(tasks)>1 and all(s.get('capture')!='encoded'for s in specs):
+            with ProcessPoolExecutor(max_workers=workers,mp_context=get_context('spawn'),
+                    initializer=cv2.setNumThreads,initargs=(1,))as pool:
+                results=list(pool.map(acquire_task,tasks))
+        else:results=[acquire_task(task)for task in tasks]
+        json.dump(results,sys.stdout,allow_nan=False)
 
 
 if __name__=='__main__':main()
