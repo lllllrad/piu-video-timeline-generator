@@ -455,3 +455,24 @@ Use an actual distinguishing edge or shape, not an expected note count or timing
 The feature regions retain their source geometry, pixels and sampling context.
 Bank contracts, cap-acquisition reuse and anchor certificates bind this selection;
 references without cap features keep their existing acquisition identity and rules.
+
+## Reviewing relative reference anchors
+
+Before activating a candidate bank, compare references that matched the same
+acquired cap:
+
+```sh
+mise exec -- python -m piu_timeline.play.skins compare-anchors \
+  .local/reports/image-review/observations.json \
+  --bank .local/cache/note-skins/example/bank.json \
+  --output .local/reports/image-review/anchor-pairs.json
+```
+
+This saved-data review checks bank identity and native timestamps without decoding
+video. It chooses each reference's strongest qualified cap comparison per acquired
+cap, including every required cap feature. It retains both witness coordinates,
+original PTS, observation index and the signed second-minus-first difference.
+Repeated relative offsets can reveal an inconsistent reference anchor. The tool
+reports the observed range without assigning an absolute calibration, widening
+coordinate limits or automatically moving any source point. Review source geometry
+before correcting the reference and replay acquisition when its anchor changes.

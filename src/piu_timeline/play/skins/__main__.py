@@ -47,6 +47,20 @@ def scan(source, segment, bank_path, output, start=None, duration=3, width=650):
     print(json.dumps({'frames': len(frames), 'counts': dict(counts), 'output': str(output)}))
 
 
+def compare_anchors(observations,bank_path,output):
+    from piu_timeline.derived import call
+    data=json.loads(Path(observations).read_text());bank=load_bank(bank_path)
+    if data.get('bank')!=bank['contract']:
+        raise ValueError('Anchor-pair review references differ from acquired observations')
+    templates=[{k:t[k]for k in ('id','regions','cap_features')if k in t}for t in bank['templates']]
+    result=call('skinAnchors.compare',data['frames'],data['analysis_height'],templates)
+    result.update(bank=bank['contract'],media=data['media'],analysis_width=data['analysis_width'],
+                  analysis_height=data['analysis_height'])
+    output=Path(output);output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_text(json.dumps(result,indent=2)+'\n')
+    print(json.dumps({'pairs':len(result['pairs']),'output':str(output)}))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -62,6 +76,10 @@ def main():
     references.add_argument('bank', type=Path)
     references.add_argument('--output', type=Path, required=True)
     references.add_argument('--lane-kind', type=int, choices=range(5))
+    pairs = commands.add_parser('compare-anchors')
+    pairs.add_argument('observations',type=Path)
+    pairs.add_argument('--bank',type=Path,required=True)
+    pairs.add_argument('--output',type=Path,required=True)
     review = commands.add_parser('scan')
     review.add_argument('source')
     review.add_argument('--segment', type=int, required=True)
@@ -70,7 +88,9 @@ def main():
     review.add_argument('--start', type=float)
     review.add_argument('--duration', type=float, default=3)
     args = parser.parse_args()
-    if args.command == 'build':
+    if args.command == 'compare-anchors':
+        compare_anchors(args.observations,args.bank,args.output)
+    elif args.command == 'build':
         print(build(args.specification, args.output))
     elif args.command == 'register-anchors':
         print(register_anchors(args.bank,args.analysis,args.registration,args.output))

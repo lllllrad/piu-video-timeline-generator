@@ -1,6 +1,7 @@
 /** JSON-lines transport for acquisition adapters. Algorithms are also directly importable. */
 import {readSync, writeSync} from 'node:fs';
 import {StringDecoder} from 'node:string_decoder';
+import * as skinAnchors from './skins/anchors.ts';
 import * as coordinates from './beats/coordinates.ts';
 import * as chords from './beats/chords.ts';
 import * as domains from './beats/domains.ts';
@@ -45,7 +46,7 @@ import * as holdRisk from './holds/risk.ts';
 import {parseData, stringifyData} from './json.ts';
 
 const operations = {
-  coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription,
+  skinAnchors, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription,
   registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft,
   holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
   holdState, holdExtent, holdGeometry, holdRisk, beats: {fitGrid, reconstruct},
