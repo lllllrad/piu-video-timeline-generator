@@ -1,11 +1,12 @@
 """Retain repeatedly supported native color shapes instead of averaging animation."""
 import cv2
 import numpy as np
+from piu_timeline.derived import CONTRACTS
 from piu_timeline.play.processing.registration import FORMAT as REGISTRATION_FORMAT,centers
 
 FORMAT={'schema':1,'revision':2,'presence_selection':'best_clear_supported_shape',
-        'minimum_support_frames':3,'minimum_similarity':.65,
-        'minimum_displacement_spacing':.5,'registration':REGISTRATION_FORMAT}
+        'minimum_support_frames':CONTRACTS['cap_coverage']['minimum_reference_frames'],'minimum_similarity':CONTRACTS['cap_coverage']['minimum_similarity'],
+        'minimum_displacement_spacing':CONTRACTS['cap_coverage']['minimum_displacement_spacing'],'registration':REGISTRATION_FORMAT}
 
 
 def overlap(template,image):
@@ -30,7 +31,7 @@ def references(values,spacing):
     return poses
 
 
-def compare(color,light,reference,y,radius,spacing):
+def compare(color,light,reference,y,radius,spacing,*,retain_support=False):
     """Presence needs one verified shape; clear absence must reject every shape."""
     from piu_timeline.play.processing import visible_template
     models=[('median',reference['mask'],{}),*[(i,p['mask'],p.get('evidence',{}))for i,p in enumerate(reference.get('poses',[]))]]
@@ -44,7 +45,8 @@ def compare(color,light,reference,y,radius,spacing):
             slices,template,coverage=cropped
             image,white=color[slices],light[slices]
             measured.append({'pose':name,'score':overlap(template,image),'coverage':coverage,
-                             'white':white,'template':template,'offset':center-round(y)})
+                             'white':white,'template':template,'offset':center-round(y),
+                             'top':slices[0].start,'reference':evidence})
     result={'state':'unknown','score':None,'unknown_reason':'image_boundary'}
     if not measured:return result
     # Presence needs one supported, clear comparison. The highest color score
@@ -68,6 +70,16 @@ def compare(color,light,reference,y,radius,spacing):
         if coverage['area_fraction']<1 and state=='present':state,reason='unknown','partial_head_present'
         result.update(state=state,score=score,unknown_reason=reason,template_pose=best['pose'],
                       template_vertical_offset_pixels=best['offset'])
+    observed=[p for p in positive if isinstance(p['pose'],int)and p['coverage']['area_fraction']==1]
+    if retain_support and result['state']=='present'and observed:
+        cap=max(observed,key=lambda p:p['score'])
+        runs=[]
+        for row in np.flatnonzero(cap['template'].any(axis=1)):
+            row=int(row)+cap['top']
+            if runs and runs[-1][1]==row:runs[-1][1]=row+1
+            else:runs.append([row,row+1])
+        result['positive_cap_support']={'intervals_pixels':runs,'box_pixels':[cap['top'],cap['top']+cap['template'].shape[0]],
+                                        'reference':cap['reference'],'score':cap['score'],'template_pose':cap['pose']}
     if coverage['area_fraction']<1:
         result.update(template_coverage=coverage,confirmation_only=True)
     return result

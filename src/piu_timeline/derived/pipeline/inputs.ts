@@ -9,9 +9,9 @@ export const viewFields = ['notes', 'matches', 'limitations', 'excluded_notes', 
   'coverage', 'note_type_diagnostics', 'conflicted_matches', 'association_view_format'];
 export function processingChannel(data: RecordData): RecordData {
   const channel = data.visual_channels?.processing ?? {};
-  return {...pick(channel, ['visibility_boundaries']), notes: (channel.notes ?? []).map(n => ({
+  return {...pick(channel, ['visibility_boundaries','format','pixel_coordinates']), notes: (channel.notes ?? []).map(n => ({
     ...pick(n, ['note', 'id', 'lane', 'status', 'reason', 'range', 'source_pts_seconds', 'confirmation_source_pts_seconds',
-      'passage_evidence', 'visibility_loss', 'gimmick_candidates', 'native_status', 'native_reason', 'motion_basis']), sample_count: n.samples?.length ?? n.sample_count ?? 0}))};
+      'passage_evidence', 'cap_coverage', 'cap_observation', 'visibility_loss', 'gimmick_candidates', 'native_status', 'native_reason', 'motion_basis']), sample_count: n.samples?.length ?? n.sample_count ?? 0}))};
 }
 export function evidence(data: RecordData): RecordData {
   const result = pick(data, ['notes', 'matches', 'conflicted_matches', 'miss_candidates', 'combo_events', 'judgment_events', 'counter_frame_events',

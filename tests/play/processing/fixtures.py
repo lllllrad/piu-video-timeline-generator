@@ -20,7 +20,7 @@ def edge_flash_frame(radius=6):
     return color,light,reference,center+.2,radius,radius/.45
 
 
-def fixture(root,animated=False,hud=True):
+def fixture(root,animated=False,hud=True,hold=False,hidden_frames=(),flash_frames=()):
     source=root/'source.mkv';source.write_bytes(b'unchanged recording')
     layout={'lanes':[{'x':.2+.1*i,'color':'blue'}for i in range(5)],'receptor_y':.142,
             'note_y_max':.95,'combo_roi':[.34,.52,.12,.075],'judgment_roi':[.34,.32,.12,.19]}
@@ -30,17 +30,30 @@ def fixture(root,animated=False,hud=True):
           'analysis_width':325,'analysis_height':200,'start_seconds':0,'end_seconds':1.4,
           'notes':[{'lane':2,'status':'estimated','target_seconds':1.,'prediction_uncertainty_seconds':.01,
                     'velocity_pixels_per_second':-240.,'points':[]}],'hold_analysis':{'holds':[]}}
+    if hold:
+        data['notes'].append({**data['notes'][0],'target_seconds':1.3,'points':[]})
+        data['hold_analysis']['holds']=[{'id':0,'head_note':0,'tail_note':1,'lane':2,
+            'covered_notes':[0,1],'start_range':[.99,1.01],'end_range':[1.29,1.31],
+            'start_censored':False,'end_censored':False}]
     decoded=[]
     for i in range(84):
         t=i/60;y=round(28.4+240*(1-t));image=np.full((200,325,3),70,dtype='uint8')
-        if t<1 and 15<=y<185:
-            cv2.rectangle(image,(116,y-14),(144,y+14),(255,255,255),-1)
-            cv2.rectangle(image,(119,y-11),(141,y+11),(0,130,255),-1)
-            if animated:
-                image[y-11:y+12,119:142]=70
-                left=119+(i%3)*8
-                image[y-11:y+12,left:min(left+7,142)]=(0,130,255)
-            if y>28.4+32.5*.85:data['notes'][0]['points'].append([t,y])
+        if hold and t<1.3:
+            # One continuous held object; the body survives the leading cap.
+            cv2.rectangle(image,(125,max(28,y)),(135,y+72),(0,130,255),-1)
+        for index,note in enumerate(data['notes']):
+            cap_y=y+72*index
+            if t<note['target_seconds'] and 15<=cap_y<185:
+                if i not in hidden_frames:
+                    cv2.rectangle(image,(116,cap_y-14),(144,cap_y+14),(255,255,255),-1)
+                    cv2.rectangle(image,(119,cap_y-11),(141,cap_y+11),(0,130,255),-1)
+                    if animated:
+                        image[cap_y-11:cap_y+12,119:142]=70
+                        left=119+(i%3)*8
+                        image[cap_y-11:cap_y+12,left:min(left+7,142)]=(0,130,255)
+                if cap_y>28.4+32.5*.85 and i not in hidden_frames:
+                    note['points'].append([t,cap_y])
+        if i in flash_frames:image[0:100,110:151]=255
         if hud:image[74:86,116:145]=255  # Known judgment foreground in the old learning band.
         decoded.append((42+t,t,image))
     pixels=ReceptorPixels(layout,325,200)

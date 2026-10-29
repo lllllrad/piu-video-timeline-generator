@@ -1,12 +1,13 @@
 /** Interpret saved hold geometry and independent channels for report/chart consumers. */
 import {annotateMatches, bracket, disputedRefresh, onsetOverlaps, processingSupport, receptorEvidence} from './evidence.ts';
 import {chartProjection, projectTypes} from './hold_projection.ts';
+import {accountCapCoverage} from './hold_coverage.ts';
 import {recoverRows} from './recovery.ts';
 import {attachRecoveredLabels, recoverPreHold} from './labels.ts';
 import type {RecordData} from './types.ts';
 
 export function present(input: RecordData, preHoldProofs: Record<string, RecordData> = {}): RecordData {
-  let data = annotateMatches(input);
+  let data = annotateMatches(accountCapCoverage(input));
   const view = chartProjection(data);
   if (!data.hold_analysis || !Object.keys(data.hold_analysis).length) return view;
   const notes = view.notes, holds = data.hold_analysis.holds ?? [], projected = view.hold_analysis.holds, tails = view.hold_analysis.observed_tail_roles;

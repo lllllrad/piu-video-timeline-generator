@@ -157,5 +157,14 @@
     64,
     96,
     192
-  ]
+  ],
+  "cap_coverage": {
+    "schema": 1,
+    "method": "moving_same_head_color_pose",
+    "minimum_reference_frames": 3,
+    "minimum_displacement_spacing": 0.5,
+    "minimum_similarity": 0.65,
+    "units": "analysis_image_pixels",
+    "radius_spacing": 0.45
+  }
 }

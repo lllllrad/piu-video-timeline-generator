@@ -1,5 +1,6 @@
 """Learn a head's persistence silhouette from its own clear native approach."""
 from collections import defaultdict
+from piu_timeline.derived import CONTRACTS
 import json
 
 import numpy as np
@@ -9,7 +10,7 @@ from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.processing.poses import FORMAT as POSE_FORMAT,references
 
 FORMAT={'schema':1,'revision':3,'minimum_frames':3,'minimum_height_spacing':1.4,
-        'radius_spacing':.45,'maximum_white_fraction':.45,'color_fraction_range':[.12,.85],
+        'radius_spacing':CONTRACTS['cap_coverage']['radius_spacing'],'maximum_white_fraction':.45,'color_fraction_range':[.12,.85],
         'poses':POSE_FORMAT}
 
 

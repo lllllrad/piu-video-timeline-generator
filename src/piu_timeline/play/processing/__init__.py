@@ -1,6 +1,7 @@
 """Observe moving-head persistence at receptors without consulting the HUD or input light."""
 from bisect import bisect_left
 from collections import Counter
+from piu_timeline.derived import CONTRACTS
 import json
 
 import numpy as np
@@ -9,7 +10,7 @@ from piu_timeline.play.processing.poses import overlap,compare
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
-PROCESSING_FORMAT = {'schema': 1, 'revision': 8,'partial_confirmation_minimum_coverage':.8,
+PROCESSING_FORMAT = {'schema': 1, 'revision': 9,'cap_coverage':CONTRACTS['cap_coverage'],'partial_confirmation_minimum_coverage':.8,
                      'templates':TEMPLATE_FORMAT}
 
 
@@ -127,7 +128,7 @@ def observe_processing(data, path):
     scale = height/data.get('analysis_height', round(data['analysis_width']*data['game_roi'][3]/data['game_roi'][2]))
     spacing = float(np.median(np.diff([lane['x']*PIXEL_FORMAT['width'] for lane in data['layout']['lanes']])))
     receptor = data['layout']['receptor_y']*height
-    radius = max(2, round(.45*spacing))
+    radius = max(2, round(TEMPLATE_FORMAT['radius_spacing']*spacing))
     # Cap identity is resolved before interpreting a disappearance as a tap.
     components = {n for h in data.get('hold_analysis', {}).get('holds', []) for n in h['covered_notes']}
     from piu_timeline.play.processing.motion import observed_paths
@@ -136,13 +137,16 @@ def observe_processing(data, path):
     result = []
     for index, note in enumerate(data.get('notes', [])):
         record = {'note': index, 'lane': note['lane'], 'samples': []}
-        if index in components:
-            result.append({**record, 'status': 'hold_component', 'reason': 'use_sustained_body_state'}); continue
+        def finish(outcome):
+            if index in components:
+                record['cap_observation']=outcome
+                outcome={'status':'hold_component','reason':'use_sustained_body_state'}
+            result.append({**record,**outcome})
         path = paths[index]
         record['motion_basis'] = path['basis']
         velocity, target = path['velocity'], path['target']
         if not path['supported']:
-            result.append({**record, 'status': 'unresolved', 'reason': 'unsupported_motion'}); continue
+            finish({'status': 'unresolved', 'reason': 'unsupported_motion'}); continue
         def lane_mask(fi):
             return np.unpackbits(masks[fi, note['lane']], axis=-1)[..., :columns].astype(bool)
         templates = []
@@ -162,7 +166,7 @@ def observe_processing(data, path):
         if learned is None and len(templates)>=TEMPLATE_FORMAT['minimum_frames']:
             reference=build(templates,spacing,'processing-features.npz')
         if reference is None:
-            result.append({**record, 'status': 'unresolved', 'reason': 'insufficient_clear_approach'}); continue
+            finish({'status': 'unresolved', 'reason': 'insufficient_clear_approach'}); continue
         record['template_evidence']=reference['evidence']
         start, end = target-min(.25, 2.8*spacing/-velocity), target+min(.2, 1.2*spacing/-velocity)
         alternatives = [paths[i] for i,other in enumerate(data['notes'])
@@ -174,7 +178,7 @@ def observe_processing(data, path):
             if y is None:
                 continue
             color, light, visibility = lane_mask(fi)
-            observation=compare(color,light,reference,y-top,radius,spacing)
+            observation=compare(color,light,reference,y-top,radius,spacing,retain_support=index in components)
             hidden=hud_regions(data['layout'],note['lane'],y,radius,PIXEL_FORMAT['width'],height)
             reason=None
             if observation['unknown_reason']=='image_boundary':pass
@@ -184,9 +188,16 @@ def observe_processing(data, path):
             elif visibility.mean()<=.015:
                 reason = 'screen_not_visible'
             if reason:observation.update(state='unknown',score=None,unknown_reason=reason)
+            cap=observation.pop('positive_cap_support',None)
+            if cap and observation['state']=='present':
+                record.setdefault('cap_coverage',[]).append({'playback_seconds':time,'source_pts_seconds':source_pts,
+                    'intervals_pixels':[[(top+a)/scale,(top+b)/scale]for a,b in cap['intervals_pixels']],
+                    'box_pixels':[(top+a)/scale for a in cap['box_pixels']],
+                    'native_lane_spacing_pixels':spacing,'reference':cap['reference'],
+                    'score':cap['score'],'template_pose':cap['template_pose'],'trace':'processing-features.npz'})
             record['samples'].append({'time':time,'pts':source_pts,'y':float(y),**observation,
                                       **({'occluders':hidden}if hidden else {})})
-        result.append({**record, **transition(record['samples'], receptor, spacing)})
+        finish(transition(record['samples'], receptor, spacing))
     from piu_timeline.play.visibility import pre_receptor_losses
     boundaries = pre_receptor_losses(result, receptor, spacing)
     holds = [{'hold': h['id'], 'lane': h['lane'], 'start_range': h['start_range'],

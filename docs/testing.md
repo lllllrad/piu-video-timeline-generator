@@ -25,6 +25,10 @@ separate Python fit or row-transcription implementation.
 
 ## What the suite establishes
 
+See [recognition validation](recognition-validation.md) for the required scene
+families, current gaps and synthetic-first promotion order. The suite below
+contains individual protections; it is not a complete ordinary-gameplay matrix.
+
 | Suite | Coverage |
 | --- | --- |
 | `metadata/` | Scene boundaries and OCR budgets, independent source-PTS consensus, title/chart ownership, credit boundaries, rival exclusion, player-separated result fields and badge recovery |

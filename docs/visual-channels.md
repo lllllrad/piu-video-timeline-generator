@@ -331,6 +331,10 @@ competition unresolved. `fixed_refresh_rows` retains the conditional ownership,
 physical bracket and native separation samples; source timing bounds, display
 brackets and prior associations remain unchanged.
 
+Known hold caps retain native appearance samples without becoming separate
+presses. [Hold cap coverage](hold-cap-coverage.md) describes their bounded use
+in corroborating an otherwise missing image region.
+
 ## Note type evidence and contradictions
 
 A failed hold reconstruction does not establish a tap. The `note_types`
