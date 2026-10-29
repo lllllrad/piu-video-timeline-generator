@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {nativeScene} from './fixtures.ts';
-import {crossing} from '../../src/piu_timeline/derived/clocks.ts';
+import {crossing, MotionClock} from '../../src/piu_timeline/derived/clocks.ts';
 import {frameBounds} from '../../src/piu_timeline/derived/frame_bounds.ts';
 import {processingPaths} from '../../src/piu_timeline/derived/scroll.ts';
 
@@ -20,12 +20,12 @@ for(const fps of [30,60,120])for(const spacing of [20,40,80])test(`repeated nati
   assert.deepEqual(data,before);
 });
 
-for(const fps of [30,60,120])test(`ordinary capture retains its existing precision at ${fps} fps`,()=>{
+for(const fps of [30,60,120])test(`ordinary capture includes its declared coordinate error at ${fps} fps`,()=>{
   const data=nativeScene([[1.01,0],[1.2,1]],40,fps,5,{end:1.4});
   const state={...data.scroll_motion,spacing:40,height:data.analysis_height};
   const result=crossing(state,state.samples[0],1.01*240,.1);
   assert.ok(result);assert.equal(result.stationary_phase_interval,undefined);
-  assert.ok(result.prediction_uncertainty_seconds<=.5/fps+1e-9);
+  assert.ok(Math.abs(result.prediction_uncertainty_seconds-(.5/fps+.1/240))<1e-9);
   assert.ok(Math.abs(result.target_seconds-1.01)<1e-9);
 });
 
@@ -116,4 +116,37 @@ for(const spacing of [20,40,80])test(`transferred coordinates without an affine 
   assert.notEqual(path.velocity,n.velocity_pixels_per_second);
   assert.equal(path.position_model.phase,phase);assert.equal(path.position_model.chunk,0);
   assert.equal(n.motion_clock,null);assert.deepEqual(data,original);
+});
+
+
+for(const fps of[30,60,120])for(const spacing of[20,40,80])for(const direction of[-1,1])
+test(`independent capture and anchor errors can align: ${fps} fps / spacing ${spacing} / sign ${direction}`,()=>{
+ const truth=1.01,lag=direction*.49/fps,coordinateError=.025*spacing,velocity=spacing*6;
+ const data=nativeScene([[truth,0]],spacing,fps,5,{end:1.4,renderTime:t=>t-lag});
+ const before=structuredClone(data),state={...data.scroll_motion,spacing,height:data.analysis_height};
+ const measuredPhase=truth*velocity+direction*coordinateError;
+ const result=crossing(state,state.samples[0],measuredPhase,coordinateError);
+ assert.equal(result.fit_method,'shared_scroll_clock');
+ assert.ok(result.target_seconds-result.prediction_uncertainty_seconds<=truth&&truth<=result.target_seconds+result.prediction_uncertainty_seconds,
+  'bounded source-frame phase and coordinate errors must both fit inside the reported target range');
+ assert.ok(Math.abs(result.prediction_uncertainty_seconds-(.5/fps+coordinateError/velocity))<1e-9);
+ assert.deepEqual(result.crossing_source_pts_seconds,result.crossing_frame_seconds.map(t=>80+t));
+ assert.deepEqual(data,before);
+});
+
+
+for(const fps of[30,60,120])for(const spacing of[20,40,80])for(const direction of[-1,1])
+test(`short extrapolation combines capture, anchor and slope errors: ${fps} fps / spacing ${spacing} / sign ${direction}`,()=>{
+ const truth=1.01,lag=direction*.49/fps,coordinateError=.025*spacing,velocity=spacing*6;
+ const data=nativeScene([[truth,0]],spacing,fps,5,{end:1.4,renderTime:t=>t-lag});
+ data.scroll_motion.samples.forEach(s=>{if(s.time>.95){s.chunk=1;s.support=0;}});
+ const original=structuredClone(data),state={...data.scroll_motion,spacing,height:data.analysis_height};
+ const result=new MotionClock(state).extrapolated(state.samples[0],truth*velocity+direction*coordinateError,coordinateError);
+ assert.ok(result);assert.equal(result.fit_method,'shared_scroll_clock_extrapolation');
+ assert.ok(result.target_seconds-result.prediction_uncertainty_seconds<=truth&&truth<=result.target_seconds+result.prediction_uncertainty_seconds);
+ const c=result.motion_clock,slopeError=Math.max(1.5,3*c.residual)/(c.window[1]-c.window[0]);
+ const expected=.5/fps+(coordinateError+c.residual+slopeError*result.extrapolation_seconds)/c.velocity;
+ assert.ok(Math.abs(result.prediction_uncertainty_seconds-expected)<1e-9);
+ assert.deepEqual(result.crossing_source_pts_seconds,result.crossing_frame_seconds.map(t=>80+t));
+ assert.deepEqual(data,original);
 });

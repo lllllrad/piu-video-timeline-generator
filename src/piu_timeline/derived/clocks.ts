@@ -69,7 +69,7 @@ export class MotionClock {
     if (tail.slice(1).some((s, i) => s.time - tail[i].time > .05 + 1e-6) || tail.slice(1).some(s => s.support >= 2 && s.time <= time)) return null;
     const before = samples[index - 1], after = samples[index], cadence = cadenceOf(chunk), span = c.window[1] - c.window[0];
     const speedError = Math.max(1.5, 3 * c.residual) / span;
-    const uncertainty = Math.max(cadence / 2, (phaseError + c.residual + speedError * (time - last.time)) / c.velocity);
+    const uncertainty = cadence / 2 + (phaseError + c.residual + speedError * (time - last.time)) / c.velocity;
     return {target_seconds: time, prediction_uncertainty_seconds: uncertainty, fit_method: 'shared_scroll_clock_extrapolation', motion_clock: c,
       motion_support_end_seconds: last.time, extrapolation_seconds: time - last.time, crossing_source_pts_seconds: [before.source_pts, after.source_pts],
       crossing_frame_seconds: [before.time, after.time], crossing_capture_range: [before.time - uncertainty, after.time + uncertainty]};
@@ -102,7 +102,7 @@ export class MotionClock {
       return bounded ? {...bounded, ...(rejected ? {rejected_chunk_clock: rejected} : {})} : null;
     }
     const time = c.origin + (phase - c.intercept) / c.velocity;
-    let uncertainty = Math.max(cadence / 2, (phaseError + c.residual) / c.velocity);
+    let uncertainty = cadence / 2 + (phaseError + c.residual) / c.velocity;
     // Repeated positions cannot identify when motion resumed within the capture interval.
     // Keep the original frames: a pause and a stale captured image remain alternatives.
     if (stationary) uncertainty = Math.max(uncertainty, Math.max(time - before.time, after.time - time) + capture);

@@ -54,8 +54,15 @@ interpolation or motion clock. `shared_subframe_clock_unresolved` stays visible
 even when the bounded target is usable. Independent motion warnings also remain.
 Without supported boundaries, reconstruction still fails explicitly.
 
-Capture cadence, displacement error and clock residual remain in the target
-range. Heads last observed in the HUD retain their bounded shared-motion
+A fitted target combines half the measured capture cadence with the position
+error and clock residual converted through the measured velocity. Add these
+bounded errors: a source-frame phase offset and an independent cap-coordinate
+error can point in the same direction. Taking only their maximum would exclude
+possible source targets even for a perfect constant-speed fit. Short
+extrapolation additionally includes its residual-derived velocity error over
+the unsupported tail. Repeated-frame brackets can require still wider bounds.
+This changes the reported measurement uncertainty, not the pixel-fit gates,
+source timestamps, estimated center or independent reconstruction warnings. Heads last observed in the HUD retain their bounded shared-motion
 proximity policy; other heads keep the ordinary proximity bound. Transfer
 between coordinate blocks and short extrapolation have separate observation,
 identity, source-continuity and distance checks. No song-wide speed fills gaps.
