@@ -66,18 +66,38 @@ export function associate(notes: RecordData[], events: RecordData[], window = .0
 }
 
 export function synchronizedRefreshes(data: RecordData, events: RecordData[]): number[][] {
-  const links = [];
+  const links = [], overlaps = [];
   events.forEach((e, ji) => {
     if (e.status !== 'candidate' || e.upper_seconds - e.lower_seconds > .05) return;
     (data.combo_events ?? []).forEach((c, ci) => {
       if (c.delta !== 1 || c.upper_seconds - c.lower_seconds > .1 + 1e-6 || c.status !== 'matched' && c.reason !== 'ambiguous_note_or_combo_association') return;
       const overlap = Math.min(e.upper_seconds, c.upper_seconds) - Math.max(e.lower_seconds, c.lower_seconds), distance = Math.abs(e.upper_seconds - c.upper_seconds);
-      if (overlap >= -1e-6 && distance <= .025) links.push([distance, ji, ci]);
+      if (overlap >= -1e-6) {
+        overlaps.push([ji,ci]);
+        if(distance<=.025)links.push([distance,ji,ci]);
+      }
     });
   });
   const pairs = links.filter(([distance, ji, ci]) => {
     const others = links.filter(([, j, c]) => !(j === ji && c === ci) && (j === ji || c === ci)).map(p => p[0]);
     return !others.length || Math.min(...others) - distance >= .008;
   }).map(([, j, c]) => [j, c]);
-  return pairs.filter(([j, c]) => pairs.every(([j2, c2]) => j2 === j || (j - j2) * (c - c2) > 0));
+  const ordered=pairs.filter(([j,c])=>pairs.every(([j2,c2])=>j2===j||(j-j2)*(c-c2)>0));
+  // A delayed counter can bracket a precise word without close upper endpoints.
+  // Only a unique overlap on both channels establishes this additional relation.
+  const rowCompatible=(j,c)=>{
+    const owners=(data.matches??[]).filter(m=>m.combo_event===c),word=events[j],delay=(data.display_delay_correction_ms??0)/1000;
+    if(!owners.length)return true;
+    const targets=owners.map(m=>m.target_seconds??data.notes?.[m.note]?.target_seconds);
+    if(targets.some(t=>!Number.isFinite(t)))return false;
+    const otherRow=t=>targets.every(target=>Math.abs(target-t)>1e-8);
+    if((data.matches??[]).some(m=>m.judgment_event===j&&otherRow(m.target_seconds??data.notes?.[m.note]?.target_seconds)))return false;
+    return !(data.notes??[]).some(n=>n.status==='estimated'&&otherRow(n.target_seconds)&&
+      n.target_seconds+delay+(n.prediction_uncertainty_seconds??0)>=word.lower_seconds-.045&&
+      n.target_seconds+delay-(n.prediction_uncertainty_seconds??0)<=word.upper_seconds+.045);
+  };
+  const exclusive=overlaps.filter(([j,c])=>rowCompatible(j,c)&&
+    overlaps.every(([j2,c2])=>j2===j&&c2===c||j2!==j&&c2!==c)&&
+    !ordered.some(([j2,c2])=>j2===j||c2===c)&&ordered.every(([j2,c2])=>(j-j2)*(c-c2)>0));
+  return [...ordered,...exclusive.filter(([j,c])=>exclusive.every(([j2,c2])=>j===j2||(j-j2)*(c-c2)>0))].sort((a,b)=>a[0]-b[0]);
 }

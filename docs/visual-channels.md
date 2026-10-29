@@ -286,6 +286,18 @@ Word recognition and refresh tracking have independent cache dependencies.
 A tracker upgrade replays the saved timestamped word observations and rebuilds
 associations. It does not require OCR, pixel recognition or video decoding.
 
+A delayed counter read retains its entire native observation bracket. A narrower
+word refresh inside that bracket can establish synchronization even when their
+upper endpoints differ by more than 25 ms, provided each bracket overlaps only
+that one eligible refresh on the other channel and the relation preserves event
+order. A counter-owned row cannot take an already owned word or a word whose
+timing also fits another visible row. Independent lane-supported associations
+remain separate evidence. The existing 100 ms counter and 50 ms word span limits still apply.
+Competing overlaps do not supply this additional proof. Original brackets remain
+unchanged; synchronization cannot turn a wide counter bracket into a precise
+input timestamp. Acquisition and word-recognition caches remain reusable when
+this association rule changes.
+
 After independent lane-onset or processing evidence recovers a counter-owned
 row, label association checks the observed word refreshes again. The original
 mutually unique synchronized-bracket rules still apply, including competing

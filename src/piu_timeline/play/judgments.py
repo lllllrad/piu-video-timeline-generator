@@ -20,7 +20,7 @@ TEMPLATE_FORMAT = {'schema': 1, 'encoding': FEATURE_FORMAT['encoding'], 'mask': 
 LEGACY_FEATURE_FORMAT = {'schema': 1, 'encoding': 'hue10-s90-v155-white-s70-v190'}
 LEGACY_TEMPLATE_FORMAT = {'schema': 1, 'encoding': 'hue10-s90-v155-white-s70-v190', 'mask': 'binary'}
 OBSERVATION_FORMAT = {'schema': 1, 'reader_revision': OBSERVATION_VERSION}
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 4}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 5, 'synchronization': 'unique_overlap_with_row_ownership'}
 
 
 def fingerprint(value):

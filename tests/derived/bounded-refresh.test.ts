@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type {RecordData} from '../../src/piu_timeline/derived/types.ts';
 import {nativeScene} from './fixtures.ts';
+import {mergeJudgments} from '../../src/piu_timeline/derived/labels.ts';
 import {present} from '../../src/piu_timeline/derived/hold_presentation.ts';
 import {crossing} from '../../src/piu_timeline/derived/clocks.ts';
 import {associate} from '../../src/piu_timeline/derived/association.ts';
 import {recoverRows} from '../../src/piu_timeline/derived/recovery.ts';
 
 function scene(spacing=40,fps=60,chord=false,delay=0):RecordData{
- const d=nativeScene(chord?[[1,0],[1,1]]:[[1,0]],spacing,fps);
+ const d=nativeScene(chord?[[1,0],[1,1]]:[[1,0]],spacing,fps,5,{end:1.4});
  d.notes.forEach(n=>Object.assign(n,{target_seconds:1-.25/fps,prediction_uncertainty_seconds:.5/fps,type_status:'tap',timing_reconstruction:{status:'restored'}}));
  const lo=1+.044+delay,hi=lo+1/fps;
  return {...d,display_delay_correction_ms:delay*1000,matches:[],combo_events:[{status:'excluded',reason:'ambiguous_note_or_combo_association',delta:1,lower_seconds:lo,upper_seconds:hi}],
@@ -105,4 +106,48 @@ for(const chord of[false,true])test(`an exclusive synchronized row can resolve a
  const[matches,recovered]=recoverRows(d);
  assert.deepEqual(recovered,chord?[0,1]:[0]);assert.equal(matches.length,chord?2:1);
  for(const m of matches){assert.equal(m.combo_event,0);assert.equal(m.judgment_event,0);assert.equal(m.target_seconds,1);}
+});
+
+for(const fps of[30,60,120])for(const spacing of[20,40,80])test(`a uniquely overlapping delayed counter retains its original bracket: ${fps} fps / spacing ${spacing}`,()=>{
+ const d=scene(spacing,fps);d.notes[0].target_seconds=1;
+ const frames=d.scroll_motion.samples.map(s=>s.time),at=frames.findIndex(t=>Math.abs(t-1)<1e-8),delay=Math.ceil(.03*fps)+1;
+ Object.assign(d.judgment_events[0],{lower_seconds:frames[at],upper_seconds:frames[at+1]});
+ Object.assign(d.combo_events[0],{lower_seconds:frames[at-1],upper_seconds:frames[at+delay]});
+ const before=structuredClone(d),[matches]=recoverRows(d);assert.equal(matches.length,1);
+ assert.equal(matches[0].combo_event,0);assert.equal(matches[0].judgment_event,0);
+ assert.deepEqual([matches[0].combo_lower_seconds,matches[0].combo_upper_seconds],[frames[at-1],frames[at+delay]]);
+ for(const e of[d.combo_events[0],d.judgment_events[0]])assert.ok(frames.includes(e.lower_seconds)&&frames.includes(e.upper_seconds));
+ assert.deepEqual(d,before);
+ d.judgment_events.push({...d.judgment_events[0],lower_seconds:frames[at+1],upper_seconds:frames[at+2]});
+ assert.deepEqual(recoverRows(d)[1],[],'a second feasible native refresh prevents the exclusive recovery');
+});
+
+test('a counter-owned row receives a word grade through its uniquely overlapping native bracket',()=>{
+ const d=scene(40,120);d.notes[0].target_seconds=1;
+ const frames=d.scroll_motion.samples.map(s=>s.time),at=frames.findIndex(t=>Math.abs(t-1)<1e-8),lo=frames[at+1],hi=frames[at+12];
+ Object.assign(d.combo_events[0],{status:'matched',reason:null,lower_seconds:lo,upper_seconds:hi});
+ d.matches=[{note:0,target_seconds:1,combo_event:0,row_note_count:1,combo_lower_seconds:lo,combo_upper_seconds:hi}];
+ d.unsupported_intervals=[];d.coverage={};const before=structuredClone(d);
+ const r=mergeJudgments(d,[{label:'GOOD',lower_seconds:frames[at+7],upper_seconds:frames[at+8],detection_status:'candidate'}]);
+ assert.equal(r.matches.length,1);assert.equal(r.matches[0].judgment_label,'GOOD');
+ assert.equal(r.matches[0].judgment_label_source,'synchronized_refresh');assert.equal(r.matches[0].judgment_event,0);
+ assert.deepEqual([r.matches[0].combo_lower_seconds,r.matches[0].combo_upper_seconds],[lo,hi]);
+ assert.equal(r.matches[0].target_seconds,1);assert.deepEqual(d.notes,before.notes);assert.deepEqual(d.scroll_motion,before.scroll_motion);
+});
+
+test('a broad counter bracket cannot take a word from another independently supported row',()=>{
+ const d=scene(),native=nativeScene([[1.09,0],[1,1]],40,60,5,{end:1.4});
+ d.notes=native.notes.map(n=>({...n,type_status:'tap',timing_reconstruction:{status:'restored'}}));
+ d.scroll_motion=native.scroll_motion;
+ const frames=native.scroll_motion.samples.map(s=>s.time),at=frames.findIndex(t=>Math.abs(t-1)<1e-8),lo=frames[at+2],hi=frames[at+3];
+ Object.assign(d.combo_events[0],{status:'matched',reason:null,lower_seconds:frames[at+1],upper_seconds:frames[at+6]});
+ d.matches=[{note:0,target_seconds:1.09,combo_event:0,row_note_count:1,combo_lower_seconds:frames[at+1],combo_upper_seconds:frames[at+6]}];
+ d.unsupported_intervals=[];d.coverage={};
+ d.visual_channels={receptors:{events:[{lane:1,lit:true,frames:4,onset_range:[lo,hi],
+  onset_source_pts_seconds:[80+lo,80+hi],start_seconds:hi,end_seconds:hi+.05}]}};
+ const labeled=mergeJudgments(d,[{label:'PERFECT',lower_seconds:lo,upper_seconds:hi,detection_status:'candidate'}]);
+ assert.equal(labeled.matches.find(m=>m.note===0).judgment_label,undefined,'bracket overlap does not establish note-row identity');
+ const[matches]=recoverRows(labeled),owned=matches.find(m=>m.note===1);
+ assert.ok(owned);assert.equal(owned.judgment_event,0);assert.equal(owned.recovery_method,'unique_row_with_independent_lane_onset');
+ assert.equal(matches.find(m=>m.note===0).combo_event,0);
 });
