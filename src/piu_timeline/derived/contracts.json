@@ -53,7 +53,7 @@
   },
   "timing": {
     "schema": 1,
-    "revision": 16,
+    "revision": 17,
     "group_beats": 4,
     "unsupported_rows": "retain_independently_unique_neighbors",
     "incompatible_chords": "fail_component_keep_independent_rows",

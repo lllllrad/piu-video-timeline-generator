@@ -43,3 +43,15 @@ test('a feasible phase outside the alignment interval is never proposed',()=>{
  assert.ok(r.status==='failed'||r.consistent_notes.length<4);
  assert.ok(r.phase_trials.every(p=>-.001<=p.phase_seconds&&p.phase_seconds<=.001));
 });
+
+for(const sign of[-1,1])test(`row rounding tolerance cannot expand the alignment budget: sign ${sign}`,()=>{
+ const uncertainty=.001,groups=[{targets:[1+sign*(uncertainty+1e-9)],errors:[0],bpm:120,origin:0}];
+ const r=fitPhase(groups,uncertainty);
+ assert.ok(r.phase_trials.every(p=>-uncertainty<=p.phase_seconds&&p.phase_seconds<=uncertainty));
+ if(r.status==='restored'){
+  assert.ok(-uncertainty<=r.phase&&r.phase<=uncertainty);
+  for(const range of[r.phase_range,r.source_phase_range]){
+   assert.ok(range[0]<=range[1]);assert.ok(-uncertainty<=range[0]&&range[1]<=uncertainty);
+  }
+ }
+});

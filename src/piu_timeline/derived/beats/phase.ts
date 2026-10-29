@@ -79,7 +79,9 @@ function sourcePhaseCandidates(groups: RecordData[], uncertainty: number, regula
   const intervals=groups.flatMap(g=>{
     if(g.invalid)return [];
     const fit=fitGrid(g.targets,g.errors,g.bpm,g.origin,undefined,uncertainty,g.native_chords??[]);
-    return fit.status==='restored'?[fit.phase_range]:[];
+    if(fit.status!=='restored')return [];
+    const lo=Math.max(-uncertainty,fit.phase_range[0]),hi=Math.min(uncertainty,fit.phase_range[1]);
+    return lo<=hi?[[lo,hi]]:[];
   });
   const boundaries=[...new Set([-uncertainty,uncertainty,...intervals.flat()])].sort((a,b)=>a-b),extra=[];
   for(const [lo,hi]of intervals)if(hi-lo<=1e-10)extra.push((lo+hi)/2);
@@ -122,5 +124,5 @@ export function fitPhase(groups: RecordData[], uncertainty: number, consistent?:
   if(sourceRange[0]>phase+1e-8||sourceRange[1]<phase-1e-8)return {status:'failed',reason:'unstable_song_phase_bounds',
     phase_trials:trials,fits:groups.map(()=>({status:'failed',reason:'unstable_song_phase_bounds'}))};
   return {status: 'restored', phase, phase_range: [Math.min(phase,Math.max(sourceRange[0],lo-half)),Math.max(phase,Math.min(sourceRange[1],hi+half))],
-    source_phase_range:sourceRange,resolution_seconds: 2 * half, fits, phase_trials: trials, consistent_notes: winners[0].supported};
+    source_phase_range:[Math.min(phase,sourceRange[0]),Math.max(phase,sourceRange[1])],resolution_seconds: 2 * half, fits, phase_trials: trials, consistent_notes: winners[0].supported};
 }
