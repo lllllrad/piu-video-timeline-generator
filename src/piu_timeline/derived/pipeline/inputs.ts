@@ -1,5 +1,6 @@
 /** Explicit consumer inputs; native acquisition metadata never becomes numerical state. */
 import type {RecordData} from '../types.ts';
+import {measurementInput} from '../native_gaps.ts';
 import {implementation} from './store.ts';
 export const processingProducer = (): string => implementation(new URL('../scroll.ts', import.meta.url));
 export const pick = (data: RecordData, keys: readonly string[]): RecordData => Object.fromEntries(keys.filter(k => Object.hasOwn(data, k)).map(k => [k, data[k]]));
@@ -25,6 +26,7 @@ export function interpretation(data: RecordData, riskAvailable: boolean): Record
   const result: RecordData = {...evidence(data), ...pick(data, ['notes', 'hold_analysis', 'skin_detector', 'limitations', 'counter_judgment_labels', 'deferred_matches']),
     native_body_risk_available: riskAvailable};
   Object.assign(result,pick(data,['analysis_width','analysis_height']));
+  result.head_registration=measurementInput(data.head_registration??{});
   if(data.layout)result.layout={...pick(data.layout,['receptor_y','note_y_max']),lanes:(data.layout.lanes??[]).map(l=>pick(l,['x']))};
   result.scroll_motion={samples:(data.scroll_motion?.samples??[]).map(s=>pick(s,['time','source_pts','chunk'])),
     coordinate_registration:{chunks:(data.scroll_motion?.coordinate_registration?.chunks??[]).map(c=>({

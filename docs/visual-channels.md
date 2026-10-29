@@ -322,8 +322,10 @@ An already assigned neighboring row can stop competing for another refresh
 only when its separate synchronized counter/word pair has an exclusive lane
 onset or independently observed disappearance. Original PTS must validate that
 physical bracket. At least four co-observed positions over 65 ms in fitted
-native coordinate blocks must separate the rows beyond both positional errors,
-with observed height order agreeing with target and disjoint display order.
+native coordinate blocks must separate the rows beyond both positional errors.
+Source-bound image measurements must jointly exclude zero separation; missing
+or conflicting coordinate bounds do not establish a different row.
+Observed height order must agree with target and disjoint display order.
 Unknown types, shared onsets, missing source frames and hold risk keep the
 competition unresolved. `fixed_refresh_rows` retains the conditional ownership,
 physical bracket and native separation samples; source timing bounds, display

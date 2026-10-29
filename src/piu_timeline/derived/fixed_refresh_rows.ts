@@ -1,6 +1,7 @@
 /** Separate a physically corroborated fixed row from another refresh's candidates. */
 import {contracts} from './contracts.ts';
 import {bracket,onsetOverlaps,processingSupport,receptorEvidence} from './evidence.ts';
+import {NativeGapMeasurements} from './native_gaps.ts';
 import {median} from './math.ts';
 import type {RecordData} from './types.ts';
 
@@ -40,7 +41,6 @@ export function fixedRefreshRow(data:RecordData,index:number,pending:number[],pa
  const width=data.analysis_width,height=data.analysis_height,lanes=data.layout?.lanes;
  if(!Number.isFinite(width)||!Number.isFinite(height)||!Array.isArray(lanes)||lanes.length<2)return null;
  const spacing=median(lanes.slice(1).map((l,i)=>(l.x-lanes[i].x)*width));if(!(spacing>0))return null;
- const error=2*contracts.coordinates.maximum_native_error_spacing*spacing;
  const top=data.layout.receptor_y*height+.85*spacing,bottom=(data.layout.note_y_max??.95)*height-.55*spacing;
  const chunks=new Map<number,Set<number>>((data.scroll_motion?.coordinate_registration?.chunks??[])
   .filter(c=>c.status==='fitted').map(c=>[c.chunk,new Set<number>(c.head_offsets.map(h=>h.note))]));
@@ -53,9 +53,16 @@ export function fixedRefreshRow(data:RecordData,index:number,pending:number[],pa
     [{time,source_pts_seconds:frame.source_pts,candidate_y_pixels:y,fixed_y_pixels:other,ordered_gap_pixels:direction*(other-y)}]:[];
   }).sort((a,b)=>a.time-b.time);
   if(samples.length<contracts.chords.minimum_frames||samples.at(-1).time-samples[0].time<contracts.chords.minimum_span_seconds||
-   samples.some(s=>!Number.isFinite(s.source_pts_seconds)||s.ordered_gap_pixels<=error)||
+   samples.some(s=>!Number.isFinite(s.source_pts_seconds))||
    samples.slice(1).some((s,k)=>!(0<s.time-samples[k].time&&s.time-samples[k].time<=.05+1e-6&&s.source_pts_seconds>samples[k].source_pts_seconds)))return null;
-  separation.push({note:i,lane_spacing_pixels:spacing,position_error_pixels:error,samples});
+  const measured=new NativeGapMeasurements(data).compare({peer_notes:[i,index],reconstructed_gap_pixels:0,
+   visible_start_seconds:samples[0].time,visible_end_seconds:samples.at(-1).time});
+  const range=measured.allowed_gap_range_pixels;
+  if(measured.reason!=='declared_native_endpoint_errors'||!range||range[0]>range[1]||
+   !(direction>0?range[0]>0:range[1]<0))return null;
+  separation.push({note:i,lane_spacing_pixels:spacing,
+   position_error_pixels:Math.max(...measured.samples.map(s=>s.coordinate_uncertainties_pixels[0]+s.coordinate_uncertainties_pixels[1])),
+   allowed_gap_range_pixels:range,coordinate_measurements:measured.samples,samples});
  }
  return {note:index,target_seconds:n.target_seconds,combo_event:m.combo_event,judgment_event:m.judgment_event,
   refresh_range:[a,b],physical_evidence:physical,native_row_separation:separation};

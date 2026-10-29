@@ -5,12 +5,17 @@ import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {prepare,type PresentationInput} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
+import {contracts} from '../../src/piu_timeline/derived/contracts.ts';
 import {nativeScene} from './fixtures.ts';
 import {recoverRows} from '../../src/piu_timeline/derived/recovery.ts';
 
 function scene(spacing=40,fps=60,earlier=false):RecordData{
  const fixed=earlier?.9:1.1,d=nativeScene([[1,0],[fixed,1]],spacing,fps,5,{end:1.4});
  d.notes.forEach(n=>Object.assign(n,{type_status:'tap',timing_reconstruction:{status:'restored'},prediction_uncertainty_seconds:.04}));
+ const scale=spacing/40,error=Math.max(contracts.native_anchor.coordinate_uncertainty_pixels,contracts.native_anchor.coordinate_uncertainty_pixels*scale);
+ d.head_registration={format:{native_cap_registration:structuredClone(contracts.native_anchor)},notes:d.notes.map((n,i)=>({
+  note:i,coordinate_method:'native_image_anchors',observations:n.points.map(([time,y])=>({time,source_pts_seconds:80+time,
+   native_y_pixels:y,template:`generated-cap-${i}`,native_cap_coordinate_uncertainty_pixels:error,native_cap_reference_scale_y:scale}))}))};
  const times=d.scroll_motion.samples.map(s=>s.time),at=t=>times.find(v=>v>=t-1e-9);
  const lo=at(1),hi=times[times.indexOf(lo)+1],a=at(fixed),b=times[times.indexOf(a)+1];
  return {...d,median_frame_interval_seconds:1/fps,
@@ -108,4 +113,18 @@ test('the cached report pipeline carries the native proof and invalidates only c
   assert.ok(!changed.matches.some(m=>m.note===0));
   assert.ok(changed.recognition_diagnostics.warnings.some(w=>w.note===0&&w.reason==='timing_evidence_unresolved'));
  }finally{rmSync(directory,{recursive:true,force:true});}
+});
+
+for(const mode of['missing_registration','wrong_reference_error','conflicting_reference','unmeasured_position','inconsistent_joint_gap'])
+test(`a fixed row requires qualified image coordinate bounds: ${mode}`,()=>{
+ const d=scene();d.notes[1].prediction_uncertainty_seconds=.07;
+ if(mode==='missing_registration')delete d.head_registration;
+ if(mode==='wrong_reference_error')d.head_registration.notes[0].observations.forEach(o=>{o.native_cap_coordinate_uncertainty_pixels=.01;});
+ if(mode==='conflicting_reference')d.head_registration.notes[0].observations.forEach(o=>{o.native_cap_registration_status='conflicting';});
+ if(mode==='unmeasured_position')d.head_registration.notes[0].observations.forEach(o=>{o.native_y_pixels+=.01;});
+ if(mode==='inconsistent_joint_gap'){
+  d.notes[1].points=d.notes[1].points.map(([t,y],i)=>[t,y+(i%2?3:-3)]);
+  d.head_registration.notes[1].observations.forEach((o,i)=>{o.native_y_pixels=d.notes[1].points[i][1];});
+ }
+ assert.deepEqual(recoverRows(d)[1],[]);
 });
