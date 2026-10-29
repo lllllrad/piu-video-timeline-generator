@@ -168,3 +168,22 @@ pixel-error limits, or exempt stop/motion warnings. Missing or invalid source ga
 cannot be bridged by the plateau search. Ordinary non-repeated captures retain
 their existing precision. Synthetic stored-observation scenes vary capture rate,
 scale, repeated images and dropped frames independently of chart-event truth.
+
+## Source-bounded phase proposals
+
+A regular 1 ms song-phase search can miss a much narrower feasible common
+interval even when each head has a broad native timing range. Independently
+bounded clock errors can place opposite ends of different heads' intervals
+close together. Generate additional proposals from the coarsest natural-grid
+fit with the complete audio-alignment allowance for each beat group. Partition
+those common phase intervals at their endpoints and test uncovered interiors,
+including intersections between groups. A zero-width interval supplies its
+single phase. These are proposals only: every candidate repeats the normal
+row, native-coordinate, chord, neighbor-reference and spacing validation.
+
+All proposed phases stay inside verified alignment bounds. Conflicting best
+assignments or supported-note identities remain explicit phase failures. The
+selected representative must reproduce the winning evidence. Intersect the
+reported phase envelope with every assigned head's original source timing
+interval, so a narrow feasible interval is not expanded back to the regular
+search spacing. Source timing errors and pixel gates remain unchanged.

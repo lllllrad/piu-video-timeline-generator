@@ -73,9 +73,28 @@ export function fitGroups(groups: RecordData[], phase: number, consistent?: Vali
   return results;
 }
 
+/** Propose interiors that the regular phase samples could miss. These are not proofs. */
+function sourcePhaseCandidates(groups: RecordData[], uncertainty: number, regular: number[]): number[] {
+  if (!uncertainty) return regular;
+  const intervals=groups.flatMap(g=>{
+    if(g.invalid)return [];
+    const fit=fitGrid(g.targets,g.errors,g.bpm,g.origin,undefined,uncertainty,g.native_chords??[]);
+    return fit.status==='restored'?[fit.phase_range]:[];
+  });
+  const boundaries=[...new Set([-uncertainty,uncertainty,...intervals.flat()])].sort((a,b)=>a-b),extra=[];
+  for(const [lo,hi]of intervals)if(hi-lo<=1e-10)extra.push((lo+hi)/2);
+  for(let i=1;i<boundaries.length;i++){
+    const lo=boundaries[i-1],hi=boundaries[i],mid=(lo+hi)/2;
+    if(hi-lo<=1e-10||!intervals.some(([a,b])=>a<=mid&&mid<=b)||regular.some(p=>lo+1e-10<p&&p<hi-1e-10))continue;
+    extra.push(mid);
+  }
+  return [...new Set([...regular,...extra])].sort((a,b)=>a-b);
+}
+
 export function fitPhase(groups: RecordData[], uncertainty: number, consistent?: Validator): RecordData {
   const steps = Math.max(1, Math.ceil(2 * uncertainty / .001));
-  const phases = uncertainty === 0 ? [0] : Array.from({length: steps + 1}, (_, i) => -uncertainty + 2 * uncertainty * i / steps);
+  const regular = uncertainty === 0 ? [0] : Array.from({length: steps + 1}, (_, i) => -uncertainty + 2 * uncertainty * i / steps);
+  const phases=sourcePhaseCandidates(groups,uncertainty,regular);
   let best = null, winners = [];
   const trials = [];
   for (const phase of phases) {
@@ -97,6 +116,11 @@ export function fitPhase(groups: RecordData[], uncertainty: number, consistent?:
     consistent && !equal(consistent(fits).sort((a, b) => a - b), winners[0].supported) ? 'unstable_spatial_song_phase' : null;
   if (unstable) return {status: 'failed', reason: unstable, phase_trials: trials, fits: groups.map(() => ({status: 'failed', reason: unstable}))};
   const half = uncertainty ? uncertainty / steps : 0;
-  return {status: 'restored', phase, phase_range: [Math.max(-uncertainty, lo - half), Math.min(uncertainty, hi + half)],
-    resolution_seconds: 2 * half, fits, phase_trials: trials, consistent_notes: winners[0].supported};
+  const bounds=fits.flatMap((f,g)=>(f.targets??[]).flatMap((t,i)=>t==null?[]:
+    [[groups[g].targets[i]-groups[g].errors[i]-(t-phase),groups[g].targets[i]+groups[g].errors[i]-(t-phase)]]));
+  const sourceRange=[Math.max(-uncertainty,...bounds.map(b=>b[0])),Math.min(uncertainty,...bounds.map(b=>b[1]))];
+  if(sourceRange[0]>phase+1e-8||sourceRange[1]<phase-1e-8)return {status:'failed',reason:'unstable_song_phase_bounds',
+    phase_trials:trials,fits:groups.map(()=>({status:'failed',reason:'unstable_song_phase_bounds'}))};
+  return {status: 'restored', phase, phase_range: [Math.min(phase,Math.max(sourceRange[0],lo-half)),Math.max(phase,Math.min(sourceRange[1],hi+half))],
+    source_phase_range:sourceRange,resolution_seconds: 2 * half, fits, phase_trials: trials, consistent_notes: winners[0].supported};
 }
