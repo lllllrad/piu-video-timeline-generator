@@ -4,8 +4,9 @@ from collections import defaultdict
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 15, 'method': 'independent_image_hold_proof',
-          'interior_caps':'separate_observed_objects'}
+FORMAT = {'schema': 1, 'revision': 16, 'method': 'independent_image_hold_proof',
+          'interior_caps':'separate_observed_objects',
+          'motion_peers':'all_observed_cap_identities'}
 
 def covered(lo, hi, boxes):
     cursor = lo

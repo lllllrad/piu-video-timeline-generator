@@ -417,3 +417,19 @@ native head range belongs to the original observation. Reports can show that hol
 and its sustained evidence; the original timing warnings remain active. UCS draft
 placement rejects it explicitly until musical timing is resolved. Ordinary taps and
 native reconstruction failures retain their existing eligibility rules.
+
+## Adjacent-frame motion for image connectivity
+
+The image connector consumes measured adjacent-frame displacement independently of
+cap type and endpoint timing. Registered same-block displacement has priority.
+When it is unavailable, identities observed in both captured frames may supply
+motion, including caps whose tap/hold role or target time remains unresolved.
+Duplicate identities contribute nothing. Every common peer must agree within
+one analysis pixel; the existing 50 ms capture-gap and displacement bounds still
+apply. A failed registered-coordinate block cannot fall back to peers.
+
+`derived/holds/image_motion.ts` computes these steps from saved coordinates in one
+batch. Peer-based image edges retain the contributing note IDs and original PTS
+pair. The native image connector still requires positively compared body regions,
+unique endpoints and sufficient observed travel. A peer motion estimate supplies
+no missing image pixels, cap classification, beat placement or input timestamp.

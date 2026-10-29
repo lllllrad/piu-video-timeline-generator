@@ -16,6 +16,7 @@ import * as registration from './registration.ts';
 import * as clocks from './clocks.ts';
 import * as tracks from './tracks.ts';
 import * as fragments from './fragments.ts';
+import * as holdMotion from './holds/image_motion.ts';
 import * as holdImages from './holds/image_timing.ts';
 import * as speed from './speed.ts';
 import * as report from './report.ts';
@@ -46,7 +47,7 @@ import {parseData, stringifyData} from './json.ts';
 const operations = {
   coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription,
   registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft,
-  holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
+  holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
   holdState, holdExtent, holdGeometry, holdRisk, beats: {fitGrid, reconstruct},
 };
 const chunk = Buffer.alloc(65536);

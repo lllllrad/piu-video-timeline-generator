@@ -1,24 +1,16 @@
 """Join positive image regions through measured motion, including clipped holds."""
 from collections import defaultdict
 
-import numpy as np
-
+from piu_timeline import derived
 from piu_timeline.play.skins.coverage import image_spans
 
 
-def displacement(before,after,motion,positions,notes,spacing):
-    dt=after-before
-    if not 0<dt<=.05+1e-6:return None
-    a,b=motion.get(before),motion.get(after)
-    if a and b and (a.get('coordinate_status')=='failed'or b.get('coordinate_status')=='failed'):return None
-    if a and b and a['chunk']==b['chunk']and b['support']:
-        value=b['phase']-a['phase'];basis='registered_frame_displacement'
-    else:
-        first={i:y for i,y,role in positions[before]if role!='barrier'}
-        values=[first[i]-y for i,y,role in positions[after]if i in first and role!='barrier']
-        if not values or max(values)-min(values)>1:return None
-        value=float(np.median(values));basis='identified_cap_displacement'
-    return (float(value),basis)if -.75<=value<=30*spacing*dt else None
+def measured_steps(data,native):
+    layout=data['layout'];spacing=(layout['lanes'][1]['x']-layout['lanes'][0]['x'])*data['analysis_width']
+    notes=[{k:n[k]for k in ('points','duplicate_of')if k in n}for n in data['notes']]
+    timeline=[{'time':f['playback_seconds'],'source_pts':f['source_pts_seconds']}for f in native]
+    return {s['time']:s for s in derived.call('holdMotion.steps',notes,
+            data.get('scroll_motion',{}).get('samples',[]),timeline,spacing)}
 
 
 def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=None):
@@ -26,14 +18,14 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
     if length_checks is None:
         from piu_timeline.play.skins.extents import LengthChecks
         length_checks=LengthChecks(data)
-    known=defaultdict(list);positions=defaultdict(list)
+    known=defaultdict(list)
     for i,note in enumerate(data['notes']):
         role=('head'if roles[i]=={'hold_start'}else'tail'if roles[i]=={'hold_end'}
               else'barrier'if 'tap'in roles[i]else None)
         if role:
             for time,y in note['points']:
-                known[time,note['lane']].append((i,y,role));positions[time].append((i,y,role))
-    motion={s['time']:s for s in data.get('scroll_motion',{}).get('samples',[])}
+                known[time,note['lane']].append((i,y,role))
+    steps=measured_steps(data,native)
     spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
     height=data['analysis_height'];nodes=[];parents=[];previous=[];before=None
     def root(i):
@@ -63,17 +55,16 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
                 nodes.append({'time':time,'source_pts':frame['source_pts_seconds'],'lane':lane,
                               'covered_bounds_pixels':[a,b],'body_template_support':body,'tags':tags,'image_node':index,'connected_to':[]})
                 current.append(index)
-        measured=displacement(before,time,motion,positions,data['notes'],spacing)if before is not None else None
+        measured=steps.get(time)if before is not None else None
         if measured is not None:
-            delta,basis=measured
+            delta=measured['displacement_pixels']
             for b in current:
                 last=nodes[b];lo,hi=last['covered_bounds_pixels']
                 for a in previous:
                     first=nodes[a];x,y=first['covered_bounds_pixels']
                     if first['lane']==last['lane']and max(x-delta,lo)<=min(y-delta,hi)+1:
                         parents[root(b)]=root(a);last['connected_to'].append(a)
-                        last['motion_link']={'method':basis,'displacement_pixels':delta,
-                                             'source_pts_range':[first['source_pts'],last['source_pts']]}
+                        last['motion_link']={k:v for k,v in measured.items()if k!='time'}
         previous=current;before=time
     components=defaultdict(list)
     for i,node in enumerate(nodes):components[root(i)].append(node)
@@ -111,17 +102,16 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
             if any(i==tail for i,role in node['tags']):proof['tail_y']=after[node['time']]
             pairs[head,tail].append(proof)
     return {'pairs':[{'head':head,'tail':tail,'proof':sorted(proof,key=lambda p:(p['time'],p['image_node'])),
-                      'missing':coverage_losses(data,native,proof,positions)}
+                      'missing':coverage_losses(data,native,proof,steps)}
                      for (head,tail),proof in pairs.items()if (head,tail)not in refuted],
             'refuted':[{'head':head,'tail':tail,'evidence':evidence}for (head,tail),evidence in refuted.items()]}
 
 
-def coverage_losses(data,native,proof,known_positions):
+def coverage_losses(data,native,proof,steps):
     """Lost previously positive rows are warnings, never filled image evidence."""
     from piu_timeline.play.screen_regions import note_occluders
     by_time=defaultdict(list)
     for node in proof:by_time[node['time']].append(node['covered_bounds_pixels'])
-    motion={s['time']:s for s in data.get('scroll_motion',{}).get('samples',[])}
     width,height=data['analysis_width'],data['analysis_height'];layout=data['layout']
     spacing=(layout['lanes'][1]['x']-layout['lanes'][0]['x'])*width
     top=layout['receptor_y']*height+.85*spacing;bottom=layout.get('note_y_max',.95)*height-.55*spacing
@@ -135,10 +125,10 @@ def coverage_losses(data,native,proof,known_positions):
         time=frame['playback_seconds']
         if not start<=time<=end_time:continue
         if previous is not None and by_time[previous['playback_seconds']]:
-            measured=displacement(previous['playback_seconds'],time,motion,known_positions,data['notes'],spacing)
+            measured=steps.get(time)
             gaps=[]
             if measured is not None:
-                delta,basis=measured;available=sorted([*by_time[time],*hud],key=lambda interval:interval[0])
+                delta,basis=measured['displacement_pixels'],measured['method'];available=sorted([*by_time[time],*hud],key=lambda interval:interval[0])
                 for lo,hi in by_time[previous['playback_seconds']]:
                     cursor,end=max(top,lo-delta),min(bottom,hi-delta)
                     for a,b in available:

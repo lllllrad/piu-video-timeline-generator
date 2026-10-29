@@ -1,5 +1,6 @@
 """A held interval can outlast the visible field without an invented head."""
 from copy import deepcopy
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -17,13 +18,18 @@ def reconstruct_images(*args,**kwargs):
     return image_analysis(*args,**kwargs)
 
 
-def fixture(root,tap=False):
-    items,_=examples(root);bank=load_bank(root/'bank.json')
+def fixture(root,tap=False,unknown_peer=False):
+    items,manifest=examples(root)
+    if unknown_peer:
+        entry=deepcopy(manifest['templates'][0]);entry.update(id='peer_cap',lane_kind=1)
+        entry['regions']=entry['regions'][:1];manifest['templates'].append(entry)
+        (root/'bank.json').write_text(json.dumps(manifest))
+    bank=load_bank(root/'bank.json')
     layout={'receptor_y':.05,'note_y_max':.95,'lanes':[{'x':.1+i*.1,'color':'blue'}for i in range(5)]}
-    detector=SkinDetector(bank,layout,200,300);native=[];receptors=[];points=[[],[]];motion=[]
-    def paste(image,y,patch):
+    detector=SkinDetector(bank,layout,200,300);native=[];receptors=[];points=[[],[]];motion=[];peer_points=[]
+    def paste(image,y,patch,left=10):
         a,b=max(0,y),min(300,y+len(patch))
-        if a<b:image[a:b,10:10+patch.shape[1]]=patch[a-y:b-y]
+        if a<b:image[a:b,left:left+patch.shape[1]]=patch[a-y:b-y]
     for index in range(133):
         time=index*.025;head=280-5*index;tail=head+360
         image=np.zeros((300,200,3),dtype='uint8')
@@ -31,7 +37,10 @@ def fixture(root,tap=False):
         if a<b:image[a:b,16:24]=[25,140,210]
         paste(image,head-10,items[1][1]);paste(image,tail-25,items[2][1])
         if tap and index==60:paste(image,130,items[0][1])
+        if unknown_peer and index in (59,60,61):paste(image,130+5*(60-index),items[0][1],left=30)
         observations=detector.detect(image)
+        if unknown_peer:
+            peer_points.extend([time,o['y']*300]for o in observations if o['lane']==1 and o['role']=='unknown')
         for i,y in enumerate((head,tail)):
             if any(o['role']!='hold_body'and abs(o['y']*300-y)<1e-6 for o in observations):points[i].append([time,y])
         native.append({'playback_seconds':time,'source_pts_seconds':40+time,'skin_observations':observations})
@@ -40,6 +49,9 @@ def fixture(root,tap=False):
                        'coordinate_status':'joint_registered'})
     notes=[{'lane':0,'points':p,'status':'estimated','target_seconds':t,'prediction_uncertainty_seconds':.02,
             'velocity_pixels_per_second':-200}for p,t in zip(points,(1.325,3.125))]
+    if unknown_peer:
+        notes.append({'lane':1,'points':peer_points,'status':'excluded','target_seconds':None})
+        motion[60]['support']=0
     if tap:notes.append({'lane':0,'points':[[1.5,150]],'status':'excluded','target_seconds':None})
     data={'analysis_width':200,'analysis_height':300,'layout':layout,'notes':notes,'start_seconds':0.,'end_seconds':3.3,
           'game_roi':[0,0,200,300],'scroll_motion':{'samples':motion},
