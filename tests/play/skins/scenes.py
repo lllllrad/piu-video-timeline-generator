@@ -25,21 +25,22 @@ BACKGROUND=np.array([12,14,18],dtype='uint8')
 COLORS=([30,140,230],[230,50,65],[240,190,35],[220,65,85],[45,150,240])
 
 
-def cap(kind):
+def cap(kind,appearance=0):
     """A lane-colored, outlined glyph shared by tap and both hold caps."""
     image=np.full((20,20,3),245,dtype='uint8')
-    image[2:18,2:18]=COLORS[kind]
+    color=np.array(COLORS[kind],dtype=float)
+    image[2:18,2:18]=np.rint(color+(255-color)*(.3*(appearance%3))).astype('uint8')
     # Direction/center details localize the anchor without relying on contours.
     for row in range(4,16):
-        col=4+(row+3*kind)%12
+        col=4+(row+3*kind+3*appearance)%12
         image[row,col]=[55,65,75]
     return image
 
 
-def bank_at(root,clearance_rows=4,connection_rows=6,margin=4,cap_only=False):
+def bank_at(root,clearance_rows=4,connection_rows=6,margin=4,cap_only=False,glyphs=None):
     entries=[]
     for kind in range(5):
-        glyph=cap(kind);color=COLORS[kind]
+        glyph=cap(kind)if glyphs is None else glyphs[kind];color=COLORS[kind]
         for role in ('tap','hold_start','hold_end','hold_body'):
             if role=='hold_body':
                 rgb=np.full((12,8,3),color,dtype='uint8');anchor=[4,6]
@@ -74,7 +75,25 @@ def bank_at(root,clearance_rows=4,connection_rows=6,margin=4,cap_only=False):
     return load_bank(path)
 
 
-def render(objects,time,width,height,seed,mode,frame,skin=None):
+def appearance_bank(root,phases,margin,cap_only,skin):
+    """Keep source appearances independent of object timing and generated scenes."""
+    entries=[]
+    for phase in range(phases):
+        directory=root/f'pose-{phase}';directory.mkdir()
+        glyphs=[cap(kind,phase)for kind in range(5)]
+        if skin=='shouldered':
+            from tests.play.skins.shoulders import bank_at as shouldered_bank
+            bank=shouldered_bank(directory,glyphs,COLORS,BACKGROUND)
+        else:bank=bank_at(directory,margin=margin,cap_only=cap_only,glyphs=glyphs)
+        for entry in json.loads((directory/'bank.json').read_text())['templates']:
+            if phase and entry['role']=='hold_body':continue
+            entries.append({**entry,'id':f'pose-{phase}-'+entry['id'],'image':f'pose-{phase}/'+entry['image']})
+    (root/'bank.json').write_text(json.dumps({'schema':1,'skin':bank['skin'],
+        'spacing_pixels':bank['spacing_pixels'],'templates':entries}))
+    return load_bank(root/'bank.json')
+
+
+def render(objects,time,width,height,seed,mode,frame,skin=None,appearance=0):
     rng=np.random.default_rng(seed)
     image=np.full((height,width,3),BACKGROUND,dtype='uint8')
     image+=rng.integers(0,3,image.shape,dtype='uint8')
@@ -89,20 +108,23 @@ def render(objects,time,width,height,seed,mode,frame,skin=None):
         for y in ([head,tail]if obj['kind']=='hold'else[head]):
             if skin=='shouldered':
                 from tests.play.skins.shoulders import stamp
-                stamp(image,cap(lane%5),x,y)
-            else:image[y-10:y+10,x-10:x+10]=cap(lane%5)
+                stamp(image,cap(lane%5,appearance),x,y)
+            else:image[y-10:y+10,x-10:x+10]=cap(lane%5,appearance)
     return image
 
 
 def acquire(spec,root,bank):
     scale,fps,lanes=spec['scale'],spec['fps'],spec['lanes']
+    appearances=spec.get('appearance_phases',1)
+    if type(appearances)is not int or not 1<=appearances<=4:raise ValueError('Scene appearance count must be 1..4')
     base_width,base_height=(lanes+4)*20,300
     width,height=round(base_width*scale),round(base_height*scale)
     layout={'receptor_y':.08,'note_y_max':.95,
             'judgment_roi':[0,0,0,0],'combo_roi':[0,0,0,0],
             'lanes':[{'x':(40+i*20)/base_width,'color':('blue','red','yellow','red','blue')[i%5]}for i in range(lanes)]}
     tracker=NoteTracker(layout,width,height,skin_bank=bank);native=[]
-    images=[render(spec['objects'],i/fps,base_width,base_height,i+spec['seed'],spec.get('mode'),i,spec.get('skin_profile'))for i in range(round(.2*fps)+1)]
+    images=[render(spec['objects'],i/fps,base_width,base_height,i+spec['seed'],spec.get('mode'),i,
+                   spec.get('skin_profile'),(i//2)%appearances)for i in range(round(.2*fps)+1)]
     if spec.get('capture')=='encoded':
         from tests.play.skins.capture import encoded
         captures,expected_pts,preserved=encoded(images,fps,root,width)
@@ -135,12 +157,16 @@ def acquire_task(task):
 def main():
     specs=json.load(sys.stdin)
     with tempfile.TemporaryDirectory()as tmp:
-        root=Path(tmp);banks={(4,False,None):(root,bank_at(root))};tasks=[]
+        root=Path(tmp);banks={(4,False,None,1):(root,bank_at(root))};tasks=[]
         for spec in specs:
-            margin=spec.get('reference_margin',4);cap_only=spec.get('reference_profile')=='cap_only';skin=spec.get('skin_profile');profile=margin,cap_only,skin
+            margin=spec.get('reference_margin',4);cap_only=spec.get('reference_profile')=='cap_only';skin=spec.get('skin_profile')
+            phases=spec.get('reference_appearance_phases',spec.get('appearance_phases',1))
+            if type(phases)is not int or not 1<=phases<=4:raise ValueError('Reference appearance count must be 1..4')
+            profile=margin,cap_only,skin,phases
             if profile not in banks:
-                directory=root/f'context-{margin}-{cap_only}-{skin}';directory.mkdir()
-                if skin=='shouldered':
+                directory=root/f'context-{margin}-{cap_only}-{skin}-{phases}';directory.mkdir()
+                if phases>1:bank=appearance_bank(directory,phases,margin,cap_only,skin)
+                elif skin=='shouldered':
                     from tests.play.skins.shoulders import bank_at as shouldered_bank
                     bank=shouldered_bank(directory,[cap(i)for i in range(5)],COLORS,BACKGROUND)
                 else:bank=bank_at(directory,margin=margin,cap_only=cap_only)

@@ -88,6 +88,15 @@ Independent in-memory RGB scenes run in up to four processes with fixed seeds
 and ordered results. Encoded scenes run serially to bound FFmpeg thread pools;
 parallel execution does not change their native frame order or expected results.
 
+`tests/derived/animated-skin.test.ts` adds four generated cap appearances with
+changing internal artwork and brightness, independently of the body's geometry.
+Flat and cut-corner scenes cover taps and both hold endpoints at 0.5/1/1.5 scales.
+Complete reference sets must retain every visible endpoint, one identity per cap,
+hold ownership and source PTS across appearance changes. Incomplete reference
+controls expose frame gaps and warnings; nearby recognized poses cannot invent
+the missing observations. These cases exercise reference coverage and native
+consumers, not arbitrary unseen skin animation or end-to-end input/UCS accuracy.
+
 The native matrix has 86 scenes: empty fields; isolated taps in all five lane
 kinds; Single/Double chords; staggered and repeated taps; long/short holds versus
 two taps; adjacent holds; real taps before/after holds; overlapping lanes;
