@@ -336,6 +336,16 @@ cap and its clearance/connection probes; a crop at the cap edge may leave its
 resampled boundary unmeasurable. Context outside the source crop is rejected.
 Retain `source_evidence` with media identity, source PTS, playback time and game
 ROI for recording-derived examples. The builder preserves it in the bank.
+Record its zero-based `lane` from the source layout, including the second panel
+on Double charts. The bank rejects a declared source lane whose direction
+(`lane % 5`) differs from `lane_kind`. Review the source column as well as the
+cropped shape before assigning a role; upper-left and upper-right tails are
+different references. An absent source lane does not certify the reference's
+direction.
+When the source layout is known, also retain normalized `lane_centers_x` in
+`source_evidence`. The original `source_crop`, `reference_dimensions` and image
+anchor must uniquely select the declared lane in that layout. This catches a
+wrong lane label even when its declared direction is internally consistent.
 Output directories are never overwritten. PNGs, source frames and
 recording-specific reference specifications stay outside Git.
 

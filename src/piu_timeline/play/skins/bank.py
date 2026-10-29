@@ -32,6 +32,12 @@ def load_bank(path):
         identifiers.add(identifier)
         if entry.get('role') not in ROLES or type(entry.get('lane_kind')) is not int or not 0 <= entry['lane_kind'] < 5:
             raise ValueError('Skin template requires a note role and a lane kind from 0 to 4')
+        evidence=entry.get('source_evidence',{})
+        if not isinstance(evidence,dict):raise ValueError('Skin source evidence must be an object')
+        if 'lane'in evidence:
+            lane=evidence['lane']
+            if type(lane)is not int or not 0<=lane<10 or lane%5!=entry['lane_kind']:
+                raise ValueError('Skin lane kind disagrees with its recording source lane')
         image_path = (path.parent / entry['image']).resolve()
         if not image_path.is_relative_to(path.parent):
             raise ValueError('Skin images must stay within their bank directory')
@@ -49,6 +55,22 @@ def load_bank(path):
         if (len(anchor) != 2 or not all(finite_number(x) for x in anchor)
                 or not 0 <= anchor[0] < width or not 0 <= anchor[1] < height):
             raise ValueError('Skin template anchor must lie inside its image')
+        if 'lane_centers_x'in evidence:
+            centers=evidence['lane_centers_x'];dimensions=evidence.get('reference_dimensions',[])
+            crop=evidence.get('source_crop',[])
+            if (not isinstance(centers,list)or len(centers)not in(5,10)
+                    or any(not finite_number(x)or not 0<x<1 for x in centers)
+                    or any(a>=b for a,b in zip(centers,centers[1:]))
+                    or len(dimensions)!=2 or any(type(v)is not int or v<=0 for v in dimensions)
+                    or len(crop)!=4 or any(type(v)is not int for v in crop)
+                    or not 0<=crop[0]<crop[2]<=dimensions[0]or not 0<=crop[1]<crop[3]<=dimensions[1]
+                    or (crop[2]-crop[0],crop[3]-crop[1])!=(width,height)or 'lane'not in evidence):
+                raise ValueError('Source lane geometry needs its original crop, dimensions and ordered lane centers')
+            x=(crop[0]+anchor[0])/dimensions[0]
+            distances=[abs(c-x)for c in centers];nearest=min(distances)
+            choices=[i for i,distance in enumerate(distances)if abs(distance-nearest)<1e-9]
+            if choices!=[evidence['lane']]:
+                raise ValueError('Declared source lane disagrees with the reference crop position')
         regions = entry.get('regions', [])
         names = {r.get('name') for r in regions}
         required = {'cap', 'connection'} if entry['role'] in ('hold_start', 'hold_end') else {'body'} if entry['role'] == 'hold_body' else {'cap'}
