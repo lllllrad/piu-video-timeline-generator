@@ -82,6 +82,6 @@ test('selected comparison pixels cannot override unknown interpolation support',
 test('comparison geometry survives source extraction and binds its own contract and cap identity',()=>{
  assert.equal(observed.scaled_boxes_correct,true);assert.equal(observed.source_preserved,true);
  assert.equal(observed.reference_bound,true);assert.equal(observed.scoped_contract,true);
- assert.deepEqual(observed.reusable_groups,['body'],'changed comparison geometry invalidates cap measurements');
+ assert.deepEqual(observed.reusable_groups,[],'changed comparison geometry invalidates the only acquired cap group');
  assert.deepEqual(observed.invalid_rejected,[true,true,true,true]);
 });

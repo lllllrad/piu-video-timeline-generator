@@ -63,7 +63,7 @@ for(const r of observed.results)test(`terminal shape is independently required a
   assert.ok(Math.abs(r.required_end[0].y-180*r.scale)<1e-6);
 });
 test('cap-feature declarations bind acquisition reuse and anchor proof identity',()=>{
-  assert.ok(!observed.reused.includes('caps'));
+  assert.deepEqual(observed.reused,[]);
   assert.equal(observed.bound_feature,true);
   assert.equal(observed.legacy_contract,null);
   assert.deepEqual(observed.contract,{schema:1,method:'independently_required_cap_regions'});

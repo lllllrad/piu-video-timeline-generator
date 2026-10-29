@@ -70,7 +70,7 @@ class AnchorRegistrationTest(unittest.TestCase):
             old=detector_metadata(root/'bank.json');path=register(root,rgb);bank=load_bank(path)
             self.assertEqual(set(bank['anchor_registrations']),{'tap','hold_start','hold_end'})
             self.assertFalse(detector_metadata(path)['registration_reviewed'])
-            self.assertEqual(reusable_groups({'skin_detector':old},bank),{'caps','body'})
+            self.assertEqual(reusable_groups({'skin_detector':old},bank),{'caps/0','body/0'})
             proof=bank['templates'][0]['native_anchor_registration']
             self.assertEqual(proof['native_measurement']['source_pts_seconds'],5.)
             self.assertEqual(proof['native_measurement']['time'],2.)

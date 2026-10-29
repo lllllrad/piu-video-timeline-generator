@@ -1,4 +1,4 @@
-"""Reuse independent cap/body acquisition only after exact reference validation."""
+"""Reuse independent lane-kind cap/body acquisition after exact reference validation."""
 from hashlib import sha256
 import json
 
@@ -7,12 +7,13 @@ from piu_timeline.play.skins.detector import FORMAT
 
 
 def group(template):
-    # Cap roles compete with one another; body minima are resolved separately.
-    return 'body'if template['role']=='hold_body'else'caps'
+    # Roles compete within a lane; both player sides use the same lane kind.
+    kind=template['lane_kind']if 'lane_kind'in template else template['lane']%5
+    return f"{'body'if template['role']=='hold_body'else'caps'}/{kind}"
 
 
 def signatures(bank):
-    result={'caps':[],'body':[]}
+    result={}
     for t in bank['templates']:
         value={k:t[k]for k in ('id','role','lane_kind','anchor_pixels','tap_clearance')}
         if t.get('cap_features'):value['cap_features']=t['cap_features']
@@ -21,7 +22,7 @@ def signatures(bank):
         h=sha256(json.dumps(value,sort_keys=True).encode())
         # Unsupported RGB can affect area resampling at noninteger scales.
         h.update(t['rgb'].tobytes());h.update(t['mask'].tobytes())
-        result[group(t)].append(h.hexdigest())
+        result.setdefault(group(t),[]).append(h.hexdigest())
     return result
 
 
@@ -37,7 +38,7 @@ def reusable_groups(data,bank):
     if (old['contract']!=saved['contract']['bank'] or old['skin']!=bank['skin']
             or old['spacing_pixels']!=bank['spacing_pixels']):return set()
     a,b=signatures(old),signatures(bank)
-    return {key for key in a if a[key]==b[key]and(key=='caps'or previous==FORMAT)}
+    return {key for key in a.keys()&b.keys()if a[key]==b[key]and(key.startswith('caps/')or previous==FORMAT)}
 
 
 def merge_observations(native,detected,reused):

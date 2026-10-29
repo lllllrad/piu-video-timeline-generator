@@ -374,12 +374,15 @@ selections fail explicitly. Bank/image bytes and detector rules participate in
 cache identity. A changed bank rescans source RGB without metadata OCR, retaining
 counter observations and original PTS. The current threshold-plane cache cannot
 reconstruct RGB; image detection changes can therefore reread original media.
-Replay treats competing tap/start/end references as one cap group and interior
-body references as an independent group. Unchanged groups are reused only when
+Replay groups competing tap/start/end references together for each lane kind,
+with separate body groups for each kind. A changed direction reacquires that
+kind on both player sides; unchanged directions keep their native observations.
+Merged observations recompute body-pattern ownership against all cap images.
+Unchanged groups are reused only when
 the acquired bank is still available with its original identity, the detector
 rules and spacing agree, and all ordered reference measurements in that group
 are identical. Body-only updates scan body images without repeating cap search.
-Proven metadata-only reference updates reuse both groups without decoding. An
+Proven metadata-only reference updates reuse all groups without decoding. An
 unverifiable old bank or changed detector rules require fresh acquisition.
 Missing native image observations or invalid source timestamps fail explicitly.
 The original contour trace is preserved in `frames.outline.jsonl` when switching

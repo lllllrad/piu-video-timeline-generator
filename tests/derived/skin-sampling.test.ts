@@ -75,7 +75,7 @@ for changed in ('body','caps'):
   data={'media':{'path':str(media),'size_bytes':media.stat().st_size,'mtime_ns':media.stat().st_mtime_ns},
    'skin_detector':detector_metadata(old/'bank.json'),'layout':layout,'analysis_width':90,'analysis_height':150,
    'game_roi':[0,0,180,300],'start_seconds':1/60,'end_seconds':.05,'frame_count':1}
-  assert reusable_groups(data,new_bank)==({'caps'}if changed=='body'else{'body'})
+  assert reusable_groups(data,new_bank)=={f"{'caps'if changed=='body'else'body'}/{kind}"for kind in range(5)}
   from piu_timeline.play.skins import replay
   classify=replay.classified_frames
   def serial(frames,bank,*args):return classify(frames,bank,*args,jobs=1)

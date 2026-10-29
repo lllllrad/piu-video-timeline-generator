@@ -37,7 +37,7 @@ class ImageReuseTest(unittest.TestCase):
                   'skin_detector':detector_metadata(old/'bank.json'),'layout':layout,
                   'analysis_width':200,'analysis_height':300,'game_roi':[0,0,200,300],
                   'start_seconds':1.,'end_seconds':1.02,'frame_count':1}
-            self.assertEqual(reusable_groups(data,new_bank),{'caps'})
+            self.assertEqual(reusable_groups(data,new_bank),{'caps/0'})
             from piu_timeline.play.skins import replay
             original=replay.classified_frames
             def body_only(decoded,bank,*args):
@@ -85,7 +85,7 @@ class ImageReuseTest(unittest.TestCase):
             root=Path(temporary);examples(root);bank=load_bank(root/'bank.json')
             data={'skin_detector':deepcopy(detector_metadata(root/'bank.json'))}
             data['skin_detector']['contract']['detector'].pop('body_candidates')
-            self.assertEqual(reusable_groups(data,bank),{'caps'})
+            self.assertEqual(reusable_groups(data,bank),{'caps/0'})
             data['skin_detector']['contract']['detector']['horizontal_search_spacing']=.5
             self.assertEqual(reusable_groups(data,bank),set())
 
@@ -93,9 +93,9 @@ class ImageReuseTest(unittest.TestCase):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);examples(root);bank=load_bank(root/'bank.json')
             data={'skin_detector':detector_metadata(root/'bank.json')}
-            self.assertEqual(reusable_groups(data,bank),{'caps','body'})
+            self.assertEqual(reusable_groups(data,bank),{'caps/0','body/0'})
             interpretation=deepcopy(data);interpretation['skin_detector']['contract']['held_body']={}
-            self.assertEqual(reusable_groups(interpretation,bank),{'caps','body'})
+            self.assertEqual(reusable_groups(interpretation,bank),{'caps/0','body/0'})
             changed=deepcopy(data);changed['skin_detector']['contract']['detector']={}
             self.assertEqual(reusable_groups(changed,bank),set())
             changed=deepcopy(data);changed['skin_detector']['contract']['bank']={}
