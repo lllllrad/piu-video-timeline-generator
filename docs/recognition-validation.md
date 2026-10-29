@@ -8,6 +8,10 @@ image recognition across the supported skins and four visual channels.
 
 ## Test inputs and expected results
 
+[Basic recognition cases](recognition-cases.md) defines the support target and
+expected outcomes before generator or processor changes. Its cases are behavioral
+requirements, not a list of passing tests.
+
 Specify chart objects, their movement, held states and independent channel events
 as ground truth. Sample that truth into pixels or saved native observations.
 Expected objects, timing bounds and warnings must come from the scene definition,
