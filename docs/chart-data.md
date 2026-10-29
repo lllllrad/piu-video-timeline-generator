@@ -10,6 +10,7 @@ just charts list 'Switronic'
 just charts add SOURCE --segment 20 --ucs-index CS306
 just charts sync
 just charts refresh-catalog
+just charts refresh-aliases
 ```
 
 `init` creates a separate local Git repository at `../piu-chart-data`, preserving existing files. It does not publish a remote. `PIU_CHART_DATA_DIR` or the global `--repo PATH` option selects a different location. Commit and review chart edits in that repository independently of analyzer code. Its layout is:
@@ -29,11 +30,27 @@ without invalidating its native analysis. `sync` attempts registration for compl
 does not invoke metadata OCR or acquire gameplay frames. It may download missing reference archives
 and decode audio for alignment.
 
-An exact normalized catalogue title or an explicit alias must identify one code. There is no guessed translation or fuzzy title correction. Assign a title with `just charts alias 'VIDEO TITLE' CS349`, or pass `--ucs-index` to `add`. Multiple arrangements use different mode/level directories; game updates require an explicit `--revision NAME`. A UCS code identifies a song, not a chart difficulty.
+An exact normalized catalogue title or a source-backed alias must identify one code.
+`refresh-aliases` reads the official bilingual song-list PDF and joins its English
+titles exactly to the current UCS catalogue. It preserves normal/full/short versions,
+existing assignments and the source PDF identity. Ambiguous or unmatched rows remain
+unresolved. Missing localized aliases are prepared before song-reference acquisition;
+ordinary identity lookup is read-only. There is no guessed translation or fuzzy title
+correction. Assign a title with `just charts alias 'VIDEO TITLE' CS349`, or pass
+`--ucs-index` to `add`. Multiple arrangements use different mode/level directories;
+game updates require an explicit `--revision NAME`. A UCS code identifies a song,
+not a chart difficulty.
 
 ## Timing and notes
 
 Audio alignment compares 24 frequency bands in three independent reference windows. At least two windows must have strong, unambiguous correlation and agree within 40 ms. Alignment is translation only; mismatched, repeated or missing music stays unresolved. `add --song-start SECONDS` permits an explicit reviewed origin in original local playback seconds. Source size and mtime must match saved observations before automatic audio alignment and remain unchanged afterward.
+
+Beat-reference preparation is independent of note-skin calibration and UCS export.
+It saves official blank timing under `timing/` and the recording-bound alignment in
+the play's `song-reference.json`, without creating a chart draft or marking a skin
+reviewed. Source/window, UCS identity, timing bytes and reference-audio bytes bind
+reuse. Unchanged references require no new audio decoding; failed identity or
+alignment remains an explicit beat reconstruction warning.
 
 UCS `Delay` is applied in milliseconds at each section boundary, while `BPM` and `Split` determine
 row duration. Drafts infer a separate split for each measure, also preserving original timing-change

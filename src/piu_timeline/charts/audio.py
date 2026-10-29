@@ -81,7 +81,7 @@ def align(data, reference_path):
     return result
 
 
-def prepare_alignment(data, directory, metadata, code):
+def prepare_alignment(data, directory, metadata, code, client=None):
     """Reuse a verified origin or prepare one source-bound audio translation."""
     from piu_timeline.charts.official import write_json
     directory=Path(directory)
@@ -102,7 +102,7 @@ def prepare_alignment(data, directory, metadata, code):
         return metadata['alignment']
     from piu_timeline.charts.official import Client
     from piu_timeline.charts.audio import align
-    _, music, _ = Client().template(code)
+    _, music, _ = (client or Client()).template(code)
     contract = {'media': identity, 'start_seconds': data['start_seconds'], 'end_seconds': data['end_seconds'],
                 'ucs_index': code, 'reference_audio_sha256': sha256(music.read_bytes()).hexdigest()}
     cache = directory / 'chart-policy-alignment.json'

@@ -25,6 +25,7 @@ import * as chartPhase from './charts/phase.ts';
 import * as chartHolds from './charts/holds.ts';
 import * as chartAssertions from './charts/assertions.ts';
 import * as chartDraft from './charts/draft.ts';
+import * as localized from './charts/localized.ts';
 import * as candidates from './candidates.ts';
 import * as ranges from './ranges.ts';
 import * as evidence from './evidence.ts';
@@ -47,7 +48,7 @@ import {parseData, stringifyData} from './json.ts';
 
 const operations = {
   skinAnchors, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription,
-  registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft,
+  registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, localized,
   holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
   holdState, holdExtent, holdGeometry, holdRisk, beats: {fitGrid, reconstruct},
 };

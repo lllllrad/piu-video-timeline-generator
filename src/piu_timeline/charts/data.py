@@ -275,6 +275,7 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('init', help='Initialize a separate Git repository and save the official catalogue')
     sub.add_parser('refresh-catalog', help='Refresh the official catalogue, preserving aliases and charts')
+    sub.add_parser('refresh-aliases', help='Import official localized titles without replacing existing aliases')
     sub.add_parser('validate', help='Validate all current UCS files and human-authored region policies')
     listing = sub.add_parser('list', help='Find official UCS codes by title or code')
     listing.add_argument('query', nargs='?', default='')
@@ -292,6 +293,9 @@ def main():
             print(initialize(args.repo)); return
         if args.command == 'refresh-catalog':
             write_json(args.repo / 'catalog.json', Client().catalogue(refresh=True)); return
+        if args.command == 'refresh-aliases':
+            from piu_timeline.charts.localized import refresh
+            print(json.dumps(refresh(args.repo),ensure_ascii=False)); return
         if args.command == 'validate':
             from piu_timeline.charts.policy import validate_regions
             count = 0

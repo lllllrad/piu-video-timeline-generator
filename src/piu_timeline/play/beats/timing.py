@@ -22,6 +22,9 @@ def reference(data, directory):
     saved=json.loads(registration.read_text()) if registration.is_file() else {}
     if saved.get('repository'):repo=Path(saved['repository'])
     code=saved.get('index') or (resolve_code(repo,data.get('song')) if (repo/'catalog.json').is_file() else None)
+    from piu_timeline.charts.reference import retained,beat_reference
+    retained_reference=retained(data,directory,repo,code)
+    if retained_reference is not None:return beat_reference(retained_reference,repo,code)
     chart=Path(saved['chart']) if saved.get('chart') else repo/'charts'/str(code)/str(data.get('chart'))/'phoenix/chart.ucs'
     metadata=chart.with_name('metadata.json');timing=repo/'timing'/f'{code}.ucs'
     if not code or not metadata.is_file() or not timing.is_file():
@@ -57,6 +60,13 @@ def prepare_reference(data,directory):
     as a diagnostic on this build, not retried by a cache-current check.
     """
     ref=reference(data,directory)
+    if ref.get('reason')=='official_timing_or_chart_identity_missing':
+        from piu_timeline.charts.reference import prepare
+        try:
+            prepare(data,Path(directory))
+        except (OSError,ValueError,KeyError,subprocess.SubprocessError)as error:
+            return {'status':'failed','reason':str(error)}
+        return {'status':'prepared','method':'official_song_reference'}
     if ref.get('reason')!='verified_song_alignment_missing':return None
     from piu_timeline.charts.audio import prepare_alignment
     try:
