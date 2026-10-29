@@ -52,6 +52,34 @@ occlusion/capture gaps and chords with missing/conflicting channels. Avoid a
 large Cartesian product of unrelated options that adds cost without testing an
 interaction.
 
+## Connected native scene checks
+
+`tests/derived/recognition-scenes.test.ts` supplies chart objects to
+`tests/play/skins/scenes.py`, which independently renders their caps and bodies
+and runs the real RGB detector, tracker, role join and image-connection consumer.
+The expected objects come from the TypeScript scene definitions. No target times
+or object identities are supplied to acquisition. Temporary reference banks use
+the same declared glyph design, with separate cap/connection/clearance regions;
+frames vary position, background noise, lane count, integer scale and cadence.
+
+The passing matrix has 40 scenes: empty fields; isolated taps in all five lane
+kinds; Single/Double chords; staggered and repeated taps; long/short holds versus
+two taps; adjacent holds; real taps before/after holds; overlapping lanes;
+unobservable connections; orphan bodies; and contradictory tap/hold observations.
+It checks exact cap counts/positions/roles in each clear frame, original PTS,
+unique hold ownership, and explicit unknown/conflict or orphan-body diagnostics.
+
+This is native-boundary coverage for parts of O01-O08, O10-O13 and O15-O17.
+It does not establish their clocks, final held/input semantics, warning projection
+or UCS output. Nor does it establish O09/O14/O18, realistic skin variation, named
+foreground combinations or the complete visibility/capture/channel matrix.
+
+Fractional whole-frame resampling remains a known failure: in a 1.5-scale scene,
+intact caps at some source-pixel phases are not detected with the same reference
+limits. Integer-scale success does not cover that case. Keep T05 incomplete and
+resolve the sampling/registration model before treating ordinary image support
+as established. Do not increase acceptance error merely to make this case pass.
+
 ## Promotion order
 
 For each processor change, first reproduce the failure in a generic synthetic
