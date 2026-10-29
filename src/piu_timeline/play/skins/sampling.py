@@ -6,7 +6,8 @@ import math
 import numpy as np
 from piu_timeline.play.skins.kernels import bicubic_weights,KERNELS
 
-FORMAT={'schema':1,'revision':2,'method':'supported_source_grid','phase_grid':4,'exact_denominator_limit':8,
+FORMAT={'schema':1,'revision':3,'method':'supported_source_grid','phase_grid':4,'exact_denominator_limit':8,
+        'comparison_canvas':{'schema':1,'method':'compared_pixel_extent','origin':'resampled_reference_pixels'},
         'kernels':KERNELS}
 
 

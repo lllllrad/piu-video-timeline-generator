@@ -104,6 +104,20 @@ when non-area, and `reference_scale_y`; anchors use the same transform.
 Body/connection coverage, receptor risk and native clearance use the matching
 kernel/phase's compared support, rather than another variant's rectangle or rows.
 
+After full source-grid resampling, the detector searches the bounding canvas of
+compared output pixels. Unused context extending outside the game image cannot
+clip an otherwise visible comparison. This does not restore actually clipped
+glyph pixels. `sampling_origin_pixels` retains the canvas origin in the resampled
+reference, independently of the source-grid phase. A source point projects to
+`bounds_origin + phase + scale * source_point - sampling_origin_pixels`.
+Role, clearance and coordinate evidence retain this origin; inconsistent anchor
+projections fail explicitly. Cropping the original source before interpolation
+would change its sampling and is not equivalent.
+Coverage tables use the full resampled reference coordinate space. Each image
+comparison supplies its own canvas origin when mapping those rows into the game
+image. A retained full-canvas observation has origin zero; it must not inherit
+the current search canvas's offset. Body risk and clearance use the same mapping.
+
 A region may restrict its comparison to the union of `comparison_boxes` inside
 its outer `box`. This separates a shaped glyph from the surrounding source RGB
 needed for interpolation. Boxes use source-pixel coordinates; output centers

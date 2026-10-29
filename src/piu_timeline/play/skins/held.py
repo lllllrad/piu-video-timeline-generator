@@ -12,10 +12,10 @@ FORMAT={'schema':1,'revision':2,'method':'positive_hold_regions_at_receptors',
 CAUSE_FORMAT={'schema':1,'revision':1,'detector':FORMAT}
 
 
-def row_runs(support):
+def row_runs(support,origin=0):
     runs=[]
     for row in np.flatnonzero(support.any(axis=1)):
-        row=int(row)
+        row=int(row)+origin
         if runs and runs[-1][1]==row:runs[-1][1]=row+1
         else:runs.append([row,row+1])
     return runs
@@ -24,14 +24,14 @@ def row_runs(support):
 class BodyAtReceptor:
     def __init__(self,detector):
         self.spacing=detector.spacing;self.receptor=detector.layout['receptor_y']*detector.height
-        self.rows={key(t):row_runs(t['support'])for t in detector.templates}
+        self.rows={key(t):row_runs(t['support'],t.get('sampling_origin_pixels',[0,0])[1])for t in detector.templates}
         self.connections={}
         for t in detector.templates:
             support=np.zeros(t['mask'].shape,dtype=bool)
             for region in t['regions']:
                 if region['name']=='connection':
                     a,b,c,d=region['box'];support[b:d,a:c]|=region['mask'].astype(bool)
-            self.connections[key(t)]=row_runs(support)
+            self.connections[key(t)]=row_runs(support,t.get('sampling_origin_pixels',[0,0])[1])
 
     def __call__(self,observations):
         return bool(self.explain(observations))
@@ -47,7 +47,7 @@ class BodyAtReceptor:
             for pattern in [image,*image.get('alternatives',[])]:
                 if (pattern.get('template_role',pattern['role'])in('hold_start','hold_end')
                         and pattern.get('classification_status')in('full_pattern','conflict')):
-                    top=pattern['bounds_pixels'][1]
+                    top=pattern['bounds_pixels'][1]-pattern.get('sampling_origin_pixels',[0,0])[1]
                     spans=[(top+a,top+b)for a,b in self.connections[key(pattern)]
                            if top+a<=r+band and top+b>=r-band]
                     if spans:causes.append({'kind':'cap_connection','lane':image['lane'],'image_indices':[index],

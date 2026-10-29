@@ -12,6 +12,24 @@ from piu_timeline.derived import CONTRACTS
 FORMAT=CONTRACTS['image_coordinates']
 
 
+def validate_origin(candidate,template,width,height,scale):
+    """Bind a trimmed comparison canvas to its original reference anchor."""
+    if 'sampling_origin_pixels'not in candidate:return
+    origin=candidate['sampling_origin_pixels'];bounds=candidate.get('bounds_pixels',[])
+    phase=candidate.get('sampling_phase_pixels',[0,0]);sy=candidate.get('reference_scale_y')
+    if (not isinstance(origin,list)or len(origin)!=2 or any(type(v)is not int or v<0 for v in origin)
+            or len(bounds)!=4 or any(type(v)is not int for v in bounds)
+            or not 0<=bounds[0]<bounds[2]<=width or not 0<=bounds[1]<bounds[3]<=height
+            or type(sy)not in(int,float)or not np.isfinite(sy)or abs(sy-scale)>1e-8
+            or len(phase)!=2 or any(not any(abs(v-p)<1e-8 for p in phases(scale))for v in phase)
+            or not np.isfinite([candidate['x'],candidate['y']]).all()
+            or candidate.get('sampling_kernel','area')not in SAMPLING_FORMAT['kernels']):
+        raise ValueError('Image comparison has incompatible sampling origin')
+    expected=[bounds[i]+phase[i]+sy*template['anchor_pixels'][i]-origin[i]for i in (0,1)]
+    if max(abs(expected[0]-candidate['x']*width),abs(expected[1]-candidate['y']*height))>1e-5:
+        raise ValueError('Image anchor disagrees with its comparison canvas origin')
+
+
 
 def registered_comparison(image,bank,templates,lane,y,height,scale):
     """Use a positive source-bound comparison at the unchanged measured row."""
@@ -56,6 +74,7 @@ def measure(data,frames):
     if bank['contract']!=data['skin_detector']['contract']['bank']:
         raise ValueError('Coordinate references differ from acquired image observations')
     templates={t['id']:t for t in bank['templates']};identities={}
+    require_origin='comparison_canvas'in data['skin_detector']['contract'].get('detector',{}).get('sampling',{})
     for key,t in templates.items():
         if any(r['name']=='cap'for r in t['regions']):identities[key]=cap_reference(bank,t)
     height=data['analysis_height']
@@ -78,6 +97,10 @@ def measure(data,frames):
             options=[o for o in caps if o['lane']==lane and abs(o['y']*height-y)<1e-5]
             if len(options)!=1:raise ValueError(f'Image coordinate lacks one native cap: note {index}, time {time}')
             image=options[0];template=templates[image['template']]
+            for candidate in [image,*image.get('alternatives',[])]:
+                if require_origin and 'sampling_origin_pixels'not in candidate:
+                    raise ValueError('Image comparison is missing its declared canvas origin')
+                validate_origin(candidate,templates[candidate['template']],data['analysis_width'],height,scale)
             region=next((r for r in template['regions']if r['name']=='cap'),None)
             error=image.get('region_errors',{}).get('cap',float('nan'))
             if (region is None or template['lane_kind']!=lane%5 or image.get('skin')!=bank['skin']
@@ -93,6 +116,8 @@ def measure(data,frames):
                                    'image_anchor':[image['x'],image['y']],'template':image['template'],
                                    'cap_error':error,'cap_reference_sha256':identities[image['template']],
                                    'classification_status':image['classification_status'],
+                                   **({'sampling_origin_pixels':image['sampling_origin_pixels']}
+                                      if 'sampling_origin_pixels'in image else{}),
                                    **registration,
                                    'trace':'frames.jsonl'})
     if expected:raise ValueError('Image coordinate trajectory has no original source frame')

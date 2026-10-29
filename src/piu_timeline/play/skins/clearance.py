@@ -53,6 +53,8 @@ def clear_regions(data,pattern,template,planes):
     if len(regions)!=2:return None
     if any(not r['mask'].any()for r in regions):return None
     left,top=pattern['bounds_pixels'][:2];result=[]
+    current=template.get('sampling_origin_pixels',[0,0]);observed=pattern.get('sampling_origin_pixels',[0,0])
+    left+=current[0]-observed[0];top+=current[1]-observed[1]
     # The positive cap must also be outside documented foreground footprints.
     cap=next(r['box']for r in template['regions']if r['name']=='cap')
     if occluders_at_bounds(data['layout'],[(left+cap[0])*sx,(top+cap[1])*sy,
@@ -125,7 +127,7 @@ def derive(data,native,samples,bank,profile):
                     'region_errors':{'cap':pattern['region_errors']['cap']},'bounds_pixels':pattern['bounds_pixels'],
                     'image_anchor':[pattern['x']*width,image['y']*height],
                     'classification_status':'cap_with_native_clearance','clearance_regions':regions,
-                    **{k:pattern[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel')if k in pattern},
+                    **{k:pattern[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels')if k in pattern},
                     'clearance_pixel_dimensions':[PIXEL_FORMAT['width'],next(iter(planes.values())).shape[0]]})
                 break
     qualified={i:group for i,points in proofs.items()if(group:=qualify(points,detector.spacing))}

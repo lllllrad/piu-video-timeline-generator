@@ -50,7 +50,10 @@ def chord_trace(path):
     data['layout']['lanes']=[{'x':.05+i*.1}for i in range(10)]
     data['notes']=data['notes'][:2];data.pop('head_registration')
     data['notes'][0]['lane']=0;data['notes'][1]['lane']=5
-    data['skin_detector']=detector_metadata(path);frames=[]
+    # These consumer fixtures supply reference-space coordinates directly;
+    # they do not claim the current RGB detector's acquisition contract.
+    data['skin_detector']={'bank_path':str(path),'contract':{'bank':bank['contract']},
+                           'registration_reviewed':False};frames=[]
     for time,y in data['notes'][0]['points']:
         frames.append({'playback_seconds':time,'source_pts_seconds':50+time,'skin_observations':[
             {'lane':lane,'x':data['layout']['lanes'][lane]['x'],'y':y/data['analysis_height'],

@@ -32,7 +32,7 @@ def observe(data, native):
                                  'image_anchor':[proof.get('x',image.get('x')),proof.get('y',image.get('y'))],
                                  'source_image_anchor':[image.get('x'),image.get('y')],
                                  'classification_status':proof.get('classification_status','full_pattern')})
-                observations[-1].update({k:proof[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','unavailable_regions')if k in proof})
+                observations[-1].update({k:proof[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')if k in proof})
         for proof in data.get('skin_role_evidence',{}).get('notes',{}).get(str(index),[]):
             observations.append({**proof,'image_anchor':[proof['image_anchor'][0]/data['analysis_width'],
                                                         proof['image_anchor'][1]/height]})

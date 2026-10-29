@@ -6,6 +6,7 @@ import math
 from piu_timeline.play.screen_regions import note_occluders
 from piu_timeline.play.skins.sampling import models,key,FORMAT as SAMPLING_FORMAT
 from piu_timeline.play.skins.subfeatures import account
+from piu_timeline.play.skins.canvas import comparison_canvas
 
 FORMAT = {'schema': 1, 'revision': 6, 'method': 'lane_masked_rgb_regions','sampling':SAMPLING_FORMAT,
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor',
@@ -29,7 +30,7 @@ class SkinDetector:
         self.templates = []
         scale = self.spacing / bank['spacing_pixels']
         for original in bank['templates']:
-            variants=list(models(original,scale))
+            variants=[comparison_canvas(model)for model in models(original,scale)]
             if not variants:raise ValueError('Skin image region vanishes at the analysis scale')
             self.templates.extend(variants)
         self.by_sampling={key(t):t for t in self.templates}
@@ -86,7 +87,7 @@ class SkinDetector:
                     candidates.append({'lane': lane, 'x': x / self.width, 'y': y / self.height,
                                        'role': 'unknown'if cap_only else template['role'], 'template': template['id'],
                                        'template_role':template['role'], 'hud_region_overlap':hidden,
-                                       **({k:template[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel')if k in template}),
+                                       **({k:template[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels')if k in template}),
                                        'classification_status':'cap_only'if cap_only else'full_pattern',
                                        **({'reason':'skin_tap_clearance_unresolved'if template['role']=='tap'
                                            else'skin_image_connection_unresolved'}if cap_only else{}),
@@ -108,7 +109,7 @@ class SkinDetector:
                 continue
             current = peers[0]
             fields=('role','template_role','classification_status','template','quality','region_errors',
-                    'x','y','bounds_pixels','sampling_phase_pixels','reference_scale_y','sampling_kernel','unavailable_regions')
+                    'x','y','bounds_pixels','sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')
             proof = {k: candidate[k] for k in fields if k in candidate}
             current['alternatives'].append(proof)
             full={r['template_role']for r in (current,candidate)if r['classification_status']=='full_pattern'}
