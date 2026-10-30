@@ -10,7 +10,7 @@ from unittest.mock import patch
 from piu_timeline.charts.speed_effects import proposals, record
 from piu_timeline.play.speed_estimation import estimate
 from piu_timeline.tools.chart_motion import review, recordings
-from tests.play.test_speed_estimation import scenario
+from tests.charts.speed_fixtures import scenario
 
 
 class SpeedEffectsTest(unittest.TestCase):
