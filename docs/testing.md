@@ -94,7 +94,7 @@ can open the video. Bulk skin/detection details are excluded from counter and
 visibility consumer records.
 
 Pure coordinate, clock, beat-domain, chord, reference-recovery, input-range and
-speed, input-candidate, row/aggregate-recovery and recovered-grade regressions
+speed, input-candidate, row/aggregate-recovery, recovered-grade and hold-projection regressions
 run directly in TypeScript under `tests/derived/beats/` and
 `tests/derived/consumers/`. Python tests exercise native image/audio acquisition,
 Python object adapters, JSONL/file handling and workflow/cache integration. New
