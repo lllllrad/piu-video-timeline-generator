@@ -166,8 +166,9 @@ It remains sustained recognition, without a new press or release timestamp.
 New banks currently remain explicitly uncalibrated for UCS export. An image
 location is useful acquisition evidence but does not prove that its anchor
 matches the game's timing convention. `skin_registration_unverified` stays
-visible and UCS export fails explicitly. The reference collection in ignored
-local storage is experimental; it is not a complete validated skin catalogue.
+visible and UCS export fails explicitly. The reference collection in the separate
+data repository contains explicitly experimental revisions; publication does not
+establish a complete validated skin catalogue or native timing calibration.
 Per-note random skins and downward travel are outside this workflow's current
 scope. They require separate skin selection or motion models.
 
@@ -252,14 +253,53 @@ Select a bank for the public analysis path:
 just play SOURCE --segment 1 --note-skin .local/cache/note-skins/example/bank.json
 ```
 
-For repeated use, `.local/data/SOURCE/note-skins.json` can select a bank:
+## Versioned reference assets
 
-```json
-{"schema":1,"profiles":[{"segments":[1,3],"bank":"../../cache/note-skins/example/bank.json"}]}
+Keep reusable banks in the separate chart-data repository (`../piu-chart-data`,
+or `PIU_CHART_DATA_DIR`). Build and inspect candidates locally, then publish:
+
+```sh
+just skins publish .local/cache/note-skins/example/bank.json --revision v1
+just skins list
+just skins select SOURCE --segments 1 3 --skin example --revision v1
+just skins validate
 ```
 
-Bank paths in this file are relative to its source directory; duplicate segment
-selections fail explicitly. Bank/image bytes and detector rules participate in
+`--repo PATH` on each management command selects a different data repository.
+Initialize it with `just charts init` first. Publication copies only the bank and
+its referenced PNGs, preserving exact bytes and source/calibration provenance.
+The bank's own `skin` field supplies the identity; `example` above must match it.
+Assets live at `skins/banks/<skin>/<revision>/bank.json` with the referenced PNGs
+and `reference.json`. The latter binds the complete bank content hash and records
+`experimental` (default), `reviewed` or `unsupported` status plus an optional
+`--description`. Review status never replaces the native calibration checks.
+Conflicting publication requires a new revision; repeating identical publication
+is harmless. Commit these files in the data repository. Analyzer code and
+synthetic tests remain in this repository; recordings and generated diagnostics
+remain local. Absolute source-image paths inside provenance are historical
+references; loading the published bank requires only its bundled PNGs.
+
+Persistent selections live in `skins/sources/SOURCE.json` in the data repository:
+
+```json
+{"schema":1,"profiles":[{"segments":[1,3],"bank":{"skin":"example","revision":"v1"}}]}
+```
+
+Profiles retain optional `role_clearance` settings alongside the selection.
+`select` replaces only the specified segments; settings for remaining segments
+are preserved. A shared source profile takes precedence over the legacy local
+`.local/data/SOURCE/note-skins.json`; absent segments in that shared profile have
+no skin selected. The explicit `--note-skin PATH` play option overrides either
+profile. Legacy local string bank paths remain relative to the source directory.
+Missing assets, changed published bytes, unsupported selected revisions and
+duplicate segment selections fail explicitly; they never fall back to outlines.
+`validate` checks image geometry, content binding and all shared selections.
+
+Existing local bank locations may be symlinks to published assets so saved
+observations can still verify their original references. Change a published bank
+by building and publishing a new revision, then selecting it. Moving identical
+bank bytes preserves acquisition identity and needs no native re-detection.
+Bank/image bytes and detector rules participate in
 cache identity. A changed bank rescans source RGB without metadata OCR, retaining
 counter observations and original PTS. The current threshold-plane cache cannot
 reconstruct RGB; image detection changes can therefore reread original media.

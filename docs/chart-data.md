@@ -21,7 +21,16 @@ aliases.json
 timing/CS306.ucs
 charts/CS306/D22/phoenix/chart.ucs
 charts/CS306/D22/phoenix/metadata.json
+skins/banks/SKIN/REVISION/bank.json
+skins/banks/SKIN/REVISION/reference.json
+skins/banks/SKIN/REVISION/*.png
+skins/sources/SOURCE.json
 ```
+
+The same repository owns reusable note-skin image assets and recording-specific
+revision selections. Manage them with `just skins publish`, `list`, `select` and
+`validate`; see [skin assets](note-skin-images.md#versioned-reference-assets).
+Original recordings and generated diagnostics stay outside this repository.
 
 Once initialized, successful `just play` runs register missing charts automatically, including
 compatible cached analyses. Registration never overwrites an existing chart directory. Download,

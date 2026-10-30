@@ -30,8 +30,14 @@ def detector_metadata(path, bank=None):
                                        for lane in range(5) for role in ROLES if (lane, role) not in represented]}
 
 
+def profile_file(directory):
+    from piu_timeline.play.skins.repository import profile_path, repository_root
+    shared = profile_path(repository_root(), directory.name)
+    return shared if shared.is_file() else directory / 'note-skins.json'
+
+
 def selected_profile(directory,segment):
-    path = directory / 'note-skins.json'
+    path = profile_file(directory)
     if not path.is_file():
         return None
     document = json.loads(path.read_text())
@@ -46,12 +52,15 @@ def selected_profile(directory,segment):
 def selected_bank(directory, segment, explicit=None):
     if explicit is not None:return str(Path(explicit).resolve())
     profile=selected_profile(directory,segment)
+    if profile and isinstance(profile['bank'],dict):
+        from piu_timeline.play.skins.repository import resolve
+        return str(resolve(profile['bank']))
     return str((directory/profile['bank']).resolve())if profile else None
 
 
 def configuration_signature(directory,segment):
     """Retry failed work when selected configuration or reference bytes change."""
-    path=directory/'note-skins.json'
+    path=profile_file(directory)
     try:
         profile=selected_profile(directory,segment)
         bank=selected_bank(directory,segment)

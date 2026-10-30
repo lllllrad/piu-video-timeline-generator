@@ -95,6 +95,13 @@ by `play/skins/coordinates.py` with original PTS and cap-comparison provenance;
 independent beat-spacing checks consume them without asserting absolute game
 calibration. See [note-skin images](note-skin-images.md).
 
+`play/skins/repository.py` publishes immutable image-bank revisions into the
+separate data repository and validates their exact content binding. Shared
+`skins/sources/` profiles select revisions before acquisition; explicit play
+paths override them. `just skins validate` checks the installed native assets
+and selections. Image validation uses the native loader; synthetic storage and
+selection regressions run through the TypeScript test suite.
+
 - `workflow.py` owns the public `just auto` flow, stable source IDs and `.local/data/` layout.
 - `media.py` prepares YouTube media with yt-dlp or inspects local input.
 - `metadata/analysis.py` detects gameplay, refines boundaries and saves structured evidence.

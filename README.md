@@ -127,6 +127,12 @@ data](docs/chart-data.md).
 
 The metadata also supports song-time `regions` with processing methods (`standard`, `exclude_timing`, `hold_state_only`), reasons/details, and scoped automatic-check exceptions. Reports show applied policies and retain unfiltered evidence alongside eligible check counts. `just charts validate` checks chart text and region settings; rebuilding a draft preserves human-authored regions. See [region configuration examples](docs/chart-data.md#region-processing-and-automatic-check-exceptions).
 
+Reusable note-skin images also live in the separate data repository, under
+`skins/banks/<skin>/<revision>/`. `just skins publish`, `list`, `select` and
+`validate` manage exact image references, review status and portable segment
+selections. Candidates can be built locally before publication. See
+[versioned skin assets](docs/note-skin-images.md#versioned-reference-assets).
+
 ## Output formats
 
 Choose a bundled or local format with the optional second argument:

@@ -64,6 +64,19 @@ def compare_anchors(observations,bank_path,output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
+    for command in ('publish', 'list', 'validate', 'select'):
+        manager = commands.add_parser(command)
+        manager.add_argument('--repo', type=Path)
+        if command == 'publish':
+            manager.add_argument('bank', type=Path)
+            manager.add_argument('--revision', required=True)
+            manager.add_argument('--status', choices=['experimental', 'reviewed', 'unsupported'], default='experimental')
+            manager.add_argument('--description', default='')
+        elif command == 'select':
+            manager.add_argument('source')
+            manager.add_argument('--segments', type=int, nargs='+', required=True)
+            manager.add_argument('--skin', required=True)
+            manager.add_argument('--revision', required=True)
     create = commands.add_parser('build')
     create.add_argument('specification', type=Path)
     create.add_argument('--output', type=Path, required=True)
@@ -92,7 +105,15 @@ def main():
     review.add_argument('--start', type=float)
     review.add_argument('--duration', type=float, default=3)
     args = parser.parse_args()
-    if args.command == 'compare-anchors':
+    if args.command in ('publish', 'list', 'validate', 'select'):
+        from piu_timeline.play.skins import repository
+        if args.command == 'publish':
+            print(repository.publish(args.bank, args.revision, args.repo, args.status, args.description))
+        elif args.command == 'select':
+            print(repository.select(source_id(args.source), args.segments, args.skin, args.revision, args.repo))
+        else:
+            print(json.dumps(repository.inventory(args.repo) if args.command == 'list' else repository.validate(args.repo), indent=2))
+    elif args.command == 'compare-anchors':
         compare_anchors(args.observations,args.bank,args.output)
     elif args.command == 'build':
         print(build(args.specification, args.output))

@@ -12,6 +12,10 @@ play +args:
 charts +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.charts.data "$@"
 
+# Manage versioned note-skin images in the separate data repository.
+skins +args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.play.skins "$@"
+
 # Rebuild a derived artifact from saved data using TypeScript only.
 derive stage input output:
     node src/piu_timeline/derived/cli.ts "$1" "$2" "$3"

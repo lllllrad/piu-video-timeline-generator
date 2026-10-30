@@ -46,9 +46,23 @@ def initialize(repository, client=None):
                 'Use a new revision directory for game chart updates.\n\n'
                 'Use metadata `regions` for song-relative processing methods and scoped automatic-check exceptions. '
                 'Every region requires a reason. The root `schema.json` documents editable fields.\n\n'
+                'Reusable note-skin images and recording selections live under `skins/`; '
+                'see `skins/README.md` for versioned asset management.\n\n'
                 'Reference audio, recordings, caches and generated HTML belong outside this repository.\n',
-            '.gitignore': '.chart-data.lock\n*.build-*\n*.mp3\n*.mp4\n*.mkv\n*.zip\ncache/\n',
+            '.gitignore': '.chart-data.lock\n*.build-*\n.publish-*/\n*.mp3\n*.mp4\n*.mkv\n*.zip\ncache/\n',
             'aliases.json': '{}\n',
+            'skins/README.md': '# Note-skin reference assets\n\n'
+                '`banks/<skin>/<revision>/` contains bank.json, referenced RGBA PNGs and '
+                'reference.json with review status and exact content identity. '
+                '`sources/<source-id>.json` selects explicit revisions for recording segments.\n\n'
+                'From the analyzer checkout, use `just skins publish BANK --revision NAME`, '
+                '`just skins list`, `just skins select SOURCE --segments 1 --skin SKIN --revision NAME`, '
+                'and `just skins validate`. Commands use PIU_CHART_DATA_DIR or --repo PATH. '
+                'Commit assets and selections here independently of analyzer code.\n\n'
+                'Publish a new revision for changed pixels or geometry. Publication defaults '
+                'to experimental; reviewed status does not establish native timing calibration. '
+                'Source paths inside bank provenance are historical references, not required files '
+                'for image loading. Keep original recordings and generated diagnostics outside this repository.\n',
         }.items():
             if not (repository / name).exists():
                 atomic_write(repository / name, content.encode())
