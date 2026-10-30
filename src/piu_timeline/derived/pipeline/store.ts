@@ -1,12 +1,11 @@
 /** Independent derived artifacts; cached output is never evidence for its own input. */
 import {readFileSync, existsSync, mkdirSync, writeFileSync, renameSync, unlinkSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
-import {createHash, randomUUID} from 'node:crypto';
+import {randomUUID} from 'node:crypto';
 import {parseData, stringifyData} from '../json.ts';
 
-const sorted = (v: any): any => Array.isArray(v) ? v.map(sorted) : v && typeof v === 'object' ?
-  Object.fromEntries(Object.keys(v).sort().map(k => [k, sorted(v[k])])) : v;
-export const fingerprint = (v: unknown): string => createHash('sha256').update(stringifyData(sorted(v))).digest('hex');
+import {fingerprint} from '../fingerprint.ts';
+export {fingerprint} from '../fingerprint.ts';
 function paths(v: any, before: string, after: string): any {
   if (typeof v === 'string') return v.startsWith(before) ? after + v.slice(before.length) : v;
   if (Array.isArray(v)) return v.map(item => paths(item, before, after));

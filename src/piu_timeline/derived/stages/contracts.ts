@@ -1,6 +1,8 @@
 /** Immutable stage results. Only composition adapters build a combined read model. */
+import {fingerprint} from '../fingerprint.ts';
 export type Immutable<T> = T extends (...args: never[]) => unknown ? T : T extends object ? {readonly [K in keyof T]:Immutable<T[K]>}:T;
-export interface Artifact<Kind extends string, Data> {readonly schema:1; readonly stage:Kind; readonly data:Immutable<Data>}
+export interface Artifact<Kind extends string, Data> {readonly schema:1; readonly stage:Kind; readonly data:Immutable<Data>;readonly input_fingerprint?:string;readonly artifact_root?:string}
+export interface BoundArtifact<Kind extends string,Data> extends Artifact<Kind,Data> {readonly input_fingerprint:string}
 export type Evidence = Readonly<Record<string,unknown>>;
 export type Point = readonly [number,number];
 export interface ObservedNote {note:number;lane:number;detection_points:readonly Point[];attributes:Evidence;separate_detection_trajectory:boolean}
@@ -15,16 +17,16 @@ export const coordinateFields=['points','status','reason','target_seconds','pred
 export type CoordinateValues=Partial<Record<typeof coordinateFields[number],unknown>>;
 export interface CoordinateNote {note:number;values:CoordinateValues}
 export interface CoordinateResult {notes:readonly CoordinateNote[];scroll_motion?:Evidence;head_registration?:Evidence;timing_reconstruction?:Evidence}
-export type CoordinateArtifact=Artifact<'coordinates',CoordinateResult>;
+export type CoordinateArtifact=BoundArtifact<'coordinates',CoordinateResult>;
 export const beatFields=['status','reason','target_seconds','prediction_uncertainty_seconds','video_target_range','beat_reconstruction',
  'timing_reconstruction','fit_method','native_clock_warning'] as const;
 export type BeatValues=Partial<Record<typeof beatFields[number],unknown>>;
 export interface ResultNote {note:number;values:Readonly<Record<string,unknown>>;removed:readonly string[]}
 export const nativeTimingFields=coordinateFields.filter(k=>!['points','head_registration'].includes(k));
 export interface NativeTimingResult {notes:readonly ResultNote[];timing_reconstruction?:Evidence}
-export type NativeTimingArtifact=Artifact<'native-timing',NativeTimingResult>;
+export type NativeTimingArtifact=BoundArtifact<'native-timing',NativeTimingResult>;
 export interface BeatResult {notes:readonly ResultNote[];beat_timing:Evidence;native_recovery?:Evidence}
-export type BeatArtifact=Artifact<'beats',BeatResult>;
+export type BeatArtifact=BoundArtifact<'beats',BeatResult>;
 export interface CoordinateSource {observations:ObservationArtifact;coordinates:CoordinateArtifact}
 export interface BeatReference {
  status:'available'|'unavailable';reason?:string;song_start_seconds?:number;alignment_uncertainty_seconds?:number;
@@ -43,6 +45,19 @@ export function artifact<K extends string,T>(stage:K,data:T):Artifact<K,T>{
 }
 export function requireArtifact<K extends string>(value:unknown,kind:K):asserts value is Artifact<K,unknown>{
  const v=value as {schema?:unknown;stage?:unknown;data?:unknown};
- if(!v||v.schema!==1||v.stage!==kind||!v.data||typeof v.data!=='object'||Array.isArray(v.data)||Object.keys(v).some(k=>!['schema','stage','data'].includes(k)))
+ if(!v||v.schema!==1||v.stage!==kind||!v.data||typeof v.data!=='object'||Array.isArray(v.data)||Object.keys(v).some(k=>!['schema','stage','data','input_fingerprint','artifact_root'].includes(k)))
   throw new Error(`Expected ${kind} stage artifact`);
+}
+
+/** Root is explicit so directory promotion preserves input identity without hiding path dependencies. */
+export function boundArtifact<K extends string,T>(stage:K,input:unknown,data:T,root?:string):BoundArtifact<K,T>{
+ const artifactRoot=root?root.replace(/\/+$/,'')+'/':undefined;
+ return Object.freeze({...artifact(stage,data),input_fingerprint:fingerprint(input,artifactRoot),
+  ...(artifactRoot?{artifact_root:artifactRoot}:{})});
+}
+export function requireInput<K extends string>(value:Artifact<K,unknown>,input:unknown):void{
+ if(value.artifact_root!==undefined&&(typeof value.artifact_root!=='string'||!value.artifact_root.endsWith('/')))
+  throw new Error(`Invalid artifact root for ${value.stage}`);
+ if(typeof value.input_fingerprint!=='string'||value.input_fingerprint!==fingerprint(input,value.artifact_root))
+  throw new Error(`${value.stage} result belongs to different inputs`);
 }

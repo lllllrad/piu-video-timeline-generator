@@ -84,7 +84,7 @@ def apply(data,directory):
     preparation=prepare_reference(data,directory)
     ref=reference(data,directory)
     timing=Path(ref['timing']).read_bytes().decode('utf-8')if ref['status']=='available'else None
-    source=data.get('_coordinate_source')or call('stageCoordinates.capture',data)
+    source=data.get('_coordinate_source')or call('stageCoordinates.capture',data,str(Path(directory).resolve())+'/')
     native=call('nativeTiming.resolve',source)
     request=call('beats.input',source,native,ref,timing,preparation)
     output=call('beats.reconstruct',request)

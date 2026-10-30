@@ -1,6 +1,5 @@
 """Opt-in, evidence-based reconstruction of visible notes and combo timing."""
 import argparse
-from collections import Counter
 import fcntl
 import json
 import math
@@ -291,7 +290,79 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                             'No missed press is inferred from a combo reset or an unreadable counter.']}
 
 
+def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_skin, display_delay_ms):
+    """Reuse physical observations; optionally rebuild beats and their associations."""
+    from piu_timeline.play.presentation import prepare_report,refresh_registration
+    from piu_timeline.play.report import write_report
+    from piu_timeline.play.holds.analysis import augment_holds
+    refresh_fields=('judgment_cache','hold_analysis','visual_channels','association_view_format',
+                    'matches','conflicted_matches','coverage','skin_detector')
+    previous_refresh={k:cached.get(k)for k in refresh_fields}
+    if coordinates is not None:
+        print('Reconstructing beat rows from saved coordinates; no frame replay, decoding or OCR.',flush=True)
+        cached=reassociate_beats(apply_beats(coordinates,final),display_delay_ms)
+        cached=augment_judgments(cached,final)
+    if not judgments_current and coordinates is None:
+        cached = augment_judgments(cached,final)
+    if note_skin is not None:
+        cached['skin_detector']={**cached['skin_detector'],'bank_path':note_skin}
+    cached = augment_holds(cached, final)
+    prepared=prepare_report(cached,final/'report.html',final)
+    write_report(prepared,final/'report.html',final)
+    if coordinates is not None or {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
+        updated = final / 'analysis.refresh-build.json'
+        updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
+        updated.replace(final/'analysis.json')
+    print('Reusing saved note trajectories and compatible word/long-note evidence; no OCR.')
+    from piu_timeline.charts.data import auto_register
+    auto_register(cached, final)
+    refresh_registration(cached, final)
+    print(final / 'report.html')
+    return final / 'report.html'
+
+
+def finish_play(result, pending, final, segment_number, display_delay_ms, source_media):
+    """Run derived stages, prepare/render the inspector, then atomically publish."""
+    result['segment_number']=segment_number
+    result=interpret_objects(result,pending,display_delay_ms)
+    from piu_timeline.play.head_registration import apply as register_heads
+    result=register_heads(result,pending,display_delay_ms)
+    from piu_timeline.play.stages import save_coordinates
+    result=save_coordinates(result,pending)
+    result=apply_beats(result,pending)
+    result=reassociate_beats(result,display_delay_ms)
+    result = augment_judgments(result,pending)
+    from piu_timeline.play.holds.analysis import augment_holds
+    result = augment_holds(result,pending)
+    stat = Path(source_media['path']).stat()
+    if (stat.st_size,stat.st_mtime_ns) != (result['media']['size_bytes'],result['media']['mtime_ns']):
+        raise ValueError('Source changed during play analysis')
+    (pending / 'analysis.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+    from piu_timeline.play.presentation import prepare_report,refresh_registration
+    from piu_timeline.play.report import write_report
+    prepared=prepare_report(result,pending/'report.html',final)
+    write_report(prepared,pending/'report.html',final)
+    from piu_timeline.storage import relocate_evidence
+    relocate_evidence(pending, final)
+    backup = final.with_name(f'{final.name}.previous-{uuid.uuid4().hex[:8]}')
+    if final.exists():
+        final.rename(backup)
+    try:
+        pending.rename(final)
+    except OSError:
+        if backup.exists() and not final.exists():
+            backup.rename(final)
+        raise
+    from piu_timeline.charts.data import auto_register
+    auto_register(result, final)
+    refresh_registration(result, final)
+    print(final / 'report.html')
+    return final / 'report.html'
+
+
+
 def run(source, segment_number=1, force=False, **options):
+    """Select saved refresh, saved-frame refit or fresh acquisition under the segment lock."""
     from piu_timeline.play.fonts import cache_current as digit_cache_current
     directory = LOCAL_DATA / source_id(source)
     analysis = directory / 'analysis/analysis.json'
@@ -346,33 +417,9 @@ def run(source, segment_number=1, force=False, **options):
                     and digit_cache_current(cached,final,LOCAL_DATA)
                     and ((judgments_current := judgment_cache_current(cached,root,final))
                          or judgment_observations_current(cached,root,final))):
-                from piu_timeline.play.presentation import prepare_report,refresh_registration
-                from piu_timeline.play.report import write_report
-                from piu_timeline.play.holds.analysis import augment_holds
-                refresh_fields=('judgment_cache','hold_analysis','visual_channels','association_view_format',
-                                'matches','conflicted_matches','coverage','skin_detector')
-                previous_refresh={k:cached.get(k)for k in refresh_fields}
-                if coordinates is not None:
-                    print('Reconstructing beat rows from saved coordinates; no frame replay, decoding or OCR.',flush=True)
-                    cached=reassociate_beats(apply_beats(coordinates,final),options.get('display_delay_ms',0))
-                    cached=augment_judgments(cached,final)
-                if not judgments_current and coordinates is None:
-                    cached = augment_judgments(cached,final)
-                if note_skin is not None:
-                    cached['skin_detector']={**cached['skin_detector'],'bank_path':note_skin}
-                cached = augment_holds(cached, final)
-                prepared=prepare_report(cached,final/'report.html',final)
-                write_report(prepared,final/'report.html',final)
-                if coordinates is not None or {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
-                    updated = final / 'analysis.refresh-build.json'
-                    updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
-                    updated.replace(previous)
-                print('Reusing saved note trajectories and compatible word/long-note evidence; no OCR.')
-                from piu_timeline.charts.data import auto_register
-                auto_register(cached, final)
-                refresh_registration(cached, final)
-                print(final / 'report.html')
-                return final / 'report.html'
+                return refresh_saved_play(cached, final, coordinates=coordinates,
+                                          judgments_current=judgments_current, note_skin=note_skin,
+                                          display_delay_ms=options.get('display_delay_ms',0))
         if not force and not can_refit and document.get('media'):
             saved=find_saved_observations(root,final,document,segments[segment_number-1],expected_start,expected_end,options)
             if saved:
@@ -384,42 +431,8 @@ def run(source, segment_number=1, force=False, **options):
             result = refit_saved(cached, donor, pending, segments[segment_number-1], options.get('display_delay_ms',0), note_skin=note_skin)
         else:
             result = analyze_play(document, segments[segment_number-1], pending, **options)
-        result['segment_number']=segment_number
-        result=interpret_objects(result,pending,options.get('display_delay_ms',0))
-        from piu_timeline.play.head_registration import apply as register_heads
-        result=register_heads(result,pending,options.get('display_delay_ms',0))
-        from piu_timeline.play.stages import save_coordinates
-        result=save_coordinates(result,pending)
-        result=apply_beats(result,pending)
-        result=reassociate_beats(result,options.get('display_delay_ms',0))
-        result = augment_judgments(result,pending)
-        from piu_timeline.play.holds.analysis import augment_holds
-        result = augment_holds(result,pending)
-        stat = Path(document['media']['path']).stat()
-        if (stat.st_size,stat.st_mtime_ns) != (result['media']['size_bytes'],result['media']['mtime_ns']):
-            raise ValueError('Source changed during play analysis')
-        result['segment_number'] = segment_number
-        (pending / 'analysis.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
-        from piu_timeline.play.presentation import prepare_report,refresh_registration
-        from piu_timeline.play.report import write_report
-        prepared=prepare_report(result,pending/'report.html',final)
-        write_report(prepared,pending/'report.html',final)
-        from piu_timeline.storage import relocate_evidence
-        relocate_evidence(pending, final)
-        backup = root / f'segment-{segment_number:03}.previous-{uuid.uuid4().hex[:8]}'
-        if final.exists():
-            final.rename(backup)
-        try:
-            pending.rename(final)
-        except OSError:
-            if backup.exists() and not final.exists():
-                backup.rename(final)
-            raise
-        from piu_timeline.charts.data import auto_register
-        auto_register(result, final)
-        refresh_registration(result, final)
-        print(final / 'report.html')
-        return final / 'report.html'
+        return finish_play(result, pending, final, segment_number,
+                           options.get('display_delay_ms',0), document['media'])
 
 
 def run_all(source, **options):

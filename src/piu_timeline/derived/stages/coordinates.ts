@@ -1,9 +1,9 @@
 /** Acquisition/read-model adapter. No combo, judgment or association belongs to coordinates. */
-import {artifact,requireArtifact,coordinateFields,beatFields,type CoordinateSource,type CoordinateResult,type TrackObservations} from './contracts.ts';
+import {artifact,boundArtifact,requireArtifact,requireInput,coordinateFields,beatFields,type CoordinateSource,type CoordinateResult,type TrackObservations} from './contracts.ts';
 import type {RecordData} from '../types.ts';
 const pick=(v:RecordData,keys:readonly string[])=>Object.fromEntries(keys.filter(k=>Object.hasOwn(v,k)).map(k=>[k,v[k]]));
 
-export function capture(source:RecordData):CoordinateSource{
+export function capture(source:RecordData,artifactRoot?:string):CoordinateSource{
  if(!Array.isArray(source.notes))throw new Error('Coordinate source requires observed notes');
  const owned=new Set<string>([...coordinateFields,...beatFields,'lane','detected_points']);
  const observations:TrackObservations={geometry:pick(source,['analysis_width','analysis_height','layout','start_seconds','end_seconds']),
@@ -11,11 +11,13 @@ export function capture(source:RecordData):CoordinateSource{
    attributes:Object.fromEntries(Object.entries(n).filter(([k])=>!owned.has(k)))}))};
  const coordinates:CoordinateResult={...pick(source,['scroll_motion','head_registration','timing_reconstruction']),
   notes:source.notes.map((n,note)=>({note,values:pick(n,coordinateFields)}))};
- return {observations:artifact('track-observations',observations),coordinates:artifact('coordinates',coordinates)};
+ const observed=artifact('track-observations',observations);
+ return {observations:observed,coordinates:boundArtifact('coordinates',observed,coordinates,artifactRoot)};
 }
 
 export function materialize(source:CoordinateSource):RecordData{
  requireArtifact(source.observations,'track-observations');requireArtifact(source.coordinates,'coordinates');
+ requireInput(source.coordinates,source.observations);
  if(Object.keys(source.coordinates.data).some(k=>!['notes','scroll_motion','head_registration','timing_reconstruction'].includes(k))||
   Object.keys(source.observations.data).some(k=>!['notes','geometry'].includes(k)))throw new Error('Foreign coordinate stage fields');
  const observed=source.observations.data.notes,fit=source.coordinates.data.notes;

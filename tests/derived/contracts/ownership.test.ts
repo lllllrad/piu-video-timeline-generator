@@ -2,7 +2,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {capture,materialize as coordinateView} from '../../../src/piu_timeline/derived/stages/coordinates.ts';
 import {resolve as nativeTiming} from '../../../src/piu_timeline/derived/stages/native_timing.ts';
-import {artifact} from '../../../src/piu_timeline/derived/stages/contracts.ts';
+import {artifact,boundArtifact} from '../../../src/piu_timeline/derived/stages/contracts.ts';
 import {changes,apply} from '../../../src/piu_timeline/derived/stages/notes.ts';
 import {input,reconstruct,materialize as beatView} from '../../../src/piu_timeline/derived/beats/stage.ts';
 import {counters,judgmentInput,judgments} from '../../../src/piu_timeline/derived/stages/associations.ts';
@@ -17,14 +17,14 @@ test('coordinate result contains no HUD associations and owns no raw detection e
  assert.deepEqual(Object.keys(source.coordinates.data).sort(),['head_registration','notes','scroll_motion']);assert.ok(!Object.hasOwn(source.observations.data,'matches'));
  assert.ok(Object.isFrozen(source.observations.data.notes[0].detection_points));assert.throws(()=>{(source.observations.data.notes[0] as {lane:number}).lane=9;},TypeError);
  const view=coordinateView(source);view.notes[0].points[0][1]++;assert.deepEqual(data,before);assert.notDeepEqual(view.notes[0].points,source.coordinates.data.notes[0].values.points);
- assert.throws(()=>coordinateView({...source,coordinates:artifact('coordinates',{...source.coordinates.data,matches:[]})}),/Foreign/);
+ assert.throws(()=>coordinateView({...source,coordinates:boundArtifact('coordinates',source.observations,{...source.coordinates.data,matches:[]})}),/Foreign/);
  assert.throws(()=>coordinateView({...source,coordinates:artifact('beats',source.coordinates.data) as never}),/Expected coordinates/);
 });
 test('native and beat artifacts are separate owned patches with explicit composition',()=>{
  const source=capture(domain()),native=nativeTiming(source),request=input(source,native,{status:'available',song_start_seconds:1,alignment_uncertainty_seconds:0},':Format=1\n:Mode=Single\n:BPM=120\n:Beat=4\n:Split=4\n'+'.....\n'.repeat(32)),before=structuredClone(request),r=reconstruct(request);
  assert.equal(native.stage,'native-timing');assert.equal(r.stage,'beats');assert.ok(!Object.hasOwn(r.data,'layout'));assert.ok(!Object.hasOwn(r.data,'matches'));assert.ok(r.data.notes.every(n=>!Object.hasOwn(n.values,'points')&&!Object.hasOwn(n.values,'lane')));
  const view=beatView(request,r);assert.equal(view.notes[4].target_seconds,1.5);assert.deepEqual(request,before);
- assert.throws(()=>beatView(request,artifact('beats',{...r.data,notes:[{note:0,values:{points:[]},removed:[]}]})),/foreign/);
+ assert.throws(()=>beatView(request,boundArtifact('beats',request,{...r.data,notes:[{note:0,values:{points:[]},removed:[]}]})),/foreign/);
  assert.throws(()=>beatView(request,artifact('coordinates',r.data)as never),/Expected beats/);
 });
 test('generic ownership guard rejects changes of coordinates, lane, IDs and foreign deletions',()=>{
@@ -49,7 +49,7 @@ test('inspection scopes keep metadata out of inference and preserve channels',()
 });
 test('inspection rejects missing, duplicate, reordered and foreign stage results',()=>{
  const request=inspection(),r=prepare(request),stages=r.data.stages;
- for(const wrong of [stages.slice(1),[...stages,stages[0]],[stages[1],stages[0],...stages.slice(2)]])assert.throws(()=>materialize(request,artifact('inspection',{stages:wrong})),/Incomplete|order/);
+ for(const wrong of [stages.slice(1),[...stages,stages[0]],[stages[1],stages[0],...stages.slice(2)]])assert.throws(()=>materialize(request,boundArtifact('inspection',request,{stages:wrong})),/Incomplete|order/);
  assert.throws(()=>result('timing-ranges',{notes:[]},{notes:[],layout:{}}),/Unowned/);
  assert.throws(()=>result('hold-view',{notes:[{lane:0,points:[[1,2]]}]},{notes:[{lane:1,points:[[1,2]]}]}),/unowned/);
  const p=preview(request);assert.deepEqual(p.data.stages.map(s=>s.stage),['hold-view','motion-effects']);assert.ok(materialize(request,p).notes);

@@ -33,6 +33,20 @@ restricted to owned fields. Changing an observation ID, lane, trajectory or
 another stage's fields fails explicitly. Composition constructs fresh read models
 without modifying producer artifacts.
 
+Bound results contain an `input_fingerprint` in addition to their stage and data.
+Coordinate results bind their observation artifact; physical timing results bind
+the narrow pair of observation and coordinate artifacts. Beat results bind the
+complete beat request, including reference timing and preparation. Inspection and
+interpretation results bind the complete prepared presentation request. Composition
+checks these bindings and rejects results from another input, even when note IDs
+and counts match. These input bindings complement stored output hashes and producer
+identities; they do not replace them.
+
+An optional explicit `artifact_root`, ending in `/`, identifies the segment
+directory. `derived/fingerprint.ts` replaces that exact string prefix with
+`@segment/` while hashing, so pending-directory promotion preserves input identity.
+Other paths and input values remain part of the fingerprint.
+
 `native-timing.json` records physical interval validation before musical fitting.
 `beat-input.json` has schema 1 with `observations`, `coordinates`, `native_timing`,
 `reference`, `timing_text` and optional `preparation`. The reference contains the
@@ -131,6 +145,10 @@ The same command supports `native-gaps`, `coordinates`, `clocks`, `speed` and `u
   `beat-input.json` supplies these fields too; musical reference fields are unused.
   Output is a `native-timing` artifact before musical-row fitting.
 * `coordinates`: `tracks`, `timeline`, `height`, `spacing`, `receptor`, `bottom`.
+  This invokes the registered-track solver and returns its numerical result;
+  it does not construct the source-bound `coordinates.json` snapshot or its
+  observation/coordinate artifacts. That boundary belongs to
+  `stages/coordinates.ts` and the Python `play/stages.py` persistence adapter.
 * `clocks`: `state` (samples, geometry and registration evidence), `tracks`,
   `receptor`, `layout`.
 * `speed`: a saved analysis document with registered `scroll_motion`.
@@ -156,6 +174,9 @@ not enter numerical inference. `observations` contains prepared frame records,
 named HUD occluders and verified image-risk proofs. Native preparation retains its
 own source-bound caches. Configured-motion measurements also carry the exact
 interpreted geometry and source identity used by their native producer.
+The association scope is tagged `inspection-associations`; it contains the
+inspection's collected association inputs and is distinct from the narrower
+`judgment-associations` calculation result.
 
 `presentation.prepare` returns an ordered `inspection` artifact, saved as
 `inspection-result.json`. Each consumer owns a whitelist of fields. Hold
@@ -166,19 +187,24 @@ objects. Other consumers cannot rewrite trajectories or add chart objects.
 | --- | --- | --- |
 | `hold-view` | Tracks, native holds, channels and prepared risk proofs | Hold-aware chart objects and judgment associations |
 | `motion-effects` | Concrete chart effects | Pause and relative-speed models |
+| `configured-processing` (optional) | Already prepared native processing measurements bound to interpreted geometry and motion | Measured processing channel supplied before effect interpretation |
 | `effect-view` | Interpreted rows, lane/processing evidence and chart effects | Effect-specific associations and visibility interpretation |
 | `policy-view` | Interpreted chart and scoped policies | Eligible input associations |
 | `timing-ranges` | Targets, input observations and compact counter frames | Target/input ranges and explicit unknowns |
 | `visibility` | Native positions, models, HUD geometry and processing states | Explained occlusions, detection gaps and motion warnings |
 | `diagnostics` | Original/projected notes, ranges and continuity results | Excluded-track and unresolved-evidence warnings |
 
-Each consumer caches its owned output under `derived-stages/`, keyed by consumed
+The seven calculation consumers cache owned outputs under `derived-stages/`, keyed by consumed
 inputs and implementation dependencies. The manifest records input/output hashes
 and which results were reused. Unrelated metadata, such as a title, does not
 invalidate inference. Shared contract or pipeline-composition changes can affect
 several consumers. Corrupt outputs fail explicitly. Segment-local references use
 `@segment/` inside hashed artifacts so directory promotion preserves their identity.
 Maintenance checks include producer identities and retained source-file signatures.
+The optional `configured-processing` stage occupies the position shown in the
+table but reuses its native measurement cache instead of running a `Store`
+consumer. Inspection preparation validates those measurements against the
+interpreted geometry and source inputs; it cannot request new pixels.
 
 Replay the prepared calculation without Python, image libraries, audio, network or
 source video:

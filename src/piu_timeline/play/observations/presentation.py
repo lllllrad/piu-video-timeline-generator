@@ -37,7 +37,7 @@ def prepare(data, directory):
               'frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'combo', 'combo_confidence') if k in f} for f in frames],
               'visibility_frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'notes') if k in f}
                                     for f in filter_frames(source, frames)]}
-    request=call('presentation.input',source,native)
+    request=call('presentation.input',source,native,str(directory.resolve())+'/')
     # This measurement depends on interpreted geometry and concrete motion, but
     # remains a native pixel operation rather than a report-side callback.
     interpretation=call('presentation.preview',request,str(directory))
@@ -56,4 +56,4 @@ def prepare(data, directory):
                 note['id'] = 'processing:'+str(note['note'])
             return result
         native['configured_processing'] = {'input': inputs, 'output': cached(directory, 'configured-processing', contract, measure)}
-    return call('presentation.input',source,native)
+    return call('presentation.input',source,native,str(directory.resolve())+'/')

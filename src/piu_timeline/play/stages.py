@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-FORMAT={'schema':2,'producer':'observations_and_owned_coordinate_results'}
+FORMAT={'schema':2,'producer':'bound_observations_and_owned_coordinate_results'}
 IDENTITY=('media','game_roi','start_seconds','end_seconds','player','participant_slots',
           'analysis_width','analysis_height','layout','native_frame_format','timing_format')
 
@@ -26,7 +26,7 @@ def paths(value,before,after):
 
 def save_coordinates(data,directory):
     from piu_timeline.derived import call
-    source=call('stageCoordinates.capture',data)
+    source=call('stageCoordinates.capture',data,str(directory.resolve())+'/')
     payload={'format':FORMAT,'identity':identity(data),'output':source}
     payload=paths(payload,str(directory.resolve())+'/', '@segment/')
     digest=fingerprint(payload)
