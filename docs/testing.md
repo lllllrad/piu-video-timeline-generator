@@ -18,7 +18,7 @@ and the pre-commit hook.
 The same gate checks TypeScript, bundled formats and the browser report scripts,
 and runs direct TypeScript tests under `tests/derived/` with QG's native
 `node-test` integration. Run `pnpm test` for the complete gate, or
-`pnpm exec node --test tests/derived/*.test.ts` for the derived suite alone.
+`pnpm exec node --test 'tests/**/*.test.ts'` for the derived suite alone.
 Python tests at the acquisition boundary call the TypeScript
 implementation through the retained-data transport; they do not exercise a
 separate Python fit or row-transcription implementation.
@@ -92,3 +92,13 @@ Native integration tests forbid decoding or image remeasurement when only HUD
 associations change. Missing acquisition must fail before a measurement consumer
 can open the video. Bulk skin/detection details are excluded from counter and
 visibility consumer records.
+
+Pure coordinate, clock, beat-domain, chord, reference-recovery, input-range and
+speed, input-candidate, row/aggregate-recovery and recovered-grade regressions
+run directly in TypeScript under `tests/derived/beats/` and
+`tests/derived/consumers/`. Python tests exercise native image/audio acquisition,
+Python object adapters, JSONL/file handling and workflow/cache integration. New
+calculation regressions belong beside their TypeScript implementation; testing
+the Python transport alone does not justify keeping them in Python. Ownership
+tests reject foreign fields, observation edits, invalid identities and incomplete
+or reordered results, alongside immutable-input checks.

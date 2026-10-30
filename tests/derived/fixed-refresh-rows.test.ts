@@ -4,7 +4,7 @@ import type {RecordData} from '../../src/piu_timeline/derived/types.ts';
 import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {prepare,type PresentationInput} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
+import {inspectionView as prepare,type InspectionFixture as PresentationInput} from './fixtures.ts';
 import {contracts} from '../../src/piu_timeline/derived/contracts.ts';
 import {nativeScene} from './fixtures.ts';
 import {recoverRows} from '../../src/piu_timeline/derived/recovery.ts';

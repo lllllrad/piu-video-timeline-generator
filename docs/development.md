@@ -72,7 +72,11 @@ word pixels and animation refreshes, while `play/judgments.py` owns their
 acquisition/cache orchestration and note association. The evidence inspector shell and SVG renderer live in `play/report.html`,
 `play/report.css` and `play/report.js`; `play/inspector/` owns tab navigation,
 provenance, channel overlays and workspace styling. `play/report.py` renders
-prepared data into each standalone HTML result.
+prepared data into each standalone HTML result. `play/presentation.py` persists
+the inspection result and composed view; callers then invoke the renderer
+explicitly. `derived/stages/` declares observation, coordinate, physical timing and
+association contracts. `derived/pipeline/composition.ts` assembles inspection
+views. See [derived analysis](derived-analysis.md) for wire schemas.
 These resources are included in built Python wheels.
 
 `play/channels.py` exposes the four retained visual evidence channels and match

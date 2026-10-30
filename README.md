@@ -77,7 +77,10 @@ One original recording stays beside six tabs: notes and judgment, channel observ
 derivation, UCS transcription, warnings, and data/setup. Selecting a note or warning
 shares its identity and recording position across tabs. Channel overlays map saved
 head/body positions and documented popup/receptor regions onto the source video.
-Frame navigation retains both recording time and source PTS.
+Frame navigation retains both recording time and source PTS. Named stage artifacts
+keep observed tracks, coordinates, physical timing, musical decisions and input
+associations separate. The inspector uses an explicitly composed view; HTML
+rendering does not run inference. See [stage contracts](docs/derived-analysis.md).
 
 The synchronized SVG chart keeps fixed-size colored notes while spacing changes.
 Lime ranges show reconstructed targets; magenta ranges show display-based input

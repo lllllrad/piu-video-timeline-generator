@@ -14,7 +14,11 @@ import * as validation from './beats/validation.ts';
 import * as ucs from './charts/ucs.ts';
 import * as transcription from './charts/transcription.ts';
 import {fitGrid} from './beats/grid.ts';
-import {reconstruct} from './beats/stage.ts';
+import * as beats from './beats/stage.ts';
+import * as stageAssociations from './stages/associations.ts';
+import * as nativeTiming from './stages/native_timing.ts';
+import * as stageCoordinates from './stages/coordinates.ts';
+
 import * as registration from './registration.ts';
 import * as clocks from './clocks.ts';
 import * as tracks from './tracks.ts';
@@ -52,7 +56,7 @@ const operations = {
   coordinateMeasurements, skinAnchors, skinCenters, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription,
   registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, localized,
   holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
-  holdState, holdExtent, holdGeometry, holdRisk, beats: {fitGrid, reconstruct},
+  holdState, holdExtent, holdGeometry, holdRisk, stageCoordinates, nativeTiming, stageAssociations, beats: {...beats,fitGrid},
 };
 const chunk = Buffer.alloc(65536);
 const decoder = new StringDecoder('utf8');

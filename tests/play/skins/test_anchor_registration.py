@@ -45,7 +45,7 @@ def register(root,rgb,name='registered'):
 
 
 def chord_trace(path):
-    from tests.play.beats.test_chords import fixture as chord_fixture
+    from tests.play.skins.coordinate_fixtures import chord_fixture
     bank=load_bank(path);data=chord_fixture();data['analysis_width']=200
     data['layout']['lanes']=[{'x':.05+i*.1}for i in range(10)]
     data['notes']=data['notes'][:2];data.pop('head_registration')

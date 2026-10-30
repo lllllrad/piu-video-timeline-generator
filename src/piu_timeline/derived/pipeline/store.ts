@@ -24,7 +24,7 @@ export function implementation(module: URL): string {
     modules.push([url.pathname.split('/derived/').at(-1), source]);
     for (const match of source.matchAll(/(?:from\s*|import\s*)['"](\.[^'"]+\.(?:ts|json))['"]/g)) visit(new URL(match[1], url));
     // contracts.ts reads this runtime resource rather than importing it.
-    if (url.pathname.endsWith('/contracts.ts')) visit(new URL('./contracts.json', url));
+    if (url.href === new URL('../contracts.ts', import.meta.url).href) visit(new URL('./contracts.json', url));
   };
   visit(module);
   return fingerprint(modules.sort(([a], [b]) => a.localeCompare(b)));

@@ -13,21 +13,15 @@ import {resolve, isAbsolute} from 'node:path';
 import {existsSync, readFileSync, statSync} from 'node:fs';
 import {parseData} from '../json.ts';
 
-export interface PresentationInput {
-  schema: 1;
-  data: RecordData;
-  observations: {
-    frames: RecordData[];
-    visibility_frames: RecordData[];
-    occluders: RecordData[];
-    native_body_risk_available: boolean;
-    pre_hold_proofs: Record<string, RecordData>;
-    configured_processing?: {input: RecordData; output: RecordData};
-    source_artifacts?: Record<string, [number, number | bigint] | null>;
-  };
-}
+import {artifact,type Evidence} from '../stages/contracts.ts';
+import {calculationView,type InspectionArtifact,type InterpretationArtifact,type PresentationInput,type ViewArtifact,type ViewStage} from './contracts.ts';
+import {result,applyResult,materialize} from './composition.ts';
+export {input} from './contracts.ts';
+export {materialize} from './composition.ts';
+export type {PresentationInput} from './contracts.ts';
 const composition = readFileSync(new URL('./presentation.ts', import.meta.url), 'utf8');
-const producer = (module: string) => fingerprint({composition, inputs: implementation(new URL('./inputs.ts', import.meta.url)),
+const producer = (module: string) => fingerprint({composition, contracts: implementation(new URL('./contracts.ts', import.meta.url)),
+  compositionRules: implementation(new URL('./composition.ts', import.meta.url)), inputs: implementation(new URL('./inputs.ts', import.meta.url)),
   algorithm: implementation(new URL(`../${module}.ts`, import.meta.url))});
 const modules = {'hold-view': 'hold_presentation', 'motion-effects': 'scroll', 'effect-view': 'effects', 'policy-view': 'evidence',
   'timing-ranges': 'ranges', visibility: 'visibility', diagnostics: 'diagnostics'};
@@ -56,7 +50,7 @@ export function current(directory: string): boolean {
   return true;
 }
 function validate(input: PresentationInput): void {
-  if (input.schema !== 1 || !input.data || !input.observations || !Array.isArray(input.observations.frames) || !Array.isArray(input.observations.visibility_frames) || !Array.isArray(input.observations.occluders) ||
+  if (input.schema !== 2 || !input.source || !input.observations || !Array.isArray(input.observations.frames) || !Array.isArray(input.observations.visibility_frames) || !Array.isArray(input.observations.occluders) ||
     typeof input.observations.native_body_risk_available !== 'boolean' || !input.observations.pre_hold_proofs) throw new Error('Invalid prepared presentation input');
   let last = -Infinity;
   for (const frame of input.observations.frames) {
@@ -69,59 +63,54 @@ function validate(input: PresentationInput): void {
     throw new Error('Presentation channels have different source timelines');
   }
 }
-export const preview = (input: PresentationInput, directory?: string): RecordData => interpreted(input, new Store(directory));
-export function interpreted(input: PresentationInput, store = new Store()): RecordData {
+export function preview(input:PresentationInput,directory?:string):InterpretationArtifact{
+ const stages:ViewArtifact[]=[];interpreted(input,new Store(directory),stages);return artifact('interpretation',{stages});
+}
+function interpreted(input: PresentationInput, store:Store, stages:ViewArtifact[]): RecordData {
   validate(input);
-  const source = inputs.interpretation(input.data, input.observations.native_body_risk_available);
+  const base=calculationView(input.source);
+  const source = inputs.interpretation(base, input.observations.native_body_risk_available);
   const request = {source, proofs: input.observations.pre_hold_proofs};
   const patch = store.run('hold-view', producer('hold_presentation'), request, () => {
     const copy = structuredClone(request);
-    return inputs.pick(present(copy.source, copy.proofs), inputs.viewFields);
+    return result('hold-view',base,inputs.pick(present(copy.source, copy.proofs), inputs.viewFields));
   });
-  const data = {...input.data, ...patch}, policy = {chart_policy: data.chart_policy ?? {}};
-  const motion = store.run('motion-effects', producer('scroll'), policy, () => ({scroll_pause_model: models(policy, 'pause'), scroll_speed_model: models(policy, 'speed')}));
-  return {...data, ...motion};
+  stages.push(patch);
+  const data = applyResult(base,patch), policy = {chart_policy: data.chart_policy ?? {}};
+  const motion = store.run('motion-effects', producer('scroll'), policy, () => result('motion-effects',data,{scroll_pause_model: models(policy, 'pause'), scroll_speed_model: models(policy, 'speed')}));
+  stages.push(motion);return applyResult(data,motion);
 }
 
-export function prepare(input: PresentationInput, directory?: string): RecordData {
+export function prepare(input: PresentationInput, directory?: string):InspectionArtifact {
   const store = new Store(directory);
-  let data = interpreted(input, store);
+  const stages:ViewArtifact[]=[];
+  let data = interpreted(input,store,stages);
   const measured = input.observations.configured_processing;
   if (measured) {
-    if (fingerprint(measured.input) !== fingerprint(inputs.processing(data))) throw new Error('Configured processing evidence belongs to different interpretation inputs');
-    data = {...data, visual_channels: {...data.visual_channels, processing: {...data.visual_channels?.processing, ...measured.output}}};
+    if (fingerprint(measured.input) !== fingerprint(inputs.processing({...data,...inputs.pick(input.source.metadata,['media','game_roi'])}))) throw new Error('Configured processing evidence belongs to different interpretation inputs');
+    const configured=result('configured-processing',data,{visual_channels:{processing:measured.output}});
+    stages.push(configured);data=applyResult(data,configured);
   }
   const effectInput = {...inputs.evidence(data), object_interpretation: data.object_interpretation,
     visual_channels: {...inputs.evidence(data).visual_channels, ...(data.visual_channels?.processing ? {processing: inputs.processingChannel(data)} : {})}};
-  const effectPatch = store.run('effect-view', producer('effects'), effectInput, () => inputs.pick(effects(structuredClone(effectInput)),
-    ['combo_events', 'matches', 'coverage', 'conflicted_matches', 'association_view_format', 'object_interpretation', 'chart_policy', 'visual_channels']));
-  if (!Object.hasOwn(data, 'visual_channels')) delete effectPatch.visual_channels;
-  else if (effectPatch.visual_channels) effectPatch.visual_channels = {...data.visual_channels, ...Object.fromEntries(Object.entries(effectPatch.visual_channels)
-    .filter(([, v]) => v !== undefined).map(([k, v]) => [k, {...data.visual_channels?.[k], ...v as RecordData}]))};
-  if (effectPatch.visual_channels?.processing && data.visual_channels?.processing) {
-    const original = new Map<number, RecordData>((data.visual_channels.processing.notes ?? []).map(n => [n.note, n]));
-    effectPatch.visual_channels.processing.notes = effectPatch.visual_channels.processing.notes.map(n => {
-      const {sample_count, ...patch} = n;
-      return {...original.get(n.note), ...patch};
-    });
-  }
-  data = {...data, ...effectPatch};
+  const effectPatch = store.run('effect-view', producer('effects'), effectInput, () => result('effect-view',data,inputs.pick(effects(structuredClone(effectInput)),
+    ['combo_events', 'matches', 'coverage', 'conflicted_matches', 'association_view_format', 'object_interpretation', 'chart_policy', 'visual_channels'])));
+  stages.push(effectPatch);data=applyResult(data,effectPatch);
   const policyInput = inputs.evidence(data);
-  const projected = store.run('policy-view', producer('evidence'), policyInput, () => policyProjection(structuredClone(policyInput)));
-  if (projected.hold_analysis) projected.hold_analysis = {...data.hold_analysis, ...projected.hold_analysis};
-  data = {...data, ...projected};
+  const projected = store.run('policy-view', producer('evidence'), policyInput, () => result('policy-view',data,inputs.pick(policyProjection(structuredClone(policyInput)),['matches','miss_candidates','hold_analysis','coverage'])));
+  stages.push(projected);data=applyResult(data,projected);
   const rangeInput = {data: inputs.evidence(data), frames: input.observations.frames.map(f => inputs.pick(f, ['playback_seconds', 'source_pts_seconds', 'combo', 'combo_confidence']))};
   const ranges = store.run('timing-ranges', producer('ranges'), rangeInput, () => {
     const initial = timingRanges(rangeInput.data);
-    return initial.counts.unknown && rangeInput.frames.length ? timingRanges({...rangeInput.data, counter_frame_events: counterFrameRanges(rangeInput.frames)}) : initial;
+    return result('timing-ranges',data,{timing_ranges:initial.counts.unknown && rangeInput.frames.length ? timingRanges({...rangeInput.data, counter_frame_events: counterFrameRanges(rangeInput.frames)}) : initial});
   });
   const visibilityInput = {data: inputs.visibility(data), frames: input.observations.visibility_frames, occluders: input.observations.occluders};
-  const visible = store.run('visibility', producer('visibility'), visibilityInput, () => continuity(visibilityInput.data, visibilityInput.frames, visibilityInput.occluders));
-  data = {...data, timing_ranges: ranges, visibility_diagnostics: visible};
-  const diagnosticInput = {native: {notes: input.data.notes ?? []}, projected: inputs.pick(data, ['notes', 'hold_analysis', 'chart_policy']),
-    data: inputs.recognition(data), ranges};
-  const diagnostics = store.run('diagnostics', producer('diagnostics'), diagnosticInput, () => ({
-    exclusion_diagnostics: exclusions(diagnosticInput.native, diagnosticInput.projected), recognition_diagnostics: recognition(diagnosticInput.data, ranges)}));
+  const visible = store.run('visibility', producer('visibility'), visibilityInput, () => result('visibility',data,{visibility_diagnostics:continuity(visibilityInput.data, [...visibilityInput.frames], [...visibilityInput.occluders])}));
+  stages.push(ranges,visible);data=applyResult(applyResult(data,ranges),visible);
+  const diagnosticInput = {native: {notes: calculationView(input.source).notes ?? []}, projected: inputs.pick(data, ['notes', 'hold_analysis', 'chart_policy']),
+    data: inputs.recognition(data), ranges:data.timing_ranges};
+  const diagnostics = store.run('diagnostics', producer('diagnostics'), diagnosticInput, () => result('diagnostics',data,{
+    exclusion_diagnostics: exclusions(diagnosticInput.native, diagnosticInput.projected), recognition_diagnostics: recognition(diagnosticInput.data, diagnosticInput.ranges)}));
   if (directory) atomicJSON(resolve(directory, 'derived-stages/manifest.json'), {schema: 1, source_artifacts: input.observations.source_artifacts ?? {}, stages: store.records});
-  return {...data, ...diagnostics};
+  stages.push(diagnostics);return artifact('inspection',{stages});
 }

@@ -2,9 +2,7 @@
 from hashlib import sha256
 import json
 
-FORMAT={'schema':1,'producer':'registered_coordinates_before_musical_timing'}
-FIELDS=('notes','scroll_motion','head_registration','timing_reconstruction','combo_events',
-        'matches','deferred_matches','unsupported_intervals','coverage','excluded_notes','timing_format')
+FORMAT={'schema':2,'producer':'observations_and_owned_coordinate_results'}
 IDENTITY=('media','game_roi','start_seconds','end_seconds','player','participant_slots',
           'analysis_width','analysis_height','layout','native_frame_format','timing_format')
 
@@ -27,7 +25,9 @@ def paths(value,before,after):
 
 
 def save_coordinates(data,directory):
-    payload={'format':FORMAT,'identity':identity(data),'output':{key:data[key]for key in FIELDS if key in data}}
+    from piu_timeline.derived import call
+    source=call('stageCoordinates.capture',data)
+    payload={'format':FORMAT,'identity':identity(data),'output':source}
     payload=paths(payload,str(directory.resolve())+'/', '@segment/')
     digest=fingerprint(payload)
     destination=directory/'coordinates.json'
@@ -49,4 +49,6 @@ def load_coordinates(data,directory):
     restored=paths(payload,'@segment/',str(directory.resolve())+'/')
     if restored.get('format')!=FORMAT or restored.get('identity')!=identity(data):return None
     result={k:v for k,v in data.items()if k not in ('conflicted_matches','association_view_format')}
-    return {**result,**restored['output']}
+    from piu_timeline.derived import call
+    coordinates=call('stageCoordinates.materialize',restored['output'])
+    return {**result,**coordinates,'_coordinate_source':restored['output']}

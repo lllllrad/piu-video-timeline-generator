@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {contracts} from '../../src/piu_timeline/derived/contracts.ts';
 import {accountCapCoverage} from '../../src/piu_timeline/derived/hold_coverage.ts';
-import {prepare,type PresentationInput} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
+import {inspectionView as prepare,type InspectionFixture as PresentationInput} from './fixtures.ts';
 import {nativeScene} from './fixtures.ts';
 import type {RecordData} from '../../src/piu_timeline/derived/types.ts';
 

@@ -20,19 +20,35 @@ the production beat stage supplies its spatial validator directly in TypeScript.
 
 ## Reusable boundaries
 
-`coordinates.json` is the registered pre-beat producer output. Its fingerprint
-binds data to source identity, geometry, detector and upstream timing contracts.
-It preserves original measured positions and source PTS, alongside derived clocks.
-Its output can be reused when musical reconstruction changes. A corrupted snapshot
-fails explicitly. A legacy result without this snapshot needs an upstream refit.
+`coordinates.json` stores a schema-2 source-bound snapshot containing two schema-1
+artifacts: `track-observations` (original detection trajectories and geometry) and
+`coordinates` (registered trajectories, clocks and physical timing attempts).
+It excludes popup events, matches and coverage. Its fingerprint binds it to source
+identity, geometry, detector and upstream timing contracts.
 
-`beat-input.json` has schema 1 and contains `data`, `reference`, `timing_text` and
-optional `preparation`. The reference includes the verified song origin and its
-uncertainty, or an explicit unavailable state and reason. TypeScript does not
-fetch timing files or prepare audio alignment. Its output is a patch containing
-`beat_timing` and, when reconstruction ran, `notes` and `timing_reconstruction`.
-It does not echo source media identity. In particular, nanosecond file timestamps
-must not make a floating-point round trip through numerical calculations.
+`derived/stages/contracts.ts` declares these immutable artifacts and owned fields.
+The acquisition adapter in `stages/coordinates.ts` constructs them. Numerical
+kernels use private mutable work arrays; public results contain indexed updates
+restricted to owned fields. Changing an observation ID, lane, trajectory or
+another stage's fields fails explicitly. Composition constructs fresh read models
+without modifying producer artifacts.
+
+`native-timing.json` records physical interval validation before musical fitting.
+`beat-input.json` has schema 1 with `observations`, `coordinates`, `native_timing`,
+`reference`, `timing_text` and optional `preparation`. The reference contains the
+verified song origin and uncertainty or an explicit unavailable reason. The stage
+does not fetch timing files or prepare audio alignment. `beat-result.json` is a
+`beats` artifact: owned timing updates, musical diagnostics and independent native
+recovery diagnostics. It contains no acquisition identity or input associations.
+`beats.materialize` explicitly combines results for downstream readers.
+Nanosecond file timestamps remain outside numerical calculations.
+
+Counter association accepts only lane, status, target, uncertainty and exclusion
+reason fields alongside counter events and eligibility intervals. Its
+`counter-associations` artifact contains event interpretation, matches, deferred
+matches and coverage. Judgment association returns a separate
+`judgment-associations` artifact, saved as `judgment-associations.json`.
+Neither stage returns coordinate edits. Raw frame/HUD observations remain separate.
 
 When independent neighboring beat rows establish a native coordinate model,
 spacing validation checks each observed head against that model's position and
@@ -111,10 +127,9 @@ just derive beats .local/data/SOURCE/play/segment-001/beat-input.json .local/tmp
 
 The same command supports `native-gaps`, `coordinates`, `clocks`, `speed` and `ucs`:
 
-* `native-gaps`: schema 1 with `data` containing saved notes, registration, shared
-  motion and timing diagnostics. An existing `beat-input.json` is accepted; the
-  reference and timing text are unused. Output is a native-timing patch, before
-  musical-row fitting.
+* `native-gaps`: schema 1 with `observations` and `coordinates` artifacts. A
+  `beat-input.json` supplies these fields too; musical reference fields are unused.
+  Output is a `native-timing` artifact before musical-row fitting.
 * `coordinates`: `tracks`, `timeline`, `height`, `spacing`, `receptor`, `bottom`.
 * `clocks`: `state` (samples, geometry and registration evidence), `tracks`,
   `receptor`, `layout`.
@@ -134,16 +149,18 @@ Only comparisons against measured seconds convert to floating point. Unsupported
 or ambiguous rows retain explicit failures; subdivision does not expand the
 time tolerance or replace missing observations.
 
-`presentation-input.json` contains the analysis document, prepared policy and visual
-support metadata, source-timestamped position/counter records, named HUD occluders
-and verified image-risk proofs. Native proof preparation has its own
-`native-stages/risk-proofs.json` cache bound to the geometry, risk evidence and
-verified reference-bank extent. Concrete-motion processing measurements include
-their exact interpretation input; contradictory measurements fail explicitly.
-Preparing these inputs belongs to `play/observations/presentation.py`. It resolves
-external metadata and native proof dependencies before calling a consumer.
+`presentation-input.json` has schema 2. Its `source` separates tracks, judgment
+associations, hold evidence, chart context and visual channels into named immutable
+artifacts. Passive `metadata` is reattached when composing the read model and does
+not enter numerical inference. `observations` contains prepared frame records,
+named HUD occluders and verified image-risk proofs. Native preparation retains its
+own source-bound caches. Configured-motion measurements also carry the exact
+interpreted geometry and source identity used by their native producer.
 
-TypeScript `derived/pipeline/presentation.ts` executes seven small consumers:
+`presentation.prepare` returns an ordered `inspection` artifact, saved as
+`inspection-result.json`. Each consumer owns a whitelist of fields. Hold
+projection expresses note changes as indexed updates and added derived chart
+objects. Other consumers cannot rewrite trajectories or add chart objects.
 
 | Stage | Inputs | Output |
 | --- | --- | --- |
@@ -167,9 +184,14 @@ Replay the prepared calculation without Python, image libraries, audio, network 
 source video:
 
 ```sh
-just derive presentation .local/data/SOURCE/play/segment-001/presentation-input.json .local/tmp/report-data.json
-just render .local/tmp/report-data.json .local/tmp/report.html
+just derive presentation .local/data/SOURCE/play/segment-001/presentation-input.json .local/tmp/inspection-result.json
 ```
+
+For `inspection-view`, supply a JSON object containing `request` (the prepared
+presentation input) and `result` (the inspection artifact). It composes the
+`report-data.json` read model. Incomplete, duplicate and out-of-order consumer
+results fail explicitly. Normal orchestration saves both artifacts before
+calling the renderer.
 
 The standalone `hold-view`, `effects`, `ranges` and `visibility` stages are also
 available. `hold-view` uses a presentation request; `effects` and `ranges` consume

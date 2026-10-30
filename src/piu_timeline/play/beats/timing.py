@@ -84,15 +84,19 @@ def apply(data,directory):
     preparation=prepare_reference(data,directory)
     ref=reference(data,directory)
     timing=Path(ref['timing']).read_bytes().decode('utf-8')if ref['status']=='available'else None
-    fields=('notes','scroll_motion','head_registration','layout','analysis_width','analysis_height',
-            'timing_reconstruction','start_seconds','end_seconds')
-    inputs={key:data[key]for key in fields if key in data}
-    request={'schema':1,'data':inputs,'reference':ref,'timing_text':timing,'preparation':preparation}
+    source=data.get('_coordinate_source')or call('stageCoordinates.capture',data)
+    native=call('nativeTiming.resolve',source)
+    request=call('beats.input',source,native,ref,timing,preparation)
     output=call('beats.reconstruct',request)
+    composed=call('beats.materialize',request,output)
+    from piu_timeline.play.observations.artifacts import save_input
+    save_input(Path(directory)/'native-timing.json',native)
+    save_input(Path(directory)/'beat-result.json',output)
     pending=Path(directory)/'beat-input.build.json'
     pending.write_text(json.dumps(request,ensure_ascii=False,allow_nan=False)+'\n')
     pending.replace(Path(directory)/'beat-input.json')
-    return {**data,**output}
+    source_data={k:v for k,v in data.items()if k!='_coordinate_source'}
+    return {**source_data,**composed}
 
 
 def reassociate(data, display_delay_ms):

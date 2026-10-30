@@ -33,7 +33,7 @@ from piu_timeline.play.counter_pixels import READER_FORMAT
 from piu_timeline.play.beats.timing import current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':5,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'object_roles':OBJECT_FORMAT,'fragment_identity':FRAGMENT_FORMAT}
+TIMING_FORMAT = {'schema':1,'counter_revision':6,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'object_roles':OBJECT_FORMAT,'fragment_identity':FRAGMENT_FORMAT}
 FRAME_OBSERVATION_VERSION = 4
 
 
@@ -48,25 +48,14 @@ def resolve_timing(tracker, combo, display_delay_ms):
     if len(combo.events) != len(original):
         baseline = associate(notes,[dict(e) for e in original],display_delay=display_delay_ms/1000)
         constraints = refinement_constraints(notes,original,baseline,combo.events)
-    candidates = associate(notes,combo.events,display_delay=display_delay_ms/1000,event_note_constraints=constraints)
-    matches, deferred = [], []
-    for match in candidates:
-        if any(match['combo_upper_seconds'] >= interval['start_seconds'] - .1
-               and match['combo_lower_seconds'] <= interval['end_seconds'] + .1
-               for interval in tracker.unsupported_intervals):
-            combo.events[match['combo_event']].update(status='excluded', reason='possible_hold_or_dense_stack')
-            deferred.append({**match, 'deferred_reason': 'possible_hold_or_dense_stack'})
-        else:
-            matches.append(match)
-    return {'timing_format': TIMING_FORMAT, 'notes': notes, **({'scroll_motion': tracker.motion.evidence()} if hasattr(tracker, 'motion') else {}),
+    from piu_timeline.derived import call
+    request={'schema':1,'notes':[{key:note[key] for key in ('lane','status','target_seconds','prediction_uncertainty_seconds','reason') if key in note} for note in notes],'events':combo.events,'display_delay_seconds':display_delay_ms/1000,
+             'unsupported_intervals':tracker.unsupported_intervals,'constraints':constraints}
+    associations=call('stageAssociations.counters',request)
+    return {'timing_format':TIMING_FORMAT,'notes':notes,
+            **({'scroll_motion':tracker.motion.evidence()}if hasattr(tracker,'motion')else{}),
             'timing_reconstruction':getattr(tracker,'timing_reconstruction',{}),
-            'combo_events': combo.events, 'matches': matches, 'deferred_matches': deferred,
-            'unsupported_intervals': tracker.unsupported_intervals,
-            'coverage': {'visible_note_heads': sum(n['status'] == 'estimated' for n in notes),
-                         'timed_note_heads': len(matches),
-                         'matched_combo_updates': len({m['combo_event'] for m in matches}),
-                         'observed_combo_updates': sum(e['delta'] > 0 for e in combo.events)},
-            'excluded_notes': dict(Counter(n['reason'] for n in notes if n['status'] == 'excluded'))}
+            'unsupported_intervals':tracker.unsupported_intervals,**associations['data']}
 
 
 def refresh_counter_observations(cached, output, replace_font=False):
@@ -357,7 +346,8 @@ def run(source, segment_number=1, force=False, **options):
                     and digit_cache_current(cached,final,LOCAL_DATA)
                     and ((judgments_current := judgment_cache_current(cached,root,final))
                          or judgment_observations_current(cached,root,final))):
-                from piu_timeline.play.presentation import build_report as write_report, refresh_registration
+                from piu_timeline.play.presentation import prepare_report,refresh_registration
+                from piu_timeline.play.report import write_report
                 from piu_timeline.play.holds.analysis import augment_holds
                 refresh_fields=('judgment_cache','hold_analysis','visual_channels','association_view_format',
                                 'matches','conflicted_matches','coverage','skin_detector')
@@ -371,7 +361,8 @@ def run(source, segment_number=1, force=False, **options):
                 if note_skin is not None:
                     cached['skin_detector']={**cached['skin_detector'],'bank_path':note_skin}
                 cached = augment_holds(cached, final)
-                write_report(cached, final / 'report.html', final)
+                prepared=prepare_report(cached,final/'report.html',final)
+                write_report(prepared,final/'report.html',final)
                 if coordinates is not None or {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
                     updated = final / 'analysis.refresh-build.json'
                     updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
@@ -409,8 +400,10 @@ def run(source, segment_number=1, force=False, **options):
             raise ValueError('Source changed during play analysis')
         result['segment_number'] = segment_number
         (pending / 'analysis.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
-        from piu_timeline.play.presentation import build_report as write_report, refresh_registration
-        write_report(result, pending / 'report.html', final)
+        from piu_timeline.play.presentation import prepare_report,refresh_registration
+        from piu_timeline.play.report import write_report
+        prepared=prepare_report(result,pending/'report.html',final)
+        write_report(prepared,pending/'report.html',final)
         from piu_timeline.storage import relocate_evidence
         relocate_evidence(pending, final)
         backup = root / f'segment-{segment_number:03}.previous-{uuid.uuid4().hex[:8]}'

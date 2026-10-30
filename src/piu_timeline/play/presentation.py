@@ -12,7 +12,10 @@ def prepare_report(data,path,final_directory=None):
     pending.write_text(json.dumps(request, ensure_ascii=False, allow_nan=False)+'\n')
     pending.replace(path.with_name('presentation-input.json'))
     source = data
-    data = call('presentation.prepare', request, str(path.parent))
+    result=call('presentation.prepare',request,str(path.parent))
+    from piu_timeline.play.observations.artifacts import save_input
+    save_input(path.with_name('inspection-result.json'),result)
+    data=call('presentation.materialize',request,result)
     from piu_timeline.play.observations.inspector import snapshot
     data['inspector_artifacts'] = snapshot(source, path.parent)
     artifacts = {'visual-support.json': data.get('visual_support'),
@@ -43,17 +46,6 @@ def prepare_report(data,path,final_directory=None):
     pending.write_text(json.dumps(data,ensure_ascii=False)+'\n')
     pending.replace(prepared)
     return data
-
-
-def build_report(data,path,final_directory=None):
-    from piu_timeline.play.report import write_report
-    prepared=prepare_report(data,path,final_directory)
-    result=write_report(prepared,path,final_directory)
-    summary={key:prepared[key]for key in ('coverage','combo_readable_fraction','play_analysis_version')if key in prepared}
-    pending=path.with_name('report-summary.build.json')
-    pending.write_text(json.dumps(summary)+'\n')
-    pending.replace(path.with_name('report-summary.json'))
-    return result
 
 
 def refresh_registration(data, directory):

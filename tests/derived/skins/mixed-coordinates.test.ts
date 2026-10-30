@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {nativeScene, template} from '../fixtures.ts';
 import {contracts} from '../../../src/piu_timeline/derived/contracts.ts';
-import {reconstruct} from '../../../src/piu_timeline/derived/beats/stage.ts';
+import {beatView as reconstruct} from '../fixtures.ts';
 import {prepare} from '../../../src/piu_timeline/derived/beats/coordinates.ts';
 import {spacingFailures} from '../../../src/piu_timeline/derived/beats/spacing.ts';
 import {text} from '../../../src/piu_timeline/derived/charts/ucs.ts';

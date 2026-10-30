@@ -45,8 +45,9 @@ def play(root, source='source', number=1, stale=False):
     from piu_timeline.play.continuity import FORMAT
     (directory/'visibility-diagnostics.json').write_text(json.dumps({'format':FORMAT,'warnings':[]}))
     from piu_timeline.derived import call
-    call('presentation.prepare', {'schema': 1, 'data': data, 'observations': {'frames': [], 'visibility_frames': [],
-         'occluders': [], 'native_body_risk_available': False, 'pre_hold_proofs': {}}}, str(directory))
+    request=call('presentation.input',data,{'frames': [], 'visibility_frames': [],
+         'occluders': [], 'native_body_risk_available': False, 'pre_hold_proofs': {}})
+    call('presentation.prepare',request,str(directory))
     return path, data
 
 

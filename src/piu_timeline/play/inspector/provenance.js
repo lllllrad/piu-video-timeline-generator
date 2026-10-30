@@ -53,6 +53,9 @@ function initializeProvenance(){
     ['processing','Note processing','Native pixel presence / clear absence / unknown around a fitted trajectory. Association consumes this evidence separately.']];
   for(const [key,title,description] of cards){const card=provenanceCard($('channelCards'),title,description,null);text('button','Highlight in video',card).onclick=()=>{$('channelFocus').value=key;updateInspectorFrame(playhead,true)}}
   const artifacts=[['Native observations','visual-channels.json','Four channels on their original timeline'],['Tracked / registered analysis','analysis.json','Trajectory positions, coordinate clocks and beats'],
+    ['Coordinate source','coordinates.json','Original track observations and registered coordinate results'],
+    ['Physical timing','native-timing.json','Physical validation without musical assignment'],['Beat decisions','beat-result.json','Owned musical timing decisions and proofs'],
+    ['Judgment associations','judgment-associations.json','HUD interpretation without coordinate edits'],['Inspection result','inspection-result.json','Ordered owned consumer outputs'],
     ['Target and input ranges','timing-ranges.json','Associations, alternatives and explicit unknowns'],['Long-note state','holds.json','Geometry and sustained recognition'],
     ['Recognition diagnostics','recognition-warnings.json','Unresolved interpretation and timing'],['Visibility diagnostics','visibility-diagnostics.json','Lost detections, stops and velocity changes'],
     ['Excluded tracks','excluded-trajectories.json','Visible candidates and their disposition'],['Prepared view','report-data.json','Input to pure HTML rendering'],

@@ -4,7 +4,8 @@ import {mkdtempSync, readFileSync, writeFileSync, rmSync, statSync} from 'node:f
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {prepare, current, type PresentationInput} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
+import {current} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
+import {inspectionView as prepare,inspectionRequest,type InspectionFixture as PresentationInput} from './fixtures.ts';
 import {parseData, stringifyData} from '../../src/piu_timeline/derived/json.ts';
 import {fingerprint, Store} from '../../src/piu_timeline/derived/pipeline/store.ts';
 
@@ -120,11 +121,11 @@ test('standalone presentation CLI replays saved JSON and leaves old output intac
   const directory = mkdtempSync(join(tmpdir(), 'piu-stages-'));
   try {
     const source = join(directory, 'input.json'), output = join(directory, 'report-data.json');
-    writeFileSync(source, stringifyData(input()));
+    writeFileSync(source, stringifyData(inspectionRequest(input())));
     const run = () => spawnSync(process.execPath, [resolve('src/piu_timeline/derived/cli.ts'), 'presentation', source, output],
       {encoding: 'utf8', env: {...process.env, PATH: directory}});
     assert.equal(run().status, 0);
-    const before = readFileSync(output, 'utf8'); assert.ok(before.includes('1780000000000000001'));
+    const before = readFileSync(output, 'utf8'); assert.equal(JSON.parse(before).stage,'inspection');
     writeFileSync(source, '{"schema":99}'); assert.equal(run().status, 1);
     assert.equal(readFileSync(output, 'utf8'), before);
   } finally {rmSync(directory, {recursive: true, force: true});}

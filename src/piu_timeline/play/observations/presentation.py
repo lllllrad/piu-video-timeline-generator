@@ -37,10 +37,11 @@ def prepare(data, directory):
               'frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'combo', 'combo_confidence') if k in f} for f in frames],
               'visibility_frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'notes') if k in f}
                                     for f in filter_frames(source, frames)]}
-    request = {'schema': 1, 'data': source, 'observations': native}
+    request=call('presentation.input',source,native)
     # This measurement depends on interpreted geometry and concrete motion, but
     # remains a native pixel operation rather than a report-side callback.
-    view = call('presentation.preview', request, str(directory))
+    interpretation=call('presentation.preview',request,str(directory))
+    view=call('presentation.materialize',request,interpretation)
     pixel_path = directory/'processing-features.npz'
     if (view['scroll_pause_model'] or view['scroll_speed_model']) and pixel_path.is_file():
         from piu_timeline.play.processing import observe_processing
@@ -55,4 +56,4 @@ def prepare(data, directory):
                 note['id'] = 'processing:'+str(note['note'])
             return result
         native['configured_processing'] = {'input': inputs, 'output': cached(directory, 'configured-processing', contract, measure)}
-    return request
+    return call('presentation.input',source,native)

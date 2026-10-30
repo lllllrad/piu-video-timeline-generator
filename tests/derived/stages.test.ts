@@ -6,7 +6,8 @@ import {join, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {grid, parse, text} from '../../src/piu_timeline/derived/charts/ucs.ts';
 import {transcribe} from '../../src/piu_timeline/derived/charts/transcription.ts';
-import {reconstruct, type BeatInput} from '../../src/piu_timeline/derived/beats/stage.ts';
+import {reconstruct as reconstructStage} from '../../src/piu_timeline/derived/beats/stage.ts';
+import {beatView as reconstruct,beatRequest,type BeatViewInput as BeatInput} from './fixtures.ts';
 import {render} from '../../src/piu_timeline/derived/report.ts';
 import type {Interval} from '../../src/piu_timeline/derived/types.ts';
 import {parseData, stringifyData} from '../../src/piu_timeline/derived/json.ts';
@@ -54,8 +55,8 @@ test('malformed observation contracts fail before inference', () => {
   const source = input();
   source.data.notes[0].points = [[9.9, 200], [9.8, 190]];
   assert.throws(() => reconstruct(source), /Invalid native positions/);
-  source.schema = 2 as any;
-  assert.throws(() => reconstruct(source), /Unsupported beat-stage/);
+  const wrong=beatRequest(input());wrong.schema=2 as any;
+  assert.throws(() => reconstructStage(wrong), /Unsupported beat-stage/);
 });
 
 test('opaque provenance integers survive numerical stages without a floating-point conversion', () => {
@@ -70,12 +71,12 @@ test('standalone replay needs no Python and preserves an existing output on fail
   const directory = mkdtempSync(join(tmpdir(), 'piu-derived-'));
   try {
     const source = join(directory, 'input.json'), output = join(directory, 'output.json');
-    writeFileSync(source, JSON.stringify(input()));
+    writeFileSync(source,JSON.stringify(beatRequest(input())));
     const cli = resolve('src/piu_timeline/derived/cli.ts');
     const run = () => spawnSync(process.execPath, [cli, 'beats', source, output], {encoding: 'utf8', env: {...process.env, PATH: directory}});
     assert.equal(run().status, 0);
     const before = readFileSync(output, 'utf8');
-    assert.equal(JSON.parse(before).beat_timing.status, 'restored');
+    assert.equal(JSON.parse(before).data.beat_timing.status, 'restored');
     writeFileSync(source, '{"schema":99}');
     assert.equal(run().status, 1);
     assert.equal(readFileSync(output, 'utf8'), before);

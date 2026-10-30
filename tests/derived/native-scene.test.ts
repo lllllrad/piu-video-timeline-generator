@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {nativeScene, template} from './fixtures.ts';
-import {reconstruct} from '../../src/piu_timeline/derived/beats/stage.ts';
+import {beatView as reconstruct} from './fixtures.ts';
 import {text} from '../../src/piu_timeline/derived/charts/ucs.ts';
 import {transcribe} from '../../src/piu_timeline/derived/charts/transcription.ts';
 import type {Interval} from '../../src/piu_timeline/derived/types.ts';

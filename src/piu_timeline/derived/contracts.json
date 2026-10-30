@@ -60,7 +60,8 @@
     "incompatible_chords": "fail_component_keep_independent_rows",
     "reference_validation": "before_and_after_native_recovery",
     "phase_selection": "native_spacing_constrained_with_source_interval_proposals",
-    "neighbor_references": "initial_spatially_validated_rows"
+    "neighbor_references": "initial_spatially_validated_rows",
+    "stage_contract": "owned_artifacts_v1"
   },
   "registration": {
     "schema": 1,

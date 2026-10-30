@@ -1,4 +1,4 @@
-import type {BeatInput} from './beats/stage.ts';
+import type {BeatInput} from './beats/reconstruct.ts';
 const object = (v: unknown): v is Record<string, any> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const assert = (ok: boolean, message: string) => { if (!ok) throw new Error(message); };

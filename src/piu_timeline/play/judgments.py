@@ -262,12 +262,14 @@ def label_counter_frames(data,observations):
         if k in result:data[k]=_merge(data.get(k),result[k])
 
 
-def merge_judgments(data,events,observations=()):
-    from piu_timeline.derived import call,evidence_input,_merge
-    result=call('labels.mergeJudgments',evidence_input(data),events,observations)
-    for k in ('matches','conflicted_matches','judgment_events','miss_candidates','coverage','counter_judgment_labels'):
-        if k in result:data[k]=_merge(data.get(k),result[k])
-    return data
+def merge_judgments(data,events,observations=(),directory=None):
+    from piu_timeline.derived import call,evidence_input
+    request=call('stageAssociations.judgmentInput',evidence_input(data),events,observations)
+    result=call('stageAssociations.judgments',request)
+    if directory is not None:
+        from piu_timeline.play.observations.artifacts import save_input
+        save_input(directory/'judgment-associations.json',result)
+    return {**data,**result['data']}
 
 
 def augment_judgments(data, output):
@@ -294,7 +296,7 @@ def augment_judgments(data, output):
         tracker=JudgmentTracker()
         for observation in observations:
             tracker.update(observation['playback_seconds'],observation)
-        result=merge_judgments(data,tracker.events,observations)
+        result=merge_judgments(data,tracker.events,observations,directory=output)
         result['judgment_cache']=cache_contracts(result,models)
         return result
     print('Reading native judgment words independently of combo visibility...',flush=True)
@@ -321,6 +323,6 @@ def augment_judgments(data, output):
                 judgment_missing_labels=sorted(set(LABELS)-{model['label'] for model in models}))
     with trace.open() as saved:
         observations=[json.loads(line) for line in saved]
-    result=merge_judgments(data,tracker.events,observations)
+    result=merge_judgments(data,tracker.events,observations,directory=output)
     result['judgment_cache']=cache_contracts(result,models)
     return result

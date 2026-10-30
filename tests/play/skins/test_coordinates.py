@@ -11,7 +11,7 @@ from piu_timeline.play.spacing_checks import spacing_failures
 from piu_timeline.play.head_registration import apply
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.coordinates import measure,cap_reference
-from tests.play.beats.test_coordinates import fixture as clock_fixture
+from tests.play.skins.coordinate_fixtures import clock_fixture
 from tests.play.skins.test_detector import examples
 
 
@@ -56,7 +56,7 @@ class ImageCoordinateTest(unittest.TestCase):
             self.assertEqual(json.loads((root/'head-registration.json').read_text()),registration)
 
     def test_context_variants_share_chord_geometry_only_with_identical_cap_sampling(self):
-        from tests.play.beats.test_chords import fixture as chord_fixture
+        from tests.play.skins.coordinate_fixtures import chord_fixture
         from piu_timeline.play.beats.chords import prepare as chords
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);data,frames=fixture(root);bank=load_bank(root/'bank.json')

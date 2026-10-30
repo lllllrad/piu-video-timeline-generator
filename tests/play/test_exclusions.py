@@ -11,7 +11,10 @@ from piu_timeline.play.exclusions import exclusion_diagnostics, recognition_diag
 
 class ExclusionWarningTest(unittest.TestCase):
     def test_inspector_retains_warning_tab_artifact_and_final_output_path(self):
-        from piu_timeline.play.presentation import build_report as write_report
+        from piu_timeline.play.presentation import prepare_report
+        from piu_timeline.play.report import write_report as render_report
+        def write_report(data,path,final_directory=None):
+            return render_report(prepare_report(data,path,final_directory),path,final_directory)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); data = self.sample()
             data.update(song='Example', chart='S20', media={'path':str(root/'source.mkv')})

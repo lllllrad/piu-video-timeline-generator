@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {neighborReferenceScene,template} from './fixtures.ts';
 import {fitGroups} from '../../src/piu_timeline/derived/beats/phase.ts';
-import {reconstruct} from '../../src/piu_timeline/derived/beats/stage.ts';
+import {beatView as reconstruct} from './fixtures.ts';
 import {text} from '../../src/piu_timeline/derived/charts/ucs.ts';
 
 for(const spacing of [20,40,80])for(const fps of [30,60,120])test(`obsolete neighbor rows cannot erase independently supported groups: spacing=${spacing}, fps=${fps}`,()=>{

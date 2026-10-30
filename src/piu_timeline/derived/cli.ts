@@ -10,18 +10,19 @@ import {parse, text} from './charts/ucs.ts';
 import {transcribe} from './charts/transcription.ts';
 import {draft} from './charts/draft.ts';
 import {parseData, stringifyData} from './json.ts';
-import {prepare, preview} from './pipeline/presentation.ts';
+import {prepare, preview,materialize} from './pipeline/presentation.ts';
 import {timingRanges} from './ranges.ts';
 import {continuity} from './visibility.ts';
 import {interpret as effects} from './effects.ts';
 import {sustained as holdState} from './hold_state.ts';
-import {resolve as nativeGaps} from './native_gaps.ts';
+import {resolve as nativeGaps} from './stages/native_timing.ts';
 
 export function derive(stage: string, input): unknown {
   if(stage==='native-gaps'){
-    if(input?.schema!==1||!Array.isArray(input.data?.notes))throw new Error('Native gap input requires schema 1 and data.notes');
-    return nativeGaps(input.data);
+    if(input?.schema!==1)throw new Error('Native timing input requires schema 1');
+    return nativeGaps(input);
   }
+  if (stage === 'inspection-view') return materialize(input.request,input.result);
   if (stage === 'presentation') return prepare(input);
   if (stage === 'hold-view') return preview(input);
   if (stage === 'ranges') return timingRanges(input);

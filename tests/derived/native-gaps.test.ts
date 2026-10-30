@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
 import {measuredGapScene,nativeScene,template} from './fixtures.ts';
 import {text} from '../../src/piu_timeline/derived/charts/ucs.ts';
 import {NativeGapMeasurements,resolve} from '../../src/piu_timeline/derived/native_gaps.ts';
 import {spacingFailures} from '../../src/piu_timeline/derived/beats/spacing.ts';
 import {prepare} from '../../src/piu_timeline/derived/beats/coordinates.ts';
-import {reconstruct} from '../../src/piu_timeline/derived/beats/stage.ts';
+import {beatRequest,beatView as reconstruct} from './fixtures.ts';
+import {counters} from '../../src/piu_timeline/derived/stages/associations.ts';
+import {materialize as nativeView} from '../../src/piu_timeline/derived/stages/native_timing.ts';
 import {derive} from '../../src/piu_timeline/derived/cli.ts';
 
 function failedSource(spacing=40,fps=60){
@@ -102,16 +102,11 @@ test('native gap resolution and reassociation work without a musical reference',
   const data=failedSource(),before=structuredClone(data),request={schema:1 as const,data,reference:{status:'unavailable',reason:'no_chart_reference'},timing_text:null};
   const r=reconstruct(request);assert.ok(r.notes.every(n=>n.status==='estimated'));
   assert.equal(r.beat_timing.warnings[0].reason,'beat_reference_unavailable');
-  assert.deepEqual(derive('native-gaps',request),resolve(data));assert.deepEqual(data,before);
+  const prepared=beatRequest(request);assert.deepEqual(nativeView(prepared,derive('native-gaps',prepared) as any).notes,resolve(data).notes);assert.deepEqual(data,before);
   const input={...data,...r,matches:[],unsupported_intervals:[],combo_events:[.85,1.1].map((t,i)=>({before:3+i,after:4+i,delta:1,
     lower_seconds:t,upper_seconds:t+.017,status:'candidate'}))};
-  const script=`import json,sys
-from piu_timeline.play.beats.timing import reassociate
-s=json.load(sys.stdin);r=reassociate(s,0)
-print(json.dumps({'matches':r['matches'],'reference_status':r['beat_timing']['status']}))`;
-  const result=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{
-    cwd:fileURLToPath(new URL('../../',import.meta.url)),input:JSON.stringify(input),encoding:'utf8'}));
-  assert.equal(result.reference_status,'unavailable');assert.deepEqual(result.matches.map(m=>m.note).sort(),[0,1]);
+  const result=counters({schema:1,notes:r.notes.map(n=>({lane:n.lane,status:n.status,target_seconds:n.target_seconds,prediction_uncertainty_seconds:n.prediction_uncertainty_seconds})),events:input.combo_events,display_delay_seconds:0,unsupported_intervals:[]});
+  assert.equal(r.beat_timing.status,'unavailable');assert.deepEqual(result.data.matches.map(m=>m.note).sort(),[0,1]);
 });
 
 for(const spacing of [20,40,80])for(const fps of [30,60,120])test(`clock conversion propagates prediction uncertainty: spacing=${spacing}, fps=${fps}`,()=>{

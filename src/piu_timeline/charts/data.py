@@ -257,8 +257,10 @@ def auto_register(data, output, **options):
         try:
             candidates = record_candidates(data,Path(output),result)
             if candidates['changed'] and (Path(output)/'report.html').is_file():
-                from piu_timeline.play.presentation import build_report as write_report
-                write_report(data,Path(output)/'report.html')
+                from piu_timeline.play.presentation import prepare_report
+                from piu_timeline.play.report import write_report
+                prepared=prepare_report(data,Path(output)/'report.html')
+                write_report(prepared,Path(output)/'report.html')
         except (OSError,ValueError,KeyError) as error:
             candidates = {'status':'pending','reason':str(error)}
         result['gimmick_candidates'] = candidates

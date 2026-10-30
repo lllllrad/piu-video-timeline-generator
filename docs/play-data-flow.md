@@ -22,7 +22,8 @@ flowchart TD
     metadata --> observations
     observations --> objects[Object interpretation and note tracks]
     objects --> coordinates[Registered coordinates and motion clocks]
-    coordinates --> beats[Beat-row reconstruction]
+    coordinates --> native[Physical timing validation]
+    native --> beats[Beat-row reconstruction]
     timing[Official UCS timing and audio alignment] --> beats
     observations --> evidence[Popup, receptor and processing evidence]
     beats --> associations[Judgment association and hold interpretation]
@@ -34,9 +35,10 @@ flowchart TD
     policy --> chart
 ```
 
-The diagram groups responsibilities; it does not imply four independent workers
-or one immutable file per box. Some associations are calculated provisionally
-and then rebuilt after target times or hold interpretations change.
+The diagram groups responsibilities. Public derived stages exchange named result
+artifacts with updates restricted to owned fields. Explicit composition builds
+downstream read models. Associations are rebuilt when target times or hold
+interpretations change.
 
 See [coordinate frames and stage inputs](coordinate-model.md) for position units,
 anchor conventions, typed views and consumer permissions.
@@ -78,8 +80,10 @@ registration. Scheduling does not give report consumers access to a decoder.
 * `coordinates.json` preserves registered pre-beat output with source, geometry,
   producer identity and a content fingerprint. Musical timing has its own
   contract; a beat-only change resumes this boundary without frame replay.
-* `beat-input.json` stores reference text and calculation inputs. TypeScript
-  returns only owned fields; acquisition identity stays outside numerical fits.
+* `coordinates.json` separates original observations and coordinate results,
+  excluding HUD associations. `native-timing.json` stores physical validation.
+  `beat-input.json` supplies these artifacts and reference text; `beat-result.json`
+  stores musical decisions. Explicit composition builds a downstream reader view.
 * Native geometry, note processing and type observations have separate cached
   outputs under `native-stages/`. Hold geometry does not depend on HUD refreshes.
   `hold-state-input.json` feeds the independent TypeScript sustained-state stage.
@@ -92,6 +96,9 @@ registration. Scheduling does not give report consumers access to a decoder.
 * Native processing under configured motion is an explicit measurement producer.
   Its output is bound to the interpreted geometry and concrete motion model.
   A prepared consumer cannot request new pixel reads through a callback.
+* `inspection-result.json` contains ordered owned consumer outputs. Composition
+  checks their order and field ownership before constructing `report-data.json`.
+  Preparation and HTML rendering are separate orchestration calls.
 * `report-data.json` feeds the pure HTML renderer. `report-summary.json` feeds
   the index. Re-rendering either view performs no analysis or frame reads.
 * `ucs-input.json` stores chart observations, exact reference timing and alignment

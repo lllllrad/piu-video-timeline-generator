@@ -1,3 +1,8 @@
+import {input as inspectionInput,prepare as inspect,materialize as inspectionModel} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
+import {capture as captureCoordinates} from '../../src/piu_timeline/derived/stages/coordinates.ts';
+import {resolve as resolveNativeTiming} from '../../src/piu_timeline/derived/stages/native_timing.ts';
+import {input as beatInput,reconstruct as reconstructBeat,materialize as materializeBeat} from '../../src/piu_timeline/derived/beats/stage.ts';
+import type {BeatReference} from '../../src/piu_timeline/derived/stages/contracts.ts';
 /** Independent chart events sampled into the saved native-observation contract. */
 import type {RecordData} from '../../src/piu_timeline/derived/types.ts';
 import {parse} from '../../src/piu_timeline/derived/charts/ucs.ts';
@@ -163,4 +168,23 @@ export function coordinateRecoveryScene(spacing=40,target=1.061,fine=true,native
   groups.push({notes:[7],unconstrained_row_domains:[[0,0]]});
  }
  return {data,groups};
+}
+
+
+/** Tests assert independent expected values on the explicitly composed read model. */
+export interface BeatViewInput {schema:1;data:RecordData;reference:RecordData;timing_text:string|null;preparation?:RecordData|null}
+export function beatView(source:BeatViewInput):RecordData{
+ const request=beatRequest(source);
+ return materializeBeat(request,reconstructBeat(request));
+}
+
+export function beatRequest(source:BeatViewInput){
+ const coordinates=captureCoordinates(source.data),native=resolveNativeTiming(coordinates);
+ return beatInput(coordinates,native,source.reference as BeatReference,source.timing_text,source.preparation);
+}
+
+export interface InspectionFixture {schema:1;data:RecordData;observations:RecordData}
+export function inspectionRequest(value:InspectionFixture){return inspectionInput(value.data,value.observations as any);}
+export function inspectionView(value:InspectionFixture,directory?:string):RecordData{
+ const request=inspectionRequest(value);return inspectionModel(request,inspect(request,directory));
 }
