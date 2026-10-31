@@ -4,11 +4,13 @@ import numpy as np
 import math
 
 from piu_timeline.play.screen_regions import note_occluders
-from piu_timeline.play.skins.sampling import models,key,FORMAT as SAMPLING_FORMAT
+from piu_timeline.play.skins.sampling import models,key,reference_scale,FORMAT as SAMPLING_FORMAT
 from piu_timeline.play.skins.subfeatures import account
 from piu_timeline.play.skins.canvas import comparison_canvas
+from piu_timeline.play.skins.matching import RegionSearch,prepare_regions
 
-FORMAT = {'schema': 1, 'revision': 6, 'method': 'lane_masked_rgb_regions','sampling':SAMPLING_FORMAT,
+FORMAT = {'schema': 1, 'revision': 7, 'method': 'lane_masked_rgb_regions','sampling':SAMPLING_FORMAT,
+          'scale_basis':'declared_uniform_game_frame_or_lane_spacing',
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor',
           'body_candidates': {'schema':1,'selection':'qualified_rows_horizontal_minima'}}
 
@@ -28,17 +30,19 @@ class SkinDetector:
         self.bank, self.layout, self.width, self.height = bank, layout, width, height
         self.spacing = float(np.median(np.diff([lane['x'] * width for lane in layout['lanes']])))
         self.templates = []
-        scale = self.spacing / bank['spacing_pixels']
+        scale = reference_scale(bank,layout,width,height)
         for original in bank['templates']:
             variants=[comparison_canvas(model)for model in models(original,scale)]
             if not variants:raise ValueError('Skin image region vanishes at the analysis scale')
             self.templates.extend(variants)
         self.by_sampling={key(t):t for t in self.templates}
+        for template in self.templates:prepare_regions(template)
 
     def detect(self, rgb):
         if rgb.shape != (self.height, self.width, 3):
             raise ValueError('Skin detector image differs from its geometry')
         image = rgb.astype('float32') / 255
+        searcher=RegionSearch(image)
         candidates = []
         for lane, column in enumerate(self.layout['lanes']):
             center = column['x'] * self.width
@@ -53,25 +57,9 @@ class SkinDetector:
                 bottom = self.height
                 if right - left < w or bottom - top < h:
                     continue
-                search = image[top:bottom, left:right]
-                scores, errors = None, {}
-                for region in template['regions']:
-                    x0, y0, x1, y1 = region['box']
-                    reference = template['rgb'][y0:y1, x0:x1]
-                    mask = region['mask']
-                    # Every region yields the same candidate-origin matrix.
-                    area = search[y0:search.shape[0] - h + y1, x0:search.shape[1] - w + x1]
-                    error = (cv2.matchTemplate(area, reference, cv2.TM_SQDIFF, mask=mask)/(3*int(mask.sum()))if mask.any()
-                             else np.full((search.shape[0]-h+1,search.shape[1]-w+1),np.inf,dtype='float32'))
-                    error = np.maximum(error, 0)
-                    errors[region['name']] = error
-                    normalized = error / region.get('maximum_error', .015)
-                    scores = normalized if scores is None else np.maximum(scores, normalized)
-                proposal_scores=scores
-                if 'cap'in errors:
-                    required={'cap',*template.get('cap_features',[])}
-                    proposal_scores=np.maximum.reduce([errors[r['name']]/r.get('maximum_error',.015)
-                        for r in template['regions']if r['name']in required])
+                evaluated=searcher.evaluate(template,[left,top,right,bottom])
+                if evaluated is None:continue
+                scores,proposal_scores,errors=evaluated
                 allowed = np.isfinite(proposal_scores) & (proposal_scores <= 1)
                 # Caps need a localized origin; body tiles measure supported rows.
                 kernel=(1,3)if template['role']=='hold_body'else(3,3)

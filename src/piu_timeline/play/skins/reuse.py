@@ -36,7 +36,8 @@ def reusable_groups(data,bank):
     try:old=load_bank(saved['bank_path'])
     except (OSError,ValueError,KeyError):return set()
     if (old['contract']!=saved['contract']['bank'] or old['skin']!=bank['skin']
-            or old['spacing_pixels']!=bank['spacing_pixels']):return set()
+            or old['spacing_pixels']!=bank['spacing_pixels']
+            or old.get('reference_frame')!=bank.get('reference_frame')):return set()
     a,b=signatures(old),signatures(bank)
     return {key for key in a.keys()&b.keys()if a[key]==b[key]and(key.startswith('caps/')or previous==FORMAT)}
 

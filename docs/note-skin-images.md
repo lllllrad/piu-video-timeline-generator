@@ -46,8 +46,9 @@ context therefore retains the position with `role: unknown` and
 images work the same way. Unknown context does not assert a tap or a background
 gap. Its reason and all region comparisons remain in the source observation.
 
-Scale references using measured lane spacing. Preserve horizontal and vertical
-image transforms separately. The builder resizes the complete source image
+Use the declared full-game reference grid for uniform image transforms, with
+lane-spacing scale for undeclared banks and nonuniform grids. Preserve horizontal
+and vertical image transforms separately. The builder resizes the complete source image
 before cropping: resizing an odd-origin crop independently changes pixel
 sampling. An anchor is an explicit registration convention, not automatically
 the center of an arrow-shaped bounding box. Distinctive short, flat or bracket
@@ -85,6 +86,42 @@ Source-grid transforms, independently measured cap centers, source certification
 and coordinate uncertainty are described in [native cap centers](note-skin-centers.md).
 
 ## Data flow
+
+### Reference frame and comparison budget
+
+A reusable full-game reference bank can declare its original image grid:
+
+```json
+{"reference_frame":{"kind":"full_game_crop","width":650,"height":365}}
+```
+
+The builder accepts the same declaration for the full source images and records
+the resulting grid after its explicit analysis-width transform. Template source
+`reference_dimensions`, when present, must agree with the bank declaration.
+For a uniform transform between the declared frame and the analysis frame, this
+grid determines reference scale. Equal grids use the original pixels, one kernel
+and one phase. Approximate HUD lane centers still locate the horizontal search;
+they do not create a fractional resize of an image from the same declared grid.
+Undeclared banks and nonuniform frame transforms retain the lane-spacing scale
+model. There is no numeric near-one snapping or inferred grid from note timing.
+Detector, coordinate registration and hold-coverage consumers share this scale
+selection. Changing the declaration invalidates image-group reuse.
+
+One selected bank represents one skin. Its images cover lane directions,
+tap/start/body/end roles and animation appearances, rather than unrelated skins.
+Matching one example cannot discard another note or contradictory complete role.
+Search first compares the cap and any required cap features. If no candidate
+origin passes those checks, it skips connector and surrounding-background work.
+Surviving caps retain every original region error, including failed context and
+cap-only observations. Body references retain their row-coverage search.
+Exactly identical image/mask comparisons over the same search rectangle reuse
+one score matrix within the current frame, in a bounded cache. Template aliases
+remain separate evidence. No score or successful identity is carried into the
+next frame to suppress new notes, changed appearances or competing roles.
+
+`just _replay` divides available CPUs across outer play jobs before choosing
+default image workers. It also defaults numerical-library thread counts to one
+for child plays. Explicit environment settings take precedence.
 
 `frames.jsonl` retains each native image observation, including original source
 PTS, playback time, role, template identity, skin identity, image bounds,
@@ -209,8 +246,8 @@ mise exec -- python -m piu_timeline.play.skins build \
   .local/tools/skin-reference-spec.json --output .local/cache/note-skins/example
 ```
 
-The specification supplies `skin`, `spacing_pixels`, optional `analysis_width`,
-and `templates`. Each template supplies `id`, `lane_kind`, `role`,
+The specification supplies `skin`, `spacing_pixels`, optional `analysis_width`
+and `reference_frame`, and `templates`. Each template supplies `id`, `lane_kind`, `role`,
 `source_image`, `crop` (`left, top, right, bottom`), `anchor_pixels` relative to
 that crop, and `regions` containing `name`, `box` and optional `maximum_error`.
 Each region can also supply nonempty `comparison_boxes`, a list of integer

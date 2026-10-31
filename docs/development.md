@@ -233,7 +233,11 @@ command for outdated results. `--acquire` also includes metadata plays without
 saved observations; `--watch` discovers later promotions every 30 seconds.
 Independent play commands run concurrently. `--jobs` defaults to half the
 available CPU affinity, capped at eight processes; `--jobs 1` requests serial
-execution. The coordinator writes progress, including all active plays; each
+execution. Each child defaults to at most `available CPUs / --jobs` image
+workers, capped at eight, with numerical-library threads defaulting to one.
+Explicit `PIU_SKIN_JOBS` and numerical-library environment settings override
+those defaults. This shares a CPU budget instead of multiplying two independent
+half-machine worker pools. The coordinator writes progress, including all active plays; each
 child keeps its own log and segment lock. Busy segment locks are deferred. Failures do not block other plays, and an
 unchanged failed input is not retried until its analysis, metadata, selected skin profile or
 reference-bank content changes. Source `note-skins.json` profiles are authoritative for automatic
@@ -466,7 +470,6 @@ therefore finish more plays than strictly necessary. Review the queue, fix a gen
 rule or add a concrete chart-specific handler/annotation, run checks, and then start
 the next batch. Missing or malformed warning artifacts fail explicitly. Omit the
 limit only when a complete acquisition or contract refresh is intended.
-
 
 After inspecting a queue, pass `--reviewed-batch PATH/TO/warning-batch.json` to
 the next run (repeat the option for multiple inspected batches). Those identities

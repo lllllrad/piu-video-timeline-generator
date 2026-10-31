@@ -6,7 +6,7 @@ import numpy as np
 
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.anchors import cap_reference, FORMAT as ANCHOR_FORMAT
-from piu_timeline.play.skins.sampling import phases,FORMAT as SAMPLING_FORMAT
+from piu_timeline.play.skins.sampling import phases,reference_scale,FORMAT as SAMPLING_FORMAT
 
 from piu_timeline.derived import CONTRACTS
 
@@ -82,7 +82,7 @@ def measure(data,frames):
     for key,t in templates.items():
         if any(r['name']=='cap'for r in t['regions']):identities[key]=cap_reference(bank,t)
     height=data['analysis_height']
-    scale=float(np.median(np.diff([lane['x']*data['analysis_width']for lane in data['layout']['lanes']])))/bank['spacing_pixels']
+    scale=reference_scale(bank,data['layout'],data['analysis_width'],height)
     expected=defaultdict(list);samples=[[]for _ in data['notes']];conflicts=defaultdict(list)
     for index,note in enumerate(data['notes']):
         for time,y in detection_points(note):expected[time].append((index,note['lane'],y))

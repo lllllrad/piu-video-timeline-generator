@@ -47,6 +47,16 @@ def file_signature(path):
         return None
 
 
+def child_environment(jobs):
+    """Share the CPU budget across plays instead of nesting two full pools."""
+    available=len(os.sched_getaffinity(0))if hasattr(os,'sched_getaffinity')else(os.cpu_count()or 1)
+    environment=os.environ.copy()
+    environment.setdefault('PIU_SKIN_JOBS',str(min(8,max(1,available//jobs))))
+    for name in ('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','VECLIB_MAXIMUM_THREADS','NUMEXPR_NUM_THREADS'):
+        environment.setdefault(name,'1')
+    return environment
+
+
 def current(path):
     """Check derived artifact contracts without decoding, OCR or cache writes."""
     if not all(path.with_name(name).is_file() for name in
@@ -187,7 +197,8 @@ class Replay:
         try:
             with log.open('w') as stream:
                 result = subprocess.run(['just', 'play', source, '--segment', str(number)],
-                                        cwd=self.root, stdout=stream, stderr=subprocess.STDOUT)
+                                        cwd=self.root, stdout=stream, stderr=subprocess.STDOUT,
+                                        env=child_environment(self.jobs))
             valid = result.returncode == 0 and current(path)
             record.update(returncode=result.returncode,
                           status='current' if valid else 'queued' if result.returncode == 0 else 'failed',

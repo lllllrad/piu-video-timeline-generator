@@ -24,6 +24,11 @@ def load_bank(path):
     spacing = document.get('spacing_pixels')
     if not finite_number(spacing) or spacing <= 0:
         raise ValueError('Skin bank needs measured reference lane spacing')
+    frame=document.get('reference_frame')
+    if frame is not None and (not isinstance(frame,dict)
+            or set(frame)!={'kind','width','height'} or frame['kind']!='full_game_crop'
+            or any(type(frame[k])is not int or frame[k]<=0 for k in ('width','height'))):
+        raise ValueError('Reference frame needs explicit full-game crop dimensions')
     templates, fingerprint, identifiers = [], sha256(path.read_bytes()), set()
     for entry in document.get('templates', []):
         identifier = entry.get('id')
@@ -34,6 +39,8 @@ def load_bank(path):
             raise ValueError('Skin template requires a note role and a lane kind from 0 to 4')
         evidence=entry.get('source_evidence',{})
         if not isinstance(evidence,dict):raise ValueError('Skin source evidence must be an object')
+        if frame and 'reference_dimensions'in evidence and evidence['reference_dimensions']!=[frame['width'],frame['height']]:
+            raise ValueError('Template source dimensions disagree with the declared reference frame')
         if 'lane'in evidence:
             lane=evidence['lane']
             if type(lane)is not int or not 0<=lane<10 or lane%5!=entry['lane_kind']:
@@ -131,6 +138,7 @@ def load_bank(path):
         raise ValueError('Skin bank contains no image templates')
     bank={'skin': document['skin'], 'spacing_pixels': spacing, 'templates': templates,
           'contract': {'format': FORMAT, 'sha256': fingerprint.hexdigest(), 'skin': document['skin']}}
+    if frame:bank['reference_frame']=frame
     if any('comparison_boxes'in r for t in templates for r in t['regions']):
         bank['contract']['comparison_geometry']=COMPARISON_FORMAT
     if any(t.get('cap_features')for t in templates):

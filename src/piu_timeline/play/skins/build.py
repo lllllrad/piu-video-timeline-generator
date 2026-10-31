@@ -15,6 +15,7 @@ def build(specification, output):
         raise ValueError('Refusing to overwrite an existing skin bank')
     output.mkdir(parents=True)
     entries = []
+    reference_frame=None
     for item in spec['templates']:
         source = (specification.parent / item['source_image']).resolve()
         image = cv2.imread(str(source), cv2.IMREAD_COLOR)
@@ -28,6 +29,11 @@ def build(specification, output):
             raise ValueError('Reference analysis width must be 320..1300')
         sx = reference_width / image.shape[1]
         reference_height = round(image.shape[0] * sx)
+        if 'reference_frame'in spec:
+            expected={'kind':'full_game_crop','width':image.shape[1],'height':image.shape[0]}
+            if spec['reference_frame']!=expected:
+                raise ValueError('Declared full-game frame differs from the reference source image')
+            reference_frame={'kind':'full_game_crop','width':reference_width,'height':reference_height}
         sy = reference_height / image.shape[0]
         # Resize the full source image before cropping. Resizing an odd-origin
         # crop independently changes the source pixel sampling phase.
@@ -55,6 +61,7 @@ def build(specification, output):
                                                               (y0+item['anchor_pixels'][1])*sy-top],
                           **({'sampling_context':context}if context else{})})
     (output / 'bank.json').write_text(json.dumps({'schema': 1, 'skin': spec['skin'],
-        'spacing_pixels': spec['spacing_pixels']*sx, 'templates': entries}, indent=2) + '\n')
+        'spacing_pixels': spec['spacing_pixels']*sx, 'templates': entries,
+        **({'reference_frame':reference_frame}if reference_frame else{})}, indent=2) + '\n')
     load_bank(output / 'bank.json')
     return output / 'bank.json'

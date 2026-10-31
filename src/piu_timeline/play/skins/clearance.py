@@ -8,7 +8,7 @@ import numpy as np
 from piu_timeline.play.pixel_cache import FORMAT as PIXEL_FORMAT, measurements
 from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.skins.detector import SkinDetector
-from piu_timeline.play.skins.sampling import key
+from piu_timeline.play.skins.sampling import key,reference_scale
 
 FORMAT={'schema':1,'revision':1,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
         'minimum_frames':4,'minimum_span_seconds':.065,'maximum_gap_seconds':.05,
@@ -24,7 +24,8 @@ def validate_profile(data,bank,profile):
     if any(lane.get('color')!=COLORS[i%5]for i,lane in enumerate(data['layout']['lanes'])):
         raise ValueError('Native clearance profile differs from lane colors')
     spacing=np.median(np.diff([lane['x']*PIXEL_FORMAT['width']for lane in data['layout']['lanes']]))
-    scale=spacing/bank['spacing_pixels'];kinds=set();count=0
+    height=round(PIXEL_FORMAT['width']*data['analysis_height']/data['analysis_width'])
+    scale=reference_scale(bank,data['layout'],PIXEL_FORMAT['width'],height);kinds=set();count=0
     for template in bank['templates']:
         if template['role']=='tap'and template['id']in bank['anchor_registrations']:
             half=FORMAT['minimum_clearance_halfwidth_spacing']*bank['spacing_pixels']

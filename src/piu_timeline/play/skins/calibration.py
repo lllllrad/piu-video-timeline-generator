@@ -60,7 +60,8 @@ def register_anchors(bank_path,analysis_path,registration_path,output):
     if registration.get('format')!=MEASUREMENT_FORMAT or registration!=data.get('head_registration'):
         raise ValueError('Native cap artifact is not the supplied analysis measurement record')
     spacing=median(np.diff([lane['x']*data['analysis_width']for lane in data['layout']['lanes']]))
-    scale=spacing/bank['spacing_pixels']
+    from piu_timeline.play.skins.sampling import reference_scale
+    scale=reference_scale(bank,data['layout'],data['analysis_width'],data['analysis_height'])
     if any((round(t['mask'].shape[1]*scale),round(t['mask'].shape[0]*scale))!=t['mask'].shape[::-1]
            for t in bank['templates']if t['role']!='hold_body'):
         raise ValueError('Reference images would be resampled at their declared native source scale')

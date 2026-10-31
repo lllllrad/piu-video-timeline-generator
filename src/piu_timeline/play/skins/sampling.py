@@ -11,6 +11,20 @@ FORMAT={'schema':1,'revision':3,'method':'supported_source_grid','phase_grid':4,
         'kernels':KERNELS}
 
 
+def reference_scale(bank,layout,width,height):
+    """Use an explicitly declared full-game grid before approximate lane spacing.
+
+    A fixed HUD layout locates lanes; it does not measure reference-image size.
+    Preserve the legacy spacing model for undeclared or nonuniform frame grids.
+    """
+    frame=bank.get('reference_frame')
+    if frame:
+        sx,sy=width/frame['width'],height/frame['height']
+        if abs(sx-sy)<1e-9:return sx
+    spacing=float(np.median(np.diff([lane['x']*width for lane in layout['lanes']])))
+    return spacing/bank['spacing_pixels']
+
+
 def key(record):
     phase=record.get('sampling_phase_pixels')
     name=record.get('template',record.get('id'))

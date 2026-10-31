@@ -2,16 +2,16 @@
 import numpy as np
 
 from piu_timeline.play.skins.bank import load_bank
-from piu_timeline.play.skins.sampling import key,models
+from piu_timeline.play.skins.sampling import key,models,reference_scale
 
 
 def reference_rows(data, *, cap_only=False):
     bank=load_bank(data['skin_detector']['bank_path'])
     if bank['contract']!=data['skin_detector']['contract']['bank']:
         raise ValueError('Hold image references differ from the acquired observation bank')
-    spacing=float(np.median(np.diff([lane['x']*data['analysis_width']for lane in data['layout']['lanes']])))
+    scale=reference_scale(bank,data['layout'],data['analysis_width'],data['analysis_height'])
     result={}
-    for template in (model for original in bank['templates']for model in models(original,spacing/bank['spacing_pixels'])):
+    for template in (model for original in bank['templates']for model in models(original,scale)):
         support=template['cap_support']if cap_only else template['support']
         rows=np.flatnonzero(support.any(axis=1))
         runs=[]

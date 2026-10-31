@@ -23,6 +23,14 @@ saved dimensions and lane spacing. A reference-pixel uncertainty scales once
 into analysis pixels; there is no second analysis-pixel floor in registration.
 Geometric cap centers do not establish engine timing anchors or capture latency.
 
+Image-reference scale uses a bank's explicit full-game `reference_frame` when
+the source and analysis grids have a uniform transform. Identical grids preserve
+native reference pixels, regardless of small rounding differences in HUD lane
+spacing. Banks without this declaration and nonuniform transforms use the
+existing lane-spacing model. Acquisition, registered image anchors and hold
+coverage use the same scale reader; no consumer chooses a scale from input or
+beat timing. See [reference search](note-skin-images.md#reference-frame-and-comparison-budget).
+
 ## Trajectory views
 
 The stored note fields retain different responsibilities:
