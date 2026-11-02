@@ -100,8 +100,11 @@ Warnings open their observed interval even when a track has no reconstructed tar
 The derivation tab exposes selected observations, clock/beat results, processing,
 policy and association records. UCS placements appear only from a saved draft;
 source-note links require exact saved-analysis and unchanged UCS identities.
-The inspector does not upload, re-encode or change media. `--all` writes a linked
-`play/index.html` overview. See [the inspector](docs/evidence-inspector.md) and [play analysis](docs/play-analysis.md).
+The inspector does not upload, re-encode or change media. `--all` and background
+replay write a linked `play/index.html` overview. Replay creates it before work
+starts, repairs missing indexes for current analyses, and updates links as plays
+finish. Unfinished rows remain unavailable. A batch with deferred work exits
+unsuccessfully instead of claiming completion. See [the inspector](docs/evidence-inspector.md) and [play analysis](docs/play-analysis.md).
 
 Saved-data modeling and report consumers run in TypeScript; Python handles media,
 OCR and native image evidence. Registered coordinates and prepared report data

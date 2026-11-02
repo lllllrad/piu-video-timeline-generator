@@ -214,11 +214,24 @@ class Replay:
 
     def finish(self, pending):
         done, _ = wait(pending, return_when=FIRST_COMPLETED)
+        sources=set()
         for future in done:
-            self.records[pending.pop(future)].update(future.result())
+            record=self.records[pending.pop(future)]
+            record.update(future.result());sources.add(record['source'])
+        self.update_indexes(sources)
         for record in self.records.values():
             if record['status']=='current':self.collect_warnings(record)
         self.progress('refreshing')
+
+    def update_indexes(self,sources):
+        """Indexes consume saved summaries, including unfinished source rows."""
+        from piu_timeline.play.report import write_index
+        for source in sorted(sources):
+            directory=self.root/'.local/data'/source
+            metadata=directory/'analysis/analysis.json'
+            if not metadata.is_file():continue
+            root=directory/'play';root.mkdir(exist_ok=True)
+            write_index(json.loads(metadata.read_text()),root)
 
     def collect_warnings(self,record):
         if self.warning_batch.full or self.warning_batch.limit is None:return
@@ -229,8 +242,10 @@ class Replay:
 
     def cycle(self):
         pending = {}
+        discovered=discover(self.root,self.sources,self.segments,self.acquire)
+        self.update_indexes({source for source,_ in discovered})
         with ThreadPoolExecutor(max_workers=self.jobs) as pool:
-            for source, number in discover(self.root, self.sources, self.segments, self.acquire):
+            for source, number in discovered:
                 if len(pending) >= self.jobs:
                     self.finish(pending)
                 if self.warning_batch.full:break
@@ -296,7 +311,8 @@ def main():
         while True:
             failed = runner.cycle()
             if runner.warning_batch.full or not args.watch:
-                raise SystemExit(int(failed))
+                deferred=any(r['status']in ('queued','busy')for r in runner.records.values())
+                raise SystemExit(int(failed or (deferred and not runner.warning_batch.full)))
             time.sleep(30)
 
 

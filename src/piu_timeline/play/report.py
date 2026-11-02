@@ -28,8 +28,15 @@ def write_index(document,root):
     entries=[]
     for number,segment in enumerate(document['segments'],1):
         summary=root/f'segment-{number:03}'/'report-summary.json'
+        try:saved=json.loads(summary.read_text())
+        except FileNotFoundError:saved=None  # A parallel producer may be promoting this directory.
         entries.append({'number':number,'song':segment.get('song'),'chart':segment.get('chart'),
-                        'summary':json.loads(summary.read_text())if summary.is_file()else None})
+                        'summary':saved})
     path=root/'index.html'
-    path.write_text(call('report.index',entries),encoding='utf-8')
+    pending=path.with_name(f'.index.{uuid4().hex}.tmp')
+    try:
+        pending.write_text(call('report.index',entries),encoding='utf-8')
+        pending.replace(path)
+    finally:
+        pending.unlink(missing_ok=True)
     return path
