@@ -4,6 +4,15 @@ import {fitGrid} from './grid.ts';
 import type {RecordData} from '../types.ts';
 export type Validator = (fits: RecordData[]) => number[];
 
+/** Audio correlation measures an audio origin, not the renderer's clock.
+ * This additional search limit is policy, never a per-note error allowance.
+ * fitPhase must still prove one common assignment from unchanged targets.
+ */
+export function phaseSearchRadius(reference: RecordData): number {
+  return reference.alignment_uncertainty_seconds + (reference.alignment_method === 'reference_audio_translation'
+    ? contracts.timing.audio_video_sync_search_seconds : 0);
+}
+
 export function signature(fits: RecordData[]): unknown[] {
   return fits.map(f => ['restored', 'partial'].includes(f.status) ? [f.status, f.split, f.rows] : ['failed']);
 }

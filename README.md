@@ -127,9 +127,11 @@ charts, including when native analysis is reused. Ambiguous or unknown titles re
 rerunning note detection or metadata OCR.
 
 Notes are stored as editable UCS text at `charts/CS349/S21/phoenix/chart.ucs`, with provenance,
-unresolved placements and `unreviewed_draft` status in `metadata.json`. Reference music aligns song
-time to original recording time using independent matching windows; it never changes playback speed.
-If audio is missing or ambiguous, provide a reviewed `--song-start SECONDS` recording position.
+unresolved placements and `unreviewed_draft` status in `metadata.json`. Official UCS timing defines
+the musical clock. Reference music locates its audio origin using independent matching windows;
+visual evidence must separately support the common video offset before audio-aligned transcription.
+Neither alignment changes playback speed. If alignment is unresolved, provide a reviewed
+`--song-start SECONDS` video position. See [audio/video alignment limits](docs/chart-data.md#reusing-the-bounded-common-song-phase).
 Holds use UCS head/body/tail cells; censored endpoints and conflicting placements remain unresolved.
 Existing chart directories are never overwritten. For an updated game chart, register a distinct
 `--revision NAME`. Downloaded ZIPs and reference music stay in the ignored cache. See [chart

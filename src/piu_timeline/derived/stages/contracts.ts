@@ -30,6 +30,7 @@ export type BeatArtifact=BoundArtifact<'beats',BeatResult>;
 export interface CoordinateSource {observations:ObservationArtifact;coordinates:CoordinateArtifact}
 export interface BeatReference {
  status:'available'|'unavailable';reason?:string;song_start_seconds?:number;alignment_uncertainty_seconds?:number;
+ alignment_method?:string|null;
  constant_tempo_bpm?:string|number|null;timing?:string;sha256?:string;ucs_index?:string;metadata_path?:string;
 }
 export interface BeatRequest extends CoordinateSource {schema:1;native_timing:NativeTimingArtifact;reference:BeatReference;timing_text:string|null;preparation?:Evidence|null}

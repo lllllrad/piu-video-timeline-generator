@@ -46,6 +46,7 @@ test('official timing prepares and reuses a source-bound alignment before skin/U
  assert.equal(result.same,true);assert.equal(result.draft_created,false);assert.equal(result.skin_reviewed,false);
  assert.equal(result.resolved.status,'available');assert.equal(result.resolved.ucs_index,'CS101');
  assert.equal(result.resolved.song_start_seconds,10.02);assert.equal(result.resolved.alignment_uncertainty_seconds,.01);
+ assert.equal(result.resolved.alignment_method,'reference_audio_translation');
 });
 test('source, window, identity, official timing and reference audio changes invalidate retained alignment',()=>{
  assert.deepEqual(result.invalid,[true,true,true,true,true]);

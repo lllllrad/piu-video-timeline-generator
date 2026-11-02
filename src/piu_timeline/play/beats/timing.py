@@ -35,16 +35,19 @@ def reference(data, directory):
         origin=explicit['song_start_seconds']
     if origin is None:return {'status':'unavailable','reason':'verified_song_alignment_missing','ucs_index':code,
                               'metadata_path':str(metadata),'timing':str(timing),'sha256':sha256(timing.read_bytes()).hexdigest()}
-    uncertainty=0 if explicit.get('method')=='explicit_song_start' and saved.get('alignment_media')==data.get('media') else meta.get('alignment',{}).get('uncertainty_seconds',0)
+    alignment=explicit if explicit.get('method')=='explicit_song_start' and saved.get('alignment_media')==data.get('media') else meta.get('alignment',{})
+    uncertainty=alignment.get('uncertainty_seconds',0)
     cached=directory/'chart-policy-alignment.json'
     if cached.is_file():
         saved_alignment=json.loads(cached.read_text())
         if saved_alignment.get('contract',{}).get('media')==data.get('media') and saved_alignment.get('alignment',{}).get('song_start_seconds')==origin:
+            alignment=saved_alignment['alignment']
             uncertainty=saved_alignment['alignment'].get('uncertainty_seconds',uncertainty)
     catalogue=repo/'catalog.json'
     entries=json.loads(catalogue.read_text()).get('songs',[]) if catalogue.is_file() else []
     bpm=next((entry.get('bpm') for entry in entries if entry['index']==code),None)
     return {'status':'available','ucs_index':code,'constant_tempo_bpm':bpm,'timing':str(timing),'sha256':sha256(timing.read_bytes()).hexdigest(),
+            'alignment_method':alignment.get('method'),
             'song_start_seconds':origin,'alignment_uncertainty_seconds':uncertainty}
 
 

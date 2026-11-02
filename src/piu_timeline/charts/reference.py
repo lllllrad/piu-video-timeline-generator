@@ -67,5 +67,6 @@ def beat_reference(saved,repository,code):
             'timing':str(Path(repository)/'timing'/f'{code}.ucs'),
             'sha256':saved['contract']['timing_sha256'],
             'song_start_seconds':saved['alignment']['song_start_seconds'],
+            'alignment_method':saved['alignment'].get('method'),
             'alignment_uncertainty_seconds':saved['alignment']['uncertainty_seconds'],
             'reference_artifact':'song-reference.json'}

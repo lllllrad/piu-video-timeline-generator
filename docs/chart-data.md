@@ -301,19 +301,30 @@ extra input barriers; an unresolved cap of another possible hold remains one.
 
 ### Reusing the bounded common song phase
 
-Beat reconstruction can refine audio alignment with one common bounded song
-phase, independently of player input. UCS transcription must consume that same
+Official UCS timing defines the musical clock, including BPM and timing changes.
+Audio correlation measures the recording's audio origin; it does not establish
+that audio and video are synchronized. Beat reconstruction searches one common
+visual translation against that unchanged UCS clock, independently of player
+input. Audio-derived origins receive an additional 100 ms search radius on each
+side, separate from measured audio uncertainty. This is a bounded search policy,
+not a measured sync error or extra per-note tolerance. Reviewed video origins
+receive no additional allowance. UCS transcription must consume that same
 phase when translating video coordinates to song time. Otherwise already
 restored beat targets are offset from the UCS grid and the original audio error
 is added a second time, making fine subdivisions ambiguous.
 
 Reuse requires matching official timing bytes, the audio origin and uncertainty,
-unit rate, a finite phase inside its supported bounds, and at least one restored
+unit rate, a finite phase inside the combined search bounds, and at least one restored
 beat group. A failed group does not invalidate a separately supported common
 phase for other groups. Retain the posterior phase interval instead of readding
 the prior audio interval. Malformed or unsupported phase evidence fails
-explicitly. A changed reference/origin keeps the audio alignment and records why
-the stale phase was unused. The immutable audio measurement remains in
+explicitly. Missing, ambiguous or stale visual phase cannot authorize an
+audio-aligned UCS draft; it stays unresolved. Larger offsets and changing sync
+need a reviewed video origin or a future separate clock model. Near a BPM
+boundary, audio alone cannot select the section for an uncertain visual target:
+boundary notes retain `audio_video_sync_crosses_tempo_boundary` warnings. A changed
+reference/origin records why the stale phase was unused. No path stretches UCS
+time or retimes the recording. The immutable audio measurement remains in
 `alignment`; `transcription_alignment` records the effective origin, uncertainty,
 phase bounds and timing digest. Source timestamps and observed target ranges
 are unchanged.

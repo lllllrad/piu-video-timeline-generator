@@ -54,7 +54,8 @@
   },
   "timing": {
     "schema": 1,
-    "revision": 17,
+    "revision": 18,
+    "audio_video_sync_search_seconds": 0.1,
     "group_beats": 4,
     "unsupported_rows": "retain_independently_unique_neighbors",
     "incompatible_chords": "fail_component_keep_independent_rows",

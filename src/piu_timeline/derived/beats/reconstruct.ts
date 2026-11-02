@@ -4,7 +4,7 @@ import {entries} from '../math.ts';
 import {parse, grid, constantTempo} from '../charts/ucs.ts';
 import {prepare as coordinateSupport} from './coordinates.ts';
 import {prepare as chordSupport} from './chords.ts';
-import {fitPhase} from './phase.ts';
+import {fitPhase, phaseSearchRadius} from './phase.ts';
 import {recover,validateRecovery} from './recovery.ts';
 import {validate, spacingSupportedNotes} from './validation.ts';
 import type {Note, RecordData} from '../types.ts';
@@ -37,7 +37,7 @@ export function reconstruct(input: BeatInput): RecordData {
     sections.push([start, start + s.rows.length * 60 / (bpm * Number(settings.Split)), bpm]);
   });
   if (sections.slice(1).some((b, i) => b[0] < sections[i][1] - 1e-6)) throw new Error('Overlapping UCS timing sections prevent beat reconstruction');
-  const origin = ref.song_start_seconds, estimated = data.notes.filter(n => n.status === 'estimated');
+  const origin = ref.song_start_seconds, searchRadius = phaseSearchRadius(ref), estimated = data.notes.filter(n => n.status === 'estimated');
   const latest = estimated.length ? Math.max(...estimated.map(n => n.target_seconds + n.prediction_uncertainty_seconds - origin)) : sections.at(-1)[1];
   if (latest >= sections.at(-1)[1] && constantTempo(doc, ref.constant_tempo_bpm)) {
     const [lo, hi, bpm] = sections.at(-1), step = 60 / (bpm * Number(settings.Split)), end = lo + (Math.ceil((latest - lo) / step) + 1) * step;
@@ -48,7 +48,12 @@ export function reconstruct(input: BeatInput): RecordData {
   const notes: Note[] = data.notes.map(n => ({...n})), groups = new Map<string, {si: number; bar: number; indices: number[]}>();
   notes.forEach((n, i) => {
     if (n.status !== 'estimated') return;
-    const time = n.target_seconds - origin, si = sections.findIndex(([lo, hi]) => lo <= time && time < hi);
+    const time = n.target_seconds - origin, error = n.prediction_uncertainty_seconds + searchRadius;
+    // Audio/video phase is not known yet. Do not select the wrong BPM on one
+    // side of a section boundary merely from an audio-clock position.
+    const crossesTempo = ref.alignment_method === 'reference_audio_translation' && sections.slice(1).some(([lo], i) =>
+      sections[i][2] !== sections[i + 1][2] && time - error < lo && lo <= time + error);
+    const si = crossesTempo ? -2 : sections.findIndex(([lo, hi]) => lo <= time && time < hi);
     const bar = si < 0 ? 0 : Math.floor((time - sections[si][0]) / (contracts.timing.group_beats * 60 / sections[si][2])), key = `${si},${bar}`;
     if (!groups.has(key)) groups.set(key, {si, bar, indices: []});
     groups.get(key).indices.push(i);
@@ -65,7 +70,7 @@ export function reconstruct(input: BeatInput): RecordData {
     indices.sort((a, b) => notes[a].target_seconds - notes[b].target_seconds);
     const g: RecordData = {notes: indices, section: si, beat_group: bar, targets: indices.map(i => notes[i].target_seconds), errors: indices.map(i => notes[i].prediction_uncertainty_seconds)};
     g.native_chords = chords.filter(p => p.peer_notes.every(i => indices.includes(i))).map(p => ({...p, indices: p.peer_notes.map(i => indices.indexOf(i))}));
-    if (si < 0) g.invalid = 'outside_official_timing_sections';
+    if (si < 0) g.invalid = si === -2 ? 'audio_video_sync_crosses_tempo_boundary' : 'outside_official_timing_sections';
     else Object.assign(g, {bpm: sections[si][2], origin: origin + sections[si][0]});
     return g;
   });
@@ -77,7 +82,10 @@ export function reconstruct(input: BeatInput): RecordData {
       neighbor_heads: Object.fromEntries(entries(heads).filter(([i]) => !g.notes.includes(i)))}));
   }
   const validator = spacing ? fits => spacingSupportedNotes(notes, proposals, fits, spacing, data.scroll_motion ?? null, support, chords) : undefined;
-  const phase = fitPhase(proposals, ref.alignment_uncertainty_seconds, validator);
+  const phase = fitPhase(proposals, searchRadius, validator);
+  result.song_phase_search = {audio_uncertainty_seconds: ref.alignment_uncertainty_seconds,
+    audio_video_sync_search_seconds: searchRadius - ref.alignment_uncertainty_seconds,
+    range_seconds: [-searchRadius, searchRadius], basis: 'common_visual_targets_against_official_ucs'};
   Object.assign(result, {song_phase_range: phase.phase_range ?? null, song_phase_correction_seconds: phase.phase ?? null,
     phase_resolution_seconds: phase.resolution_seconds ?? null, phase_trials: phase.phase_trials ?? [], phase_consistent_notes: phase.consistent_notes ?? null});
   proposals.forEach((g, i) => {
