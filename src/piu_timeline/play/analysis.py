@@ -11,7 +11,7 @@ import uuid
 import cv2
 import numpy as np
 
-from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, find_saved_observations, detector_replay_available, is_outline_trace, validate_native_frame
+from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, stage_saved_observations, detector_replay_available, is_outline_trace, validate_native_frame
 from piu_timeline.vision.ocr import ocr_images
 from piu_timeline.play.frames import decode_frames, crop_region, TIME_EPSILON
 from piu_timeline.play.tracking import NoteTracker, DigitReader, ComboTracker, associate
@@ -121,9 +121,8 @@ def refresh_counter_observations(cached, output, replace_font=False):
     return {'combo_readable_fraction':known/count,'refreshed_counter_only':True}
 
 
-def refit_saved(cached, previous, output, segment, display_delay_ms, note_skin=None):
-    """Rerun trajectories and row alignment using identical source observations."""
-    shutil.copytree(previous, output)
+def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
+    """Interpret an already staged snapshot using identical source observations."""
     from piu_timeline.storage import relocate_evidence
     relocate_evidence(output,output,source=previous)
     cached=json.loads((output/'analysis.json').read_text())
@@ -317,6 +316,8 @@ def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_sk
     from piu_timeline.charts.data import auto_register
     auto_register(cached, final)
     refresh_registration(cached, final)
+    from piu_timeline.storage import prune_history
+    prune_history(final,media=cached.get('media'))
     print(final / 'report.html')
     return final / 'report.html'
 
@@ -353,6 +354,9 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
         if backup.exists() and not final.exists():
             backup.rename(final)
         raise
+    if backup.exists():relocate_evidence(backup,backup,source=final)
+    from piu_timeline.storage import prune_history
+    prune_history(final,backup,source_media)
     from piu_timeline.charts.data import auto_register
     auto_register(result, final)
     refresh_registration(result, final)
@@ -420,15 +424,13 @@ def run(source, segment_number=1, force=False, **options):
                 return refresh_saved_play(cached, final, coordinates=coordinates,
                                           judgments_current=judgments_current, note_skin=note_skin,
                                           display_delay_ms=options.get('display_delay_ms',0))
-        if not force and not can_refit and document.get('media'):
-            saved=find_saved_observations(root,final,document,segments[segment_number-1],expected_start,expected_end,options)
-            if saved:
-                cached,donor=saved
-                stat=Path(document['media']['path']).stat()
-                can_refit=(stat.st_size,stat.st_mtime_ns)==(cached['media']['size_bytes'],cached['media']['mtime_ns'])
         pending = root / f'segment-{segment_number:03}.build-{uuid.uuid4().hex[:8]}'
+        if can_refit:shutil.copytree(donor,pending)
+        elif not force and document.get('media'):
+            saved=stage_saved_observations(root,final,pending,document,segments[segment_number-1],expected_start,expected_end,options)
+            if saved:cached,donor=saved;can_refit=True
         if can_refit:
-            result = refit_saved(cached, donor, pending, segments[segment_number-1], options.get('display_delay_ms',0), note_skin=note_skin)
+            result = refit_saved(donor, pending, segments[segment_number-1], options.get('display_delay_ms',0), note_skin=note_skin)
         else:
             result = analyze_play(document, segments[segment_number-1], pending, **options)
         return finish_play(result, pending, final, segment_number,

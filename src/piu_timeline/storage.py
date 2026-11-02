@@ -1,5 +1,24 @@
 """Relocate nested evidence references when promoting a saved analysis."""
 import json
+from contextlib import contextmanager
+import fcntl
+
+
+@contextmanager
+def history_guard(directory, shared=False):
+    """Snapshot selection/copy and pruning coordinate through the same parent lock."""
+    with (directory / '.retention.lock').open('a') as lock:
+        fcntl.flock(lock,fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+        yield
+
+
+def prune_history(directory, previous=None, media=None):
+    """Bound saved versions only after success, while the caller owns its writer lock."""
+    from piu_timeline.derived import call
+    protected=[media['path']]if media and media.get('path')else[]
+    with history_guard(directory.parent):
+        return call('retention.prune',str(directory.absolute()),
+                    str(previous.absolute())if previous and previous.is_dir()else None,protected)
 
 
 def relocate_evidence(directory, destination, source=None):

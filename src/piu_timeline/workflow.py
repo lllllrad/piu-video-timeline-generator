@@ -112,6 +112,7 @@ def _run(source, format_name="default", game_roi=None):
     raw = directory / "raw"
     analysis_dir = directory / "analysis"
     analysis_file = analysis_dir / "analysis.json"
+    backup = None
     output = directory / "output" / f"{format_name}.txt"
     script = formatter(format_name)
     document = json.loads(analysis_file.read_text(encoding="utf-8")) if analysis_file.is_file() else None
@@ -165,6 +166,8 @@ def _run(source, format_name="default", game_roi=None):
         document = json.loads(analysis_file.read_text(encoding="utf-8"))
     if document.get("method") != "automatic_hud_ocr":
         raise ValueError("Saved analysis is not an automatic HUD analysis")
+    from piu_timeline.storage import prune_history
+    prune_history(analysis_dir,backup,document.get('media'))
     from piu_timeline.metadata.badge_recovery import refresh
     if refresh(document, analysis_dir):
         pending = analysis_file.with_suffix('.badges-build.json')

@@ -20,6 +20,10 @@ The command downloads or opens the source, detects plays, recognizes songs, char
     +-- default.txt
 ```
 
+Successful analysis updates retain one previous rollback and clean older analysis
+versions and abandoned builds. Original recordings and current native evidence
+are preserved. See [local storage](docs/local-storage.md).
+
 Local files work the same way:
 
 ```sh

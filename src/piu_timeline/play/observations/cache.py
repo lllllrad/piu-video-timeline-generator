@@ -2,6 +2,8 @@
 import json
 import math
 import re
+import shutil
+from pathlib import Path
 
 from piu_timeline.storage import read_analysis_header as cache_header
 
@@ -69,5 +71,18 @@ def find_saved_observations(root, final, document, segment, start, end, options)
         except (OSError,ValueError):
             continue
     return None
+
+
+def stage_saved_observations(root,final,pending,document,segment,start,end,options):
+    """Pin immutable history through selection and copying, before native refitting."""
+    from piu_timeline.storage import history_guard
+    with history_guard(root,shared=True):
+        saved=find_saved_observations(root,final,document,segment,start,end,options)
+        if saved is None:return None
+        cached,donor=saved
+        stat=Path(document['media']['path']).stat()
+        if (stat.st_size,stat.st_mtime_ns)!=(cached['media']['size_bytes'],cached['media']['mtime_ns']):return None
+        shutil.copytree(donor,pending)
+        return saved
 
 

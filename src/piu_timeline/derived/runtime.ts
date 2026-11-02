@@ -18,6 +18,7 @@ import * as beats from './beats/stage.ts';
 import * as stageAssociations from './stages/associations.ts';
 import * as nativeTiming from './stages/native_timing.ts';
 import * as stageCoordinates from './stages/coordinates.ts';
+import * as retention from './retention.ts';
 
 import * as registration from './registration.ts';
 import * as clocks from './clocks.ts';
@@ -53,7 +54,7 @@ import * as holdRisk from './holds/risk.ts';
 import {parseData, stringifyData} from './json.ts';
 
 const operations = {
-  coordinateMeasurements, skinAnchors, skinCenters, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription,
+  coordinateMeasurements, skinAnchors, skinCenters, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription, retention,
   registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, localized,
   holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
   holdState, holdExtent, holdGeometry, holdRisk, stageCoordinates, nativeTiming, stageAssociations, beats: {...beats,fitGrid},
