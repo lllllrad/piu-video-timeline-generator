@@ -14,6 +14,7 @@ from piu_timeline.metadata.analysis import ANALYSIS_VERSION, analyze, resolve_so
 from piu_timeline.vision.detect import roi_value
 from piu_timeline.vision.ocr import cache_identity as configuration
 from piu_timeline.storage import relocate_evidence
+from piu_timeline.media import completed_video
 from piu_timeline import ROOT
 LOCAL_DATA = ROOT / ".local/data"
 LOCAL_FORMATS = ROOT / ".local/formats"
@@ -124,6 +125,8 @@ def _run(source, format_name="default", game_roi=None):
         if media:
             cached_source = Path(media["path"])
             stale |= not cached_source.is_file()
+            if document.get('provenance',{}).get('kind')in ('cached_youtube','youtube_download'):
+                stale |= not completed_video(cached_source)
             if cached_source.is_file():
                 stat = cached_source.stat()
                 stale |= (stat.st_size, stat.st_mtime_ns) != (media["size_bytes"], media["mtime_ns"])

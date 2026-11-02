@@ -24,7 +24,7 @@ def fetch_command(source, output_root, concurrent_fragments=4):
     # Ignore machine-wide settings and cookies; preserve the original timebase.
     destination = Path(output_root)
     command = [
-        "yt-dlp", "--ignore-config", "--no-playlist", "--no-overwrites",
+        "yt-dlp", "--ignore-config", "--no-playlist", "--no-overwrites", "--continue",
         "--match-filters", "!is_live", "--write-info-json",
         "--js-runtimes", "node", "--paths", str(destination), "--output", "%(id)s.%(ext)s",
         "--format", "bv*+ba/b", "--merge-output-format", "mkv",
@@ -75,10 +75,9 @@ def resolve_source(source, raw_dir=None):
     url = resolve_url(source)
     if raw_dir is None:
         raise ValueError("YouTube sources require a local raw directory")
-    destination = Path(raw_dir)
+    destination = Path(raw_dir).resolve()
     destination.mkdir(parents=True, exist_ok=True)
-    existing = [path.resolve() for path in destination.iterdir()
-                if path.is_file() and path.suffix.lower() in {".mkv", ".mp4", ".webm", ".mov"}]
+    existing = [path.resolve() for path in destination.iterdir() if completed_video(path)]
     if len(existing) == 1:
         return existing[0], {"kind": "cached_youtube", "url": url, "network_used": False}
     if len(existing) > 1:
@@ -88,10 +87,17 @@ def resolve_source(source, raw_dir=None):
     output = run_download(command)
     paths = [Path(line.removeprefix("PIU_FILE:")).resolve() for line in output.splitlines()
              if line.startswith("PIU_FILE:")]
-    if len(paths) != 1 or not paths[0].is_file() or not paths[0].is_relative_to(destination):
+    if len(paths) != 1 or not completed_video(paths[0]) or not paths[0].is_relative_to(destination):
         raise ValueError("Download did not return exactly one completed video")
     return paths[0], {"kind": "youtube_download", "url": url, "network_used": True,
                       "timing_policy": "full untrimmed download; no local offset inferred"}
+
+
+def completed_video(path):
+    """A finished format stream is still an intermediate file before merging."""
+    return (path.is_file() and path.suffix.lower() in {'.mkv','.mp4','.webm','.mov'}
+            and re.search(r'\.f\d+(?:[-_][A-Za-z0-9_-]+)?$',path.stem) is None
+            and not path.stem.endswith('.temp'))
 
 
 if __name__ == "__main__":

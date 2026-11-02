@@ -40,6 +40,12 @@ Downloads show live progress, speed and estimated time remaining.
 
 `fetch` and `auto` share the same cache. A later `auto` call reuses the completed video under `.local/data/<video-id>/raw/` without downloading it again.
 
+Interrupted downloads resume on the next `fetch` or `auto` call. Format streams
+such as `.f299.mp4` remain intermediate files until video and audio are merged;
+their `.part` and `.ytdl` files are preserved for yt-dlp continuation. Visual
+recognition uses video; the recording audio supports official-song alignment
+for beat reconstruction and UCS transcription.
+
 To use a video downloaded from YouTube Studio as that cached source, move it into place with its URL or ID:
 
 ```sh
