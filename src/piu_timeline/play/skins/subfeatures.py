@@ -4,6 +4,20 @@ import numpy as np
 from piu_timeline.play.skins.sampling import key
 
 
+def shared_cap_pixels(first,second,templates,fraction):
+    """Two positive comparisons identify one glyph only through shared pixels."""
+    if any('bounds_pixels'not in p or 'sampling_origin_pixels'not in p for p in(first,second)):
+        return None
+    a,b,c,d=first['bounds_pixels'];x,y,z,w=second['bounds_pixels']
+    lo,top,hi,bottom=max(a,x),max(b,y),min(c,z),min(d,w)
+    if lo>=hi or top>=bottom:return None
+    before,after=(templates[key(p)]['cap_support']for p in(first,second))
+    if not before.any()or not after.any():return None
+    count=int((before[top-b:bottom-b,lo-a:hi-a]&after[top-y:bottom-y,lo-x:hi-x]).sum())
+    ratios=count/int(before.sum()),count/int(after.sum())
+    return {'shared_pixels':count,'primary_fraction':ratios[0],'reference_fraction':ratios[1]}if min(ratios)>=fraction else None
+
+
 def account(images,templates,width,height):
     if not any(o['role']=='hold_body'for o in images):return images
     caps=[];unions={}

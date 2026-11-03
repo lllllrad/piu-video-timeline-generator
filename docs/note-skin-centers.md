@@ -106,7 +106,9 @@ or the leading boundary and dimensions measured from at least two independently
 sourced isolated caps. The dimension model requires matching full width and a
 visible lower glyph protrusion outside the stem; the body cannot define the cap
 height. Conflicting dimension/RGB estimates cannot supply a center. All supporting
-reference sources must independently pass original RGB/PTS verification. Hold ends have no automatic center model. The command independently
+reference sources must independently pass original RGB/PTS verification. Hold ends
+require a complete tap-cap RGB comparison and have no boundary-only fallback.
+The command independently
 checks the original source RGB, ROI, dimensions, PTS and unchanged media identity
 before issuing certificates. It saves measurement and verification artifacts,
 leaves unresolved references unregistered, and never uses beat rows, targets or
@@ -121,12 +123,15 @@ without decoding source video. Metadata-only certification can reuse unchanged
 cap/body acquisition groups.
 
 The representative detection keeps its original image identity and coordinate.
-A positively matched registered alternative can supply a coordinate proof only
-whose matching anchor coincides with the original detection. Project that
-comparison with its own certified center offset and actual vertical scale.
+A positively matched registered alternative supplies its own certified center
+offset and actual vertical scale. When its matching origin differs from the
+representative detection, both compared cap supports must overlap by at least
+80% of each support's pixels on the actual target grid. Bounding-box proximity
+does not establish this identity. The actual shared-pixel count and both support
+fractions are retained as `native_cap_shared_pixel_evidence`.
 The sample retains both `detected_y_pixels` and `native_y_pixels`, its actual reference,
 comparison index and cap error; failed context does not erase positive cap
-pixels. A nearby row cannot transfer calibration. All positively matched
+pixels. Another glyph cannot transfer calibration. All positively matched
 registered coordinate intervals must intersect. Mutually contradictory
 comparisons produce an explicit per-track warning and do not supply chord or
 independent coordinate-model support; raw detections and comparisons remain.
@@ -146,6 +151,15 @@ qualified hypothesis. They supply no independent chord/spacing coordinate proof.
 There is no lane-wide or neighboring-frame center correction. Reapplying
 registration starts from the raw trajectory. Image ownership, role
 joins and hold connectivity use raw matching positions and original PTS.
+
+A trajectory whose fitted samples all have certified native center bounds can
+measure displacement even while it is the only visible note. The native adapter
+passes that coordinate basis and error explicitly to shared motion. Such samples
+are labeled `measured_cap_displacement`; an unregistered image origin or a
+conflicting projection cannot establish this solo support. Joint registration
+also accepts a single qualified trajectory and bounds monotonic correction by
+its endpoint errors. Unknown frames are not filled, and source PTS, capture gaps,
+target-clock checks and independent chord requirements remain separate.
 
 Coordinates retain registration only for the reference that actually supplied
 the positive cap measurement. Uncertainty is converted through the actual

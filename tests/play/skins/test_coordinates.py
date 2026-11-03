@@ -34,6 +34,38 @@ def fixture(root):
 
 
 class ImageCoordinateTest(unittest.TestCase):
+    def test_same_positive_cap_pixels_supply_their_own_center_across_different_matching_origins(self):
+        import numpy as np
+        from tests.play.skins.test_anchor_registration import fixture as source_fixture,register
+        from piu_timeline.play.skins.detector import SkinDetector
+        from piu_timeline.play.skins.replay import detector_metadata
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);rgb,data,_=source_fixture(root);path=register(root,rgb)
+            document=json.loads(path.read_text());start=next(t for t in document['templates']if t['id']=='hold_start')
+            start.pop('native_anchor_registration');start['anchor_pixels'][1]+=1
+            path.write_text(json.dumps(document));bank=load_bank(path)
+            canvas=np.zeros_like(rgb)
+            canvas[30:65,10:30]=rgb[60:95,10:30]
+            canvas[100:135,10:30]=rgb[60:95,10:30]
+            layout={'receptor_y':.05,'note_y_max':.95,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+            images=SkinDetector(bank,layout,200,160).detect(canvas)
+            caps=[o for o in images if o['role']!='hold_body'and o['lane']==0]
+            image=min(caps,key=lambda o:o['y']);self.assertEqual(image['role'],'hold_start')
+            self.assertAlmostEqual(image['y']*160,41)
+            data.update(layout=layout,notes=[{'lane':0,'points':[[2.,41.]]}],skin_detector=detector_metadata(path))
+            frames=[{'playback_seconds':2.,'source_pts_seconds':5.,'skin_observations':images}]
+            record=measure(data,frames)['notes'][0];sample=record['observations'][0]
+            self.assertEqual(record['coordinate_status'],'projected')
+            self.assertAlmostEqual(sample['native_y_pixels'],40)
+            self.assertGreaterEqual(sample['native_cap_shared_pixel_evidence']['primary_fraction'],.8)
+            self.assertGreaterEqual(sample['native_cap_shared_pixel_evidence']['reference_fraction'],.8)
+            # A genuine positive match of the other glyph cannot calibrate this one.
+            other=max(caps,key=lambda o:o['y'])
+            alternative=next(p for p in other['alternatives']if p['template']in bank['anchor_registrations'])
+            image['alternatives']=[alternative]
+            sample=measure(data,frames)['notes'][0]['observations'][0]
+            self.assertNotIn('native_cap_coordinate_uncertainty_pixels',sample)
+
     def test_unregistered_image_origins_fail_spacing_without_inventing_calibration(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);data,frames=fixture(root);original=deepcopy((data,frames))

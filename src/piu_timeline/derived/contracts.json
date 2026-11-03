@@ -144,7 +144,8 @@
   },
   "image_coordinates": {
     "schema": 1,
-    "revision": 9,
+    "revision": 10,
+    "minimum_same_cap_support_fraction": 0.8,
     "position_search": {"grid_pixels": 1, "uncertainty_pixels": 0.5},
     "projection": "measured_center_frames_without_mixed_anchor_conventions",
     "uncertainty_units": "source_reference_pixels_scaled_to_analysis",

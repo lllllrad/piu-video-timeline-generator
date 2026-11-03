@@ -13,7 +13,7 @@ from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.calibration import frame_ranges
 from piu_timeline.play.frames import decode_frames
 
-FORMAT={'schema':1,'revision':2,'method':'bright_piu_complete_source_cap',
+FORMAT={'schema':1,'revision':3,'method':'bright_piu_complete_source_cap',
         'minimum_value':170,'minimum_saturation':65,'white_minimum':165,'white_chroma':110,
         'size_spacing_range':[.65,1.25],'maximum_height_difference_pixels':1,
         'maximum_center_shift_spacing':.25,'coordinate_uncertainty_pixels':1.}
@@ -72,7 +72,7 @@ def leading(template,references,spacing):
 
 
 def proposals(bank):
-    """Complete source caps define centers; attached starts require matching RGB."""
+    """Complete caps define centers; tails need a complete tap RGB comparison."""
     taps=defaultdict(list);measured={};spacing=bank['spacing_pixels']
     for t in bank['templates']:
         if t['role']!='tap':continue
@@ -85,8 +85,8 @@ def proposals(bank):
             measured[t['id']]={'center_pixels':[x+w/2,y+h/2],'source_cap_bounds':[x,y,x+w,y+h],
                                'basis':'complete_bright_cap_envelope'}
     for t in bank['templates']:
-        if t['role']!='hold_start':continue
-        geometry=leading(t,taps[t['lane_kind']],spacing)
+        if t['role']not in('hold_start','hold_end'):continue
+        geometry=leading(t,taps[t['lane_kind']],spacing)if t['role']=='hold_start'else None
         target=t['rgb'].astype('float32')/255;matches=[]
         for ref,box in taps[t['lane_kind']]:
             cap=next(r for r in ref['regions']if r['name']=='cap');a,b,c,d=cap['box']

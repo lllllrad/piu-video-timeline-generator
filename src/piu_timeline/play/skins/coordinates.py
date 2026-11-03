@@ -32,7 +32,7 @@ def validate_origin(candidate,template,width,height,scale):
 
 
 
-def registered_comparison(image,bank,templates,lane,y,height,scale):
+def registered_comparison(image,bank,templates,lane,y,height,scale,comparisons=None):
     """Project a positive comparison from its matching anchor to its native center."""
     choices=[]
     for index,candidate in enumerate([image,*image.get('alternatives',[])]):
@@ -68,6 +68,13 @@ def registered_comparison(image,bank,templates,lane,y,height,scale):
     hi=min(c['native_y_pixels']+c['uncertainty_pixels']for c in choices)
     conflict={'coordinate_intersection_pixels':[lo,hi],'comparisons':choices}if lo>hi+1e-6 else None
     coincident=[c for c in choices if abs(c['detected_y_pixels']-y)<1e-5]
+    if not coincident and comparisons is not None:
+        from piu_timeline.play.skins.subfeatures import shared_cap_pixels
+        patterns=[image,*image.get('alternatives',[])]
+        for choice in choices:
+            proof=shared_cap_pixels(image,patterns[choice['comparison_index']],comparisons,
+                                    FORMAT['minimum_same_cap_support_fraction'])
+            if proof:coincident.append({**choice,'shared_cap_pixels':proof})
     if not coincident:return {},conflict
     chosen=min(coincident,key=lambda c:(c['uncertainty_pixels'],c['comparison_index']))
     projection_error=max(abs(c['native_y_pixels']-chosen['native_y_pixels'])+c['uncertainty_pixels']for c in choices)
@@ -76,6 +83,7 @@ def registered_comparison(image,bank,templates,lane,y,height,scale):
             **({'native_cap_coordinate_uncertainty_pixels':chosen['uncertainty_pixels']}if not conflict else{}),
             **({'native_cap_sampling_uncertainty_pixels':chosen['sampling_uncertainty_pixels']}
                if chosen['sampling_uncertainty_pixels']else{}),
+            **({'native_cap_shared_pixel_evidence':chosen['shared_cap_pixels']}if 'shared_cap_pixels'in chosen else{}),
             'native_cap_reference_scale_y':chosen['scale_y'],'native_cap_reference_template':chosen['template'],
             'native_cap_reference_error':chosen['cap_error'],'native_cap_comparison_index':chosen['comparison_index']},conflict
 
@@ -90,6 +98,10 @@ def measure(data,frames):
         if any(r['name']=='cap'for r in t['regions']):identities[key]=cap_reference(bank,t)
     height=data['analysis_height']
     scale=reference_scale(bank,data['layout'],data['analysis_width'],height)
+    comparisons=None
+    if require_origin:
+        from piu_timeline.play.skins.detector import SkinDetector
+        comparisons=SkinDetector(bank,data['layout'],data['analysis_width'],height).by_sampling
     expected=defaultdict(list);samples=[[]for _ in data['notes']];conflicts=defaultdict(list)
     for index,note in enumerate(data['notes']):
         for time,y in detection_points(note):expected[time].append((index,note['lane'],y))
@@ -119,7 +131,7 @@ def measure(data,frames):
                     or not np.isfinite(error)or error<0
                     or np.float32(error)/region.get('maximum_error',.015)>1):
                 raise ValueError(f'Image coordinate has no positive cap comparison: note {index}, time {time}')
-            registration,conflict=registered_comparison(image,bank,templates,lane,y,height,scale)
+            registration,conflict=registered_comparison(image,bank,templates,lane,y,height,scale,comparisons)
             if conflict:
                 conflicts[index].append({'time':time,'source_pts_seconds':pts,**conflict})
                 registration={**registration,'native_cap_registration_status':'conflicting'}

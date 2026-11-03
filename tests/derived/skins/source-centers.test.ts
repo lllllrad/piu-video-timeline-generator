@@ -12,32 +12,37 @@ from piu_timeline.play.skins.bank import load_bank
 with tempfile.TemporaryDirectory()as tmp:
  root=Path(tmp);source=root/'recording.bin';source.write_bytes(b'original recording')
  stat=source.stat();media={'path':str(source),'size_bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns}
- rgb=np.zeros((120,120,3),dtype='uint8');entries=[]
- for index,role in enumerate(('tap','hold_start')):
+ rgb=np.zeros((120,170,3),dtype='uint8');entries=[]
+ for index,role in enumerate(('tap','hold_start','hold_end')):
   image=np.zeros((50,40,3),dtype='uint8');image[12:32,10:30]=[255,255,255];image[14:30,12:28]=[20,150,245]
   if role=='hold_start':image[32:,16:24]=[20,150,245]
+  if role=='hold_end':image[:12,16:24]=[20,150,245]
   cv2.imwrite(str(root/(role+'.png')),np.dstack([image[:,:,::-1],np.full((50,40),255,dtype='uint8')]))
   x=10+50*index;crop=[x,40,x+40,90];rgb[40:90,x:x+40]=image
   regions=[{'name':'cap','box':[10,12,30,32]}]
   if role=='hold_start':regions.append({'name':'connection','box':[16,34,24,50]})
+  if role=='hold_end':regions.append({'name':'connection','box':[16,0,24,10]})
   entries.append({'id':role,'role':role,'lane_kind':0,'anchor_pixels':[20,18],'image':role+'.png','regions':regions,
-   'source_evidence':{'media':media,'roi':[0,0,120,120],'reference_dimensions':[120,120],
+   'source_evidence':{'media':media,'roi':[0,0,170,120],'reference_dimensions':[170,120],
     'source_crop':crop,'playback_seconds':2.,'source_pts_seconds':52.}})
  document={'schema':1,'skin':'synthetic-bright','spacing_pixels':24,'templates':entries}
  bank_path=root/'bank.json';bank_path.write_text(json.dumps(document));bank=load_bank(bank_path)
  p=proposals(bank)
  assert p['tap']['center_pixels']==[20,22] and p['hold_start']['center_pixels']==[20,22]
  assert p['hold_start']['basis']=='complete_tap_cap_rgb_match'
+ assert p['hold_end']['center_pixels']==[20,22] and p['hold_end']['basis']=='complete_tap_cap_rgb_match'
+ unsupported=load_bank(bank_path);unsupported['templates'][2]['rgb'][:]=255
+ assert 'hold_end'not in proposals(unsupported),'a tail cannot obtain a center from its body boundary'
  def build(name,image=rgb,pts=52.):
   with patch('piu_timeline.play.skins.source_centers.decode_frames',return_value=iter([(pts,2.,image)])):
    return prepare(bank_path,root/name)
  path=build('verified');verified=load_bank(path)
- assert set(verified['anchor_registrations'])=={'tap','hold_start'}
+ assert set(verified['anchor_registrations'])=={'tap','hold_start','hold_end'}
  assert all(t['anchor_pixels']==[20,18] and t['native_center_pixels']==[20,22]for t in verified['templates'])
  assert all(r['center_offset_y_pixels']==4 for r in verified['anchor_registrations'].values())
  changed=rgb.copy();changed[54,74,0]^=1
  partial=load_bank(build('partial',changed))
- assert set(partial['anchor_registrations'])=={'tap'}
+ assert set(partial['anchor_registrations'])=={'tap','hold_end'}
  invalid_reference=rgb.copy();invalid_reference[54,24,0]^=1
  try:build('invalid-reference',invalid_reference)
  except ValueError:pass
@@ -70,5 +75,5 @@ with tempfile.TemporaryDirectory()as tmp:
 `;
 test('bright-source geometry and complete cap RGB need exact native source pixels and PTS',()=>{
  const r=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{encoding:'utf8'}));
- assert.equal(r.registered,2);
+ assert.equal(r.registered,3);
 });
