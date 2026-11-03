@@ -102,3 +102,12 @@ calculation regressions belong beside their TypeScript implementation; testing
 the Python transport alone does not justify keeping them in Python. Ownership
 tests reject foreign fields, observation edits, invalid identities and incomplete
 or reordered results, alongside immutable-input checks.
+
+
+`tests/derived/fixtures.ts:capFrames` generates raw cap observations with original
+recording times and PTS, repeated renders, compressed capture steps and visibility
+through the receptor. The production-style tracker tests infer their own motion
+from these observations and retain ambiguous identities explicitly. Their matrix
+covers multiple game sizes and frame rates, simultaneous rows, missing detector
+observations, repeated frames and capture bursts. `nativeScene` supplies the
+separate approach-window data used by coordinate and clock consumers.

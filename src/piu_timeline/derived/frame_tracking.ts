@@ -7,7 +7,7 @@ type Observation={time:number;anchor:Position;anchors?:Position[];center:Positio
 type Track={lane:number;observations:Observation[];maximumGapSeconds:number};
 type Detection={lane:number;observation:Observation};
 type Edge=[number,number];
-type Displacement={fromSeconds:number;pixels:number;uncertaintyPixels:number};
+type Displacement={fromSeconds:number;pixels:number;uncertaintyPixels:number;unobservedTerminalStep?:boolean};
 type Step=Displacement&{toSeconds:number;basis:'coobserved_images'|'forced_identity_images'};
 type Displacements=Map<number,Displacement>;
 
@@ -27,7 +27,9 @@ function predict(points:{time:number;position:Position}[],time:number,spacing:nu
  const last=points.at(-1),dt=time-last.time;
  if(!(dt>0))throw Error('Tracking observations must increase in original recording time');
  const displacement=motion.get(last.time);
- if(displacement){
+ // An inferred final step is a search envelope. Repeated native positions
+ // constrain a long visibility gap independently of that unobserved step.
+ if(displacement&&!(dt>.05+1e-6&&points.length>=4&&displacement.unobservedTerminalStep)){
   if(![displacement.pixels,displacement.uncertaintyPixels].every(Number.isFinite)||displacement.uncertaintyPixels<0)
    throw Error('Invalid measured tracking displacement');
   const y=last.position.yPixels-displacement.pixels,error=last.position.uncertaintyPixels+displacement.uncertaintyPixels;
@@ -92,9 +94,9 @@ function matching(edges:boolean[][],ordered:boolean,except?:Edge):Edge[]{
 }
 
 /** Common signed translation in compatible views, before choosing identities. */
-function translationAtLimit(tracks:Track[],detections:Detection[],time:number,spacing:number,intervalSeconds:number):Displacement|null{
+function translationsAtLimit(tracks:Track[],detections:Detection[],time:number,spacing:number,intervalSeconds:number):Displacement[]{
  const fromSeconds=Math.max(...tracks.map(t=>t.observations.at(-1).time)),dt=time-fromSeconds;
- if(!(0<dt&&dt<=.05+1e-6))return null;
+ if(!(0<dt&&dt<=.05+1e-6))return [];
  const before=tracks.filter(t=>t.observations.at(-1).time===fromSeconds),
   after=detections,limit=contracts.frame_tracking.maximum_speed_spacing_per_second*spacing*intervalSeconds;
  const intervals=before.map(t=>after.map(d=>{
@@ -113,20 +115,41 @@ function translationAtLimit(tracks:Track[],detections:Detection[],time:number,sp
   if(pairs.length===score[0]&&lanes===score[1])ranges.push([lo,hi]);
  };
  boundaries.forEach((p,i)=>{inspect(p,p);if(i)inspect(boundaries[i-1],p);});
- if(!ranges.length)return null;
- ranges.sort((a,b)=>a[0]-b[0]);let lo=ranges[0][0],hi=ranges[0][1];
- for(const r of ranges.slice(1)){if(r[0]>hi+1e-9)return null;hi=Math.max(hi,r[1]);}
- return {fromSeconds,pixels:(lo+hi)/2,uncertaintyPixels:(hi-lo)/2};
+ if(!ranges.length)return [];
+ ranges.sort((a,b)=>a[0]-b[0]);const merged:number[][]=[];
+ for(const r of ranges){const last=merged.at(-1);if(!last||r[0]>last[1]+1e-9)merged.push([...r]);else last[1]=Math.max(last[1],r[1]);}
+ return merged.map(([lo,hi])=>({fromSeconds,pixels:(lo+hi)/2,uncertaintyPixels:(hi-lo)/2}));
 }
 
 
-/** A unique cross-lane image translation can survive a compressed capture step.
- * First prefer the ordinary one-frame gate. A larger measured jump retains a
- * separate cadence warning; it does not establish elapsed engine time. */
-function translation(tracks:Track[],detections:Detection[],time:number,spacing:number):Displacement|null{
- const dt=time-Math.max(...tracks.map(t=>t.observations.at(-1).time));
- return translationAtLimit(tracks,detections,time,spacing,dt)??
-  translationAtLimit(tracks,detections,time,spacing,contracts.frame_tracking.maximum_capture_interval_seconds);
+function ordinaryHistory(tracks:Track[],step:Displacement,time:number):boolean{
+ let lo=-Infinity,hi=Infinity,captureBound=0;const lanes=new Set<number>();
+ for(const track of tracks){
+  const history=track.observations;
+  if(history.length<3||history.at(-1).time!==step.fromSeconds)continue;
+  const net=displacement(history[0],history.at(-1));
+  if(!net||net[0]>0&&step.pixels+step.uncertaintyPixels<0||net[1]<0&&step.pixels-step.uncertaintyPixels>0)continue;
+  let a=-Infinity,b=Infinity;
+  const adjacent=history.slice(1).map((o,i)=>displacement(history[i],o));
+  if(adjacent.some((r,i)=>!r||history[i+1].time-history[i].time>.05+1e-6))continue;
+  // A repeated game render is not zero engine velocity. Retain one actually
+  // observed render step as capture-phase uncertainty over the full history.
+  const capture=Math.max(...adjacent.map(r=>Math.abs((r[0]+r[1])/2)));
+  for(let i=0;i<history.length;i++)for(let j=i+1;j<history.length;j++){
+   const range=displacement(history[i],history[j]),dt=history[j].time-history[i].time;
+   if(!range){a=Infinity;continue;}
+   a=Math.max(a,(range[0]-capture)/dt);b=Math.min(b,(range[1]+capture)/dt);
+  }
+  if(a>b)continue;
+  lo=Math.max(lo,a);hi=Math.min(hi,b);captureBound=Math.max(captureBound,capture);lanes.add(track.lane);
+ }
+ const dt=time-step.fromSeconds;
+ return lanes.size>=2&&lo<=hi&&lo*dt-captureBound<=step.pixels+step.uncertaintyPixels&&step.pixels-step.uncertaintyPixels<=hi*dt+captureBound;
+}
+function translations(tracks:Track[],detections:Detection[],time:number,spacing:number):Displacement[]{
+ const dt=time-Math.max(...tracks.map(t=>t.observations.at(-1).time)),ordinary=translationsAtLimit(tracks,detections,time,spacing,dt);
+ if(ordinary.length===1&&ordinaryHistory(tracks,ordinary[0],time))return ordinary;
+ return translationsAtLimit(tracks,detections,time,spacing,contracts.frame_tracking.maximum_capture_interval_seconds);
 }
 
 function orderedView(tracks:Track[],detections:Detection[]):{before:Position[];after:Position[]}|null{
@@ -154,7 +177,7 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
  if(tracks.some(t=>!Number.isFinite(t.maximumGapSeconds)||t.maximumGapSeconds<0||t.observations.slice(1).some((o,i)=>o.time<=t.observations[i].time)))throw Error('Invalid tracking history or expiry');
  const displacements=new Map(motion.map(s=>[s.fromSeconds,s]));
  if(displacements.size!==motion.length)throw Error('Duplicate tracking displacement origin');
- const measured=translation(tracks,detections,time,spacing);
+ const alternatives=translations(tracks,detections,time,spacing),measured=alternatives.length===1?alternatives[0]:null;
  let step:Step|null=measured?{...measured,toSeconds:time,basis:'coobserved_images'}:null;
  const steps=new Map(pastSteps.map(s=>[s.toSeconds,s]));
  if(steps.size!==pastSteps.length)throw Error('Duplicate frame displacement time');
@@ -166,12 +189,12 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
   const latest=Math.max(...pastSteps.map(s=>s.toSeconds)),gap=time-latest;
   if(0<gap&&gap<=.05+1e-6){
    origin=latest;uncertaintyPixels=contracts.frame_tracking.maximum_speed_spacing_per_second*spacing*gap;
-   displacements.set(origin,{fromSeconds:origin,pixels,uncertaintyPixels});
+   displacements.set(origin,{fromSeconds:origin,pixels,uncertaintyPixels,unobservedTerminalStep:true});
   }
  }
  while(steps.has(origin)){
   const previous=steps.get(origin);pixels+=previous.pixels;uncertaintyPixels+=previous.uncertaintyPixels;origin=previous.fromSeconds;
-  displacements.set(origin,{fromSeconds:origin,pixels,uncertaintyPixels});
+  displacements.set(origin,{fromSeconds:origin,pixels,uncertaintyPixels,...(!step?{unobservedTerminalStep:true}:{})});
  }
  const matches:Edge[]=[],uncertainTracks=new Set<number>(),uncertainDetections=new Set<number>(),ambiguities:Edge[]=[];
  for(const lane of new Set([...tracks,...detections].map(x=>x.lane))){
@@ -182,11 +205,19 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
    const before=new Map(a.map((id,i)=>[id,view.before[i]])),after=new Map(b.map((id,i)=>[id,view.after[i]]));
    a.sort((i,j)=>before.get(i).yPixels-before.get(j).yPixels);b.sort((i,j)=>after.get(i).yPixels-after.get(j).yPixels);
   }
-  const edges=a.map(i=>b.map(j=>compatible(tracks[i],detections[j],time,spacing,displacements)));
-  const chosen=matching(edges,!!view),forced=chosen.filter(edge=>matching(edges,!!view,edge).length<chosen.length);
+  const hypotheses=alternatives.length>1?alternatives.map(d=>new Map(displacements).set(d.fromSeconds,d)):[displacements];
+  const tables=hypotheses.map(m=>a.map(i=>b.map(j=>compatible(tracks[i],detections[j],time,spacing,m))));
+  const forcedByModel=tables.map(edges=>{
+   const chosen=matching(edges,!!view);
+   return chosen.filter(edge=>matching(edges,!!view,edge).length<chosen.length);
+  });
+  // Each assignment must use one coherent image translation. Combining edges
+  // from different translations could fabricate a larger matching and force
+  // a false identity when one actual cap is missing.
+  const forced=forcedByModel[0].filter(([i,j])=>forcedByModel.every(edges=>edges.some(([a,b])=>a===i&&b===j)));
+  const edges=a.map((_,i)=>b.map((_,j)=>tables.some(edges=>edges[i][j])));
   for(const [i,j]of forced)matches.push([a[i],b[j]]);
   const fixedA=new Set(forced.map(([i])=>i)),fixedB=new Set(forced.map(([,j])=>j));
-  if(forced.length===chosen.length)continue;
   // Retire the uncertain fragments before beginning the newly observed ones.
   // They remain separate evidence, rather than contaminating a later identity.
   for(let i=0;i<a.length;i++)for(let j=0;j<b.length;j++)if(edges[i][j]&&!fixedA.has(i)&&!fixedB.has(j)){
@@ -208,5 +239,5 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
   visible_start_seconds:measured.fromSeconds,visible_end_seconds:time,
   displacement_range_pixels:[measured.pixels-measured.uncertaintyPixels,measured.pixels+measured.uncertaintyPixels],
   source_cadence_limit_pixels:limit,interpretation:'measured_image_translation_without_engine_time_assumption'}]:[];
- return {cadenceWarnings,matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step};
+ return {translationAlternatives:alternatives,cadenceWarnings,matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step};
 }

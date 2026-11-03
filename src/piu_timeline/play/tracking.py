@@ -96,6 +96,7 @@ class NoteTracker:
         warning={'reason':'ambiguous_note_tracking','check':'note_visibility',
                  'visible_start_seconds':seconds,'visible_end_seconds':seconds,'source_pts_seconds':[source_pts],
                  'observed_points':len(assignment['ambiguities']),
+                 'candidate_frame_displacements':assignment['translationAlternatives'],
                  'candidate_edges':[{'previous_lane':self.active[i].lane,'previous_seconds':self.active[i].points[-1][0],
                     'previous_image_y_pixels':self.active[i].points[-1][1],
                     'observed_lane':detections[j]['lane'],'observed_image_y_pixels':detections[j]['y']*self.height,

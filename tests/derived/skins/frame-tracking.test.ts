@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync}from 'node:child_process';
 import {assign} from '../../../src/piu_timeline/derived/frame_tracking.ts';
-import {nativeScene} from '../fixtures.ts';
+import {nativeScene,capFrames} from '../fixtures.ts';
 
 const center=(y:number,error=.5)=>({yPixels:y,uncertaintyPixels:error,basis:{kind:'native_cap_center' as const}});
 const anchor=(y:number,reference='cap')=>({yPixels:y,uncertaintyPixels:.5,
@@ -171,4 +171,56 @@ print(json.dumps([{'lane':a.lane,'points':a.points,'warnings':a.tracking_warning
  assert.equal(result.length,2);assert.ok(result.every(r=>r.points.length===2));
  for(const r of result){assert.equal(r.warnings[0].reason,'observed_frame_step_exceeds_source_cadence');
   assert.deepEqual(r.warnings[0].source_pts_seconds,[101,101+1/60]);}
+});
+
+for(const spacing of [20,40,80])for(const fps of [30,60,120])for(const burst of [false,true])
+test(`generated production-style tracking learns its own movement across a capture burst: spacing=${spacing}, fps=${fps}, burst=${burst}`,()=>{
+ const scene=capFrames(Array.from({length:9},(_,i)=>[1+Math.floor(i/2)*.125,i%2]),spacing,fps,
+  burst?{end:2.3,repeated:[[.5,.5+1/fps]],renderTime:t=>t>=.7?t+2/fps:t}:{end:2.3});
+ let active:any[]=[],steps:any[]=[];const created=new Map<number,number>(),uncertainSources=new Set<number>();let warnings=0;
+ for(const [index,sample]of scene.frames.entries()){
+  const time=sample.playback_seconds,caps=sample.notes.filter(n=>!(n.source===3&&index%17===0)).map(n=>({
+   source:n.source,lane:n.lane,observation:observation(time,n.y_pixels)}));
+  const r=assign(active,caps,time,spacing,[],steps);warnings+=r.cadenceWarnings.length;
+  if(r.ambiguousTracks.length){
+   assert.ok(r.translationAlternatives.length>1,`unexplained ambiguity at ${time}`);
+   assert.ok(r.ambiguousDetections.length>0);
+   warnings++;r.ambiguousTracks.forEach(i=>uncertainSources.add(active[i].source));
+  }
+  const used=new Set<number>();
+  for(const [i,j]of r.matches){assert.equal(active[i].source,caps[j].source,`identity switched at ${time}`);
+   active[i].observations.push(caps[j].observation);active[i].observations=active[i].observations.slice(-6);used.add(j);}
+  active=active.filter((t,i)=>!r.ambiguousTracks.includes(i)&&time-t.observations.at(-1).time<=.12);
+  caps.forEach((cap,j)=>{if(!used.has(j)){
+   if(created.has(cap.source))assert.ok(uncertainSources.has(cap.source),`unexplained fragmentation at ${time}`);
+   created.set(cap.source,(created.get(cap.source)??0)+1);
+   active.push({lane:cap.lane,source:cap.source,observations:[cap.observation],maximumGapSeconds:.12});}});
+  steps=steps.filter(s=>time-s.toSeconds<=.35);if(r.step)steps.push(r.step);
+ }
+ assert.equal(created.size,9);if(burst){if(spacing>=40||fps<=60)assert.ok(warnings>0);}
+ else{assert.equal(uncertainSources.size,0);assert.ok([...created.values()].every(n=>n===1));}
+});
+
+test('a plausible slow reverse cannot steal the following row during a larger forward capture burst',()=>{
+ const tracks=[{...track(308),lane:0},{...track(308),lane:1}],time=1+1/30,
+  caps=[detection(260,time),detection(320,time),{...detection(260,time),lane:1},{...detection(320,time),lane:1}];
+ const r=assign(tracks,caps,time,40);
+ assert.deepEqual(r.matches,[]);assert.equal(r.translationAlternatives.length,2);
+ assert.deepEqual(r.ambiguousTracks,[0,1]);assert.equal(r.ambiguousDetections.length,4);
+});
+
+test('one missing cap cannot make edges from different image translations look certain',()=>{
+ const tracks=[0,1].flatMap(lane=>[148,208,268].map(y=>({...track(y),lane}))),time=1+1/30,
+  caps=[...([132,192,252,312].map(y=>detection(y,time))),...[132,252,312].map(y=>({...detection(y,time),lane:1}))];
+ const r=assign(tracks,caps,time,40);
+ assert.equal(r.translationAlternatives.length,2);assert.deepEqual(r.matches,[]);
+ assert.equal(r.ambiguousTracks.length,6);assert.equal(r.ambiguousDetections.length,7);
+});
+
+test('an unobserved final step cannot widen a disappeared cap into the following note',()=>{
+ const old={lane:0,maximumGapSeconds:.12,observations:Array.from({length:6},(_,i)=>observation(1-(5-i)/30,32+8*(5-i)))},
+  following={lane:0,maximumGapSeconds:.12,observations:[observation(1+2/30,46)]},now=1+3/30,
+  steps=Array.from({length:2},(_,i)=>({fromSeconds:1+i/30,toSeconds:1+(i+1)/30,pixels:8,uncertaintyPixels:.5,basis:'forced_identity_images' as const}));
+ const r=assign([old,following],[detection(38,now)],now,20,[],steps);
+ assert.deepEqual(r.matches,[[1,0]]);assert.deepEqual(r.ambiguousTracks,[]);
 });

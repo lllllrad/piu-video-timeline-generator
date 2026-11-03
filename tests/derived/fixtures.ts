@@ -45,6 +45,19 @@ export function nativeScene(events: [number, number][], spacing = 40, fps = 60, 
       coordinate_registration: {chunks: [{chunk: 0, status: 'fitted', head_offsets: offsets}]}}};
 }
 
+
+/** Raw cap visibility ends at the receptor when processed; source PTS is retained. */
+export function capFrames(events:[number,number][],spacing=40,fps=60,capture:NativeCapture={}){
+ const scene=nativeScene(events,spacing,fps,5,capture),receptor=scene.layout.receptor_y*scene.analysis_height,
+  bottom=scene.layout.note_y_max*scene.analysis_height;
+ return {analysis_width:scene.analysis_width,analysis_height:scene.analysis_height,layout:scene.layout,
+  frames:scene.scroll_motion.samples.map(sample=>({playback_seconds:sample.time,source_pts_seconds:sample.source_pts,
+   notes:events.flatMap(([target,lane],source)=>{
+    const y=receptor+2*(spacing*6*target-sample.phase);
+    return receptor<y&&y<bottom-.55*spacing?[{source,lane,y_pixels:y}]:[];
+   })}))};
+}
+
 /** Certified endpoint errors explain a raster gap differing from its fitted value. */
 export function measuredGapScene(spacing=40,fps=60,events:[number,number][]=[[.85,0],[1.1,1]]){
   const data=nativeScene(events,spacing,fps,5,{end:1.3}),scale=spacing/40;

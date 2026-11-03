@@ -124,10 +124,15 @@ native position domain.
 
 
 A uniquely supported translation across independent lanes can preserve image
-identities through an unusually large captured step. The ordinary one-frame
-search remains preferred; an expanded search covers only the declared maximum
-capture interval. Oversized steps retain original timestamps and explicit
+identities through an unusually large captured step. A one-frame translation is
+preferred when independent lanes support it throughout their recent displacement
+intervals, including one observed render step of capture-phase uncertainty.
+Otherwise the search covers the declared maximum capture interval. Each possible
+translation uses its own complete matching; only links forced under every
+hypothesis survive. A guessed terminal step cannot replace measured displacement
+through a long visibility gap when repeated native positions constrain that gap.
+
+Oversized steps retain original timestamps and explicit
 `observed_frame_step_exceeds_source_cadence` / `native_motion_cadence_unresolved`
-warnings. They can supply measured screen displacement, but do not establish
-engine time or decide between capture delay and a scroll effect. A lone cap or
-competing translations cannot establish this expanded image connection.
+warnings. They supply measured screen displacement while leaving engine time and
+the distinction between capture delay and scroll effects unresolved.
