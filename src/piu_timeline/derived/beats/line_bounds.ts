@@ -1,16 +1,10 @@
 /** Joint affine constraints; no reference is discarded or moved to a beat row. */
 import type {CoordinateModel, Interval, Reference} from '../types.ts';
-import {clipPlane,type Vertex} from '../coordinates/polygon.ts';
+import {clipAffine as clip,type Vertex} from '../coordinates/polygon.ts';
 
 export type {Vertex} from '../coordinates/polygon.ts';
 
-export function clip(vertices: Vertex[], time: number, offset: number, error: number): Vertex[] {
-  let result = vertices;
-  for (const sign of [-1, 1]) {
-    result=clipPlane(result,p=>error-sign*(p[1]+p[0]*time-offset));
-  }
-  return result;
-}
+export {clip};
 
 export function domain(references: Reference[], origin: number, error: number): Vertex[] {
   const times = references.map(r => r.target_seconds - origin), values = references.map(r => r.offset);

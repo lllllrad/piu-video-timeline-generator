@@ -4,7 +4,8 @@ contracts.image_coordinates.native_cap_registration = contracts.native_anchor;
 contracts.shared_motion.local_clock = contracts.local_clock;
 Object.assign(contracts.chords, {native_cap_registration: contracts.native_anchor, image_coordinates: contracts.image_coordinates});
 for (const key of ['domains', 'recovery']) contracts[key].measurement_limits = contracts.coordinates;
-Object.assign(contracts.timing, {clock_conversion: contracts.clock_conversion, spacing_checks: contracts.spacing,
+Object.assign(contracts.native_clock,{render_clock:contracts.render_clock});
+Object.assign(contracts.timing, {clock_conversion: contracts.clock_conversion, render_clock:contracts.render_clock, spacing_checks: contracts.spacing,
   independent_coordinates: contracts.coordinates, native_chords: contracts.chords, native_row_domains: contracts.domains, native_recovery: contracts.recovery,
   native_gap_validation: contracts.native_gap_validation});
 export const NATURAL_SPLITS: number[] = contracts.natural_splits;

@@ -10,7 +10,7 @@ export interface Geometry {analysis_width?:number;analysis_height?:number;layout
 export interface TrackObservations {notes:readonly ObservedNote[];geometry:Geometry}
 export type ObservationArtifact=Artifact<'track-observations',TrackObservations>;
 export const coordinateFields=['points','status','reason','target_seconds','prediction_uncertainty_seconds','velocity_pixels_per_second',
- 'native_interval_model','native_motion_support','residual_pixels','speed_change_fraction','fit_method','motion_clock','motion_target_phase','clock_target_phase','motion_chunk','motion_support_points',
+ 'native_interval_model','native_motion_support','residual_pixels','speed_change_fraction','fit_method','motion_clock','motion_clock_validation','motion_target_phase','clock_target_phase','motion_chunk','motion_support_points',
  'observed_phase_slope','head_registration','timing_reconstruction','native_clock_warning','rejected_chunk_clock','stationary_phase_interval',
  'crossing_source_pts_seconds','crossing_frame_seconds','crossing_capture_range','validated_later_observations','later_observation_maximum_error_pixels',
  'later_observation_tolerance_pixels','extrapolation_seconds','motion_support_end_seconds'] as const;

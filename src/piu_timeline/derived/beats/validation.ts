@@ -22,7 +22,8 @@ export function spacingSupportedNotes(notes: Note[], groups: RecordData[], fits:
   const candidate = notes.map(n => ({...n}));
   groups.forEach((g, i) => g.notes.forEach((index, j) => {
     const f = fits[i];
-    if (['restored', 'partial'].includes(f.status) && f.targets[j] != null) candidate[index].target_seconds = f.targets[j];
+    if (['restored', 'partial'].includes(f.status) && f.targets[j] != null){candidate[index].target_seconds = f.targets[j];
+      candidate[index].beat_reconstruction={...candidate[index].beat_reconstruction,status:'restored',provisional:true};}
     else candidate[index].status = 'excluded';
   }));
   const rejected = new Set([...spacingFailures(candidate, spacing, motion, support), ...conflicts(candidate, chords)].map(w => w.note));

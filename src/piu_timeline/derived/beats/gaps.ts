@@ -1,6 +1,8 @@
 /** Pairwise physical gaps constrain row differences before selecting a subdivision. */
 import {contracts} from '../contracts.ts';
 import {equal} from '../math.ts';
+import {same as sameClock}from '../coordinates/clock_model.ts';
+import {fit as phaseClocks,covering,sourceEstimate}from '../coordinates/phase_clock.ts';
 import {fitTrajectory} from '../coordinates/points.ts';
 import {NativeGapMeasurements} from '../native_gaps.ts';
 import type {Interval,RecordData} from '../types.ts';
@@ -14,19 +16,28 @@ export function prepare(data:RecordData,groups:RecordData[]):RecordData[]{
   const a=Math.min(notes[i],notes[j]),b=Math.max(notes[i],notes[j]);if(membership.get(a)!==membership.get(b))continue;
   const key=`${a},${b}`;if(!pairs.has(key))pairs.set(key,[]);pairs.get(key).push(time);
  }
- const proofs=[];
+ const proofs=[],renderModels=new Map<number,RecordData[]>();
  for(const [key,times]of pairs){
   const ids=key.split(',').map(Number),notes=ids.map(i=>data.notes[i]),clock=notes[0].motion_clock;
-  if(!clock||!equal(clock,notes[1].motion_clock)||!Array.isArray(clock.window)||clock.window.length!==2)continue;
+  if(notes.some(n=>!sourceEstimate(n)))continue;
+  const proof=measured.measure({peer_notes:ids,visible_start_seconds:Math.min(...times),visible_end_seconds:Math.max(...times)});
+  if(proof.status!=='measured')continue;
+  const endpointError=Math.max(...proof.samples.flatMap(s=>s.coordinate_uncertainties_pixels));
+  if(!renderModels.has(endpointError))renderModels.set(endpointError,phaseClocks(data.scroll_motion,endpointError));
+  const render=covering(renderModels.get(endpointError),ids,notes,proof.samples);
+  if(render){
+   const values=proof.allowed_gap_range_pixels.flatMap(g=>render.velocity_range_pixels_per_second.map(v=>g/v));
+   proofs.push({peer_notes:ids,target_gap_range_seconds:[Math.min(...values),Math.max(...values)],
+    source_velocity_range_pixels_per_second:render.velocity_range_pixels_per_second,render_clock:render,native_gap_measurements:proof});
+   continue;
+  }
+  if(!clock||!sameClock(clock,notes[1].motion_clock)||!Array.isArray(clock.window)||clock.window.length!==2)continue;
   const span=clock.window[1]-clock.window[0];
   if(![clock.origin,clock.intercept,clock.velocity,clock.residual,...clock.window].every(Number.isFinite)||clock.velocity<=0||clock.residual<0||span<F.minimum_clock_span_seconds)continue;
   if(notes.some(n=>!Number.isFinite(n.clock_target_phase??n.motion_target_phase)||
    Math.abs(clock.origin+((n.clock_target_phase??n.motion_target_phase)-clock.intercept)/clock.velocity-n.target_seconds)>1e-8))continue;
   if(notes.some(n=>!Number.isFinite(n.target_seconds)||!Number.isFinite(n.prediction_uncertainty_seconds)||n.prediction_uncertainty_seconds<0||
    n.target_seconds-n.prediction_uncertainty_seconds<clock.window[0]||n.target_seconds+n.prediction_uncertainty_seconds>clock.window[1]))continue;
-  const proof=measured.measure({peer_notes:ids,visible_start_seconds:Math.min(...times),visible_end_seconds:Math.max(...times)});
-  if(proof.status!=='measured')continue;
-  const endpointError=Math.max(...proof.samples.flatMap(s=>s.coordinate_uncertainties_pixels));
   const error=Math.max(F.slope_error_floor_pixels,F.slope_error_residual_multiplier*clock.residual,2*endpointError)/span;
   const velocity=[clock.velocity-error,clock.velocity+error];if(velocity[0]<=0)continue;
   const values=proof.allowed_gap_range_pixels.flatMap(g=>velocity.map(v=>g/v));

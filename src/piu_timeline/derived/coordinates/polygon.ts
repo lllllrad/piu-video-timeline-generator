@@ -11,3 +11,10 @@ export function clipPlane(vertices:Vertex[],score:(point:Vertex)=>number):Vertex
  }
  return result;
 }
+
+/** Bound an affine value at one sample without choosing a representative line. */
+export function clipAffine(vertices:Vertex[],time:number,value:number,error:number):Vertex[]{
+ let result=vertices;
+ for(const sign of [-1,1])result=clipPlane(result,p=>error-sign*(p[1]+p[0]*time-value));
+ return result;
+}

@@ -13,7 +13,8 @@ CONTRACTS['image_coordinates']['native_cap_registration']=CONTRACTS['native_anch
 CONTRACTS['shared_motion']['local_clock']=CONTRACTS['local_clock']
 CONTRACTS['chords'].update(native_cap_registration=CONTRACTS['native_anchor'],image_coordinates=CONTRACTS['image_coordinates'])
 for _name in ('domains','recovery'):CONTRACTS[_name]['measurement_limits']=CONTRACTS['coordinates']
-CONTRACTS['timing'].update(clock_conversion=CONTRACTS['clock_conversion'],spacing_checks=CONTRACTS['spacing'],
+CONTRACTS['native_clock']['render_clock']=CONTRACTS['render_clock']
+CONTRACTS['timing'].update(clock_conversion=CONTRACTS['clock_conversion'],render_clock=CONTRACTS['render_clock'],spacing_checks=CONTRACTS['spacing'],
     independent_coordinates=CONTRACTS['coordinates'],native_chords=CONTRACTS['chords'],
     native_row_domains=CONTRACTS['domains'],native_recovery=CONTRACTS['recovery'],
     native_gap_validation=CONTRACTS['native_gap_validation'])

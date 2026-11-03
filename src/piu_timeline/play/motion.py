@@ -69,8 +69,8 @@ class ScrollMotion:
                 'coordinate_registration':getattr(self,'coordinate_registration',{}),
                 'registered_positions':getattr(self,'registered_positions',None)}
 
-    def _track(self,track):
-        return {'lane':track.lane,'points':track.points,'coordinate_basis':getattr(track,'coordinate_basis',None),
+    def _track(self,track,note_index=None):
+        return {'note_index':note_index,'lane':track.lane,'points':track.points,'coordinate_basis':getattr(track,'coordinate_basis',None),
                 'registration_uncertainty_pixels':getattr(track,'registration_uncertainty_pixels',0),
                 'registration_offsets':{chunk:v for (identity,chunk),v in getattr(self,'coordinate_offsets',{}).items()if identity==id(track)}}
 
@@ -83,7 +83,7 @@ class ScrollMotion:
         return call('clocks.fit',self._state(),self._track(track),receptor,layout)
 
     def fit_many(self,tracks,receptor,layout=None):
-        return call('clocks.fitMany',self._state(),[self._track(t)for t in tracks],receptor,layout)
+        return call('clocks.fitMany',self._state(),[self._track(t,i)for i,t in enumerate(tracks)],receptor,layout)
 
     def evidence(self):
         return {'format': getattr(self,'evidence_format',{'schema': 1, 'method': 'peer_note_displacement'}),

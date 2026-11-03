@@ -1,8 +1,10 @@
 /** Subframe clocks from retained displacement. Source frames are never resampled. */
 import {contracts} from './contracts.ts';
+import {fit as renderClocks,crossingRange}from './coordinates/phase_clock.ts';
 import {frameBounds} from './frame_bounds.ts';
 import {compare, linear, lowerBound, median, rms} from './math.ts';
 import type {RecordData} from './types.ts';
+import type {ClockParameters}from './coordinates/clock_model.ts';
 const F = contracts.local_clock;
 const qualified=(track:RecordData)=>track.coordinate_basis==='native_cap_center'&&
  Number.isFinite(track.registration_uncertainty_pixels)&&track.registration_uncertainty_pixels>0;
@@ -21,7 +23,7 @@ export function* crossingWindows(samples: RecordData[], before: RecordData, afte
 }
 export const windows = (samples, before, after) => [...crossingWindows(samples, before, after)];
 
-export function clock(samples: RecordData[], spacing: number): RecordData | null {
+export function clock(samples: RecordData[], spacing: number): ClockParameters | null {
   if (samples.length < 16 || samples.at(-1).time - samples[0].time < .3) return null;
   const t = samples.map(s => s.time - samples[0].time), phase = samples.map(s => s.phase);
   const [velocity, intercept] = linear(t, phase), residual = rms(phase.map((v, i) => v - velocity * t[i] - intercept)), cadence = cadenceOf(samples);
@@ -37,11 +39,12 @@ export class MotionClock {
   chunks: Map<number, RecordData[]>;
   at: Map<number, RecordData>;
   clocks = new Map<number, RecordData | null>();
+  renderModels = new Map<number,RecordData[]>();
   constructor(state: RecordData) {
     this.state = state; this.chunks = new Map(); this.at = new Map();
     for (const s of state.samples) { this.at.set(s.time, s); if (!this.chunks.has(s.chunk)) this.chunks.set(s.chunk, []); this.chunks.get(s.chunk).push(s); }
   }
-  local(chunk, crossing, phase, phaseError, before, after, cadence): [RecordData | null, number | null] {
+  local(chunk, crossing, phase, phaseError, before, after, cadence): [ClockParameters | null, number | null, RecordData | null] {
     const local = chunk.filter(s => Math.abs(s.time - crossing) <= F.maximum_radius_seconds);
     let best = null;
     for (const window of crossingWindows(local, before, after)) {
@@ -52,11 +55,11 @@ export class MotionClock {
       const errors = [before, after].map(s => Math.abs(s.phase - (c.intercept + c.velocity * (s.time - c.origin)))), limit = capture * c.velocity;
       if (Math.max(...errors) <= limit + 1e-6 && before.time - capture <= proposed && proposed <= after.time + capture) {
         const score = [Math.max(F.position_floor_pixels, c.residual), -window.length, Math.abs((window[0].time + window.at(-1).time) / 2 - crossing), window[0].time];
-        if (!best || compare(score, best.score) < 0) best = {score, clock: {...c, selection: F.selection, trimmed_outer_frames: local.length - window.length,
+        if (!best || compare(score, best.score) < 0) best = {score, clock:c, validation:{selection: F.selection, trimmed_outer_frames: local.length - window.length,
           bracket_phase_errors_pixels: errors, bracket_tolerance_pixels: limit}, capture};
       }
     }
-    return best ? [best.clock, best.capture] : [null, null];
+    return best ? [best.clock, best.capture, best.validation] : [null, null, null];
   }
   extrapolated(sample, phase, phaseError): RecordData | null {
     const chunk = this.chunks.get(sample.chunk), last = chunk.at(-1), spacing = this.state.spacing;
@@ -90,7 +93,7 @@ export class MotionClock {
     const sourcePhaseError = phaseError;
     phaseError += Math.sqrt(Math.max(0, after.variance - sample.variance));
     if (!this.clocks.has(sample.chunk)) this.clocks.set(sample.chunk, clock(chunk, this.state.spacing));
-    let c = this.clocks.get(sample.chunk), capture = 0, rejected = null;
+    let c = this.clocks.get(sample.chunk), capture = 0, rejected = null, validation = null;
     const cadence = cadenceOf(chunk.slice(Math.max(0, index - 8), index + 8));
     capture = cadence / 2;
     if (c) {
@@ -98,7 +101,7 @@ export class MotionClock {
       capture = cadence / 2 + phaseError / c.velocity;
       if (!(before.time - capture <= proposed && proposed <= after.time + capture)) { rejected = {clock: c, target_seconds: proposed}; c = null; }
     }
-    if (!c) { const [local, error] = this.local(chunk, interpolated, phase, phaseError, before, after, cadence); if (local) { c = local; capture = error; } }
+    if (!c) { const [local, error, proof] = this.local(chunk, interpolated, phase, phaseError, before, after, cadence); if (local) { c = local; capture = error; validation = proof; } }
     if (!c) {
       const bounded = frameBounds(chunk, sample, phase, sourcePhaseError, cadence);
       return bounded ? {...bounded, ...(rejected ? {rejected_chunk_clock: rejected} : {})} : null;
@@ -109,6 +112,7 @@ export class MotionClock {
     // Keep the original frames: a pause and a stale captured image remain alternatives.
     if (stationary) uncertainty = Math.max(uncertainty, Math.max(time - before.time, after.time - time) + capture);
     return {target_seconds: time, prediction_uncertainty_seconds: uncertainty, fit_method: 'shared_scroll_clock', motion_clock: c,
+      ...(validation?{motion_clock_validation:validation}:{}),
       ...(rejected ? {rejected_chunk_clock: rejected} : {}),
       ...(stationary ? {stationary_phase_interval: {recording_seconds: [before.time, lastBefore.time],
         source_pts_seconds: [before.source_pts, lastBefore.source_pts], phase: lastBefore.phase,
@@ -164,6 +168,14 @@ export class MotionClock {
     const target = phase.at(-1) + intercept - receptor, error = Math.max(.75, 2 * residual, short?bound:(track.registration_uncertainty_pixels ?? 0));
     const r = this.crossing(visible.at(-1)[2], target, error);
     if (!r || !(0 <= r.target_seconds - visible.at(-1)[0] && r.target_seconds - visible.at(-1)[0] <= (hud ? .65 : .25))) return null;
+    if(calibrated){
+      const endpoint=track.registration_uncertainty_pixels;
+      if(!this.renderModels.has(endpoint))this.renderModels.set(endpoint,renderClocks(this.state,endpoint));
+      const model=this.renderModels.get(endpoint).find(m=>m.chunk===chunk&&m.head_notes.includes(track.note_index)),
+        range=model?crossingRange(model,target,error):null;
+      if(range){r.prediction_uncertainty_seconds=Math.max(r.prediction_uncertainty_seconds,r.target_seconds-range[0],range[1]-r.target_seconds);
+        r.motion_clock_validation={...r.motion_clock_validation,render_phase_clock:model,source_target_range_seconds:range};}
+    }
     return {...r, status: 'estimated', reason: null, velocity_pixels_per_second: -(phase.at(-1) - phase[0]) / (visible.at(-1)[0] - visible[0][0]), residual_pixels: residual,
       ...(short?{native_motion_support:{policy,coordinate_basis:track.coordinate_basis,endpoint_uncertainty_pixels:track.registration_uncertainty_pixels,
         source_pts_seconds:visible.map(p=>p[2].source_pts),phase_range_pixels:[phase[0],phase.at(-1)],cap_displacement_pixels:y[0]-y.at(-1),position_errors_pixels:errors,

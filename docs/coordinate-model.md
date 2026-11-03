@@ -156,3 +156,32 @@ one bounded offset. The proof records original PTS, measured displacement,
 position errors and offset intersection as `native_motion_support`. Unregistered
 origins retain the ordinary fit requirements, and a static cap cannot borrow
 motion from neighboring notes.
+
+
+## Rendered phase and musical gaps
+
+`motion_clock` contains affine parameters and the source window used to estimate
+a physical crossing. Its per-note selection and bracket checks live in
+`motion_clock_validation`. The parameter reader compares mathematical models
+independently of diagnostic fields and JSON key order.
+
+For musical rows, `coordinates/phase_clock.ts` bounds positive constant velocity
+from every sample in a complete registered displacement chunk. Its phase budget
+includes one observed render step and both declared position endpoint errors;
+retained native displacement intervals can enlarge the phase measurement error.
+The solver retains all feasible affine models and discards no contradictory
+samples. Source gaps, nonmonotone PTS, reverse motion and unsupported nonuniform
+chunks supply no such clock.
+
+A source-qualified crossing also retains the extrema of this complete phase
+domain, including its cap endpoint uncertainty. A short local fit with a small
+RMS residual cannot narrow those bounds: delayed and catch-up captures may bias
+its intercept. The physical stage records the source target range in
+`motion_clock_validation` before musical rows are considered.
+
+Native endpoint gaps constrain beat-row differences using this velocity domain.
+The same domain validates candidate and final musical rows. Original measured
+pixel bounds stay attached to their endpoints; clock conversion uncertainty is
+recorded separately. Independent coordinate references still enforce their
+absolute constraints. The inspector retains the clock domain and source PTS for
+review, alongside unresolved motion and timing warnings.

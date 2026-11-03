@@ -70,7 +70,7 @@
   },
   "timing": {
     "schema": 1,
-    "revision": 19,
+    "revision": 20,
     "native_gaps": "qualified_endpoint_intervals_constrain_row_differences",
     "audio_video_sync_search_seconds": 0.1,
     "group_beats": 4,
@@ -86,7 +86,9 @@
     "method": "native_endpoint_intervals_under_one_covering_clock",
     "minimum_clock_span_seconds": 0.3,
     "slope_error_floor_pixels": 1.5,
-    "slope_error_residual_multiplier": 3
+    "slope_error_residual_multiplier": 3,
+    "revision": 2,
+    "clock_model": "covering_registered_render_phase_domain_or_common_affine_parameters"
   },
   "registration": {
     "schema": 1,
@@ -106,11 +108,12 @@
   },
   "spacing": {
     "schema": 1,
-    "revision": 4,
+    "revision": 5,
     "coordinate_basis": "qualified_centers_or_identical_matching_reference",
     "pair_selection": "all_coobserved_native_neighbors_including_chords",
     "minimum_unregistered_gap_spacing": 0.075,
-    "independent_validation": "each_head_against_reference_coordinate_bounds"
+    "independent_validation": "each_head_against_reference_coordinate_bounds",
+    "musical_targets": "bounded_render_phase_velocity_before_point_clock_conversion"
   },
   "clock_conversion": {
     "schema": 1,
@@ -226,6 +229,14 @@
       "method": "source_bound_offset_intersection",
       "minimum_frames": 2,
       "maximum_position_error_multiplier": 2
-    }
+    },
+    "output_ownership": "affine_clock_parameters_and_separate_all_sample_crossing_bounds"
+  },
+  "render_clock": {
+    "schema": 1,
+    "method": "all_registered_phase_samples_with_one_observed_render_step",
+    "minimum_span_seconds": 0.3,
+    "maximum_capture_gap_seconds": 0.05,
+    "endpoint_error_multiplier": 2
   }
 }

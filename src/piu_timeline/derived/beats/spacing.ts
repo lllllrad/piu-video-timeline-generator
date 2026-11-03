@@ -5,6 +5,8 @@ import {TrajectoryCoordinates} from '../coordinates/trajectories.ts';
 import {fitTrajectory} from '../coordinates/points.ts';
 import {clip} from './line_bounds.ts';
 import {NativeGapMeasurements} from '../native_gaps.ts';
+import {same as sameClock}from '../coordinates/clock_model.ts';
+import {fit as phaseClocks,covering}from '../coordinates/phase_clock.ts';
 import type {CoordinateSupport, Note, RecordData} from '../types.ts';
 const C = contracts.coordinates, K = contracts.clock_conversion;
 
@@ -54,7 +56,7 @@ export function registeredGap(first: Note, second: Note, samples: number[][], of
 
 export function clockConversion(first: Note, second: Note): RecordData | null {
   const c = first.motion_clock;
-  if (!c || !equal(c, second.motion_clock) || !c.window?.length || [first, second].some(n => !Object.hasOwn(n, 'motion_target_phase'))) return null;
+  if (!c || !sameClock(c, second.motion_clock) || !c.window?.length || [first, second].some(n => !Object.hasOwn(n, 'motion_target_phase'))) return null;
   const original = [first, second].map(n => c.origin + ((n.clock_target_phase ?? n.motion_target_phase) - c.intercept) / c.velocity);
   if (Math.max(...[first, second].map((n, i) => Math.abs(n.target_seconds - original[i]))) < 1e-8) return null;
   const span = c.window[1] - c.window[0];
@@ -99,7 +101,7 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
   // An unsupported origin cannot hide two calibrated neighbors. Preserve the
   // original sampling window when they already have a direct adjacency check.
   for(const [key,samples]of additionalPairs)if(!pairs.has(key))pairs.set(key,samples);
-  const failed = [];
+  const failed = [],renderModels=new Map<number,RecordData[]>();
   for (const [key, samples] of pairs) {
     const [a, b] = key.split(',').map(Number);
     if (changed && !changed.includes(a) && !changed.includes(b)) continue;
@@ -116,7 +118,7 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
         failure_detail:'incompatible_coordinate_origins',check:'timing_reconstruction',observed_points:samples.length});
       continue;
     }
-    let predicted = motion === null ? (ca && cb && Object.keys(ca).length && Object.keys(cb).length && equal(ca, cb) ? (second.target_seconds - first.target_seconds) * ca.velocity : null) :
+    let predicted = motion === null ? (ca && cb && Object.keys(ca).length && Object.keys(cb).length && sameClock(ca, cb) ? (second.target_seconds - first.target_seconds) * ca.velocity : null) :
       (ca && cb ? registeredGap(first, second, samples, offsets, frames, a, b) : null);
     const models = predictions(a, b, notes, [samples[0][0], samples.at(-1)[0]], support);
     // Without independent reference coordinates, a small raster gap alone
@@ -128,11 +130,24 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
       const selected = models.reduce((best, m) => Math.abs(m.predicted_gap_pixels - measured(m)) > Math.abs(best.predicted_gap_pixels - measured(best)) ? m : best);
       predicted = selected.predicted_gap_pixels; comparisonGap = measured(selected);
       diagnostics?.push({peer_notes: [a, b], observed_gap_pixels: gap, comparison_gap_pixels: comparisonGap, comparison_basis: 'independent_registered_offsets', models});
-    } else if (!ca || !cb) continue;
+    }
+    const nativeProof=!models.length&&native?native.measure({peer_notes:[a,b],visible_start_seconds:samples[0][0],visible_end_seconds:samples.at(-1)[0]}):null;
+    let render=null,renderError=0;
+    if(nativeProof?.status==='measured'&&[first,second].every(n=>n.beat_reconstruction?.status==='restored')){
+      const error=Math.max(...nativeProof.samples.flatMap(s=>s.coordinate_uncertainties_pixels));
+      if(!renderModels.has(error))renderModels.set(error,phaseClocks(motion,error));
+      render=covering(renderModels.get(error),[a,b],[first,second],nativeProof.samples);
+      if(render){
+        const values=render.velocity_range_pixels_per_second.map(v=>v*(second.target_seconds-first.target_seconds)),lo=Math.min(...values),hi=Math.max(...values);
+        predicted=(lo+hi)/2;renderError=(hi-lo)/2;
+        diagnostics?.push({peer_notes:[a,b],comparison_basis:'registered_render_phase_domain',render_clock:render,predicted_gap_range_pixels:[lo,hi]});
+      }
+    }
+    if(!models.length&&!render&&(!ca||!cb))continue;
     const tolerance = Math.max(C.maximum_reference_error_spacing * spacing, 3 * scatter);
-    const conversion = motion !== null && predicted !== null && !models.length ? clockConversion(first, second) : null;
-    const comparison = tolerance + (conversion?.position_error_pixels ?? 0);
-    const measured=!models.length&&predicted!==null&&native?native.compare({peer_notes:[a,b],reconstructed_gap_pixels:predicted,prediction_uncertainty_pixels:conversion?.position_error_pixels??0,
+    const conversion = motion !== null && predicted !== null && !models.length && !render ? clockConversion(first, second) : null;
+    const comparison = tolerance + renderError + (conversion?.position_error_pixels ?? 0);
+    const measured=!models.length&&predicted!==null&&native?native.compare({peer_notes:[a,b],reconstructed_gap_pixels:predicted,prediction_uncertainty_pixels:render?renderError:(conversion?.position_error_pixels??0),
       visible_start_seconds:samples[0][0],visible_end_seconds:samples.at(-1)[0]}):null;
     const qualified=measured?.reason==='declared_native_endpoint_errors';
     if(qualified)diagnostics?.push({peer_notes:[a,b],comparison_basis:'native_endpoint_intervals',native_gap_measurements:measured});
@@ -148,6 +163,7 @@ export function spacingFailures(notes: Note[], spacing: number, motion: RecordDa
       ...(models.length ? {comparison_gap_pixels: comparisonGap, comparison_basis: 'independent_registered_offsets'} : {}), tolerance_pixels: tolerance,
       ...(conversion ? {clock_conversion: conversion, comparison_tolerance_pixels: comparison} : {}),
       ...(qualified?{comparison_basis:'native_endpoint_intervals',native_gap_measurements:measured}:{}),
+      ...(render?{render_clock:render,prediction_uncertainty_pixels:renderError}:{}),
       ...(models.length ? {independent_coordinate_models: models, native_position_attribution: attribution} : {})});
   }
   return failed;
