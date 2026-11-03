@@ -75,7 +75,9 @@ Models are downloaded on first use into `.local/cache/paddleocr/`; pinned model 
 
 ## Visual play analysis
 
-After `just auto`, analyze one play's visible notes and combo/judgment update timing:
+After `just auto`, select a compatible image bank with `just skins select` (or
+pass `--note-skin PATH`) before analyzing visible notes and combo/judgment timing.
+Unconfigured plays fail explicitly before decoding; existing reports remain readable:
 
 ```sh
 just play VIDEO --segment 1

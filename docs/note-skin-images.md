@@ -8,10 +8,10 @@ image, rather than an optional association inferred from a distant note.
 
 The image detector scans each lane directly. It does not need an outline
 candidate, a lane-color threshold, a successful judgment association or an
-existing UCS row to propose a location. White-outline detection remains the
-default until an image bank is selected for a play. An explicitly selected bank
-replaces that detector; missing image matches cannot silently fall back to the
-outline model for a different skin.
+existing UCS row to propose a location. Every play requires an explicitly selected
+image bank. Missing selection fails before frame decoding or OCR; missing image
+matches remain missing observations. Native note replay accepts image-template
+observations only.
 
 ## References and measurements
 
@@ -351,12 +351,10 @@ are identical. Body-only updates scan body images without repeating cap search.
 Proven metadata-only reference updates reuse all groups without decoding. An
 unverifiable old bank or changed detector rules require fresh acquisition.
 Missing native image observations or invalid source timestamps fail explicitly.
-The original contour trace is preserved in `frames.outline.jsonl` when switching
-an existing play to an image bank. Original media remains unchanged.
-Image-first acquisition has no original contour trace. Image-to-image updates
-must not create one from RGB-template observations. Removing that profile needs
-fresh contour acquisition unless a genuine contour backup is available; both
-cache selection and replay check the observation type rather than its filename.
+Image-bank changes preserve source timestamps and counter observations while
+replacing note observations from RGB references. Image-to-image updates reuse
+unchanged template groups. Removing a selection leaves that play unsupported;
+existing reports remain readable and new analysis requires a selected bank.
 
 RGB frame detection uses separate CPU worker processes, defaulting to half the
 available CPU affinity, capped at eight. Set `PIU_SKIN_JOBS=1` for serial execution

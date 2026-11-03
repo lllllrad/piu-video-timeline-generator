@@ -11,7 +11,7 @@ import uuid
 import cv2
 import numpy as np
 
-from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, stage_saved_observations, detector_replay_available, is_outline_trace, validate_native_frame
+from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, stage_saved_observations, validate_native_frame
 from piu_timeline.vision.ocr import ocr_images
 from piu_timeline.play.frames import decode_frames, crop_region, TIME_EPSILON
 from piu_timeline.play.tracking import NoteTracker, DigitReader, ComboTracker, associate
@@ -77,7 +77,8 @@ def refresh_counter_observations(cached, output, replace_font=False):
                     baseline = previous.parent / 'frames.jsonl'
                     break
         shutil.copyfile(baseline,base)
-    frames = [json.loads(line) for line in base.open()]
+    with base.open()as stream:
+        frames = [json.loads(line) for line in stream]
     prior,following = [],[None]*len(frames)
     known_before = known_after = None
     for frame in frames:
@@ -127,17 +128,10 @@ def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
     relocate_evidence(output,output,source=previous)
     cached=json.loads((output/'analysis.json').read_text())
     from piu_timeline.play.skins.replay import detector_contract, refresh
+    if note_skin is None:
+        raise ValueError('Image note-skin bank required for native replay')
     if cached.get('skin_detector', {}).get('contract') != detector_contract(note_skin):
-        if note_skin is None:
-            outline = output / 'frames.outline.jsonl'
-            if not is_outline_trace(outline):
-                raise ValueError('Original contour observations are unavailable for detector reset')
-            shutil.copy2(outline, output / 'frames.jsonl')
-            shutil.copy2(outline, output / 'frames.base.jsonl')
-            cached.pop('skin_detector', None)
-            cached.pop('skin_role_evidence',None)
-        else:
-            cached['skin_detector'] = refresh(cached, output, note_skin)
+        cached['skin_detector'] = refresh(cached, output, note_skin)
     refreshed = {}
     from piu_timeline.play.fonts import refresh_reader
     replaced_font = refresh_reader(cached, output, LOCAL_DATA)
@@ -147,16 +141,17 @@ def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
         refreshed = refresh_counter_observations(cached,output,replace_font=replaced_font or reader_changed)
     tracker = NoteTracker(cached['layout'], cached['analysis_width'], cached['analysis_height'])
     combo, count, last = ComboTracker(), 0, None
-    for line in (output / 'frames.jsonl').open():
-        frame = json.loads(line)
-        validate_native_frame(frame,len(cached['layout']['lanes']),allow_images=note_skin is not None)
-        seconds = frame['playback_seconds']
-        if last is not None and seconds <= last:
-            raise ValueError('Saved observation timestamps are not increasing')
-        last = seconds; count += 1
-        tracker.hold_candidate = frame.get('possible_hold_or_dense_stack', False)
-        tracker.update(seconds, frame['notes'], frame['source_pts_seconds']); combo.update(seconds,frame['combo'],frame.get('combo_confidence'),
-                          frame.get('combo_read_mode'),frame['source_pts_seconds'])
+    with (output / 'frames.jsonl').open()as stream:
+        for line in stream:
+            frame = json.loads(line)
+            validate_native_frame(frame,len(cached['layout']['lanes']))
+            seconds = frame['playback_seconds']
+            if last is not None and seconds <= last:
+                raise ValueError('Saved observation timestamps are not increasing')
+            last = seconds; count += 1
+            tracker.hold_candidate = frame.get('possible_hold_or_dense_stack', False)
+            tracker.update(seconds, frame['notes'], frame['source_pts_seconds']); combo.update(seconds,frame['combo'],frame.get('combo_confidence'),
+                              frame.get('combo_read_mode'),frame['source_pts_seconds'])
     if count != cached['frame_count']:
         raise ValueError('Saved native-frame observations are incomplete')
     cached={k:v for k,v in cached.items()if k not in ('conflicted_matches','association_view_format')}
@@ -174,6 +169,10 @@ def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
 
 def analyze_play(document, segment, output, player=None, layout=None, start=None, duration=None,
                  width=650, display_delay_ms=0, note_skin=None):
+    if note_skin is None:
+        raise ValueError('Image note-skin bank required; select one with just skins select or --note-skin')
+    from piu_timeline.play.skins.bank import load_bank
+    skin_bank = load_bank(note_skin)
     record, roi = document['media'], tuple(document['game_roi'])
     source = Path(record['path'])
     before = source.stat()
@@ -206,9 +205,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     (output / 'evidence').mkdir(exist_ok=True)
     digits, bootstrap = bootstrap_digits(record, roi, start, end, layout, output / 'evidence', width=width)
     combo, tracker, times = ComboTracker(), None, []
-    from piu_timeline.play.skins.bank import load_bank
     from piu_timeline.play.skins.replay import detector_metadata
-    skin_bank = load_bank(note_skin) if note_skin is not None else None
     from piu_timeline.play.skins.pipeline import classified_frames
     observed, known, previous_mask, previous_read = 0, 0, None, (None, 0.0)
     last_adapted = None
@@ -220,11 +217,9 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
         for pts, playback, image, skin_observations in classified_frames(decoded,skin_bank,layout,width,round(width*roi[3]/roi[2])):
             if tracker is None:
                 tracker = NoteTracker(layout, image.shape[1], image.shape[0],skin_bank=skin_bank)
-            if skin_observations is None:notes = tracker.detect(image)
-            else:
-                tracker.skin_observations=skin_observations
-                tracker.hold_candidate=tracker.body_at_receptor(skin_observations)
-                notes=[o for o in skin_observations if o['role']!='hold_body']
+            tracker.skin_observations=skin_observations
+            tracker.hold_candidate=tracker.body_at_receptor(skin_observations)
+            notes=[o for o in skin_observations if o['role']!='hold_body']
             tracker.update(playback, notes, pts)
             crop = crop_region(image, layout['combo_roi'])
             counter_pixels.append(pts,playback,crop)
@@ -242,7 +237,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                 last_adapted = value
             times.append(playback); observed += 1; known += value is not None
             trace.write(json.dumps({'source_pts_seconds': pts, 'playback_seconds': playback,
-                                    'notes': notes, **({'skin_observations':tracker.skin_observations} if skin_bank else {}),
+                                    'notes': notes, 'skin_observations':tracker.skin_observations,
                                     'possible_hold_or_dense_stack': tracker.hold_candidate, 'combo': value, 'combo_confidence': confidence, 'combo_read_mode': digits.last_mode}) + '\n')
             if observed % 300 == 0:
                 print(f'  {observed} native frames, {playback-start:.1f}/{end-start:.1f}s, combo readable {known/observed:.0%}', flush=True)
@@ -257,17 +252,18 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             {'media': record, 'start_seconds': start, 'end_seconds': end, 'game_roi': list(roi),
              'analysis_width': width, 'layout': layout, 'frame_observation_version': 2}, output)
         combo = ComboTracker()
-        for line in (output / 'frames.jsonl').open():
-            frame = json.loads(line)
-            combo.update(frame['playback_seconds'],frame['combo'],frame.get('combo_confidence'),
-                         frame.get('combo_read_mode'),frame['source_pts_seconds'])
+        with (output / 'frames.jsonl').open()as stream:
+            for line in stream:
+                frame = json.loads(line)
+                combo.update(frame['playback_seconds'],frame['combo'],frame.get('combo_confidence'),
+                             frame.get('combo_read_mode'),frame['source_pts_seconds'])
         known = round(refinement['combo_readable_fraction']*observed)
     after = source.stat()
     if (after.st_size, after.st_mtime_ns) != (before.st_size, before.st_mtime_ns):
         raise ValueError('Source changed during play analysis')
     interval = float(np.median(np.diff(times))) if len(times) > 1 else None
     return {'schema_version': 1, 'play_analysis_version': VERSION, 'media': record,
-            **({'skin_detector':detector_metadata(note_skin, skin_bank)} if skin_bank else {}),
+            'skin_detector':detector_metadata(note_skin, skin_bank),
             'participant_slots': sorted(segment.get('players',{})), 'song': segment.get('song'), 'chart': segment.get('chart'), 'player': player,
             'chart_identity': segment.get('chart_identity'),
             'start_seconds': start, 'end_seconds': end, 'game_roi': list(roi), 'layout': layout,
@@ -378,8 +374,9 @@ def run(source, segment_number=1, force=False, **options):
         raise ValueError(f'--segment must be between 1 and {len(segments)}')
     from piu_timeline.play.skins.replay import selected_bank, detector_contract
     note_skin = selected_bank(directory, segment_number, options.get('note_skin'))
-    if note_skin is not None:
-        options['note_skin'] = note_skin
+    if note_skin is None:
+        raise ValueError('Image note-skin bank required; select one with just skins select or --note-skin')
+    options['note_skin'] = note_skin
     skin_contract = detector_contract(note_skin)
     root = directory / 'play'; root.mkdir(exist_ok=True)
     with (root / f'.segment-{segment_number:03}.lock').open('a') as lock:
@@ -402,8 +399,7 @@ def run(source, segment_number=1, force=False, **options):
             can_refit = (same_source and same_settings
                          and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
                          and all(key in cached for key in ('layout','analysis_height','frame_count'))
-                         and (final / 'frames.jsonl').is_file()
-                         and detector_replay_available(cached,final,options))
+                         and (final / 'frames.jsonl').is_file())
             upstream_current=(same_source and same_settings and cached.get('play_analysis_version') == VERSION
                     and cached.get('skin_detector',{}).get('contract') == skin_contract
                     and cached.get('timing_format') == TIMING_FORMAT and objects_current(cached,final))

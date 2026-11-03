@@ -74,6 +74,7 @@ def configuration_signature(directory,segment):
 def configuration_current(data,directory,segment):
     """Check persisted selection independently of acquired frame observations."""
     bank=selected_bank(directory,segment)
+    if bank is None:return False
     if data.get('skin_detector',{}).get('contract')!=detector_contract(bank):return False
     if bank is not None and data['skin_detector'].get('bank_path')!=bank:return False
     profile=selected_profile(directory,segment)
@@ -93,11 +94,6 @@ def refresh(data, output, path):
     if (before.st_size, before.st_mtime_ns) != (data['media']['size_bytes'], data['media']['mtime_ns']):
         raise ValueError('Skin replay source no longer matches its acquisition identity')
     trace = output / 'frames.jsonl'
-    backup = output / 'frames.outline.jsonl'
-    if not data.get('skin_detector')and not backup.exists():
-        from piu_timeline.play.observations.cache import is_outline_trace
-        if not is_outline_trace(trace):raise ValueError('Unlabelled image observations cannot become an outline backup')
-        shutil.copy2(trace, backup)
     target = output / 'frames.skin-build.jsonl'
     from piu_timeline.play.skins.reuse import reusable_groups, group, merge_observations
     reused=reusable_groups(data,bank)

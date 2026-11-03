@@ -1,10 +1,9 @@
 # Visual support and recording options
 
 The current acquisition model follows notes moving upward to a fixed top
-receptor. It expects approximately square white head outlines, lane-specific
-blue/red/yellow interiors, and observable connections between hold caps and
-bodies. Recognition of several isolated heads is insufficient to certify a
-skin: every lane, tap/hold distinction and hold tail need independent support.
+receptor. It requires a selected image bank with supported cap/body patterns,
+measured image anchors, and observable connections between hold caps and bodies.
+Recognition of several isolated heads is insufficient to certify a skin: every lane, tap/hold distinction and hold tail need independent support.
 Skin appearance and playback options belong to the recording, not the song's
 shared UCS metadata. A chart gimmick remains chart-specific.
 
@@ -12,7 +11,7 @@ shared UCS metadata. A chart gimmick remains chart-specific.
 | --- | --- |
 | A hold tail using the same glyph as a tap | Ambiguous in a single frame; establish body connectivity and neighboring-frame continuity before treating it as a tail. Head detection success does not establish UCS suitability |
 | A distinct flat, notched or illustrated endpoint | Potentially easier to separate from taps; adapt the detector and calibrate its timing anchor. Lack of an arrow-shaped tail is not evidence that the skin is visually unsuitable |
-| Card faces or other heads lacking the expected contours/colors | Unsupported for UCS generation until an independent detector and hold model exist; occasional detected face details do not demonstrate support |
+| Card faces or other unconfigured image patterns | Unsupported for UCS generation until an independent detector and hold model exist; occasional detected face details do not demonstrate support |
 | A head flashing fully invisible during its approach | Unsupported for full UCS reconstruction without a verified play-option visibility model; disappearing pixels are not successful processing |
 | Notes moving down toward bottom receptors | Unsupported by the current upward coordinate model; pixel detections alone do not establish tracking support |
 | Hold artwork with no uniquely observable tail cap or body endpoint | Keep hold endpoints unresolved; do not emit a tap or invent a tail |

@@ -122,17 +122,6 @@ class TrackingTest(unittest.TestCase):
         reader.train(image,111,source=2)
         self.assertEqual(reader.read(image)[0],111)
 
-    def test_long_component_at_receptor_blocks_hold_timing(self):
-        layout={'lanes':[{'x':.1+.2*i,'color':('blue','red','yellow','red','blue')[i]} for i in range(5)],
-                'receptor_y':.2,'note_y_max':.95}
-        tracker=NoteTracker(layout,320,180)
-        image=np.zeros((180,320,3),dtype='uint8')
-        cv2.rectangle(image,(22,60),(42,170),(0,200,255),-1)
-        notes=tracker.detect(image);tracker.update(.1,notes)
-        self.assertTrue(tracker.hold_candidate)
-        self.assertEqual(len(tracker.unsupported_intervals),1)
-        tracker.detect(np.zeros_like(image))
-        self.assertFalse(tracker.hold_candidate)
 
     def test_external_display_delay_changes_association_not_raw_evidence(self):
         notes=[{'status':'estimated','target_seconds':1,'lane':0}]

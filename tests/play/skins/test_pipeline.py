@@ -66,10 +66,10 @@ class FramePipelineTest(unittest.TestCase):
                 self.assertTrue(state['closed'])
                 self.assertLessEqual(state['read'],2*jobs)
 
-    def test_legacy_frames_do_not_start_workers_or_require_skin_settings(self):
-        image=np.zeros((2,2,3),dtype='uint8')
+    def test_missing_bank_fails_before_frames_or_workers_are_started(self):
+        def frames():
+            raise AssertionError('missing bank must not consume video')
+            yield
         with patch.dict('os.environ',{'PIU_SKIN_JOBS':'invalid'}):
-            rows=list(classified_frames(iter([(31.,1.,image)]),None,{},2,2))
-            self.assertIs(rows[0][2],image)
-            self.assertIsNone(rows[0][3])
-            with self.assertRaises(ValueError):worker_count()
+            with self.assertRaisesRegex(ValueError,'Image note-skin bank required'):
+                list(classified_frames(frames(),None,{},2,2))

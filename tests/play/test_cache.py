@@ -29,6 +29,7 @@ class PlayCacheTest(unittest.TestCase):
             from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT,reference
             saved['beat_timing']={'contract':{'format':BEAT_FORMAT,'reference':reference(saved,final)}}
             saved['judgment_cache']=cache_contracts(saved,[])
+            saved.setdefault('skin_detector',self.image_detector)
             (final/'analysis.json').write_text(json.dumps(saved))
             with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
                     patch('piu_timeline.play.skins.replay.detector_contract',return_value=contract), \
@@ -41,6 +42,13 @@ class PlayCacheTest(unittest.TestCase):
             self.assertEqual(source.read_bytes(),b'original')
 
     def setUp(self):
+        from tests.play.skins.test_detector import examples
+        from piu_timeline.play.skins.replay import detector_metadata
+        bank=tempfile.TemporaryDirectory();self.addCleanup(bank.cleanup)
+        examples(Path(bank.name));bank_path=str(Path(bank.name)/'bank.json')
+        self.image_detector=detector_metadata(bank_path)
+        selected=patch('piu_timeline.play.skins.replay.selected_bank',side_effect=lambda directory,segment,explicit=None:explicit or bank_path)
+        selected.start();self.addCleanup(selected.stop)
         repository=tempfile.TemporaryDirectory()
         self.addCleanup(repository.cleanup)
         isolated=patch('piu_timeline.charts.data.default_repository',return_value=Path(repository.name)/'missing')
@@ -64,8 +72,9 @@ class PlayCacheTest(unittest.TestCase):
             from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,donor)}}
             saved['judgment_cache']=cache_contracts(saved,[])
+            saved['skin_detector']=self.image_detector
             (donor/'analysis.json').write_text(json.dumps(saved,indent=2))
-            trace=''.join(json.dumps({'source_pts_seconds':t,'playback_seconds':t,'combo':None,'notes':[]})+'\n' for t in (1.,1.02))
+            trace=''.join(json.dumps({'source_pts_seconds':t,'playback_seconds':t,'combo':None,'notes':[],'skin_observations':[]})+'\n' for t in (1.,1.02))
             (donor/'frames.jsonl').write_text(trace)
             (donor/'judgments.jsonl').write_text(''.join(json.dumps({'playback_seconds':t,'source_pts_seconds':t,
                 'label':None,'box':None,'blank':False})+'\n' for t in (1.,1.02)))
@@ -143,8 +152,9 @@ class PlayCacheTest(unittest.TestCase):
             from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,final)}}
             saved['judgment_cache']=cache_contracts(saved,[])
+            saved.setdefault('skin_detector',self.image_detector)
             (final/'analysis.json').write_text(json.dumps(saved))
-            trace=''.join(json.dumps({'source_pts_seconds':t,'playback_seconds':t,'notes':[],'combo':None})+'\n' for t in (1.,1.02))
+            trace=''.join(json.dumps({'source_pts_seconds':t,'playback_seconds':t,'notes':[],'skin_observations':[],'combo':None})+'\n' for t in (1.,1.02))
             (final/'frames.jsonl').write_text(trace)
             (final/'judgments.jsonl').write_text(''.join(json.dumps({'playback_seconds':t,'source_pts_seconds':t,
                 'label':None,'box':None,'blank':False})+'\n' for t in (1.,1.02)))
@@ -191,6 +201,7 @@ class PlayCacheTest(unittest.TestCase):
             from piu_timeline.play.beats.timing import FORMAT as BEAT_FORMAT, reference
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,final)}}
             saved['judgment_cache']=cache_contracts(saved,[])
+            saved.setdefault('skin_detector',self.image_detector)
             (final/'analysis.json').write_text(json.dumps(saved))
             with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
                     patch.object(play,'analyze_play',side_effect=AssertionError('must reuse evidence')):
@@ -220,6 +231,7 @@ class PlayCacheTest(unittest.TestCase):
             saved['beat_timing']={'status':'unavailable','contract':{'format':BEAT_FORMAT,'reference':reference(saved,final)}}
             saved['judgment_cache']=cache_contracts(saved,[])
             saved['judgment_cache']['association']['format']={'schema':1,'revision':0}
+            saved.setdefault('skin_detector',self.image_detector)
             (final/'analysis.json').write_text(json.dumps(saved))
             raw=json.dumps({'playback_seconds':1,'source_pts_seconds':41,'label':None,'blank':False})+'\n'
             (final/'judgments.jsonl').write_text(raw)

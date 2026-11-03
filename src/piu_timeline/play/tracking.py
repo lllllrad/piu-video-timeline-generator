@@ -36,48 +36,7 @@ class NoteTracker:
             self.skin_observations = self.skin_detector.detect(rgb)
             self.hold_candidate = self.body_at_receptor(self.skin_observations)
             return [o for o in self.skin_observations if o['role'] != 'hold_body']
-        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
-        h, s, v = cv2.split(hsv)
-        colors = {'blue': (h >= 85) & (h <= 130),
-                  'red': (h <= 15) | (h >= 150),
-                  'yellow': (h >= 15) & (h <= 45)}
-        white = ((rgb.min(axis=2) > 175) & (rgb.max(axis=2) - rgb.min(axis=2) < 80)).astype('uint8')
-        contours, _ = cv2.findContours(white, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        detections = []
-        receptor = self.layout['receptor_y'] * self.height
-        for contour in contours:
-            x, y, w, height = cv2.boundingRect(contour)
-            if not (.65*self.spacing < w < 1.25*self.spacing and .65*self.spacing < height < 1.25*self.spacing):
-                continue
-            cy, cx = y + height/2, x + w/2
-            if not receptor + .55*self.spacing < cy < self.layout.get('note_y_max', .95)*self.height:
-                continue
-            index = min(range(len(self.layout['lanes'])),
-                        key=lambda i: abs(self.layout['lanes'][i]['x']*self.width-cx))
-            lane = self.layout['lanes'][index]
-            if abs(lane['x']*self.width-cx) > .2*self.spacing:
-                continue
-            quality = float((colors[lane['color']] & (s > 90) & (v > 140))[y:y+height,x:x+w].mean())
-            if quality < .12:
-                continue
-            if any(n['lane'] == index and abs(n['y']*self.height-cy) < .4*self.spacing for n in detections):
-                continue
-            detections.append({'lane': index, 'x': lane['x'], 'y': cy/self.height, 'quality': quality,
-                               'method': 'colored_head_outline'})
-        # Keep hold evidence separate from the head centers. Colored rings are
-        # disconnected, but a continuous long colored body indicates a tail.
-        self.hold_candidate = False
-        top = int(receptor + .45*self.spacing)
-        bottom = int(self.layout.get('note_y_max', .95)*self.height)
-        for lane in self.layout['lanes']:
-            cx = lane['x']*self.width
-            left, right = max(0,int(cx-.43*self.spacing)), min(self.width,int(cx+.43*self.spacing))
-            mask = (colors[lane['color']] & (s > 105) & (v > 170))[top:bottom,left:right].astype('uint8')
-            _, _, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
-            if any(height > 1.25*self.spacing and w > .2*self.spacing and y < .25*self.spacing
-                   and area > self.spacing**2*.10 for x,y,w,height,area in stats[1:]):
-                self.hold_candidate = True
-        return detections
+        raise ValueError('Image note-skin bank required for note detection')
 
     def update(self, seconds, detections, source_pts=None):
         self.motion.update(seconds, detections, source_pts)

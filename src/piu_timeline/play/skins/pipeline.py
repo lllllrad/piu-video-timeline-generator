@@ -39,8 +39,7 @@ def _classified_frames(frames,bank,layout,width,height,jobs):
     changing trajectories or counter crops. Spawn avoids inherited CV threads.
     """
     if bank is None:
-        for frame in frames:yield (*frame,None)
-        return
+        raise ValueError('Image note-skin bank required before decoding frames')
     jobs=worker_count()if jobs is None else jobs
     if type(jobs)is not int or not 1<=jobs<=32:raise ValueError('Skin workers must be 1..32')
     if jobs==1:

@@ -17,8 +17,25 @@ from piu_timeline.play.judgments import augment_judgments, feature_map
 from piu_timeline.tools.timeline import media_record
 
 
+def tap_bank(root):
+    rgb=np.zeros((65,49,3),dtype='uint8')
+    rgb[8:57]=255;rgb[12:53,4:45]=[0,200,255]
+    image=root/'tap.png';cv2.imwrite(str(image),np.dstack([rgb[:,:,::-1],np.full((65,49),255,dtype='uint8')]))
+    path=root/'bank.json'
+    path.write_text(json.dumps({'schema':1,'skin':'generated-blue-square','spacing_pixels':64,'templates':[
+        {'id':'tap','role':'tap','lane_kind':0,'image':'tap.png','anchor_pixels':[24,32],
+         'regions':[{'name':'cap','box':[0,8,49,57],'maximum_error':.02},
+                    {'name':'clear_above','box':[12,0,37,6],'maximum_error':.02},
+                    {'name':'clear_below','box':[12,59,37,65],'maximum_error':.02}]}]}))
+    return str(path)
+
+
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg unavailable')
 class PlayIntegrationTest(unittest.TestCase):
+    def setUp(self):
+        environment=patch.dict('os.environ',{'PIU_SKIN_JOBS':'1'})
+        environment.start();self.addCleanup(environment.stop)
+
     def test_native_long_note_is_one_sustained_state_and_replays_without_decoding(self):
         layout = {'receptor_y': .15, 'note_y_max': .95,
                   'lanes': [{'x': .38+.06*i, 'color': 'blue'} for i in range(5)]}
@@ -95,7 +112,7 @@ class PlayIntegrationTest(unittest.TestCase):
             record=media_record(video);before=video.read_bytes(),video.stat().st_mtime_ns
             with patch('piu_timeline.play.analysis.bootstrap_digits',return_value=(DigitReader(),{'ocr_images':0,'missing_digits':list('0123456789')})):
                 data=analyze_play({'media':record,'game_roi':[0,0,320,180]},
-                                  {'start_seconds':0,'end_seconds':2},root/'out',layout=layout,width=320)
+                                  {'start_seconds':0,'end_seconds':2},root/'out',layout=layout,width=320,note_skin=tap_bank(root))
             self.assertEqual(data['matches'],[])
             with patch('piu_timeline.play.judgments.learn_models',return_value=models), \
                     patch('piu_timeline.play.judgments.ocr_images',side_effect=AssertionError('no per-frame OCR')):
@@ -133,7 +150,7 @@ class PlayIntegrationTest(unittest.TestCase):
             record=media_record(video);before=(video.stat().st_size,video.stat().st_mtime_ns)
             with patch('piu_timeline.play.analysis.bootstrap_digits',side_effect=bootstrap):
                 data=analyze_play({'media':record,'game_roi':[0,0,320,180]},
-                                  {'start_seconds':0,'end_seconds':2,'chart':'S1'},root/'out',layout=layout,width=320)
+                                  {'start_seconds':0,'end_seconds':2,'chart':'S1'},root/'out',layout=layout,width=320,note_skin=tap_bank(root))
             self.assertEqual(data['frame_count'],60)
             self.assertGreater(len(data['matches']),0, (data['combo_readable_fraction'],data['combo_events'],[(n['status'],n.get('reason'),n.get('target_seconds'),n['points']) for n in data['notes']]))
             match=data['matches'][0]

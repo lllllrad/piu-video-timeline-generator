@@ -23,8 +23,13 @@ def play(root, source='source', number=1, stale=False):
     (metadata/'analysis.json').write_text(json.dumps({'segments':[{}]*number}))
     media=directory.parent.parent/'recording.mp4';media.write_bytes(b'original recording')
     stat=media.stat()
+    from tests.play.skins.test_detector import examples
+    from piu_timeline.play.skins.replay import detector_metadata
+    bank=root/'bank'
+    if not bank.exists():bank.mkdir();examples(bank)
+    (directory.parent.parent/'note-skins.json').write_text(json.dumps({'schema':1,'profiles':[{'segments':list(range(1,number+1)),'bank':str(bank/'bank.json')}]}))
     data={'timing_format':TIMING_FORMAT,'association_view_format':ASSOCIATION_VIEW_FORMAT,
-          'play_analysis_version':0 if stale else VERSION, 'notes':[], 'matches':[],
+          'play_analysis_version':0 if stale else VERSION, 'skin_detector':detector_metadata(bank/'bank.json'), 'notes':[], 'matches':[],
           'combo_events':[], 'judgment_events':[], 'analysis_width':650,
           'media':{'path':str(media),'size_bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns},
           'start_seconds':0, 'end_seconds':1, 'game_roi':[0,0,1300,730], 'layout':{'lanes':[]}}

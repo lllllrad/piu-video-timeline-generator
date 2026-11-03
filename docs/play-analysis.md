@@ -274,9 +274,8 @@ acquisition. `layout.method` is `fixed_phoenix_game_layout`, and the profile/rev
 declared geometry. Existing native observations retain their original geometry. An explicit
 `--layout` takes precedence. Unknown mode/side uses the visual calibration fallback described below.
 
-The current visual detector supports the usual blue diagonal, red diagonal and yellow center note
-colors, with white outlines and five or ten ordered receptor columns. Whole-head white contours
-locate centers and color verifies the lane, avoiding fragmented internal colored rings.
+Native note detection requires a selected RGB image bank, with tap and hold roles and measured
+registration anchors. Unconfigured skins fail explicitly before acquisition. See note-skin-images.md.
 Auto-calibration compares receptor outlines across source frames. A previously validated layout from
 the same source can be reused only when at least four current outlines span half its lane grid and
 match its positions. Complementary partial outlines can establish a grid only when every receiver is

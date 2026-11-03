@@ -10,22 +10,7 @@ from piu_timeline.storage import read_analysis_header as cache_header
 NATIVE_FRAME_FORMAT = {'schema':1,'notes':'normalized_lane_centers','time':'source_pts_and_playback'}
 
 
-def is_outline_trace(path):
-    """A filename alone cannot turn image-template observations into outlines."""
-    try:
-        with path.open()as stream:frame=json.loads(stream.readline())
-        return (isinstance(frame,dict)and isinstance(frame.get('notes'),list)
-                and 'skin_observations'not in frame
-                and all(n.get('method')!='skin_image'for n in frame['notes']))
-    except (OSError,ValueError,AttributeError,TypeError):return False
-
-
-def detector_replay_available(cached,directory,options):
-    return (options.get('note_skin')is not None or not cached.get('skin_detector')
-            or is_outline_trace(directory/'frames.outline.jsonl'))
-
-
-def validate_native_frame(frame,lane_count,*,allow_images=True):
+def validate_native_frame(frame,lane_count):
     try:
         if (not math.isfinite(frame['source_pts_seconds'])or not math.isfinite(frame['playback_seconds'])
                 or not isinstance(frame['notes'],list)
@@ -36,8 +21,10 @@ def validate_native_frame(frame,lane_count,*,allow_images=True):
             raise ValueError('Unsupported saved native observation format')
     except (KeyError,TypeError)as error:
         raise ValueError('Unsupported saved native observation format')from error
-    if not allow_images and('skin_observations'in frame or any(n.get('method')=='skin_image'for n in frame['notes'])):
-        raise ValueError('Image-template observations cannot be replayed as contour observations')
+    if (not isinstance(frame.get('skin_observations'),list)
+            or any(n.get('method')!='skin_image'for n in frame['notes'])
+            or any(not isinstance(n,dict)or n.get('method')!='skin_image'for n in frame['skin_observations'])):
+        raise ValueError('Native note observations require image-template evidence')
 
 
 def observation_settings_match(cached, document, segment, start, end, options):
@@ -53,6 +40,7 @@ def observation_settings_match(cached, document, segment, start, end, options):
 
 
 def find_saved_observations(root, final, document, segment, start, end, options):
+    if options.get('note_skin')is None:return None
     # Backups are immutable snapshots, so another segment can reuse them safely
     # while the numbered presentation directories are being updated.
     paths=[p for p in root.glob('segment-*.previous-*/analysis.json') if p.parent!=final]
@@ -65,8 +53,7 @@ def find_saved_observations(root, final, document, segment, start, end, options)
                 cached=json.loads(path.read_text())
                 if (observation_settings_match(cached,document,segment,start,end,options)
                         and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
-                        and all(key in cached for key in ('layout','analysis_height','frame_count'))
-                        and detector_replay_available(cached,path.parent,options)):
+                        and all(key in cached for key in ('layout','analysis_height','frame_count'))):
                     return cached,path.parent
         except (OSError,ValueError):
             continue

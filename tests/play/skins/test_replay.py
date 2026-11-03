@@ -18,7 +18,7 @@ class SkinReplayTest(unittest.TestCase):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);bank=root/'bank';bank.mkdir();examples(bank)
             path=root/'note-skins.json';profile={'segments':[1],'bank':'bank/bank.json'}
-            data={};self.assertTrue(configuration_current(data,root,1))
+            data={};self.assertFalse(configuration_current(data,root,1))
             path.write_text(json.dumps({'schema':1,'profiles':[profile]}))
             self.assertFalse(configuration_current(data,root,1))
             data['skin_detector']=detector_metadata(bank/'bank.json')
@@ -36,7 +36,7 @@ class SkinReplayTest(unittest.TestCase):
             self.assertTrue(configuration_current(data,root,1))
             path.unlink();self.assertFalse(configuration_current(data,root,1))
             data.pop('skin_detector');data.pop('skin_role_evidence')
-            self.assertTrue(configuration_current(data,root,1))
+            self.assertFalse(configuration_current(data,root,1))
 
     def setUp(self):
         environment=patch.dict('os.environ',{'PIU_SKIN_JOBS':'1'})
@@ -81,7 +81,7 @@ class SkinReplayTest(unittest.TestCase):
             with patch('piu_timeline.play.skins.replay.decode_frames',return_value=iter(decoded)):
                 metadata=refresh(data,root,bank/'bank.json')
             updated=[json.loads(line)for line in (root/'frames.jsonl').read_text().splitlines()]
-            self.assertEqual((root/'frames.outline.jsonl').read_text(),trace)
+            self.assertFalse((root/'frames.outline.jsonl').exists())
             self.assertEqual((root/'frames.base.jsonl').read_text(),(root/'frames.jsonl').read_text())
             for old,new in zip(frames,updated,strict=True):
                 self.assertEqual({k:new[k]for k in old if k!='notes'},{k:v for k,v in old.items()if k!='notes'})

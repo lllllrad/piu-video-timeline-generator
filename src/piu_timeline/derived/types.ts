@@ -18,7 +18,7 @@ export interface Note extends RecordData {
   status: string;
   /** Wire trajectory for fitting. Its origin is qualified by coordinates/trajectories.ts. */
   points: Interval[];
-  /** Original image-matching/outline positions before any coordinate projection. */
+  /** Original image-template positions before any coordinate projection. */
   detected_points?: Interval[];
   target_seconds: number | null;
   prediction_uncertainty_seconds: number;
