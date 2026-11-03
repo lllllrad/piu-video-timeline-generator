@@ -43,6 +43,7 @@ import * as association from './association.ts';
 import * as scroll from './scroll.ts';
 import * as visibility from './visibility.ts';
 import * as diagnostics from './diagnostics.ts';
+import * as timingSummary from './timing_summary.ts';
 import * as rowRecovery from './recovery.ts';
 import * as labels from './labels.ts';
 import * as holdProjection from './hold_projection.ts';
@@ -59,7 +60,7 @@ import {parseData, stringifyData} from './json.ts';
 const operations = {
   coordinateMeasurements, skinAnchors, skinCenters, skinSelection, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription, retention,
   registration, clocks, nativeClock, tracks, frameTracking, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, localized,
-  holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
+  holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, timingSummary, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
   holdState, holdExtent, holdGeometry, holdRisk, stageCoordinates, nativeTiming, stageAssociations, beats: {...beats,fitGrid},
 };
 const chunk = Buffer.alloc(65536);

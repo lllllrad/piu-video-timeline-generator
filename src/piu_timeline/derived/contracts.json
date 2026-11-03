@@ -132,11 +132,12 @@
   },
   "shared_motion": {
     "schema": 1,
-    "revision": 20,
+    "revision": 21,
     "method": "registered_peer_or_measured_cap_displacement",
     "native_steps": "intersection_of_declared_endpoint_intervals",
     "incomplete_clock": "source_bound_native_interval_with_explicit_warning",
-    "compressed_capture_step": "independent_native_lanes_with_explicit_cadence_warning"
+    "compressed_capture_step": "independent_native_lanes_with_explicit_cadence_warning",
+    "summary": "owned_physical_states_separate_from_warning_counts"
   },
   "speed": {
     "schema": 1,

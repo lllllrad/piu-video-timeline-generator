@@ -136,3 +136,10 @@ Oversized steps retain original timestamps and explicit
 `observed_frame_step_exceeds_source_cadence` / `native_motion_cadence_unresolved`
 warnings. They supply measured screen displacement while leaving engine time and
 the distinction between capture delay and scroll effects unresolved.
+
+
+Physical timing summaries count per-note reconstruction states. A restored
+interval with a precision or capture-cadence warning contributes to
+`restored_notes` and `warning_notes`, not `failed_notes`. Musical-row failures
+are reported by the beat stage. Any retained native warning keeps the overall
+native status failed until resolved; counting it separately does not suppress it.

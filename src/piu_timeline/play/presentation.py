@@ -29,7 +29,7 @@ def prepare_report(data,path,final_directory=None):
         path.with_name(name).write_text(json.dumps(value, ensure_ascii=False, indent=2)+'\n')
     reconstruction = data.get('timing_reconstruction', {})
     if reconstruction.get('status') == 'failed':
-        print(f"Warning: timing reconstruction FAILED for {reconstruction['failed_notes']} note trajectories; rejected estimates are retained only for review.", file=sys.stderr)
+        print(f"Warning: native timing has {reconstruction['failed_notes']} failed trajectories and {reconstruction.get('warning_notes', 0)} trajectories with warnings; inspect retained evidence.", file=sys.stderr)
     exclusions, recognition = data['exclusion_diagnostics'], data['recognition_diagnostics']
     final_directory=Path(final_directory or path.parent)
     path.with_name('timing-ranges.json').write_text(json.dumps(data['timing_ranges'], ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

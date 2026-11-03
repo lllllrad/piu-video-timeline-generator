@@ -12,10 +12,10 @@ const rangeByNote=data.timing_ranges?.notes||{};
 const targetColor='#b6ff59',inputColor='#ff70dd';
 const notePalette={blue:['#267bcc','#83caff'],red:['#c63c52','#ff9da9'],yellow:['#d8a600','#ffe476']};
 const beatTiming=data.beat_timing;
-if(beatTiming)text('p','Beat timing: '+beatTiming.status+(beatTiming.contract.reference.reason?' / '+beatTiming.contract.reference.reason.replaceAll('_',' '):'')+' / '+(beatTiming.warnings?.length||0)+' rejected note timings.',$('quality'));
+if(beatTiming)text('p','Beat timing: '+beatTiming.status+(beatTiming.contract.reference.reason?' / '+beatTiming.contract.reference.reason.replaceAll('_',' '):'')+' / '+(beatTiming.warnings?.length||0)+' warnings.',$('quality'));
 if(data.visual_support&&!data.visual_support.chart_geometry)text('p','UCS generation unavailable: '+data.visual_support.regions.filter(r=>!r.chart_geometry).map(r=>r.reason).join('; '),$('quality'));
 const reconstruction=data.timing_reconstruction;
-if(reconstruction?.status==='failed')text('p','Timing reconstruction FAILED: '+reconstruction.failed_notes+' trajectories have rejected timing. Consult warnings and original observations.',$('quality'));
+if(reconstruction?.status==='failed')text('p','Native timing: '+reconstruction.failed_notes+' failed trajectories / '+(reconstruction.warning_notes||0)+' trajectories with warnings. Consult original observations.',$('quality'));
 const visibility=data.visibility_diagnostics;
 if(visibility)text('p','Visibility audit: '+visibility.warnings.length+' warnings / '+visibility.known_occlusions.length+' explained occlusion intervals / '+(visibility.known_motion_effects?.length||0)+' observed configured motion records / '+visibility.accounted_exits.length+' accounted detector exits or continued detections.',$('quality'));
 if(data.chart_policy){

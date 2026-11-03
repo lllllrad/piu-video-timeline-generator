@@ -1,4 +1,5 @@
 /** Revalidate native gap failures with acquired endpoint measurement bounds. */
+import {summarize}from './timing_summary.ts';
 import {imagePosition} from './coordinates/measurements.ts';
 import {fitTrajectory} from './coordinates/points.ts';
 import {contracts} from './contracts.ts';
@@ -104,7 +105,6 @@ export function resolve(data: RecordData): RecordData {
   }
   if(!restored.length&&original.native_gap_validation)return {};
   const remaining=warnings.filter(w=>!restored.includes(w.note));
-  return {notes,timing_reconstruction:{...original,warnings:remaining,status:remaining.length?'failed':'restored',
-    restored_notes:(original.restored_notes??0)+restored.length,failed_notes:new Set(remaining.map(w=>w.note)).size,
+  return {notes,timing_reconstruction:{...original,...summarize(notes,remaining),
     native_gap_validation:{format:F,source_warnings:warnings,comparisons:[...comparisons].map(([warning,proof])=>({warning,...proof})),attempts,restored_notes:restored}}};
 }

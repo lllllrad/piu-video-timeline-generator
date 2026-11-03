@@ -1,3 +1,4 @@
+import {summarize}from '../timing_summary.ts';
 /** Pure beat reconstruction. Reference acquisition and promotion belong to the caller. */
 import {contracts, RECOVERABLE} from '../contracts.ts';
 import {entries} from '../math.ts';
@@ -145,8 +146,7 @@ export function reconstruct(input: BeatInput): RecordData {
   if (restored.length || nativeRestored.length) {
     result.warnings = result.warnings.filter(w=>!(restored.includes(w.note) && w.reason===recovered[w.note].source_failure));
     const remaining = (reconstruction.warnings ?? []).filter(w=>!(nativeRestored.includes(w.note) && w.reason===recovered[w.note].source_failure));
-    Object.assign(reconstruction, {warnings: remaining, status: remaining.length ? 'failed' : 'restored', failed_notes: new Set(remaining.map(w => w.note)).size,
-      restored_notes: (reconstruction.restored_notes ?? 0) + nativeRestored.length});
+    Object.assign(reconstruction, summarize(notes,remaining));
   }
   result.status = result.warnings.length ? 'failed' : 'restored';
   return {notes, beat_timing: result, timing_reconstruction: reconstruction};

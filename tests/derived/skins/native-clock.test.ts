@@ -69,6 +69,8 @@ print(json.dumps({'note':notes[0],'diagnostics':result}))
  assert.equal(result.note.status,'estimated');assert.equal(result.note.fit_method,'source_bound_native_interval');
  assert.equal(result.note.motion_chunk,undefined);assert.equal(result.note.motion_target_phase,undefined);
  assert.ok(result.diagnostics.warnings.some(w=>w.reason==='shared_subframe_clock_unresolved'));
+ assert.equal(result.diagnostics.failed_notes,0);assert.equal(result.diagnostics.restored_notes,1);
+ assert.equal(result.diagnostics.warning_notes,1);assert.equal(result.diagnostics.status,'failed');
 });
 
 test('processing consumes the native position domain without moving it to a beat target',async()=>{

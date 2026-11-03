@@ -97,6 +97,4 @@ def restore(notes, tracks, timeline, layout, width, height):
         rejected={k:note.get(k) for k in ('target_seconds','prediction_uncertainty_seconds','fit_method')}
         note.update(status='excluded',reason=record['reason'],target_seconds=None,
                     timing_reconstruction={'status':'failed','reason':record['reason'],'unaccepted_previous_estimate':rejected})
-    return motion,{'format':FORMAT,'status':'failed' if warnings else 'restored','warnings':warnings,
-                   'restored_notes':sum(n.get('timing_reconstruction',{}).get('status')=='restored' for n in notes),
-                   'failed_notes':len({r['note'] for r in warnings})}
+    return motion,{'format':FORMAT,**call('timingSummary.summarize',notes,warnings)}
