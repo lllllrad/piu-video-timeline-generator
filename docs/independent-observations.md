@@ -100,3 +100,12 @@ detector failure isolation and channel-specific corruption. Native image tests v
 that candidate collection precedes grouping in both serial and parallel workers.
 Source-specific recognition cases and skin references belong in the separate data
 repository, not this project's tests.
+
+
+Native hold-image connectivity depends on original image observations, cap
+coordinates, measured displacement and the cap-measurement policies it consumes.
+Changing a crossing-clock policy, musical subdivision or unused motion diagnostics
+does not repeat image connectivity measurement. Source PTS, image content, actual
+displacement or cap measurement-policy changes invalidate that evidence. Timed
+hold intervals remain a separate consumer and are projected again from the
+retained connections and current endpoint timing.

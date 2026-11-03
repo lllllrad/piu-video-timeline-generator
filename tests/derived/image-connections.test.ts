@@ -76,6 +76,8 @@ test('a proven body cannot shorten the warning span of later unverified endpoint
 });
 test('clock changes reuse native image measurement while refreshing timed intervals',()=>{
  const s=imageHoldScene();failClock(s);s.data.media={path:'synthetic',size_bytes:0,mtime_ns:0};
+ s.data.scroll_motion={samples:s.native.map((f,i)=>({time:f.playback_seconds,source_pts:f.source_pts_seconds,
+  phase:100*f.playback_seconds,chunk:0,support:i?2:0}))};
  const script=`import json,sys,tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -86,12 +88,25 @@ with tempfile.TemporaryDirectory()as tmp:
  root=Path(tmp);(root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\\n'for f in s['native']))
  with patch('piu_timeline.play.skins.coverage.reference_rows',side_effect=lambda data,cap_only=False:s['cap_references']if cap_only else s['references']),patch('piu_timeline.play.skins.holds.measure_connections',wraps=measure_connections)as measured:
   first=geometry(s['data'],root,s['native'],None);before=json.loads((root/'native-stages/hold-geometry.json').read_text())
+  s['data']['scroll_motion']['format']={'local_clock':{'selection':'different_policy'}}
+  for sample in s['data']['scroll_motion']['samples']:sample['variance']=999
   n=s['data']['notes'][1];n.update(status='estimated',reason=None,target_seconds=1.45,timing_reconstruction={'status':'restored'})
   second=geometry(s['data'],root,s['native'],None)
   frames=json.loads(json.dumps(s['native']));frames[0]['bodies']=[{'other_channel':True}]
   third=geometry(s['data'],root,frames,None);after=json.loads((root/'native-stages/hold-geometry.json').read_text())
-  print(json.dumps({'first':first,'second':second,'measurements':measured.call_count,'physical_cache_unchanged':before==after,'physical_keys':list(after['output'])}))`;
+  reuse_count=measured.call_count
+  from piu_timeline.derived import CONTRACTS
+  from piu_timeline.play.observations.artifacts import current
+  current_before=current(root,['hold-geometry'])
+  CONTRACTS['native_anchor']['coordinate_uncertainty_pixels']+=.125
+  current_changed=current(root,['hold-geometry'])
+  geometry(s['data'],root,frames,None);policy_count=measured.call_count
+  s['data']['scroll_motion']['samples'][1]['phase']+=.125
+  geometry(s['data'],root,frames,None)
+  print(json.dumps({'first':first,'second':second,'measurements':reuse_count,'physical_cache_unchanged':before==after,'physical_keys':list(after['output']),
+    'current_before':current_before,'current_changed':current_changed,'policy_count':policy_count,'motion_count':measured.call_count}))`;
  const r=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{cwd:root,input:JSON.stringify(s),encoding:'utf8'}));
+ assert.ok(r.current_before);assert.equal(r.current_changed,false);assert.equal(r.policy_count,2);assert.equal(r.motion_count,3);
  assert.equal(r.measurements,1);assert.ok(r.physical_cache_unchanged);assert.ok(!r.physical_keys.includes('holds'));
  assert.deepEqual(r.first.holds,[]);assert.equal(r.second.holds.length,1);
  assert.deepEqual(r.second.holds[0].end_range,[1.44,1.46]);

@@ -67,6 +67,10 @@ def current(directory, names):
         sources = saved.get('producer', {})
         if not sources or producer(*sources) != sources:
             return False
+        if name=='hold-geometry' and saved.get('derived') is not None:
+            from piu_timeline.play.holds.stages import image_geometry_contract
+            if saved['derived']!=image_geometry_contract():
+                return False
         if name in ('processing', 'configured-processing'):
             from piu_timeline.play.observations.channel_stages import derived_motion_contract
             if saved.get('derived') != derived_motion_contract():
