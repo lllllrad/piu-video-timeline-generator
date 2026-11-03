@@ -60,8 +60,8 @@ export function capFrames(events:[number,number][],spacing=40,fps=60,capture:Nat
 }
 
 /** Certified endpoint errors explain a raster gap differing from its fitted value. */
-export function measuredGapScene(spacing=40,fps=60,events:[number,number][]=[[.85,0],[1.1,1]]){
-  const data=nativeScene(events,spacing,fps,5,{end:1.3}),scale=spacing/40;
+export function measuredGapScene(spacing=40,fps=60,events:[number,number][]=[[.85,0],[1.1,1]],capture:NativeCapture={}){
+  const data=nativeScene(events,spacing,fps,5,{end:1.3,...capture}),scale=spacing/40;
   const uncertainty=contracts.native_anchor.coordinate_uncertainty_pixels*scale;
   data.notes.forEach((n,i)=>{
     const error=(i===0?1:-1)*.75*scale;

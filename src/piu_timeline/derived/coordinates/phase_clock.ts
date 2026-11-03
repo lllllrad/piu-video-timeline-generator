@@ -4,6 +4,18 @@ import {clipAffine as clip,type Vertex}from './polygon.ts';
 import type {RecordData}from '../types.ts';
 const F=contracts.render_clock;
 
+/** Every retained sample must admit the same positive affine model. */
+export function affineDomain(points:number[][],error:number):RecordData|null{
+ if(points.length<2||!Number.isFinite(error)||error<0||points.some(([t,y])=>![t,y].every(Number.isFinite)))return null;
+ const [origin,first]=points[0],[lastTime,last]=points.at(-1),span=lastTime-origin,travel=last-first;
+ if(span<=0||travel<=2*error||points.slice(1).some(([t],i)=>t<=points[i][0]))return null;
+ const lo=(travel-2*error)/span,hi=(travel+2*error)/span;
+ let vertices:Vertex[]=[[lo,first-error],[hi,first-error],[hi,first+error],[lo,first+error]];
+ for(const [time,value]of points){vertices=clip(vertices,time-origin,value,error);if(!vertices.length)return null;}
+ if(vertices.some(([v])=>v<=0))return null;
+ return {origin_seconds:origin,vertices,velocity_range_pixels_per_second:[Math.min(...vertices.map(p=>p[0])),Math.max(...vertices.map(p=>p[0]))]};
+}
+
 export function fit(motion:RecordData|null,endpointError:number):RecordData[]{
  if(!motion||!Number.isFinite(endpointError)||endpointError<=0)return [];
  const records=new Map((motion.coordinate_registration?.chunks??[]).filter(r=>r.status==='fitted').map(r=>[r.chunk,r])),
@@ -21,14 +33,10 @@ export function fit(motion:RecordData|null,endpointError:number):RecordData[]{
   if(declared.some(r=>!Array.isArray(r)||r.length!==2||!r.every(Number.isFinite)||r[0]>r[1]))continue;
   const phaseEndpointError=Math.max(endpointError,...declared.map(r=>(r[1]-r[0])/4)),
    capture=Math.max(...samples.slice(1).map((s,i)=>s.phase-samples[i].phase)),
-   error=capture+F.endpoint_error_multiplier*phaseEndpointError,travel=last.phase-first.phase;
-  if(!(capture>0&&travel>2*error))continue;
-  const lo=Math.max(0,(travel-2*error)/span),hi=(travel+2*error)/span;
-  let vertices:Vertex[]=[[lo,first.phase-error],[hi,first.phase-error],[hi,first.phase+error],[lo,first.phase+error]];
-  for(const s of samples){vertices=clip(vertices,s.time-first.time,s.phase,error);if(!vertices.length)break;}
-  if(!vertices.length||vertices.some(([v])=>v<=0))continue;
-  result.push({format:F,chunk,window:[first.time,last.time],origin_seconds:first.time,vertices,
-   velocity_range_pixels_per_second:[Math.min(...vertices.map(p=>p[0])),Math.max(...vertices.map(p=>p[0]))],
+   error=capture+F.endpoint_error_multiplier*phaseEndpointError;
+  if(!(capture>0))continue;
+  const domain=affineDomain(samples.map(s=>[s.time,s.phase]),error);if(!domain)continue;
+  result.push({format:F,chunk,window:[first.time,last.time],...domain,
    phase_error_pixels:error,observed_render_step_pixels:capture,endpoint_uncertainty_pixels:endpointError,phase_endpoint_uncertainty_pixels:phaseEndpointError,
    source_pts_range:[first.source_pts,last.source_pts],frames:samples.length,
    head_notes:((records.get(chunk)as RecordData).head_offsets??[]).map(h=>h.note)});

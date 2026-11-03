@@ -1,5 +1,7 @@
 /** Concurrent measured heads constrain rows without widening recorded time bounds. */
 import {test} from 'node:test';import assert from 'node:assert/strict';
+import {contracts}from '../../../src/piu_timeline/derived/contracts.ts';
+import {measuredGapScene}from '../fixtures.ts';
 import {chord,apply} from './fixtures.ts';
 import {prepare,constrain,conflicts} from '../../../src/piu_timeline/derived/beats/chords.ts';
 import {fitGrid} from '../../../src/piu_timeline/derived/beats/grid.ts';
@@ -56,4 +58,66 @@ test('fine rows retain every pixel-compatible candidate without forcing equality
 });
 test('bounded concurrency propagates between peers without collapsing distinct rows',()=>{
  const p=[[0,1],[1,2]].map(indices=>({indices,lane_spacing_pixels:40,minimum_velocity_pixels_per_second:500}));assert.deepEqual(constrain([[10,10],[10,20],[14,14]],.0025,p)[0],[[10,10],[12,12],[14,14]]);
+});
+
+for(const spacing of [20,40,80])for(const fps of [30,60,120])for(const hidden of [false,true])
+test(`source-certified concurrency survives capture delay and paired visibility loss: spacing=${spacing}, fps=${fps}, hidden=${hidden}`,()=>{
+ const d=measuredGapScene(spacing,fps,[[.85,0],[.85,1]],{renderTime:t=>t-.012*Math.sin(2*Math.PI*(t-.2)/.4)});
+ if(hidden){
+  d.notes.forEach(n=>n.points=n.points.filter(([t])=>!(.4<t&&t<.55)));
+  d.head_registration.notes.forEach(r=>r.observations=r.observations.filter(o=>!(.4<o.time&&o.time<.55)));
+ }
+ const before=structuredClone(d),proofs=prepare(d,spacing);assert.equal(proofs.length,1);
+ const p=proofs[0],model=p.capture_phase_motion;assert.ok(model);
+ assert.ok(model.velocity_range_pixels_per_second[0]<=6*spacing&&6*spacing<=model.velocity_range_pixels_per_second[1]);
+ assert.ok(model.source_frames>p.observed_points||!hidden);
+ const indexed={...p,indices:[0,1]};assert.deepEqual(constrain([[0,0],[0,1]],.125,[indexed])[0],[[0,0],[0,0]]);
+ assert.deepEqual(d,before);
+});
+
+test('capture-aware chord support preserves physically compatible distinct fine rows',()=>{
+ const d=measuredGapScene(40,60,[[.85,0],[.852,1]],{renderTime:t=>t-.012*Math.sin(2*Math.PI*(t-.2)/.4)}),p=prepare(d,40)[0];
+ assert.ok(p?.capture_phase_motion);
+ assert.deepEqual(constrain([[400,400],[401,401]],.002,[{...p,indices:[0,1]}])[0],[[400,400],[401,401]]);
+});
+for(const missing of [false,true])test(`nonuniform motion or absent original capture cannot borrow a jitter budget: missing=${missing}`,()=>{
+ const d=measuredGapScene(40,60,[[.85,0],[.85,1]],{renderTime:missing?
+  t=>t-.012*Math.sin(2*Math.PI*(t-.2)/.4):t=>t-Math.min(.2,Math.max(0,t-.3))});
+ if(missing){
+  d.notes.forEach(n=>n.points=n.points.filter(([t])=>!(.4<t&&t<.55)));
+  d.head_registration.notes.forEach(r=>r.observations=r.observations.filter(o=>!(.4<o.time&&o.time<.55)));
+  d.scroll_motion.samples=d.scroll_motion.samples.filter(s=>!(.4<s.time&&s.time<.55));
+ }
+ assert.deepEqual(prepare(d,40),[]);
+});
+
+for(const spacing of [19.25,38.5,77])test(`native center precision follows the actual sampling grid: spacing=${spacing}`,()=>{
+ const d=measuredGapScene(spacing,60,[[.85,0],[.85,1]],{renderTime:t=>t-.012*Math.sin(2*Math.PI*(t-.2)/.4)}),
+  scale=spacing/77,sampling=contracts.image_coordinates.position_search.uncertainty_pixels,
+  error=scale*contracts.native_anchor.coordinate_uncertainty_pixels+sampling;
+ d.head_registration.format.position_search=structuredClone(contracts.image_coordinates.position_search);
+ for(const r of d.head_registration.notes)for(const o of r.observations)Object.assign(o,{
+  native_cap_reference_scale_y:scale,native_cap_sampling_uncertainty_pixels:sampling,
+  native_cap_coordinate_uncertainty_pixels:error,sampling_origin_pixels:[0,0]});
+ const before=structuredClone(d),proof=prepare(d,spacing)[0];assert.ok(proof?.capture_phase_motion);
+ assert.equal(proof.measurement_basis,'source_bound_native_cap_centers');
+ assert.ok(proof.endpoint_uncertainty_pixels.every(r=>r.every(v=>v===error)));
+ const distance=Math.max(...proof.native_gap_range_pixels.map(Math.abs)),legacy=(contracts.chords.maximum_gap_spacing+2*contracts.chords.coordinate_error_spacing)*spacing;
+ assert.ok(distance>legacy);
+ const sign=Math.abs(proof.native_gap_range_pixels[0])>Math.abs(proof.native_gap_range_pixels[1])?-1:1;
+ const notes=[{lane:0,points:[],prediction_uncertainty_seconds:.01,status:'estimated',target_seconds:0},{lane:1,points:[],prediction_uncertainty_seconds:.01,status:'estimated',target_seconds:sign*(distance+legacy)/2/proof.minimum_velocity_pixels_per_second}];
+ assert.deepEqual(conflicts(notes,[proof]),[],'actual endpoint uncertainty must also govern the final validation');
+ notes[1].target_seconds=sign*(distance+.01*spacing)/proof.minimum_velocity_pixels_per_second;
+ assert.equal(conflicts(notes,[proof]).length,2,'declared precision is a bound, not unconditional concurrency');
+ assert.deepEqual(d,before);
+});
+
+test('a source gap excluding zero cannot become an exact chord on a coarse grid',()=>{
+ const p={indices:[0,1],peer_notes:[0,1],lane_spacing_pixels:40,minimum_velocity_pixels_per_second:500,
+  native_gap_range_pixels:[1,2],capture_phase_motion:{velocity_range_pixels_per_second:[500,510]}};
+ assert.ok(constrain([[0,0],[0,1]],.125,[p])[0].every(([lo,hi])=>lo>hi));
+ assert.deepEqual(constrain([[0,0],[0,3]],.002,[p])[0],[[0,0],[1,2]]);
+ const notes=[{lane:0,points:[],prediction_uncertainty_seconds:.01,status:'estimated',target_seconds:0},{lane:1,points:[],prediction_uncertainty_seconds:.01,status:'estimated',target_seconds:.003}];
+ assert.deepEqual(conflicts(notes,[p]),[]);
+ for(const target of [0,-.003,.005]){notes[1].target_seconds=target;assert.equal(conflicts(notes,[p]).length,2);}
 });

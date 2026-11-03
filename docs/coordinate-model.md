@@ -193,3 +193,16 @@ pixel bounds stay attached to their endpoints; clock conversion uncertainty is
 recorded separately. Independent coordinate references still enforce their
 absolute constraints. The inspector retains the clock domain and source PTS for
 review, alongside unresolved motion and timing warnings.
+
+
+Source-qualified simultaneous-cap checks use the same positive affine-domain
+solver for all retained paired positions. Original source frames must cover any
+paired visibility gap; only adjacent observed movements supply the render-step
+budget. An absent source interval supplies no capture-phase proof. A failed
+straight-line point fit cannot discard independent same-frame position bounds.
+
+A certified center keeps its declared reference-scale and sampling-grid error,
+even when that exceeds a fixed fraction of the displayed lane spacing. The
+intersection of measured gap intervals governs both row-domain constraints and
+final concurrency validation. Finer rows retain compatible small separations;
+large measurement errors cannot silently become exact simultaneity.

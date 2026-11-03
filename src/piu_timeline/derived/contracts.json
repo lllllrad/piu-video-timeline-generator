@@ -41,7 +41,7 @@
   },
   "chords": {
     "schema": 1,
-    "revision": 8,
+    "revision": 9,
     "domain_constraint": "bounded_native_lane_distance",
     "image_support": "qualified_native_centers_or_identical_cap_reference",
     "minimum_frames": 4,
@@ -49,7 +49,13 @@
     "maximum_gap_spacing": 0.025,
     "maximum_motion_residual_spacing": 0.0375,
     "minimum_displacement_spacing": 0.8,
-    "coordinate_error_spacing": 0.025
+    "coordinate_error_spacing": 0.025,
+    "capture_motion": {
+      "schema": 1,
+      "method": "all_paired_positions_with_source_bound_capture_phase",
+      "maximum_source_gap_seconds": 0.05
+    },
+    "native_bounds": "all_source_qualified_centers_with_declared_gap_intervals"
   },
   "domains": {
     "schema": 1,

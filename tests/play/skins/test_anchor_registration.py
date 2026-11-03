@@ -122,7 +122,7 @@ class AnchorRegistrationTest(unittest.TestCase):
                 with self.subTest(kind=kind),self.assertRaises(ValueError):load_bank(path)
 
     def test_registered_reference_coordinates_enable_cross_template_chords_without_absolute_calibration(self):
-        from piu_timeline.play.beats.chords import prepare
+        from piu_timeline.play.beats.chords import prepare,constrain
         from piu_timeline.play.skins.coordinates import measure
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);rgb,_,_=fixture(root);path=register(root,rgb)
@@ -136,7 +136,12 @@ class AnchorRegistrationTest(unittest.TestCase):
             enlarged=deepcopy(data);enlarged['analysis_width']=400
             enlarged['head_registration']=measure(enlarged,frames)
             self.assertEqual(enlarged['head_registration']['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels'],2.)
-            self.assertEqual(prepare(enlarged,40),[])
+            wider=prepare(enlarged,40)
+            self.assertEqual(len(wider),1)
+            self.assertEqual(wider[0]['native_gap_range_pixels'],[-4.,4.])
+            self.assertTrue(all(errors==[2.,2.]for errors in wider[0]['endpoint_uncertainty_pixels']))
+            # Larger calibrated error remains evidence, but cannot collapse fine rows.
+            self.assertEqual(constrain([(0,0),(0,1)],.002,[{**wider[0],'indices':[0,1]}])[0],[(0,0),(0,1)])
             smaller=deepcopy(data);smaller['analysis_width']=100
             smaller['head_registration']=measure(smaller,frames)
             self.assertEqual(smaller['head_registration']['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels'],.5)
@@ -151,7 +156,7 @@ class AnchorRegistrationTest(unittest.TestCase):
             with self.assertRaises(ValueError):prepare(data,40)
 
     def test_coincident_registered_alternative_supplies_its_own_coordinate_proof(self):
-        from piu_timeline.play.beats.chords import prepare
+        from piu_timeline.play.beats.chords import prepare,constrain
         from piu_timeline.play.skins.coordinates import measure
         from piu_timeline.play.exclusions import recognition_diagnostics
         with tempfile.TemporaryDirectory()as temporary:
