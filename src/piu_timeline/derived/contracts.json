@@ -66,7 +66,8 @@
   },
   "registration": {
     "schema": 1,
-    "revision": 1,
+    "revision": 2,
+    "single_head_support": "measured_native_center_with_declared_error",
     "model": "head_y_plus_frame_displacement_equals_head_offset",
     "robust_passes": 3,
     "maximum_iterations": 512,
@@ -105,6 +106,11 @@
     "unfitted_crossing": "measured_phase_error_bracket_with_explicit_precision_warning",
     "target_uncertainty": "capture_half_interval_plus_coordinate_and_clock_error"
   },
+  "shared_motion": {
+    "schema": 1,
+    "revision": 17,
+    "method": "registered_peer_or_measured_cap_displacement"
+  },
   "speed": {
     "schema": 1,
     "revision": 3,
@@ -123,7 +129,7 @@
   },
   "native_gap_validation": {
     "schema": 1,
-    "revision": 3,
+    "revision": 4,
     "comparison": "intersection_of_declared_native_endpoint_errors",
     "minimum_frames": 4,
     "minimum_span_seconds": 0.065

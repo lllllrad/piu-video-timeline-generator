@@ -58,6 +58,16 @@ with tempfile.TemporaryDirectory()as tmp:
  # Resizing changes physical uncertainty in the same units as measured positions.
  smaller=deepcopy(trace);smaller['analysis_width']/=2
  assert measure(smaller,frames)['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels']==.5
+ # Compatible alternatives retain the qualified center's own measurement bound.
+ # Conflicting projections retain their wider, explicitly unqualified envelope.
+ compatible=deepcopy(frames)
+ for frame in compatible:
+  image=frame['skin_observations'][0]
+  image['alternatives']=[{**image,'template':'hold_end','y':image['y']+.5/raw['analysis_height']}]
+ (root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n'for f in compatible))
+ qualified=apply(raw,root)
+ assert qualified['notes'][0]['head_registration']['coordinate_uncertainty_pixels']==1.
+ assert qualified['head_registration']['notes'][0]['observations'][0]['native_cap_projection_uncertainty_pixels']>=1.5-1e-9
  # Partial acquisition fits measured centers without mixing in an unknown origin.
  partial_document=json.loads(path.read_text());partial_document['templates'][1].pop('native_anchor_registration')
  partial_path=path.parent/'partial-bank.json';partial_path.write_text(json.dumps(partial_document))

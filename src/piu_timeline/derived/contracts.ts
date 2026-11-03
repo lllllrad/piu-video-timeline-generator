@@ -1,6 +1,7 @@
 import {readFileSync} from 'node:fs';
 export const contracts = JSON.parse(readFileSync(new URL('./contracts.json', import.meta.url), 'utf8'));
 contracts.image_coordinates.native_cap_registration = contracts.native_anchor;
+contracts.shared_motion.local_clock = contracts.local_clock;
 Object.assign(contracts.chords, {native_cap_registration: contracts.native_anchor, image_coordinates: contracts.image_coordinates});
 for (const key of ['domains', 'recovery']) contracts[key].measurement_limits = contracts.coordinates;
 Object.assign(contracts.timing, {clock_conversion: contracts.clock_conversion, spacing_checks: contracts.spacing,

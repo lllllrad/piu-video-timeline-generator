@@ -22,8 +22,14 @@ export function registered(tracks: RecordData[], timeline: RecordData[], height:
         if (support >= 2 && (lanes >= 2 || Math.max(...kept.map(p => current[p[2]][1])) - Math.min(...kept.map(p => current[p[2]][1])) > .65 * spacing) && -.75 <= center && center <= spacing * 30 * (time - previous.time)) {
           displacement = Math.max(0, median(kept.map(p => p[0]))); scatter = Math.max(.35, std(kept.map(p => p[0])));
           basis = 'independent_registered_peers'; anchor = [time, new Set(kept.map(p => p[2]))];
-        } else if (pairs.length === 1 && anchor && time - anchor[0] <= .25 + 1e-6 && anchor[1].has(pairs[0][2]) && -.75 <= pairs[0][0] && pairs[0][0] <= spacing * 30 * (time - previous.time)) {
-          displacement = Math.max(0, pairs[0][0]); support = lanes = 1; scatter = .75; basis = 'registered_identity_continuation';
+        } else if (pairs.length === 1) {
+          const track=tracks[pairs[0][2]],error=track.registration_uncertainty_pixels;
+          const measured=track.coordinate_basis==='native_cap_center'&&Number.isFinite(error)&&error>0;
+          const continued=anchor&&time-anchor[0]<=.25+1e-6&&anchor[1].has(pairs[0][2]);
+          if((measured||continued)&&-Math.max(.75,measured?2*error:0)<=pairs[0][0]&&pairs[0][0]<=spacing*30*(time-previous.time)){
+            displacement=Math.max(0,pairs[0][0]);support=lanes=1;scatter=Math.max(.75,measured?error:0);
+            basis=measured?'measured_cap_displacement':'registered_identity_continuation';
+          }
         }
       }
     }

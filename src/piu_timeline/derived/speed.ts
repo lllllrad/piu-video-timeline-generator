@@ -42,7 +42,7 @@ export function transition(before: RecordData, after: RecordData, samples: Recor
 
 export function estimate(data: RecordData): RecordData {
   const motion = data.scroll_motion ?? {};
-  if (motion.format?.method !== 'registered_peer_displacement') return {format: F, status: 'unavailable', reason: 'registered_native_displacement_required', transitions: []};
+  if (motion.format?.method !== contracts.shared_motion.method) return {format: F, status: 'unavailable', reason: 'registered_native_displacement_required', transitions: []};
   const lanes = data.layout?.lanes ?? [];
   if (lanes.length < 2) return {format: F, status: 'unavailable', reason: 'lane_geometry_required', transitions: []};
   const xs = lanes.map(l => l.x * data.analysis_width), spacing = median(xs.slice(1).map((x, i) => x - xs[i]));

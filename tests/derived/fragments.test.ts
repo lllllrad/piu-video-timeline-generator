@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {associate} from '../../src/piu_timeline/derived/association.ts';
 import {nativeScene} from './fixtures.ts';
+import {contracts} from '../../src/piu_timeline/derived/contracts.ts';
 import {interleaved,stitch} from '../../src/piu_timeline/derived/fragments.ts';
 
 function scene(spacing=40,fps=60){
@@ -11,7 +12,7 @@ function scene(spacing=40,fps=60){
  const layout={...d.layout,combo_roi:[.05,.5,.4,.1]},receptor=layout.receptor_y*d.analysis_height;
  const boundary=.6*d.analysis_height+spacing;
  const last=first.points.filter(([,y])=>boundary<y).at(-1);last[1]+=.05*spacing;
- const motion={...d.scroll_motion,height:d.analysis_height,spacing,evidence_format:{method:'registered_peer_displacement'}};
+ const motion={...d.scroll_motion,height:d.analysis_height,spacing,evidence_format:{method:contracts.shared_motion.method}};
  return {tracks:[first,second],receptor,spacing,motion,layout};
 }
 for(const spacing of [20,40,80])for(const fps of [30,60,120])test(`HUD continuation uses coherent registered observations, not a noisy endpoint: spacing=${spacing}, fps=${fps}`,()=>{
@@ -54,7 +55,7 @@ function contained(spacing=40,fps=60){
  const inner=all.filter(([t])=>.6-1e-9<=t&&t<=.7+1e-9),selected=new Set(inner.map(p=>p[0]));
  const outer=all.filter(([t])=>!selected.has(t));
  return {tracks:[{lane:0,points:outer},{lane:0,points:inner}],spacing,
-  motion:{...d.scroll_motion,evidence_format:{method:'registered_peer_displacement'}},truth:d.layout.receptor_y*d.analysis_height+spacing*6*1.2};
+  motion:{...d.scroll_motion,evidence_format:{method:contracts.shared_motion.method}},truth:d.layout.receptor_y*d.analysis_height+spacing*6*1.2};
 }
 for(const spacing of[20,40,80])for(const fps of[30,60,120])test(`a contained same-head fragment retains all captured positions: spacing=${spacing}, fps=${fps}`,()=>{
  const s=contained(spacing,fps),before=structuredClone(s),[tracks,origins]=interleaved(s.tracks,spacing,s.motion);
@@ -88,7 +89,7 @@ test('interleaved fragments with individually permitted errors still need one co
  const second=points.filter(([t],i)=>t>=.6-1e-9&&(t>.7+1e-9||i%2!==0)).map(([t,y])=>[t,y+4]);
  first[0][1]-=5.6;second.at(-1)[1]+=5.6;
  assert.deepEqual(interleaved([{lane:0,points:first},{lane:0,points:second}],40,
-  {...d.scroll_motion,evidence_format:{method:'registered_peer_displacement'}})[1],[[0],[1]]);
+  {...d.scroll_motion,evidence_format:{method:contracts.shared_motion.method}})[1],[[0],[1]]);
 });
 
 test('a contained identity uses the shared motion origin without discarding an earlier chunk',()=>{
@@ -111,7 +112,7 @@ test('restoring one physical head removes a false same-lane chord conflict',()=>
  const event={status:'candidate',delta:1,lower_seconds:1.25,upper_seconds:1.25+1/60};
  assert.deepEqual(associate(timed(source),[{...event}]),[],'two identities for the same cap incorrectly conflict inside the chord');
  const[tracks,origins]=stitch(source,d.layout.receptor_y*d.analysis_height,40,
-  {...d.scroll_motion,evidence_format:{method:'registered_peer_displacement'}},d.layout);
+  {...d.scroll_motion,evidence_format:{method:contracts.shared_motion.method}},d.layout);
  assert.equal(tracks.length,3);assert.deepEqual(origins,[[0,1],[2],[3]]);
  const matches=associate(timed(tracks),[{...event}]);assert.equal(matches.length,3);
  assert.ok(matches.every(m=>m.combo_event===0&&m.row_note_count===3));

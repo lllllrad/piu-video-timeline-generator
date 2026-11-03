@@ -62,7 +62,11 @@ export function refine(samples: RecordData[], tracks: RecordData[], receptor: nu
   for (const [number, chunk] of chunks) {
     if (chunk.length < 4) continue;
     const identities = [...new Set(chunk.flatMap(s => [...(positions.get(s.time)?.keys() ?? [])]))].sort((a, b) => a - b);
-    if (identities.length < 2) continue;
+    if (!identities.length)continue;
+    if(identities.length===1){
+      const track=tracks[identities[0]],error=track.registration_uncertainty_pixels;
+      if(track.coordinate_basis!=='native_cap_center'||!Number.isFinite(error)||error<=0)continue;
+    }
     const mapping = new Map(identities.map((id, i) => [id, i])), heads = [], frames = [], ys = [], parents = identities.map((_, i) => i);
     const root = (i: number) => { while (parents[i] !== i) { parents[i] = parents[parents[i]]; i = parents[i]; } return i; };
     chunk.forEach((s, frame) => {
@@ -75,7 +79,9 @@ export function refine(samples: RecordData[], tracks: RecordData[], receptor: nu
       const [phase, fitted, iterations] = solve(heads, frames, ys, chunk.map(s => s.phase), identities.length, chunk.length) as [number[], number[], number];
       let runningMaximum = -Infinity;
       const forward = phase.map(v => runningMaximum = Math.max(runningMaximum, v));
-      if (maximum(forward.map((v, i) => v - phase[i])) > Math.max(.75, .02 * spacing)) throw new Error('joint_coordinates_contradict_forward_motion');
+      const positionError=Math.max(0,...identities.map(id=>tracks[id].coordinate_basis==='native_cap_center'?
+        2*(tracks[id].registration_uncertainty_pixels??0):0));
+      if (maximum(forward.map((v, i) => v - phase[i])) > Math.max(.75, .02 * spacing,positionError)) throw new Error('joint_coordinates_contradict_forward_motion');
       const errors = ys.map((v, i) => fitted[heads[i]] - forward[frames[i]] - v);
       Object.assign(record, {status: 'fitted', iterations, residual_pixels: rms(errors), maximum_residual_pixels: maximum(errors.map(Math.abs)),
         maximum_forward_adjustment_pixels: maximum(forward.map((v, i) => v - phase[i])), maximum_phase_correction_pixels: maximum(forward.map((v, i) => Math.abs(v - chunk[i].phase))),

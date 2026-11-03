@@ -2,17 +2,21 @@
 from collections import defaultdict
 
 import numpy as np
+from piu_timeline.derived import CONTRACTS
 
-from piu_timeline.play.motion import ScrollMotion, LOCAL_CLOCK_FORMAT
+from piu_timeline.play.motion import ScrollMotion
 
-FORMAT = {'schema':1,'revision':16,'method':'registered_peer_displacement','local_clock':LOCAL_CLOCK_FORMAT}
+FORMAT = CONTRACTS['shared_motion']
 
 
 def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
     """One saved-data call integrates and jointly registers every trajectory."""
     from piu_timeline.derived import call
     from piu_timeline.play.registered_coordinates import apply_result
-    result=call('tracks.registered',[{'lane':t.lane,'points':t.points}for t in tracks],timeline,height,spacing,receptor,bottom)
+    result=call('tracks.registered',[{'lane':t.lane,'points':t.points,
+                'coordinate_basis':getattr(t,'coordinate_basis',None),
+                'registration_uncertainty_pixels':getattr(t,'registration_uncertainty_pixels',0)}for t in tracks],
+                timeline,height,spacing,receptor,bottom)
     motion=ScrollMotion(height,spacing);motion.evidence_format=FORMAT
     motion.samples=result['samples'];motion.at_time={s['time']:s for s in motion.samples}
     motion.chunks=[]

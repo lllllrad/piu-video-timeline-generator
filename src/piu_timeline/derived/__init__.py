@@ -10,6 +10,7 @@ _ROOT = Path(__file__).parent
 CONTRACTS = json.loads((_ROOT / 'contracts.json').read_text())
 for _name in ('timing','recovery','transcription'):CONTRACTS[_name]['natural_splits']=CONTRACTS['natural_splits']
 CONTRACTS['image_coordinates']['native_cap_registration']=CONTRACTS['native_anchor']
+CONTRACTS['shared_motion']['local_clock']=CONTRACTS['local_clock']
 CONTRACTS['chords'].update(native_cap_registration=CONTRACTS['native_anchor'],image_coordinates=CONTRACTS['image_coordinates'])
 for _name in ('domains','recovery'):CONTRACTS[_name]['measurement_limits']=CONTRACTS['coordinates']
 CONTRACTS['timing'].update(clock_conversion=CONTRACTS['clock_conversion'],spacing_checks=CONTRACTS['spacing'],

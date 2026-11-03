@@ -408,7 +408,7 @@ frame traces and pixel caches are reusable across these derived-rule changes.
 ## Measuring scroll-speed changes
 
 `just _chart-motion --sources VIDEO_ID --charts S23` estimates concrete speed
-changes from saved `registered_peer_displacement` samples. It reads native
+changes from saved shared native-displacement samples. It reads native
 motion and verified source/alignment identities without decoding video, OCR or
 new audio alignment. The default is read-only; `--write` appends qualified,
 provisionally active effects to the separate chart repository. Measurements and

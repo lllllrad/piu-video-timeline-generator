@@ -136,7 +136,8 @@ def apply(data,directory,display_delay_ms=0):
                           for o in r['observations']if 'native_cap_projection_uncertainty_pixels'in o]
             if observations:
                 measured[r['note']]={**r,'status':'measured_only','offset_pixels':0,
-                    'coordinate_uncertainty_pixels':max(o['native_cap_projection_uncertainty_pixels']for o in observations),
+                    'coordinate_uncertainty_pixels':max(o.get('native_cap_coordinate_uncertainty_pixels',
+                                                              o['native_cap_projection_uncertainty_pixels'])for o in observations),
                     'observations':observations}
         return refit_coordinates(data,registration,measured,display_delay_ms)
     from piu_timeline.play.appearance import acquire
@@ -163,6 +164,9 @@ def refit_coordinates(data,registration,measured,display_delay_ms):
         points=project_coordinates(raw,record)if record else raw
         track=Track(original['lane'],points)
         track.registration_uncertainty_pixels=record['coordinate_uncertainty_pixels']if record else 0
+        if record and record.get('coordinate_method')=='native_image_anchors'and all(
+                'native_cap_coordinate_uncertainty_pixels'in o for o in record['observations']):
+            track.coordinate_basis='native_cap_center'
         note=fit_track(track,data['layout']['receptor_y']*height,spacing,layout=data['layout'])
         if record:
             note.update(detected_points=raw,head_registration={

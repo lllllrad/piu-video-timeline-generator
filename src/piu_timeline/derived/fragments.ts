@@ -16,7 +16,7 @@ const joined = (a: RecordData, b: RecordData) => ({lane:a.lane, points:[...a.poi
 
 export function interleaved(tracks: RecordData[], spacing: number, motion: RecordData | null): Result {
   const origins=tracks.map((_,i)=>[i]);
-  if (motion?.evidence_format?.method!=='registered_peer_displacement') return [tracks,origins];
+  if (motion?.evidence_format?.method!==contracts.shared_motion.method) return [tracks,origins];
   const at=new Map<number,RecordData>((motion.samples??[]).map(s=>[s.time,s])), outgoing=new Map<number,number[]>(), incoming=new Map<number,number[]>(),proofs=new Map<string,RecordData>();
   const link=(map,key,value)=>{if(!map.has(key))map.set(key,[]);map.get(key).push(value);};
   for(const indices of lanes(tracks).values()){
@@ -69,7 +69,7 @@ export function interleaved(tracks: RecordData[], spacing: number, motion: Recor
 /** A native displacement origin must use the intact approach, not one endpoint. */
 function anchor(points: number[][], at: Map<number,RecordData>, spacing: number, motion: RecordData | null): RecordData {
   const chunk=at.get(points.at(-1)[0])?.chunk;
-  if(motion?.evidence_format?.method!=='registered_peer_displacement'||chunk==null||
+  if(motion?.evidence_format?.method!==contracts.shared_motion.method||chunk==null||
     Object.hasOwn(motion.coordinate_failures??{},chunk)||points.some(([t])=>at.get(t)?.chunk!==chunk)||
     points.length<F.minimum_references||points.at(-1)[0]-points[0][0]<F.minimum_span_seconds)return {status:'unavailable'};
   const offsets=points.map(([t,y])=>y+at.get(t).phase),error=F.maximum_reference_error_spacing*spacing;

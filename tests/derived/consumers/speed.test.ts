@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {estimate} from '../../../src/piu_timeline/derived/speed.ts';
 import {contracts} from '../../../src/piu_timeline/derived/contracts.ts';
 import type {RecordData} from '../../../src/piu_timeline/derived/types.ts';
-function scene(ratio=2,repeated=false):RecordData{return {analysis_width:400,layout:{lanes:[{x:.2},{x:.3}]},scroll_motion:{format:{method:'registered_peer_displacement'},coordinate_registration:{format:contracts.registration},samples:Array.from({length:300},(_,i)=>{const t=i/60,r=repeated?Math.floor(i/2)*2/60:t;return {time:1000+t,source_pts:9000+t,phase:240*Math.min(r,2)+240*ratio*Math.max(0,r-2),chunk:0,support:4,lanes:2};})}};}
+function scene(ratio=2,repeated=false):RecordData{return {analysis_width:400,layout:{lanes:[{x:.2},{x:.3}]},scroll_motion:{format:{method:contracts.shared_motion.method},coordinate_registration:{format:contracts.registration},samples:Array.from({length:300},(_,i)=>{const t=i/60,r=repeated?Math.floor(i/2)*2/60:t;return {time:1000+t,source_pts:9000+t,phase:240*Math.min(r,2)+240*ratio*Math.max(0,r-2),chunk:0,support:4,lanes:2};})}};}
 for(const ratio of [.5,1.73,2])test(`native speed transition retains real ratio and original frame brackets: ${ratio}`,()=>{
  const d=scene(ratio),before=structuredClone(d),r=estimate(d);assert.ok(r.transitions.length);const c=r.transitions.reduce((a,b)=>Math.abs(a.estimated_transition_seconds-1002)<Math.abs(b.estimated_transition_seconds-1002)?a:b);
  assert.ok(Math.abs(c.speed_multiplier-ratio)<=.02);assert.ok(c.speed_ratio_range[0]<=ratio&&c.speed_ratio_range[1]>=ratio);assert.ok(Math.abs(c.estimated_transition_seconds-1002)<=.02);assert.equal(c.auto_recordable,true);

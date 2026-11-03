@@ -1,5 +1,6 @@
 """Generic retained displacement for metadata-registration integration tests."""
 from piu_timeline.play.registered_coordinates import FORMAT as COORDINATE_FORMAT
+from piu_timeline.play.shared_timing import FORMAT as MOTION_FORMAT
 
 def scenario(ratio=2.,repeated=False):
     samples=[]
@@ -8,5 +9,5 @@ def scenario(ratio=2.,repeated=False):
         phase=240*min(render,2)+240*ratio*max(0,render-2)
         samples.append({'time':1000+time,'source_pts':9000+time,'phase':phase,'chunk':0,'support':4,'lanes':2})
     return {'analysis_width':400,'layout':{'lanes':[{'x':.2},{'x':.3}]},
-            'scroll_motion':{'format':{'method':'registered_peer_displacement'},
+            'scroll_motion':{'format':MOTION_FORMAT,
                              'coordinate_registration':{'format':COORDINATE_FORMAT},'samples':samples}}
