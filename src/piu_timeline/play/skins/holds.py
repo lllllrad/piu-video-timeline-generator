@@ -5,11 +5,12 @@ from piu_timeline.play.observations.coordinates import detection_points
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 20, 'method': 'independent_image_hold_proof',
+FORMAT = {'schema': 1, 'revision': 21, 'method': 'independent_image_hold_proof',
           'interior_caps':'separate_observed_objects',
           'motion_peers':'explicit_fit_trajectory_displacement',
           'cap_coverage':'all_qualified_cap_comparisons',
-          'coverage_prediction':'intersection_of_source_bound_displacements'}
+          'coverage_prediction':'intersection_of_source_bound_displacements',
+          'temporal_body_support':'qualified_body_or_endpoint_connection_regions'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -22,7 +23,7 @@ def covered(lo, hi, boxes):
     return False
 
 
-def image_pairs(data, native, roles, references, cap_references, lengths):
+def image_pairs(data, native, roles, references, cap_references, lengths,body_references=None):
     """Native image connectivity does not depend on an endpoint clock."""
     from piu_timeline.play.skins.coverage import image_spans
     by_time = {f['playback_seconds']: f for f in native}
@@ -73,7 +74,7 @@ def image_pairs(data, native, roles, references, cap_references, lengths):
             proposals.append((head, tail, proof, missing)); heads[head].add(tail); tails[tail].add(head)
     from piu_timeline.play.skins.temporal import temporal_pairs
     existing={(head,tail):(proof,missing)for head,tail,proof,missing in proposals}
-    temporal=temporal_pairs(data,native,roles,references,cap_references,length_checks=lengths)
+    temporal=temporal_pairs(data,native,roles,references,cap_references,length_checks=lengths,body_references=body_references)
     for pair in temporal['pairs']:
         head,tail=pair['head'],pair['tail']
         if (head,tail)in existing:
@@ -105,15 +106,16 @@ def image_pairs(data, native, roles, references, cap_references, lengths):
     return proposals,[{'head':a,'tail':b,'evidence':proof}for(a,b),proof in refuted.items()]
 
 
-def measure_connections(data,native,diagnostics,*,references=None,cap_references=None):
+def measure_connections(data,native,diagnostics,*,references=None,cap_references=None,body_references=None):
     from piu_timeline.play.skins.coverage import reference_rows
+    if references is None and body_references is None:body_references=reference_rows(data,body_only=True)
     references=reference_rows(data)if references is None else references
     cap_references=reference_rows(data,cap_only=True)if cap_references is None else cap_references
     from piu_timeline.play.skins.extents import LengthChecks
     lengths = LengthChecks(data)
     records = observe(data, native)['notes']
     roles = {r['note']: {o['role'] for o in r['observations']} - {'unknown'} for r in records}
-    proposals,refuted=image_pairs(data,native,roles,references,cap_references,lengths)
+    proposals,refuted=image_pairs(data,native,roles,references,cap_references,lengths,body_references)
     heads,tails=defaultdict(set),defaultdict(set)
     for head,tail,_,_ in proposals:heads[head].add(tail);tails[tail].add(head)
     image_connections,represented=[],set()

@@ -86,7 +86,7 @@ from piu_timeline.play.skins.holds import measure_connections
 s=json.load(sys.stdin)
 with tempfile.TemporaryDirectory()as tmp:
  root=Path(tmp);(root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\\n'for f in s['native']))
- with patch('piu_timeline.play.skins.coverage.reference_rows',side_effect=lambda data,cap_only=False:s['cap_references']if cap_only else s['references']),patch('piu_timeline.play.skins.holds.measure_connections',wraps=measure_connections)as measured:
+ with patch('piu_timeline.play.skins.coverage.reference_rows',side_effect=lambda data,cap_only=False,body_only=False:{k:[]for k in s['references']}if body_only else s['cap_references']if cap_only else s['references']),patch('piu_timeline.play.skins.holds.measure_connections',wraps=measure_connections)as measured:
   first=geometry(s['data'],root,s['native'],None);before=json.loads((root/'native-stages/hold-geometry.json').read_text())
   s['data']['scroll_motion']['format']={'local_clock':{'selection':'different_policy'}}
   for sample in s['data']['scroll_motion']['samples']:sample['variance']=999

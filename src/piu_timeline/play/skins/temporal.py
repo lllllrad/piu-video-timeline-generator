@@ -14,7 +14,7 @@ def measured_steps(data,native):
             data.get('scroll_motion',{}).get('samples',[]),timeline,spacing)}
 
 
-def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=None):
+def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=None,body_references=None):
     """No interpolated image or assumed constant velocity supplies an edge."""
     if length_checks is None:
         from piu_timeline.play.skins.extents import LengthChecks
@@ -43,6 +43,8 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
                 rows=image_spans(image,cap_references,cap_only=True)
             else:continue
             lanes[lane].extend((a,b,image['role']=='hold_body')for a,b in rows)
+            if body_references is not None and image['role']in('hold_start','hold_end'):
+                lanes[lane].extend((a,b,True)for a,b in image_spans(image,body_references,full_only=True))
         current=[]
         for lane,spans in lanes.items():
             merged=[]

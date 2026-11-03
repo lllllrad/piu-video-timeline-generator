@@ -78,3 +78,10 @@ interpretations at the displayed-hold level leave original observations intact.
 The chart marks a known hold without a reconstructed interval as `H`, an unknown
 type as `?`, and contradictory native types as `!`. Hold geometry uncertainty is
 not presented as missing type evidence.
+
+Short holds need not expose a separate body tile. Fully qualified start/end
+image comparisons contribute their declared connector rows to temporal body
+support. Cap pixels and failed connector comparisons do not count as body.
+Reconstruction still requires a unique pair of observed endpoints, positive
+regions connected through measured source motion, and sustained multi-frame
+support. Missing pixels, motion and endpoint timing remain explicit failures.

@@ -22,6 +22,11 @@ class ReferenceCoverageTest(unittest.TestCase):
             self.assertEqual(caps['hold_start'],[[0,20]])
             self.assertEqual(caps['hold_end'],[[15,35]])
             self.assertEqual(caps['hold_body'],[])
+            connectors=reference_rows(data,body_only=True)
+            self.assertEqual(connectors['hold_start'],[[22,35]])
+            self.assertEqual(connectors['hold_end'],[[0,12]])
+            self.assertEqual(connectors['tap'],[])
+            self.assertEqual(connectors['hold_body'],[[0,12]])
             self.assertEqual(image_spans({'template':'hold_start','bounds_pixels':[10,105,30,140]},rows),
                              [(105,125),(127,140)])
             data.update(analysis_width=400,analysis_height=600)
