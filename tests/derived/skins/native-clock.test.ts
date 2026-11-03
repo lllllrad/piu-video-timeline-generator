@@ -15,9 +15,12 @@ function scene(spacing=40,fps=60,early=false,repeated=false){
  return {data,track,state,receptor};
 }
 for(const spacing of [20,40,80])for(const fps of [30,60,120])for(const early of [false,true])
-test(`a short certified approach retains a bounded target: spacing=${spacing}, fps=${fps}, early=${early}`,()=>{
+test(`a short certified approach requires its entire target domain inside the extrapolation budget: spacing=${spacing}, fps=${fps}, early=${early}`,()=>{
  const {data,track,state,receptor}=scene(spacing,fps,early),before=structuredClone({state,track});
  const r=fit(state,track,receptor,data.layout);
+ // The earliest 30fps window no longer bounds every capture-phase model
+ // within the declared 250ms extrapolation limit. It must fail as a whole.
+ if(early&&fps===30){assert.equal(r,null);assert.deepEqual({state,track},before);return;}
  assert.ok(r);const [lo,hi]=r.native_interval_model.target_range_seconds;
  assert.ok(lo<=.93+1e-8&&.93<=hi+1e-8);assert.ok(hi<=track.points.at(-1)[0]+.25+1e-8);
  for(const [v,b]of r.native_interval_model.vertices)for(const o of r.native_interval_model.observations){
@@ -40,13 +43,13 @@ test('repeated image positions widen the feasible capture interval',()=>{
  assert.ok(repeated.prediction_uncertainty_seconds>plain.prediction_uncertainty_seconds);
  assert.ok(repeated.native_interval_model.target_range_seconds[0]<=.93&&repeated.native_interval_model.target_range_seconds[1]>=.93);
 });
-for(const kind of ['raw_origin','no_error','reverse','curved','clipped','gap','conflict','future_speed'])
+for(const kind of ['raw_origin','no_error','reverse','excessive_curve','clipped','gap','conflict','future_speed'])
 test(`native interval recovery rejects unsupported evidence: ${kind}`,()=>{
  const {data,track,state,receptor}=scene();
  if(kind==='raw_origin')track.coordinate_basis='image_reference_anchor';
  if(kind==='no_error')track.registration_uncertainty_pixels=0;
  if(kind==='reverse')track.points=track.points.map(([t,y])=>[t,500-y]);
- if(kind==='curved')track.points[4][1]+=15;
+ if(kind==='excessive_curve')track.points[4][1]+=3*state.spacing;
  if(kind==='clipped')state.samples=state.samples.filter(s=>s.time<.9);
  if(kind==='gap')state.samples=state.samples.filter(s=>s.time<.9||s.time>1.02);
  if(kind==='conflict')state.coordinate_conflicts=[{note:0,reason:'native_frame_displacement_conflict'}];
@@ -93,4 +96,25 @@ test('a long detector gap retains earlier same-identity positions when the sourc
  assert.ok(r.native_interval_model.target_range_seconds[0]<=.93&&r.native_interval_model.target_range_seconds[1]>=.93);
  const a=track.points[2][0],b=track.points[3][0];state.samples=state.samples.filter(s=>s.time<=a||s.time>=b);
  assert.equal(fit(state,track,receptor,data.layout),null);
+});
+
+for(const spacing of [20,40,80])for(const fps of [30,60,120])for(const phase of [-1,1])
+test(`a one-frame capture phase cannot exclude the known latent crossing: spacing=${spacing}, fps=${fps}, phase=${phase}`,()=>{
+ const d=nativeScene([[.93,0]],spacing,fps,5,{end:1.3,speedSpacingPerSecond:12,renderTime:t=>t+phase/fps}),
+  track={note_index:0,coordinate_basis:'native_cap_center',registration_uncertainty_pixels:spacing/160,
+   points:d.notes[0].points.filter(([t])=>t<=.84)},state={...d.scroll_motion,height:d.analysis_height,spacing},
+  before=structuredClone({state,track}),result=fit(state,track,d.layout.receptor_y*d.analysis_height,d.layout);
+ assert.ok(result);const [lo,hi]=result.native_interval_model.target_range_seconds;
+ assert.ok(lo<=.93&&.93<=hi,`${lo}..${hi} must contain the generator's independent target`);
+ assert.equal(result.native_clock_warning.reason,'shared_subframe_clock_unresolved');
+ assert.ok(result.prediction_uncertainty_seconds<.08);
+ assert.deepEqual({state,track},before);
+ for(const o of result.native_interval_model.observations)assert.equal(o.source_pts_seconds,80+o.time);
+});
+
+test('a one-frame phase excursion alone cannot prove a nonlinear clock',()=>{
+ const {data,track,state,receptor}=scene();track.points[4][1]+=15;
+ const result=fit(state,track,receptor,data.layout);assert.ok(result);
+ assert.equal(result.native_clock_warning.reason,'shared_subframe_clock_unresolved');
+ const [lo,hi]=result.native_interval_model.target_range_seconds;assert.ok(lo<=.93&&.93<=hi);
 });

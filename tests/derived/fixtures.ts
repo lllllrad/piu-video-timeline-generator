@@ -14,12 +14,13 @@ export function template(split = 48, rows = 384) {
 
 export interface NativeCapture {
   end?: number;
+  speedSpacingPerSecond?:number;
   repeated?: [number, number][];
   dropped?: number[];
   renderTime?: (recordingTime: number) => number;
 }
 export function nativeScene(events: [number, number][], spacing = 40, fps = 60, lanes = 5, capture: NativeCapture = {}): RecordData {
-  const width = spacing * 16.25, height = spacing * 9.125, receptor = spacing * 1.3, velocity = spacing * 6;
+  const width = spacing * 16.25, height = spacing * 9.125, receptor = spacing * 1.3, velocity = spacing * (capture.speedSpacingPerSecond??6);
   const times = Array.from({length: Math.round(((capture.end ?? 1.05) - .2) * fps) + 1}, (_, i) => .2 + i / fps).filter((_, i) => !capture.dropped?.includes(i));
   const rendered = (time: number) => {
     const interval = capture.repeated?.find(([lo, hi]) => lo - 1e-9 <= time && time <= hi + 1e-9);

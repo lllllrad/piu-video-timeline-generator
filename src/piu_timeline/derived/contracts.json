@@ -230,7 +230,8 @@
       "minimum_frames": 2,
       "maximum_position_error_multiplier": 2
     },
-    "output_ownership": "affine_clock_parameters_and_separate_all_sample_crossing_bounds"
+    "output_ownership": "affine_clock_parameters_and_separate_all_sample_crossing_bounds",
+    "capture_phase_extent": "one_adjacent_source_frame_each_side"
   },
   "render_clock": {
     "schema": 1,

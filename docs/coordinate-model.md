@@ -115,6 +115,14 @@ the original source timeline remains continuous. Reverse or curved
 motion, contradictory native steps, source gaps and extrapolation beyond the
 bounded recording support fail explicitly.
 
+Original frame PTS does not identify the center of a game-render capture phase.
+Each isolated source observation retains one adjacent original frame interval on
+either side. A fixed half-frame assumption can exclude a valid musical row even
+when native position errors are small. Repeated positions extend that capture
+interval without moving timestamps. The complete feasible crossing domain must
+still satisfy the source-coverage and extrapolation limits; an overwide domain
+fails instead of retaining only convenient models.
+
 The extrema of the feasible models bound the receptor crossing; a representative
 model only supplies a display position. This result keeps a
 `shared_subframe_clock_unresolved` warning and its own `native_interval_model`;

@@ -43,10 +43,10 @@ export function fit(state:RecordData,track:RecordData,receptor:number,layout:Rec
  if(points.some(([t,y])=>!Number.isFinite(t)||!Number.isFinite(y)||!Number.isFinite(at.get(t)?.source_pts)||
   state.coordinate_failures?.[at.get(t)?.chunk]==='joint_coordinates_contradict_forward_motion'))return null;
  const observations=points.map(([time,y])=>{
-  const i=lowerBound(times,time),steps=[i>0?time-times[i-1]:NaN,i+1<times.length?times[i+1]-time:NaN].filter(v=>Number.isFinite(v)&&v>0),half=Math.max(...steps)/2;
-  return {time,source_pts_seconds:at.get(time).source_pts,y_pixels:y,coordinate_uncertainty_pixels:error,capture_range_seconds:[time-half,time+half]};
+  const i=lowerBound(times,time),steps=[i>0?time-times[i-1]:NaN,i+1<times.length?times[i+1]-time:NaN].filter(v=>Number.isFinite(v)&&v>0),extent=Math.max(...steps);
+  return {time,source_pts_seconds:at.get(time).source_pts,y_pixels:y,coordinate_uncertainty_pixels:error,capture_range_seconds:[time-extent,time+extent]};
  });
- if(observations.some(o=>!Number.isFinite(o.capture_range_seconds[0])||o.capture_range_seconds[1]-o.capture_range_seconds[0]>F.maximum_capture_gap_seconds+1e-6))return null;
+ if(observations.some(o=>!Number.isFinite(o.capture_range_seconds[0])||o.capture_range_seconds[1]-o.capture_range_seconds[0]>2*F.maximum_capture_gap_seconds+1e-6))return null;
  if(new Set(observations.map(o=>o.source_pts_seconds)).size!==observations.length)return null;
  let plateau=0;
  for(let i=0;i<observations.length;){
