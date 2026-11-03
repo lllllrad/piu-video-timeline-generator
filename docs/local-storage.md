@@ -5,6 +5,9 @@ traces, original source PTS, counter crops and pixel caches live beside each
 current play result under `play/segment-NNN/`. Preserve these for later analysis
 without reacquiring video. Image banks are versioned in the separate data
 repository. Generated HTML and derived stage artifacts are reproducible consumers.
+Promotion updates complete JSON path values atomically without reserializing
+numerical observations. Files with no affected paths retain their exact bytes
+and modification times; original media paths and JSON object keys stay unchanged.
 
 Native observations are structured text, not compressed video. A frame can carry
 several positive patterns and alternatives with independent region errors and

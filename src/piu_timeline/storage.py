@@ -1,5 +1,6 @@
 """Relocate nested evidence references when promoting a saved analysis."""
 import json
+import re
 from contextlib import contextmanager
 import fcntl
 
@@ -25,17 +26,25 @@ def relocate_evidence(directory, destination, source=None):
     """Promotion must preserve every image/JSON evidence link, including nested OCR."""
     prefix = str((source or directory).resolve()) + "/"
     replacement = str(destination.resolve()) + "/"
-    def relocate(value):
-        if isinstance(value, str):
-            return replacement + value[len(prefix):] if value.startswith(prefix) else value
-        if isinstance(value, list):
-            return [relocate(item) for item in value]
-        if isinstance(value, dict):
-            return {key: relocate(item) for key, item in value.items()}
-        return value
+    if prefix==replacement:return
+    # Touch only complete JSON string values beginning with this directory.
+    # Large numerical observations must not be parsed and serialized again.
+    prefixes={json.dumps(prefix,ensure_ascii=ascii)[:-1]for ascii in (True,False)}
+    pattern=re.compile(r'(?<!\\)(?:'+'|'.join(re.escape(p)for p in prefixes)+r')(?:[^"\\]|\\.)*"(?!\s*:)')
+    def relocate(match):
+        value=json.loads(match.group())
+        return json.dumps(replacement+value[len(prefix):],ensure_ascii=False)
     for path in directory.rglob("*.json"):
-        value = json.loads(path.read_text(encoding="utf-8"))
-        path.write_text(json.dumps(relocate(value), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        text=path.read_text(encoding='utf-8')
+        if not any(p in text for p in prefixes):continue
+        updated=pattern.sub(relocate,text)
+        if updated==text:continue
+        temporary=path.with_name(path.name+'.relocate-build')
+        try:
+            temporary.write_text(updated,encoding='utf-8')
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def read_analysis_header(path):
