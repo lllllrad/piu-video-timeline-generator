@@ -7,8 +7,8 @@ def evidence(samples,receptor,spacing,minimum_coverage):
         coverage=sample.get('template_coverage',{})
         return (sample.get('unknown_reason')=='partial_head_present'and sample.get('score',0)>=.65
                 and all(coverage.get(k,0)>=minimum_coverage for k in('area_fraction','foreground_fraction')))
-    beyond=[s for s in samples if positive(s)and s['y']<receptor-.65*spacing]
-    pairs=[(a,b)for a,b in zip(beyond,beyond[1:])if 0<b['time']-a['time']<=.05 and b['y']<a['y']]
+    beyond=[s for s in samples if positive(s)and s.get('y_range_pixels',[s['y']])[-1]<receptor-.65*spacing]
+    pairs=[(a,b)for a,b in zip(beyond,beyond[1:])if 0<b['time']-a['time']<=.05 and b.get('y_range_pixels',[b['y']])[-1]<a.get('y_range_pixels',[a['y']])[0]]
     if not pairs:return None
     a,b=pairs[-1]
     return {'range':[a['time'],b['time']],'source_pts_seconds':[a['pts'],b['pts']],

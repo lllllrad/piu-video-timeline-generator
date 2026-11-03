@@ -31,14 +31,14 @@ def references(values,spacing):
     return poses
 
 
-def compare(color,light,reference,y,radius,spacing,*,retain_support=False):
+def compare(color,light,reference,y,radius,spacing,*,retain_support=False,y_range=None):
     """Presence needs one verified shape; clear absence must reject every shape."""
     from piu_timeline.play.processing import visible_template
     models=[('median',reference['mask'],{}),*[(i,p['mask'],p.get('evidence',{}))for i,p in enumerate(reference.get('poses',[]))]]
     models=[(name,mask,evidence)for name,mask,evidence in models if mask.any()]
     measured=[];expected=0
     for name,mask,evidence in models:
-        locations=centers(y,evidence);expected+=len(locations)
+        locations=centers(y,evidence,y_range);expected+=len(locations)
         for center in locations:
             cropped=visible_template(color,mask,center,radius)
             if cropped is None:continue

@@ -97,3 +97,27 @@ is statically branded. Low-level numerical fitters operate on supplied points
 and cannot qualify cross-track coordinates themselves. Registration readers and
 stage entry checks enforce that responsibility. Cache contracts for affected
 consumers change with this model; retained frames remain reusable.
+
+## Bounded native timing without a common clock
+
+Certified cap endpoints supply displacement intervals using both declared
+endpoint errors. `derived/tracks.ts` intersects those intervals; contradictory
+certified movements remain warnings with the original PTS and rejected bounds.
+Unknown reference origins cannot outvote a certified measurement.
+
+A short final observation block may lack enough support for a common affine
+clock. `derived/native_clock.ts` then retains all positive constant-speed models
+consistent with the same cap's measured centers, reference errors and original
+capture intervals. Repeated image positions widen the capture interval. Missing
+detector observations do not create missing source frames. Reverse or curved
+motion, contradictory native steps, source gaps and extrapolation beyond the
+bounded recording support fail explicitly.
+
+The extrema of the feasible models bound the receptor crossing; a representative
+model only supplies a display position. This result keeps a
+`shared_subframe_clock_unresolved` warning and its own `native_interval_model`;
+it does not acquire a shared phase or clock. Musical rows still require their
+ordinary independent validation. Processing compares all feasible integer image
+alignments before declaring absence, and possible positions remain bounded when
+checking passage or disappearance. Beat targets and input times do not move the
+native position domain.

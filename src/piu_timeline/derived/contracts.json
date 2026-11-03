@@ -128,8 +128,10 @@
   },
   "shared_motion": {
     "schema": 1,
-    "revision": 17,
-    "method": "registered_peer_or_measured_cap_displacement"
+    "revision": 19,
+    "method": "registered_peer_or_measured_cap_displacement",
+    "native_steps": "intersection_of_declared_endpoint_intervals",
+    "incomplete_clock": "source_bound_native_interval_with_explicit_warning"
   },
   "speed": {
     "schema": 1,
@@ -166,7 +168,10 @@
     "schema": 1,
     "revision": 10,
     "minimum_same_cap_support_fraction": 0.8,
-    "position_search": {"grid_pixels": 1, "uncertainty_pixels": 0.5},
+    "position_search": {
+      "grid_pixels": 1,
+      "uncertainty_pixels": 0.5
+    },
     "projection": "measured_center_frames_without_mixed_anchor_conventions",
     "uncertainty_units": "source_reference_pixels_scaled_to_analysis",
     "method": "native_image_anchors",
@@ -200,5 +205,15 @@
     "minimum_similarity": 0.65,
     "units": "analysis_image_pixels",
     "radius_spacing": 0.45
+  },
+  "native_clock": {
+    "schema": 1,
+    "method": "source_bound_capture_interval",
+    "minimum_frames": 4,
+    "minimum_span_seconds": 0.065,
+    "minimum_displacement_spacing": 0.8,
+    "maximum_capture_gap_seconds": 0.05,
+    "maximum_speed_spacing_per_second": 30,
+    "maximum_extrapolation_seconds": 0.25
   }
 }

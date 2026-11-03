@@ -58,6 +58,33 @@ for(const motion of ['stopped','reverse'])test(`a measured solo ${motion} cannot
  assert.equal(new MotionClock({...result,spacing,height:d.analysis_height}).fit(track,receptor,d.layout),null);
 });
 
+for(const spacing of [20,40,80])for(const fps of [30,60,120])
+test(`opposite permitted endpoint errors cannot disconnect a measured scroll clock: spacing=${spacing}, fps=${fps}`,()=>{
+ const d=nativeScene([[1,0],[1.1,1]],spacing,fps,5,{end:1.3}),error=spacing/40,
+  receptor=d.layout.receptor_y*d.analysis_height,bottom=d.layout.note_y_max*d.analysis_height;
+ const tracks=d.notes.map((n,i)=>({lane:n.lane,coordinate_basis:'native_cap_center',registration_uncertainty_pixels:error,
+  points:n.points.map(([t,y])=>[t,y+(Math.round((t-.2)*fps)%2?1:-1)*(i?1:-1)*error])}));
+ const before=structuredClone(tracks),r=registered(tracks,d.scroll_motion.samples,d.analysis_height,spacing,receptor,bottom);
+ assert.deepEqual(r.coordinate_failures,{});assert.deepEqual(r.coordinate_conflicts,[]);
+ const visible=tracks.flatMap(t=>t.points.filter(([,y])=>receptor+.85*spacing<y&&y<bottom-.55*spacing).map(([t])=>t)),
+  lo=Math.min(...visible),hi=Math.max(...visible),continuous=r.samples.filter(s=>lo<=s.time&&s.time<=hi);
+ assert.equal(new Set(continuous.map(s=>s.chunk)).size,1);
+ assert.ok(continuous.slice(1).every(s=>s.support>0&&s.native_displacement_interval));
+ for(const s of continuous.slice(1)){
+  const previous=r.samples[r.samples.indexOf(s)-1],truth=spacing*6*(s.time-previous.time),range=s.native_displacement_interval.range_pixels;
+  assert.ok(range[0]-1e-8<=truth&&truth<=range[1]+1e-8);
+ }
+ assert.deepEqual(tracks,before);
+});
+
+test('contradictory certified movements remain explicit instead of choosing a convenient peer',()=>{
+ const {d,track,spacing,receptor,bottom}=scene(),other=structuredClone(track);other.lane=1;
+ other.points=other.points.map(([t,y],i)=>[t,y+40+(i%2?8:-8)]);
+ const before=structuredClone([track,other]),r=registered([track,other],d.scroll_motion.samples,d.analysis_height,spacing,receptor,bottom);
+ assert.ok(r.coordinate_conflicts.some(w=>w.reason==='native_frame_displacement_conflict'&&w.failure_detail==='inconsistent_native_displacements'));
+ assert.ok(r.samples.some(s=>s.support===0));assert.deepEqual([track,other],before);
+});
+
 test('the native adapter transports measured-center qualification into shared motion',()=>{
  const script=String.raw`
 import json

@@ -55,3 +55,12 @@ class PassageTest(unittest.TestCase):
         refreshed=annotate_matches(data)['matches'][0]
         self.assertNotIn('processing_passage_after_refresh',refreshed)
         self.assertNotIn('processing_conflict',refreshed)
+
+    def test_possible_positions_cannot_be_replaced_by_the_nominal_center(self):
+        values=samples()
+        values[0]['y_range_pixels']=[8.,14.]
+        values[1]['y_range_pixels']=[4.,12.]
+        self.assertIsNone(evidence(values,25,20,.8))
+        values[0]['y_range_pixels']=[9.,11.]
+        values[1]['y_range_pixels']=[5.,7.]
+        self.assertIsNotNone(evidence(values,25,20,.8))

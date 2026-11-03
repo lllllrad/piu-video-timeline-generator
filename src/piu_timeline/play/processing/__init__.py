@@ -10,7 +10,7 @@ from piu_timeline.play.processing.poses import overlap,compare
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
-PROCESSING_FORMAT = {'schema': 1, 'revision': 10,'cap_coverage':CONTRACTS['cap_coverage'],'partial_confirmation_minimum_coverage':.8,
+PROCESSING_FORMAT = {'schema': 1, 'revision': 11,'cap_coverage':CONTRACTS['cap_coverage'],'partial_confirmation_minimum_coverage':.8,
                      'templates':TEMPLATE_FORMAT}
 
 
@@ -99,8 +99,9 @@ def transition(samples, receptor, spacing):
             and 0 < absent[0]['time']-last['time'] <= .075
             and 0 < confirmation['time']-absent[0]['time'] <= .1
             and confirmation['time']-last['time'] <= .15
-            and -.45*spacing <= last['y']-receptor <= 1.25*spacing
-            and absent[0]['y'] >= receptor-.8*spacing
+            and -.45*spacing <= last.get('y_range_pixels',[last['y']])[0]-receptor
+            and last.get('y_range_pixels',[last['y']])[-1]-receptor <= 1.25*spacing
+            and absent[0].get('y_range_pixels',[absent[0]['y']])[0] >= receptor-.8*spacing
             and all(0 < b['time']-a['time'] <= .05 for a,b in zip([last]+after,after))):
         return {'status': 'disappeared_near_receptor', 'reason': 'verified_head_then_clear_absence',
                 'range': [last['time'], absent[0]['time']],
@@ -177,9 +178,17 @@ def observe_processing(data, path):
             y = path['position'](time)
             if y is None:
                 continue
+            position_range=path.get('position_range',lambda _:None)(time)
+            if position_range:
+                # The model describes continuous position. Capture at this PTS
+                # adds the original adjacent-frame half interval before comparison.
+                half=max(time-float(times[fi-1])if fi else 0,float(times[fi+1])-time if fi+1<len(times)else 0)/2
+                extremes=[path['position_range'](t)for t in (time-half,time+half)]
+                if any(r is None for r in extremes):continue
+                position_range=[min(r[0]for r in extremes),max(r[1]for r in extremes)]
             color, light, visibility = lane_mask(fi)
-            observation=compare(color,light,reference,y-top,radius,spacing,retain_support=index in components)
-            hidden=hud_regions(data['layout'],note['lane'],y,radius,PIXEL_FORMAT['width'],height)
+            observation=compare(color,light,reference,y-top,radius,spacing,retain_support=index in components,y_range=[v-top for v in position_range]if position_range else None)
+            hidden=hud_regions(data['layout'],note['lane'],y,radius+max(y-position_range[0],position_range[1]-y)if position_range else radius,PIXEL_FORMAT['width'],height)
             reason=None
             if observation['unknown_reason']=='image_boundary':pass
             elif competing:reason='competing_head'
@@ -195,7 +204,7 @@ def observe_processing(data, path):
                     'box_pixels':[(top+a)/scale for a in cap['box_pixels']],
                     'native_lane_spacing_pixels':spacing,'reference':cap['reference'],
                     'score':cap['score'],'template_pose':cap['template_pose'],'trace':'processing-features.npz'})
-            record['samples'].append({'time':time,'pts':source_pts,'y':float(y),**observation,
+            record['samples'].append({'time':time,'pts':source_pts,'y':float(y),**({'y_range_pixels':position_range}if position_range else {}),**observation,
                                       **({'occluders':hidden}if hidden else {})})
         finish(transition(record['samples'], receptor, spacing))
     from piu_timeline.play.visibility import pre_receptor_losses

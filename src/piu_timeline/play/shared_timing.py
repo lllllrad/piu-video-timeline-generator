@@ -2,7 +2,7 @@
 from collections import defaultdict
 
 import numpy as np
-from piu_timeline.derived import CONTRACTS
+from piu_timeline.derived import CONTRACTS, call
 
 from piu_timeline.play.motion import ScrollMotion
 
@@ -29,7 +29,7 @@ def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
 
 
 def restore(notes, tracks, timeline, layout, width, height):
-    """A failed common reconstruction never silently becomes a local estimate."""
+    """Retain bounded native intervals with explicit unresolved-clock diagnostics."""
     spacing=float(np.median(np.diff([lane['x']*width for lane in layout['lanes']])))
     receptor=layout['receptor_y']*height
     motion=registered_motion(tracks,timeline,height,spacing,receptor,layout.get('note_y_max',.95)*height)
@@ -39,18 +39,25 @@ def restore(notes, tracks, timeline, layout, width, height):
         for t,y in track.points:shared_frames[t][i]=y
     warnings=list(motion.coordinate_conflicts)
     fitted_tracks=motion.fit_many(tracks,receptor,layout)
+    pending=[i for i,fitted in enumerate(fitted_tracks) if fitted is None]
+    native=call('nativeClock.fitMany',motion._state(),[
+        {'note_index':i,'points':tracks[i].points,
+         'coordinate_basis':getattr(tracks[i],'coordinate_basis',None),
+         'registration_uncertainty_pixels':getattr(tracks[i],'registration_uncertainty_pixels',0)}for i in pending],
+        receptor,layout)
+    bounded=dict(zip(pending,native,strict=True))
     for index,(note,track) in enumerate(zip(notes,tracks,strict=True)):
         # Short/noisy candidates already have explicit exclusion diagnostics.
         if len(track.points)<4 or track.points[-1][0]-track.points[0][0]<.065:
             continue
-        fitted=fitted_tracks[index]
+        fitted=fitted_tracks[index] or bounded.get(index)
         peer_counts=defaultdict(int)
         for t,y in track.points:
             for peer,py in shared_frames[t].items():
                 if peer!=index and (tracks[peer].lane!=track.lane or abs(py-y)>.65*spacing):
                     peer_counts[peer]+=1
         isolated = not any(count>=4 for count in peer_counts.values())
-        if isolated and fitted is None:
+        if isolated and fitted is None and getattr(track,'coordinate_basis',None)!='native_cap_center':
             from piu_timeline.play.tracking import fit_track
             direct=fit_track(track,receptor,spacing)
             if direct['status']=='estimated':
@@ -58,7 +65,7 @@ def restore(notes, tracks, timeline, layout, width, height):
         previous={k:note.get(k) for k in ('target_seconds','prediction_uncertainty_seconds','fit_method',
                                          'native_clock_warning','crossing_method')}
         # Preliminary online fits do not own the final registered clock state.
-        for key in ('native_clock_warning','crossing_method'):
+        for key in ('native_clock_warning','crossing_method','native_interval_model'):
             if not fitted or key not in fitted:note.pop(key,None)
         if fitted is None:
             visible=[motion.at_time[t] for t,y in track.points if receptor+.85*spacing<y<layout.get('note_y_max',.95)*height-.55*spacing]
@@ -72,6 +79,9 @@ def restore(notes, tracks, timeline, layout, width, height):
                              'visible_end_seconds':track.points[-1][0],'observed_points':len(track.points),
                              'failure_detail':failure})
         else:
+            if fitted.get('native_interval_model'):
+                for key in ('motion_target_phase','clock_target_phase','motion_chunk','motion_support_points','coordinate_bridge'):
+                    note.pop(key,None)
             note.update(**fitted,timing_reconstruction={'status':'restored','format':FORMAT})
             if fitted.get('native_clock_warning'):
                 warnings.append({'note':index,'lane':track.lane,'check':'timing_reconstruction',

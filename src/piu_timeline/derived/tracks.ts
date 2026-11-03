@@ -7,11 +7,11 @@ export function registered(tracks: RecordData[], timeline: RecordData[], height:
   tracks.forEach((track, i) => { for (const [t, y] of track.points) if (receptor + .85 * spacing < y && y < bottom - .55 * spacing) {
     if (!at.has(t)) at.set(t, {}); at.get(t)[i] = [track.lane, y];
   } });
-  const samples = [];
+  const samples = [],nativeConflicts=[];
   let previous = null, anchor = null, chunk = -1;
   for (const native of timeline) {
     const time = native.time, current = at.get(time) ?? {};
-    let displacement = null, observed = null, support = 0, lanes = 0, scatter = 0, basis = 'unsupported';
+    let displacement = null, observed = null, support = 0, lanes = 0, scatter = 0, basis = 'unsupported',nativeInterval=null;
     if (previous && 0 < time - previous.time && time - previous.time <= .05 + 1e-6) {
       const before = at.get(previous.time) ?? {};
       const pairs = Object.keys(before).filter(i => Object.hasOwn(current, i)).map(i => [before[i][1] - current[i][1], current[i][0], Number(i)]);
@@ -19,7 +19,27 @@ export function registered(tracks: RecordData[], timeline: RecordData[], height:
         const center = median(pairs.map(p => p[0])); observed = center;
         const kept = pairs.filter(p => Math.abs(p[0] - center) <= 1.5);
         support = kept.length; lanes = new Set(kept.map(p => p[1])).size;
-        if (support >= 2 && (lanes >= 2 || Math.max(...kept.map(p => current[p[2]][1])) - Math.min(...kept.map(p => current[p[2]][1])) > .65 * spacing) && -.75 <= center && center <= spacing * 30 * (time - previous.time)) {
+        const qualified=pairs.filter(p=>tracks[p[2]].coordinate_basis==='native_cap_center'&&
+          Number.isFinite(tracks[p[2]].registration_uncertainty_pixels)&&tracks[p[2]].registration_uncertainty_pixels>0);
+        if(qualified.length){
+          const intervals=qualified.map(p=>[p[0]-2*tracks[p[2]].registration_uncertainty_pixels,p[0]+2*tracks[p[2]].registration_uncertainty_pixels]);
+          const lo=Math.max(0,...intervals.map(r=>r[0])),hi=Math.min(spacing*30*(time-previous.time),...intervals.map(r=>r[1]));
+          if(lo<=hi+1e-8){
+            displacement=Math.max(lo,Math.min(hi,median(qualified.map(p=>p[0]))));support=qualified.length;
+            lanes=new Set(qualified.map(p=>p[1])).size;
+            scatter=Math.max(.35,std(qualified.map(p=>p[0])),displacement-lo,hi-displacement);
+            basis=support>1?'independent_registered_peers':'measured_cap_displacement';
+            anchor=[time,new Set(qualified.map(p=>p[2]))];
+            nativeInterval={range_pixels:[lo,hi],notes:qualified.map(p=>p[2]),endpoint_intervals_pixels:intervals};
+          }else{
+            for(const p of qualified)nativeConflicts.push({note:p[2],lane:p[1],reason:'native_frame_displacement_conflict',check:'timing_reconstruction',
+              visible_start_seconds:previous.time,visible_end_seconds:time,observed_points:2,
+              source_pts_seconds:[previous.source_pts,native.source_pts],peer_notes:qualified.map(p=>p[2]),
+              displacement_intervals_pixels:intervals,forward_intersection_pixels:[lo,hi],
+              failure_detail:Math.max(...intervals.map(r=>r[0]))>Math.min(...intervals.map(r=>r[1]))?
+                'inconsistent_native_displacements':hi<0?'reverse_motion':'excessive_frame_displacement'});
+          }
+        }else if (support >= 2 && (lanes >= 2 || Math.max(...kept.map(p => current[p[2]][1])) - Math.min(...kept.map(p => current[p[2]][1])) > .65 * spacing) && -.75 <= center && center <= spacing * 30 * (time - previous.time)) {
           displacement = Math.max(0, median(kept.map(p => p[0]))); scatter = Math.max(.35, std(kept.map(p => p[0])));
           basis = 'independent_registered_peers'; anchor = [time, new Set(kept.map(p => p[2]))];
         } else if (pairs.length === 1) {
@@ -37,10 +57,12 @@ export function registered(tracks: RecordData[], timeline: RecordData[], height:
     if (displacement === null) { chunk++; anchor = null; }
     else { phase = samples.at(-1).phase + displacement; variance = samples.at(-1).variance + scatter ** 2; }
     samples.push({...native, phase, pairwise_phase_pixels: phase, observed_peer_displacement_pixels: observed, variance, chunk,
-      support: displacement !== null ? support : 0, lanes: displacement !== null ? lanes : 0, displacement_basis: basis});
+      support: displacement !== null ? support : 0, lanes: displacement !== null ? lanes : 0, displacement_basis: basis,
+      ...(nativeInterval?{native_displacement_interval:nativeInterval}:{})});
     previous = native;
   }
-  return {...refine(samples, tracks, receptor, spacing, bottom), registered_positions: Object.fromEntries(at)};
+  const result=refine(samples,tracks,receptor,spacing,bottom);
+  return {...result,coordinate_conflicts:[...result.coordinate_conflicts,...nativeConflicts],registered_positions:Object.fromEntries(at)};
 }
 
 export function fitTrack(track: RecordData, receptor: number, spacing: number): RecordData {

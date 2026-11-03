@@ -12,7 +12,15 @@ def position_adapter(result,chunks=None):
     if model['kind']=='registered':
         samples,times,_=chunks[model['chunk']]
         original=chunks[model['from_chunk']][2]if model['from_chunk']is not None else {}
+    def interval(time):
+        if not model['start']<=time<=model['end']:return None
+        values=[(b-v*(time-model['origin']))*model['scale']for v,b in model['vertices']]
+        return [min(values),max(values)]
     def position(time):
+        if model['kind']=='native_interval':
+            if interval(time)is None:return None
+            v,b=model['representative']
+            return (b-v*(time-model['origin']))*model['scale']
         if model['kind']=='linear':return model['receptor']+model['velocity']*(time-model['target'])
         if model['kind']=='registered':
             from bisect import bisect_left
@@ -27,7 +35,7 @@ def position_adapter(result,chunks=None):
         if not bounds['start']<=time<=bounds['end']:return None
         delta=time-model['center']
         return model['intercept']+model['speed']*(delta if delta<0 else bounds['ratio']*delta)
-    return {**result,'position':position}
+    return {**result,'position':position,**({'position_range':interval}if model['kind']=='native_interval'else {})}
 
 
 def apply(data):

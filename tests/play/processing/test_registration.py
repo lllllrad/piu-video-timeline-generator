@@ -52,3 +52,25 @@ class ProcessingRegistrationTest(unittest.TestCase):
         color=np.zeros((40,13),dtype=bool);light=np.zeros_like(color);light[22:28]=True
         event=compare(color,light,reference(),20.2,6,20)
         self.assertEqual(event['state'],'unknown');self.assertEqual(event['unknown_reason'],'white_effect')
+
+    def test_native_position_interval_checks_all_alignments_before_absence(self):
+        ref=reference();light=np.zeros((45,13),dtype=bool);color=np.zeros_like(light)
+        color[18:31]=ref['mask']  # Actual center 24, outside the nominal center 20.
+        self.assertNotEqual(compare(color,light,ref,20.,6,20)['state'],'present')
+        event=compare(color,light,ref,20.,6,20,y_range=[18.,24.])
+        self.assertEqual(event['state'],'present')
+        clear=np.zeros_like(color)
+        self.assertEqual(compare(clear,light,ref,20.,6,20,y_range=[18.,24.])['state'],'absent')
+        # A flash at any feasible position defeats a claimed clear absence.
+        white=light.copy();white[24:28]=True
+        self.assertEqual(compare(clear,white,ref,20.,6,20,y_range=[18.,24.])['state'],'unknown')
+        self.assertEqual(compare(clear,light,ref,8.,6,20,y_range=[-5.,12.])['state'],'unknown')
+
+    def test_native_position_adapter_retains_all_feasible_vertices(self):
+        from piu_timeline.play.scroll_pauses import position_adapter
+        model={'kind':'native_interval','origin':1.,'vertices':[[100.,20.],[120.,24.]],
+               'representative':[110.,22.],'scale':.5,'start':.8,'end':1.1}
+        path=position_adapter({'supported':True,'position_model':model})
+        self.assertEqual(path['position_range'](1.),[10.,12.])
+        self.assertAlmostEqual(path['position'](1.),11.)
+        self.assertIsNone(path['position_range'](1.2));self.assertIsNone(path['position'](1.2))

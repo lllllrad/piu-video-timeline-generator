@@ -1,21 +1,13 @@
 /** Joint affine constraints; no reference is discarded or moved to a beat row. */
 import type {CoordinateModel, Interval, Reference} from '../types.ts';
+import {clipPlane,type Vertex} from '../coordinates/polygon.ts';
 
-export type Vertex = [number, number]; // velocity, intercept at the model origin
+export type {Vertex} from '../coordinates/polygon.ts';
 
 export function clip(vertices: Vertex[], time: number, offset: number, error: number): Vertex[] {
   let result = vertices;
   for (const sign of [-1, 1]) {
-    const input = result; result = [];
-    for (let i = 0; i < input.length; i++) {
-      const a = input[i], b = input[(i + 1) % input.length];
-      const fa = error - sign * (a[1] + a[0] * time - offset), fb = error - sign * (b[1] + b[0] * time - offset);
-      if (fa >= -1e-9) result.push(a);
-      if ((fa >= -1e-9) !== (fb >= -1e-9)) {
-        const fraction = fa / (fa - fb);
-        result.push([a[0] + fraction * (b[0] - a[0]), a[1] + fraction * (b[1] - a[1])]);
-      }
-    }
+    result=clipPlane(result,p=>error-sign*(p[1]+p[0]*time-offset));
   }
   return result;
 }

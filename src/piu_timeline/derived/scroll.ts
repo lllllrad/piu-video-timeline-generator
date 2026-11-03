@@ -91,6 +91,14 @@ export function processingPaths(notes: RecordData[], data: RecordData, receptor:
     if (configured) return configured;
     const points = fitTrajectory(note).points, failed = {supported: false, basis: 'unsupported_native_trajectory', velocity: 0, target: null};
     if (points.length < 4) return failed;
+    if(note.native_interval_model){
+      const native=note.native_interval_model,vertices=native.vertices;
+      if(note.timing_reconstruction?.status==='failed'||!vertices?.length)return failed;
+      const [v,b]=native.representative;
+      return {supported:true,basis:'source_bound_native_interval',velocity:-v*scale,target:native.origin_seconds+(b-receptor/scale)/v,
+        position_model:{kind:'native_interval',origin:native.origin_seconds,vertices,representative:native.representative,scale,
+          start:native.observations[0].capture_range_seconds[0],end:native.target_range_seconds[1]}};
+    }
     const bridge = note.coordinate_bridge ?? {}, phase = Object.hasOwn(note, 'clock_target_phase') ? note.clock_target_phase : note.motion_target_phase;
     const chunk = bridge.to_chunk ?? note.motion_chunk, samples = chunks.get(chunk) ?? [];
     if (phase != null && samples.length && note.timing_reconstruction?.status !== 'failed') {

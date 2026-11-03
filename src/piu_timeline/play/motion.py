@@ -65,6 +65,7 @@ class ScrollMotion:
         return {'samples':self.samples,'height':self.height,'spacing':self.spacing,
                 'strict_clock':getattr(self,'strict_clock',False),
                 'coordinate_failures':getattr(self,'coordinate_failures',{}),
+                'coordinate_conflicts':getattr(self,'coordinate_conflicts',[]),
                 'coordinate_registration':getattr(self,'coordinate_registration',{}),
                 'registered_positions':getattr(self,'registered_positions',None)}
 
