@@ -39,6 +39,14 @@ class SkinDetector:
         for template in self.templates:prepare_regions(template)
 
     def detect(self, rgb):
+        return self.resolve(self.candidates(rgb))
+
+    def candidates(self, rgb):
+        """Measure every localized match before grouping or object interpretation.
+
+        Nearby caps, incompatible roles and body matches inside caps stay separate.
+        Only image-region comparisons and local extrema belong to acquisition.
+        """
         if rgb.shape != (self.height, self.width, 3):
             raise ValueError('Skin detector image differs from its geometry')
         image = rgb.astype('float32') / 255
@@ -85,7 +93,7 @@ class SkinDetector:
                                        **({'unavailable_regions':[name for name,values in errors.items()if not np.isfinite(values[row,col])]}
                                           if any(not np.isfinite(values[row,col])for values in errors.values())else{}),
                                        'bounds_pixels': bounds, 'method': 'skin_image', 'skin': self.bank['skin']})
-        return self.resolve(candidates)
+        return candidates
 
     def resolve(self, candidates):
         retained = []

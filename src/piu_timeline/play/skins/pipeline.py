@@ -26,11 +26,11 @@ def initialize_worker(bank,layout,width,height):
     _detector=SkinDetector(bank,layout,width,height)
 
 
-def detect_frame(rgb):
-    return _detector.detect(rgb)
+def detect_frame(rgb, retain_candidates=False):
+    return _detector.candidates(rgb) if retain_candidates else _detector.detect(rgb)
 
 
-def _classified_frames(frames,bank,layout,width,height,jobs):
+def _classified_frames(frames,bank,layout,width,height,jobs,retain_candidates):
     """Keep at most two original RGB frames per worker in flight.
 
     Workers receive one frozen bank and return detections only. The original
@@ -44,7 +44,8 @@ def _classified_frames(frames,bank,layout,width,height,jobs):
     if type(jobs)is not int or not 1<=jobs<=32:raise ValueError('Skin workers must be 1..32')
     if jobs==1:
         detector=SkinDetector(bank,layout,width,height)
-        for pts,time,rgb in frames:yield pts,time,rgb,detector.detect(rgb)
+        for pts,time,rgb in frames:
+            yield pts,time,rgb,detector.candidates(rgb) if retain_candidates else detector.detect(rgb)
         return
     # Validate image-bank geometry before starting child processes.
     SkinDetector(bank,layout,width,height)
@@ -53,7 +54,7 @@ def _classified_frames(frames,bank,layout,width,height,jobs):
             initializer=initialize_worker,initargs=(bank,layout,width,height))as executor:
         try:
             for frame in frames:
-                pending.append((frame,executor.submit(detect_frame,frame[2])))
+                pending.append((frame,executor.submit(detect_frame,frame[2],retain_candidates)))
                 if len(pending)>=2*jobs:
                     original,future=pending.popleft();yield (*original,future.result())
             while pending:
@@ -62,9 +63,9 @@ def _classified_frames(frames,bank,layout,width,height,jobs):
             for _,future in pending:future.cancel()
 
 
-def classified_frames(frames,bank,layout,width,height,jobs=None):
+def classified_frames(frames,bank,layout,width,height,jobs=None,*,retain_candidates=False):
     """Return ordered detections and close acquisition on completion or failure."""
     try:
-        yield from _classified_frames(frames,bank,layout,width,height,jobs)
+        yield from _classified_frames(frames,bank,layout,width,height,jobs,retain_candidates)
     finally:
         if hasattr(frames,'close'):frames.close()

@@ -36,6 +36,22 @@ class FramePipelineTest(unittest.TestCase):
                 tap=next(o for o in after[3]if o['role']=='tap')
                 self.assertAlmostEqual(tap['y']*300,60+20*index)
 
+    def test_independent_capture_preserves_competing_matches_before_grouping(self):
+        with tempfile.TemporaryDirectory()as tmp:
+            bank,layout,frames=self.fixture(Path(tmp))
+            from piu_timeline.play.skins.detector import SkinDetector
+            detector=SkinDetector(bank,layout,200,300)
+            raw=list(classified_frames(iter(frames),bank,layout,200,300,jobs=2,retain_candidates=True))
+            grouped=list(classified_frames(iter(frames),bank,layout,200,300,jobs=1))
+            for source,observed,resolved in zip(frames,raw,grouped,strict=True):
+                self.assertEqual(source[:2],observed[:2])
+                self.assertEqual(observed[3],detector.candidates(source[2]))
+                self.assertGreater(len(observed[3]),len(resolved[3]))
+                self.assertTrue(all('alternatives'not in c and 'cap_subfeature'not in c for c in observed[3]))
+                before=json.dumps(observed[3],sort_keys=True)
+                detector.resolve(observed[3])
+                self.assertEqual(json.dumps(observed[3],sort_keys=True),before)
+
     def test_prefetch_is_bounded_and_early_close_releases_the_input(self):
         with tempfile.TemporaryDirectory()as tmp:
             bank,layout,frames=self.fixture(Path(tmp));state={'read':0,'closed':False}
