@@ -44,6 +44,42 @@ def scenario():
 
 
 class NativeClearanceTest(unittest.TestCase):
+    def test_moving_cap_identity_and_a_clear_role_frame_have_independent_requirements(self):
+        data,frames,samples,bank,profile=scenario()
+        for sample in samples[:3]:sample[2]['white'][:]=True
+        result=derive(data,frames,samples,bank,profile)
+        self.assertEqual(len(result['notes']['0']),1)
+        self.assertEqual(result['notes']['0'][0]['source_pts_seconds'],samples[-1][0])
+        self.assertEqual(observe({**data,'skin_role_evidence':result},frames)['notes'][0]['status'],'tap')
+        self.assertEqual(derive(data,frames[1:],samples[1:],bank,profile)['notes'],{})
+
+    def test_distinct_clear_cap_positions_have_the_same_role_at_different_capture_rates(self):
+        for fps in (30,60,120,240):
+            with self.subTest(fps=fps):
+                data,frames,samples,bank,profile=scenario()
+                times=[1+i/fps for i in range(4)]
+                data['notes'][0]['points']=[(t,y)for t,(_,y)in zip(times,data['notes'][0]['points'],strict=True)]
+                for i,(t,frame)in enumerate(zip(times,frames,strict=True)):
+                    frame.update(playback_seconds=t,source_pts_seconds=10+t)
+                    samples[i]=(10+t,t,*samples[i][2:])
+                result=derive(data,frames,samples,bank,profile)
+                self.assertEqual(len(result['notes']['0']),4)
+
+    def test_unobservable_frames_between_clear_views_do_not_erase_owned_tap_evidence(self):
+        data,frames,samples,bank,profile=scenario()
+        times=[1.,1.025,1.15,1.175]
+        data['notes'][0]['points']=[(t,y)for t,(_,y)in zip(times,data['notes'][0]['points'],strict=True)]
+        for i,(t,frame)in enumerate(zip(times,frames,strict=True)):
+            frame.update(playback_seconds=t,source_pts_seconds=10+t)
+            samples[i]=(10+t,t,*samples[i][2:])
+        result=derive(data,frames,samples,bank,profile)
+        self.assertEqual(observe({**data,'skin_role_evidence':result},frames)['notes'][0]['status'],'tap')
+        self.assertEqual([p['playback_seconds']for p in result['notes']['0']],times)
+        # Positive hold evidence must remain a conflict across the same gap.
+        changed=deepcopy(frames)
+        changed[1]['skin_observations'][0].update(role='hold_start',template_role='hold_start',classification_status='full_pattern')
+        self.assertEqual(observe({**data,'skin_role_evidence':result},changed)['notes'][0]['status'],'conflict')
+
     def test_positive_cap_and_measured_blank_bands_do_not_need_matching_background_rgb(self):
         data,frames,samples,bank,profile=scenario();original=deepcopy(frames)
         result=derive(data,frames,samples,bank,profile)
@@ -109,7 +145,7 @@ class NativeClearanceTest(unittest.TestCase):
         result=derive(data,frames,samples,bank,profile)
         self.assertIn('0',result['notes'])
         # A body pixel outside the narrow reference gap is still observed.
-        for sample in samples:sample[2]['relaxed_blue'][140,61]=True
+        for i,sample in enumerate(samples):sample[2]['relaxed_blue'][140-5*i,61]=True
         self.assertEqual(derive(data,frames,samples,bank,profile)['notes'],{})
 
     def test_profile_must_explain_body_colors_and_native_pts_must_agree(self):

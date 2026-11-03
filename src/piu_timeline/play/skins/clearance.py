@@ -10,8 +10,8 @@ from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.skins.detector import SkinDetector
 from piu_timeline.play.skins.sampling import key,reference_scale
 
-FORMAT={'schema':1,'revision':3,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
-        'minimum_frames':4,'minimum_span_seconds':.065,'maximum_gap_seconds':.05,
+FORMAT={'schema':1,'revision':6,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
+        'minimum_frames':4,
         'minimum_motion_spacing':.5,'maximum_anchor_delta_spacing':.1,
         'body_core_halfwidth_spacing':.1,'minimum_clearance_halfwidth_spacing':.2,
         'maximum_white_fraction':.05}
@@ -81,18 +81,17 @@ def clear_regions(data,pattern,template,planes):
     return result
 
 
-def qualify(proofs,spacing):
-    groups=[]
-    for point in proofs:
-        if not groups or point['playback_seconds']-groups[-1][-1]['playback_seconds']>FORMAT['maximum_gap_seconds']:
-            groups.append([])
-        groups[-1].append(point)
-    for group in groups:
-        times=[p['playback_seconds']for p in group];ys=[p['image_anchor'][1]for p in group]
-        if (len(set(p['source_pts_seconds']for p in group))>=FORMAT['minimum_frames']
-                and times[-1]-times[0]>=FORMAT['minimum_span_seconds']
-                and len(set(ys))>=FORMAT['minimum_frames']
-                and max(ys)-min(ys)>=FORMAT['minimum_motion_spacing']*spacing):return group
+def qualify(proofs,spacing,movement=None):
+    # These are positive per-frame classifications of one owned trajectory,
+    # not a motion interpolation across missing observations. An unobservable
+    # frame cannot invalidate clear pixels before or after it. Hold observations
+    # anywhere on the trajectory still create a type conflict in the role join.
+    if not proofs:return []
+    moving=proofs if movement is None else movement
+    ys=[p['image_anchor'][1]for p in moving]
+    if (len(set(p['source_pts_seconds']for p in moving))>=FORMAT['minimum_frames']
+            and len(set(ys))>=FORMAT['minimum_frames']
+            and max(ys)-min(ys)>=FORMAT['minimum_motion_spacing']*spacing):return proofs
     return []
 
 
@@ -102,7 +101,7 @@ def derive(data,native,samples,bank,profile):
         raise ValueError('Clearance bank differs from acquired cap images')
     width,height=data['analysis_width'],data['analysis_height']
     detector=SkinDetector(bank,data['layout'],width,height);templates={key(t):t for t in detector.templates}
-    owners=defaultdict(list);proofs=defaultdict(list);already_taps=set()
+    owners=defaultdict(list);proofs=defaultdict(list);held=defaultdict(list);movement=defaultdict(list);already_taps=set()
     for i,note in enumerate(data['notes']):
         for time,y in detection_points(note):
             owners[time,note['lane'],round(y,5)].append(i)
@@ -115,10 +114,22 @@ def derive(data,native,samples,bank,profile):
         previous=pts,time
         if frame['source_pts_seconds']!=pts or frame['playback_seconds']!=time:
             raise ValueError('Clearance masks differ from original frame timestamps')
+        from piu_timeline.play.skins.connections import body_connections
+        for image,pattern,connection in body_connections(data,frame,templates):
+            indices=owners[time,image['lane'],round(image['y']*height,5)]
+            if len(indices)!=1:continue
+            held[indices[0],connection['role']].append({'kind':'hold','role':connection['role'],
+                'reason':'image_cap_with_measured_body_connection','source_note':indices[0],
+                'playback_seconds':time,'source_pts_seconds':pts,'trace':'frames.jsonl',
+                'template':pattern['template'],'skin':bank['skin'],'region_errors':pattern['region_errors'],
+                'bounds_pixels':pattern['bounds_pixels'],'image_anchor':[pattern['x']*width,image['y']*height],
+                'classification_status':'cap_with_body_comparisons',**connection})
         for image in frame.get('skin_observations',[]):
             if image['role']=='hold_body':continue
             indices=owners[time,image['lane'],round(image['y']*height,5)]
             if len(indices)!=1:continue
+            movement[indices[0]].append({'playback_seconds':time,'source_pts_seconds':pts,
+                                       'image_anchor':[image['x']*width,image['y']*height]})
             if 'tap'in image.get('conflicting_roles',[image['role']]):already_taps.add(indices[0])
             for pattern in [image,*image.get('alternatives',[])]:
                 template=templates[key(pattern)]
@@ -137,8 +148,13 @@ def derive(data,native,samples,bank,profile):
                     **{k:pattern[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels')if k in pattern},
                     'clearance_pixel_dimensions':[PIXEL_FORMAT['width'],next(iter(planes.values())).shape[0]]})
                 break
-    qualified={i:group for i,points in proofs.items()if(group:=qualify(points,detector.spacing))}
+    qualified={i:group for i,points in proofs.items()if(group:=qualify(points,detector.spacing,movement[i]))}
+    notes={str(i):group for i,group in qualified.items()if i not in already_taps}
+    connected=0
+    for (i,_),points in held.items():
+        group=qualify(points,detector.spacing,movement[i])
+        if group:notes.setdefault(str(i),[]).extend(group);connected+=1
     return {'status':'available','validation':validation,
             'counts':{'qualified_clearance_notes':len(qualified),'already_observed_taps':len(qualified.keys()&already_taps),
-                      'additional_tap_roles':len(qualified.keys()-already_taps)},
-            'notes':{str(i):group for i,group in qualified.items()if i not in already_taps},'warnings':[]}
+                      'additional_tap_roles':len(qualified.keys()-already_taps),'connected_hold_roles':connected},
+            'notes':notes,'warnings':[]}

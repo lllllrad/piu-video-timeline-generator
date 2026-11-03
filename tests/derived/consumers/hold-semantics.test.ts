@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import type {RecordData} from '../../../src/piu_timeline/derived/types.ts';
 import {present} from '../../../src/piu_timeline/derived/hold_presentation.ts';
-import {observedTailRoles,chartProjection} from '../../../src/piu_timeline/derived/hold_projection.ts';
+import {observedTailRoles,chartProjection,projectTypes} from '../../../src/piu_timeline/derived/hold_projection.ts';
 import {recognition,exclusions} from '../../../src/piu_timeline/derived/diagnostics.ts';
 import {recognitionSegments} from '../../../src/piu_timeline/derived/hold_state.ts';
 import {timingRanges} from '../../../src/piu_timeline/derived/ranges.ts';
@@ -53,6 +53,18 @@ visible_start_seconds:.1,
 visible_end_seconds:.3}}]}};
 }
 function held():RecordData{return {notes:[{lane:0,status:'estimated',target_seconds:9,prediction_uncertainty_seconds:.01},{lane:1,status:'estimated',target_seconds:10,prediction_uncertainty_seconds:.01}],matches:[],combo_events:[],judgment_events:[],hold_analysis:{holds:[{id:0,lane:0,head_note:0,covered_notes:[0],start_range:[9,9.02],end_range:[11,11.02],start_censored:false,end_censored:false,input:{segments:[]}}],receptor_runs:[]}};}
+test('known hold roles with missing intervals warn about geometry rather than unknown type',()=>{
+ const notes:RecordData[]=[{lane:0,status:'estimated',target_seconds:1}],observations=[{kind:'hold',role:'hold_start',playback_seconds:.8}];
+ const data={visual_channels:{note_types:{notes:[{note:0,observations}]}}};
+ const diagnostics=projectTypes(data,notes,[]);
+ assert.equal(notes[0]['type_status'],'hold');
+ assert.equal(diagnostics[0].reason,'unresolved_hold_geometry');
+ assert.equal(diagnostics[0].failure_detail,'observed_hold_role_without_reconstructed_interval');
+ const unknown=structuredClone(data);unknown.visual_channels.note_types.notes[0].observations=[];
+ assert.equal(projectTypes(unknown,structuredClone(notes),[])[0].reason,'note_type_unresolved');
+ observations.push({kind:'tap',role:'tap',playback_seconds:.9});
+ assert.equal(projectTypes(data,structuredClone(notes),[])[0].reason,'note_type_conflict');
+});
 test('observed tail survives failed head timing without inventing a hold or press',()=>{
  const d=tails(),before=structuredClone(d),v=present(d);assert.deepEqual(d,before);assert.equal(v.notes[1].reason,'observed_hold_tail_pending_geometry');assert.deepEqual(v.matches,[]);assert.deepEqual(v.hold_analysis.holds,[]);assert.equal(v.notes[0].target_seconds,null);assert.equal(v.notes[1].target_seconds,1.5);
  const w=recognition(v,{notes:{}}).warnings;for(const reason of ['observed_hold_tail_pending_geometry','unresolved_hold_geometry'])assert.ok(w.some(w=>w.reason===reason));assert.ok(exclusions(d,v).warnings.some(w=>w.reason==='observed_hold_tail_pending_geometry'));

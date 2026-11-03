@@ -67,7 +67,9 @@ export function projectTypes(data: RecordData, notes: RecordData[], holds: Recor
       const proof = obs.filter(o => o.kind !== 'unknown');
       let times = proof.flatMap(o => [o.playback_seconds, o.playback_end_seconds ?? o.playback_seconds]);
       if (!times.length) times = (n.points ?? []).map(p => p[0]); if (!times.length) times = [n.target_seconds];
-      diagnostics.push({note: i, lane: n.lane, reason: status === 'conflict' ? 'note_type_conflict' : 'note_type_unresolved', visible_start_seconds: Math.min(...times), visible_end_seconds: Math.max(...times),
+      diagnostics.push({note: i, lane: n.lane, reason: status === 'conflict' ? 'note_type_conflict' : status === 'hold' ? 'unresolved_hold_geometry' : 'note_type_unresolved',
+        ...(status==='hold'?{failure_detail:'observed_hold_role_without_reconstructed_interval'}:{}),
+        visible_start_seconds: Math.min(...times), visible_end_seconds: Math.max(...times),
         observed_points: obs.length, type_evidence: proof, type_unknown_reasons: n.type_unknown_reasons, hold: n.hold_id ?? null});
     }
   });

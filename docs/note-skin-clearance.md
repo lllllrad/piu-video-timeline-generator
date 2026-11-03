@@ -1,4 +1,4 @@
-# Native clearance around image-matched caps
+# Independent role evidence around image-matched caps
 
 A tap image's background changes with the song animation. Comparing its upper
 and lower margins to reference RGB can leave a clearly matched cap without a
@@ -6,6 +6,19 @@ role. The optional `phoenix_chromatic_gap` model instead combines the positive
 cap image with independently retained spatial masks around that cap. It does
 not detect heads or infer their times, and a failed hold match does not prove
 a tap.
+
+A failed endpoint-connector reference can also use independently matched body
+images from the same original frame. `skins/connections.py` unions only their
+positively compared `body` pixels, including retained alternatives. It requires
+every declared connector pixel of a positive cap comparison to be covered.
+Nearby tiles, bounding rectangles, cap-internal body subfeatures and even a
+single unmeasured connector pixel cannot establish a connection. The result
+retains the actual body-comparison indices, connector support and original PTS.
+Moving-cap observations establish object identity using the same distinct-frame
+and travel requirements as tap evidence. Once that identity is established,
+one fully measured connector can supply a positive role observation.
+No judgment or input channel supplies
+these hold roles; downstream endpoint ownership and timing must still succeed.
 
 A versioned bank can declare this model in `roles.json` beside `bank.json` in
 the separate skin repository:
@@ -50,8 +63,14 @@ For each existing image observation, the model requires:
   coverage. A saturated effect, colored connection or known overlay leaves the
   role unresolved. Black acquired pixels can establish a gap for this explicitly
   validated bright-body model.
-- At least four distinct original PTS across 65 ms, no adjacent observation gap
-  above 50 ms, four distinct cap positions and half a lane spacing of travel.
+- A moving object established by positive cap matches at four distinct original
+  PTS and cap positions, with half a lane spacing of travel. At least one frame
+  must satisfy both clearance tests. The movement observations and role
+  observations have separate purposes; an obscured margin does not erase a cap
+  match or a role observed in another frame of the same acquired trajectory.
+  This combines role evidence without interpolating motion or blank pixels.
+  Elapsed duration does not qualify a type: the required spatial travel and
+  distinct positions prevent repeated render frames from adding support at any FPS.
   Repeated capture frames and stationary receptor artwork cannot supply this
   moving-cap proof.
 
