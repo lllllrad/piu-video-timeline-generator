@@ -1,7 +1,10 @@
 # The CLI loads the language-independent recommended rules by default.
 presets: [js]
 rules:
-  test/no-directory-fixture-copy: error
+  test/no-directory-fixture-copy:
+    severity: error
+    options:
+      ignoredDirectories: [.git, .local, .qg, node_modules, dist, .venv, build, __pycache__]
   pnpm/lockfile-is-current:
     severity: error
     options:
