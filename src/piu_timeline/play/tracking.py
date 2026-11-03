@@ -27,7 +27,7 @@ class NoteTracker:
         self.motion = ScrollMotion(height, self.spacing)
         self.skin_detector = None
         self.frame_centers = None
-        self.frame_uncertainty = {}
+        self.frame_steps = []
         self.skin_observations = []
         if skin_bank is not None:
             from piu_timeline.play.skins.detector import SkinDetector
@@ -66,7 +66,6 @@ class NoteTracker:
         from piu_timeline.derived import call,CONTRACTS
         observations=self.observations(seconds,detections)
         centers=[{**image,'y':point['center']['yPixels']/self.height}for image,point in zip(detections,observations,strict=True)if point['center']]
-        self.frame_uncertainty[seconds]=max([p['center']['uncertaintyPixels']for p in observations if p['center']],default=0)
         self.motion.update(seconds,centers,source_pts)
         if self.hold_candidate:
             if self.unsupported_intervals and seconds - self.unsupported_intervals[-1]['end_seconds'] < .1:
@@ -74,16 +73,11 @@ class NoteTracker:
             else:
                 self.unsupported_intervals.append({'start_seconds': seconds, 'end_seconds': seconds,
                                                    'reason': 'possible_hold_or_dense_stack'})
-        displacements=[]
-        for time in {o['time']for t in self.active for o in t.tracking_observations}:
-            distance=self.motion.distance(time,seconds)
-            if distance is not None:
-                error=self.frame_uncertainty[seconds]+self.frame_uncertainty[time]
-                error+=math.sqrt(max(0,self.motion.at_time[seconds]['variance']-self.motion.at_time[time]['variance']))
-                displacements.append({'fromSeconds':time,'pixels':distance,'uncertaintyPixels':error})
         assignment=call('frameTracking.assign',
             [{'lane':t.lane,'observations':t.tracking_observations,'maximumGapSeconds':self.gap_limit(t)}for t in self.active],
-            [{'lane':n['lane'],'observation':o}for n,o in zip(detections,observations,strict=True)],seconds,self.spacing,displacements)
+            [{'lane':n['lane'],'observation':o}for n,o in zip(detections,observations,strict=True)],seconds,self.spacing,[],self.frame_steps)
+        self.frame_steps=[s for s in self.frame_steps if seconds-s['toSeconds']<=.35]
+        if assignment['step']:self.frame_steps.append(assignment['step'])
         used_tracks, used_notes = set(), set()
         for i,j in assignment['matches']:
             self.active[i].points.append((seconds, detections[j]['y'] * self.height))

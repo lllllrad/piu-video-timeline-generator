@@ -53,6 +53,15 @@ test('an identical image anchor can retain identity through a temporarily unregi
  assert.deepEqual(assign([first],[next],1+1/60,40,motion).matches,[]);
 });
 
+test('pixel-qualified alternative anchors preserve identity when an unregistered representative changes',()=>{
+ const first={lane:0,maximumGapSeconds:.12,observations:[{time:1,center:null,anchor:anchor(214,'a'),anchors:[anchor(214,'a'),anchor(200,'b')]}]};
+ const next={lane:0,observation:{time:1+1/60,center:null,anchor:anchor(192,'b'),anchors:[anchor(206,'a'),anchor(192,'b')]}};
+ assert.deepEqual(assign([first],[next],1+1/60,40,motion).matches,[[0,0]]);
+ // A second positive view must agree; it is not a list of guesses to pick from.
+ next.observation.anchors[0]=anchor(230,'a');
+ assert.deepEqual(assign([first],[next],1+1/60,40,motion).matches,[]);
+});
+
 test('coordinate error widens the range while expired and cross-lane observations cannot attach',()=>{
  const next=detection(194);next.observation.center.uncertaintyPixels=2;
  assert.deepEqual(assign([track(200)],[next],1+1/60,40,motion).matches,[[0,0]]);
@@ -60,6 +69,49 @@ test('coordinate error widens the range while expired and cross-lane observation
  assert.deepEqual(assign([track(200)],[next],1+1/60,40,motion).matches,[]);
  assert.deepEqual(assign([track(200)],[detection(192,1.2)],1.2,40,motion).matches,[]);
  assert.deepEqual(assign([track(200)],[{...detection(192),lane:1}],1+1/60,40,motion).matches,[]);
+});
+
+for(const displacement of [-10,0,6])test(`coobserved centers retain identities through a changed scroll step: ${displacement}`,()=>{
+ const tracks=[track(200),track(280),{...track(240),lane:1}];
+ // Earlier forward motion must not prevent a newly measured stop or reverse.
+ tracks.forEach(t=>t.observations.unshift(observation(.98,t.observations[0].center.yPixels+8)));
+ const caps=tracks.map(t=>({...detection(t.observations.at(-1).center.yPixels-displacement),lane:t.lane}));
+ const r=assign(tracks,caps,1+1/60,40);
+ assert.deepEqual(r.matches.sort((a,b)=>a[0]-b[0]),[[0,0],[1,1],[2,2]]);
+ assert.deepEqual(r.ambiguities,[]);assert.ok(r.measuredDisplacement);
+ assert.ok(r.measuredDisplacement.pixels-r.measuredDisplacement.uncertaintyPixels<=displacement);
+ assert.ok(displacement<=r.measuredDisplacement.pixels+r.measuredDisplacement.uncertaintyPixels);
+});
+
+test('two equally supported scrolling translations do not become a measured displacement',()=>{
+ const tracks=[track(200),{...track(200),lane:1}];
+ const caps=[detection(192),detection(208),{...detection(192),lane:1},{...detection(208),lane:1}];
+ const r=assign(tracks,caps,1+1/60,40);
+ assert.equal(r.measuredDisplacement,null);assert.deepEqual(r.matches,[]);
+ assert.deepEqual(r.ambiguousTracks.sort(),[0,1]);
+});
+
+test('a vanished lower cap cannot return as the following note after retained forward steps',()=>{
+ const tracks=[track(125),track(250,1+5/60)],now=1+6/60;
+ const steps=Array.from({length:5},(_,i)=>({fromSeconds:1+i/60,toSeconds:1+(i+1)/60,
+  pixels:8,uncertaintyPixels:.5,basis:'forced_identity_images' as const}));
+ const caps=[detection(242,now)];
+ const result=assign(tracks,caps,now,40,[],steps);
+ assert.deepEqual(result.matches,[[1,0]]);assert.deepEqual(result.ambiguities,[]);
+ // A missing displacement link cannot be silently interpolated.
+ const reappeared=[detection(77,now)];
+ assert.deepEqual(assign([tracks[0]],reappeared,now,40,[],steps).matches,[[0,0]]);
+ const broken=assign([tracks[0]],reappeared,now,40,[],steps.slice(1));
+ assert.deepEqual(broken.matches,[]);
+});
+
+test('a lone new cap cannot reuse an old identity after an unobserved field interval',()=>{
+ const previous=track(74,1),now=1+.117;
+ const result=assign([previous],[detection(144,now)],now,64);
+ assert.deepEqual(result.matches,[]);assert.equal(result.step,null);
+ // Independent observed displacement can still bridge a visibility gap.
+ const observed=assign([previous],[detection(44,now)],now,64,[{fromSeconds:1,pixels:30,uncertaintyPixels:1}]);
+ assert.deepEqual(observed.matches,[[0,0]]);
 });
 
 for(const spacing of [20,40,80])for(const fps of [30,60,120])

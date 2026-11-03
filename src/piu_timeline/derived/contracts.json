@@ -1,12 +1,15 @@
 {
   "frame_tracking": {
     "schema": 1,
-    "revision": 1,
+    "revision": 5,
     "coordinates": "measured_centers_or_identical_reference_anchors",
     "assignment": "forced_edges_of_maximum_cardinality_matching",
     "order": "coobserved_separated_positions_in_one_coordinate_basis",
     "maximum_speed_spacing_per_second": 30,
-    "history_frames": 6
+    "history_frames": 6,
+    "motion": "signed_compatible_image_steps_with_retained_endpoint_intervals",
+    "alternative_views": "positive_shared_cap_pixels_with_separate_reference_origins",
+    "gap_prediction": "observed_step_chain_or_repeated_compatible_positions"
   },
   "fragments": {
     "schema": 1,

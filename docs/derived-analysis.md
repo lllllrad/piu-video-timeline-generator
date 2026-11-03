@@ -26,6 +26,10 @@ interval when available and an original matching-anchor interval scoped to its
 exact reference identity. Both use analysis-image pixels with y downward.
 `derived/frame_tracking.ts` predicts in one compatible coordinate view at a time;
 raw origins from different references cannot substitute for cap centers.
+When positive alternative comparisons cover the same cap pixels, their separately
+scoped anchors are retained too. A changing representative can link through a
+shared exact reference; all shared views must agree. This does not certify an
+absolute center for an unregistered image.
 
 Frame assignment retains only links required by every maximum-cardinality
 matching. Co-observed, separated positions in a common basis establish note order;
@@ -33,8 +37,21 @@ asynchronous or incomparable positions do not establish that order. Missing
 observations cannot make a following note inherit another identity through a
 wide proximity threshold. Ambiguous fragments are kept separately with
 `ambiguous_note_tracking`, original timestamps and candidate pixel positions.
-Later coordinate refitting preserves these warnings. Identity prediction can
-include capture-step slack; that slack does not enlarge a chart target range.
+Later coordinate refitting preserves these warnings. Co-observed compatible image
+positions in at least two lanes can independently measure one common signed frame
+translation before identities are selected. Equal competing translations remain
+unavailable. Without that measurement, association uses a speed bound in both
+directions; past velocity cannot prohibit a new stop, acceleration or reversal.
+These identity bounds do not establish a clock or enlarge chart target ranges.
+Signed frame steps retain endpoint error intervals and can carry a disappeared
+cap forward through the observations of other caps. A gap breaks that chain;
+there is no interpolation over missing steps. A final unmeasured capture step
+retains its full speed bound. A visibility gap over 50 ms without a displacement
+chain needs at least four repeated, compatible positions; their measured errors
+and one capture-step allowance bound a trajectory prediction. A lone position
+cannot establish a reversal and return to the field. Only forced identities may supply a subsequent
+single-cap step in a compatible coordinate view, after the assignment has been
+decided independently.
 
 Tracking appends original matching anchors to the immutable detection trajectory.
 The independently measured centers guide association and are projected into the

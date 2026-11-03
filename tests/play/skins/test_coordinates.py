@@ -77,6 +77,21 @@ class ImageCoordinateTest(unittest.TestCase):
             self.assertAlmostEqual(first.points[0][1],41)
             self.assertAlmostEqual(first.points[1][1],36)
             self.assertEqual([o['center']['yPixels']for o in first.tracking_observations],[40,36,32,28])
+            # Shared comparison pixels also preserve identity without claiming
+            # a native center when none of the references has a certificate.
+            for entry in document['templates']:entry.pop('native_anchor_registration',None)
+            unknown=root/'unregistered.json';unknown.write_text(json.dumps(document))
+            unknown_bank=load_bank(unknown);uncalibrated=NoteTracker(layout,200,160,skin_bank=unknown_bank)
+            for index in range(4):
+                moving=np.zeros_like(canvas)
+                for top in(30,100):
+                    patch=rgb[60:95,10:30].copy()
+                    if index%2:patch[20:,6:14]=[35,160,230]
+                    moving[top-4*index:top-4*index+35,10:30]=patch
+                observed=uncalibrated.detect(moving);uncalibrated.update(2+index*.025,observed,5+index*.025)
+            self.assertEqual(len(uncalibrated.active),2)
+            self.assertTrue(all(len(t.points)==4 for t in uncalibrated.active))
+            self.assertTrue(all(o['center']is None for t in uncalibrated.active for o in t.tracking_observations))
             # A genuine positive match of the other glyph cannot calibrate this one.
             other=max(caps,key=lambda o:o['y'])
             alternative=next(p for p in other['alternatives']if p['template']in bank['anchor_registrations'])
