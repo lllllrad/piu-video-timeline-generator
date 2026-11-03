@@ -94,3 +94,39 @@ test('preheld lane counts without inventing onset at visual head',()=>{
  const times=[8.9,8.95,9,9.05,9.1,9.15,9.2],frames=times.map(t=>({playback_seconds:t,source_pts_seconds:t+10,receptor_lit:[true]})),h={lane:0,start_range:[9,9.01],end_range:[9.2,9.21],start_censored:false,last_body_seconds:9.2},state=recognitionSegments(frames,times,h,{} as any);
  assert.deepEqual(state.recognition_envelope,[9,9.2]);assert.equal(state.press_range,null);const d=held();d.hold_analysis.holds[0].input=state;const r=timingRanges(present(d)).notes[0];assert.equal(r.status,'hold_state');assert.equal(r.input_requirement,'held_state');assert.equal(r.requires_head_press,false);assert.equal(r.press_range,null);
 });
+
+function sourceKinds(kinds:string[]):RecordData{
+ return {visual_channels:{timeline:{frames:[[1.2,51.2],[1.4,51.4],[1.6,51.6]]},note_types:{notes:kinds.map((kind,i)=>({note:i,observations:[{
+  kind,reason:kind==='unknown'?'skin_image_connection_unresolved':'positive_native_pixels',source_note:i,playback_seconds:1.2,source_pts_seconds:51.2}]}))}}};
+}
+for(const kind of ['tap','hold','unknown'])test(`native type evidence remains visible when timing is excluded: ${kind}`,()=>{
+ const d=sourceKinds([kind]),before=structuredClone(d),make=(status:string):RecordData[]=>[{lane:0,status,reason:status==='estimated'?null:'shared_timing_reconstruction_failed',
+  points:[[1.2,120]],target_seconds:status==='estimated'?1.5:null}],timed=make('estimated'),excluded=make('excluded');
+ projectTypes(d,timed,[]);projectTypes(d,excluded,[]);
+ assert.equal(excluded[0].type_status,kind);assert.deepEqual(excluded[0].type_evidence,timed[0].type_evidence);
+ assert.deepEqual(excluded[0].type_unknown_reasons,timed[0].type_unknown_reasons);
+ assert.equal(excluded[0].reason,'shared_timing_reconstruction_failed');assert.equal(excluded[0].target_seconds,null);assert.deepEqual(d,before);
+});
+test('a positive tap/hold conflict warns even when timing independently failed',()=>{
+ const d=sourceKinds(['hold']);d.visual_channels.note_types.notes[0].observations.push({kind:'tap',reason:'positive_native_pixels',source_note:0,
+  playback_seconds:1.4,source_pts_seconds:51.4});
+ const notes:RecordData[]=[{lane:0,status:'excluded',reason:'shared_timing_reconstruction_failed',points:[[1.2,120]],target_seconds:null}],warnings=projectTypes(d,notes,[]);
+ assert.equal(notes[0].type_status,'conflict');assert.equal(warnings[0].reason,'note_type_conflict');assert.equal(warnings[0].note,0);
+ assert.equal(notes[0].reason,'shared_timing_reconstruction_failed');
+});
+for(const after of [false,true])test(`a suppressed hold component retains native contradictions beside the hold interpretation: after=${after}`,()=>{
+ const d=sourceKinds(['hold','hold']),time=after?1.6:1.4;
+ d.visual_channels.note_types.notes[1].observations.push({kind:'tap',reason:'positive_native_pixels',source_note:1,playback_seconds:time,source_pts_seconds:50+time});
+ const notes:RecordData[]=[{lane:0,status:'estimated',note_type:'hold',points:[[1.2,120]]},{lane:0,status:'excluded',note_type:'hold_component',reason:'long_note_body_or_tail',points:[[1.2,180]]}],
+  holds=[{id:0,display_note:0,head_note:0,head_observation_note:0,tail_observation_note:1,covered_notes:[0,1],start_range:[1.5,1.51],source_pts_range:[51.2,51.4]}],before=structuredClone(d),warnings=projectTypes(d,notes,holds);
+ assert.equal(notes[1].type_status,'conflict');assert.equal(notes[1].note_type,'hold_component');
+ assert.deepEqual(notes[1].type_evidence,d.visual_channels.note_types.notes[1].observations);
+ assert.ok(warnings.some(w=>w.note===1&&w.reason==='note_type_conflict'));
+ assert.deepEqual(d,before);
+});
+test('ambiguous hold ownership cannot remove a source type contradiction',()=>{
+ const d=sourceKinds(['hold','hold','hold']);d.visual_channels.note_types.notes[1].observations.push({kind:'tap',reason:'positive_native_pixels',source_note:1,playback_seconds:1.6,source_pts_seconds:51.6});
+ const notes:RecordData[]=[0,1,2].map(lane=>({lane:0,status:lane===1?'excluded':'estimated',note_type:lane===1?'hold_component':'hold',points:[[1.2,120+lane*30]]})),
+  holds=[0,2].map(head=>({id:head,display_note:head,head_note:head,covered_notes:[head,1],start_range:[1.5,1.51],source_pts_range:[51.2,51.4]})),warnings=projectTypes(d,notes,holds);
+ assert.equal(notes[1].type_status,'conflict');assert.ok(warnings.some(w=>w.note===1&&w.reason==='note_type_conflict'));
+});

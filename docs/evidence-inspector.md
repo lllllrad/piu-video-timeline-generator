@@ -61,3 +61,20 @@ reconstruct missing observations or change diagnostic severity. Tests exercise
 shipped browser code with synthetic observations and an observable DOM, including
 shared selection, excluded-track seeks, crop transforms, UCS source linkage and
 retained nodes during playback. These tests do not establish recognition accuracy.
+
+
+## Type evidence and timing failures
+Type presentation is independent of timing acceptance. Every retained head keeps
+its type evidence and unknown reasons even if its physical or musical timing
+failed. Timing exclusion cannot turn a positively identified tap into an
+unconfirmed type. A genuine tap/hold contradiction remains a warning on an
+excluded head as well.
+
+Suppressed hold components keep their own native type observations separately
+from the reconstructed hold interpretation. A hold's ownership claim alone
+cannot remove a native tap/hold contradiction on a component. Processing-remnant
+interpretations at the displayed-hold level leave original observations intact.
+
+The chart marks a known hold without a reconstructed interval as `H`, an unknown
+type as `?`, and contradictory native types as `!`. Hold geometry uncertainty is
+not presented as missing type evidence.

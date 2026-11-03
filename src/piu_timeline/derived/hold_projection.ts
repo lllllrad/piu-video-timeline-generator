@@ -50,8 +50,7 @@ export function projectTypes(data: RecordData, notes: RecordData[], holds: Recor
   for (const h of holds) { groups.set(h.display_note, unique<number>([...h.covered_notes, ...['head_note', 'head_observation_note', 'tail_observation_note'].map(k => h[k]).filter(i => i != null)])); byHold.set(h.display_note, h); }
   const timeline = new Map<number, number>((data.visual_channels?.timeline?.frames ?? []).map(([t, pts]) => [pts, t]));
   notes.forEach((n, i) => {
-    if (n.status !== 'estimated') return;
-    const members = groups.get(i) ?? [i], hold = byHold.get(i);
+    const members=groups.get(i)??[i],hold=byHold.get(i);
     let obs = [...members].sort((a, b) => a - b).flatMap(index => by.get(index)?.observations ?? []);
     if (hold?.start_range) obs = obs.map(o => o.kind === 'tap' && o.playback_seconds >= hold.start_range[0] ? {...o, kind: 'unknown', observed_kind: 'tap', reason: 'hold_processing_remnant'} : o);
     const kinds = new Set(obs.map(o => o.kind).filter(k => k !== 'unknown'));
@@ -63,6 +62,7 @@ export function projectTypes(data: RecordData, notes: RecordData[], holds: Recor
     }
     const status = kinds.size > 1 ? 'conflict' : kinds.size ? [...kinds][0] : 'unknown';
     Object.assign(n, {type_status: status, type_evidence: obs, type_unknown_reasons: count(obs.filter(o => o.kind === 'unknown'), 'reason')});
+    if(n.status!=='estimated'&&status!=='conflict')return;
     if (['unknown', 'conflict'].includes(status) || status === 'hold' && n.note_type !== 'hold') {
       const proof = obs.filter(o => o.kind !== 'unknown');
       let times = proof.flatMap(o => [o.playback_seconds, o.playback_end_seconds ?? o.playback_seconds]);

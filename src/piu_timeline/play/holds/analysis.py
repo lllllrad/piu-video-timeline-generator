@@ -5,7 +5,7 @@ import json
 from piu_timeline.play.holds.features import feature_contract
 from piu_timeline.play.holds.reconstruction import reconstruct
 
-ASSOCIATION_FORMAT = {'schema': 1, 'revision': 43}
+ASSOCIATION_FORMAT = {'schema': 1, 'revision': 44, 'types':'independent_of_timing_with_visible_component_conflicts'}
 
 
 def fingerprint(value):

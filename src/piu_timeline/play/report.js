@@ -253,7 +253,7 @@ const group=svgNode('g',{'data-note':index,'data-kind':'note',role:'button',tabi
 svgNode('rect',{x:x-size/2,y:y(t)-size/2,width:size,height:size,fill:palette[0],stroke:palette[1],'stroke-width':2,'data-kind':'note-square','data-type-status':note.type_status||'unknown',
   ...(note.type_status==='tap'||note.type_status==='hold'&&hold?{}:{'stroke-dasharray':'3 2'})},group);
 label(group,hold?.start_censored?'?':['↙','↖','●','↗','↘'][note.lane%5],x,y(t)+size*.32,'#ffffff',size,'middle');
-if(note.type_status!=='tap'&&!(note.type_status==='hold'&&hold))label(group,note.type_status==='conflict'?'!':'?',x+size*.34,y(t)-size*.25,'#ffffff',Math.max(10,size*.3),'middle');
+if(note.type_status!=='tap'&&!(note.type_status==='hold'&&hold))label(group,note.type_status==='conflict'?'!':note.type_status==='hold'?'H':'?',x+size*.34,y(t)-size*.25,'#ffffff',Math.max(10,size*.3),'middle');
 selectionRects.set(index,svgNode('rect',{x:x-size/2-3,y:y(t)-size/2-3,width:size+6,height:size+6,fill:'none',stroke:'#ffffff','stroke-width':2,visibility:'hidden'},group));
 group.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();seek(t,matchByNote.get(index)?.index??-1,index)}};
 }
