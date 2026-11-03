@@ -38,6 +38,23 @@ profiles remain authoritative and are never overwritten by automatic choices.
 After identification, acquisition compares only the selected bank. Skin identity
 alone does not establish note roles, calibrated timing or reviewed UCS geometry.
 
+## Evidence stages and ownership
+
+| Stage | Inputs | Output and acceptance rule |
+| --- | --- | --- |
+| Skin identification | Native frames and candidate banks | Appearance identity only; cap matches do not certify roles or centers |
+| Image acquisition | Original pixels and the selected bank | Source PTS, region errors, positions and alternatives; retain positive matches inside potential HUD footprints |
+| Coordinate registration | Saved image observations and declared reference anchors | Per-observation centers and uncertainty; contradictory anchors remain explicit failures |
+| Role interpretation | Cap, connection and clearance observations across frames | Tap or held-interval boundaries; failed connection matches never prove a tap |
+| Timing and associations | Registered motion, official musical clock and separate input/judgment channels | Chart target ranges and input associations remain separate |
+| UCS transcription | Chart targets and confirmed tap/hold geometry | Build an unreviewed draft with unresolved placements retained; skin review status is not an export prerequisite |
+
+Human review controls replacement of chart data, not whether an observed note
+exists. Explicit rebuilds can replace only untouched unreviewed generated drafts;
+reviewed or manually edited UCS files remain protected. Concrete unsupported
+visual profiles and actual unresolved coordinates or roles retain their own
+failures. A skin-level approval flag cannot replace those per-observation checks.
+
 ## References and measurements
 
 Each bank has a skin identity, measured reference lane spacing, and RGBA PNG
@@ -90,7 +107,8 @@ source pixels may supply interpolation context; output outside comparison
 regions supplies no cap/body coverage or foreground-overlap evidence.
 The lower search limit applies to note anchors. Surrounding image context can
 extend beyond that limit while remaining inside the original game image; it is
-still subject to HUD support checks. A fully visible template must not be
+subject to the same positive region comparisons. Potential HUD overlap alone
+cannot reject those matched pixels. A fully visible template must not be
 rejected just because its canvas extends below the anchor limit.
 Local image minima supply cap positions. Body tiles retain every vertically
 qualified origin, using horizontal minima to localize the lane pattern. A better

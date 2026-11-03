@@ -155,26 +155,27 @@ class ChartDataTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); repo = initialize(root/'repo', Provider()); output = root/'video/play/segment-001'
             output.mkdir(parents=True)
-            result = register(data(), output, repository=repo, song_start=10, client=Provider())
+            source=data();source['skin_detector']={'registration_reviewed':False}
+            result = register(source, output, repository=repo, song_start=10, client=Provider())
             chart = Path(result['chart']); original = chart.read_bytes()
             metadata_path = chart.with_name('metadata.json')
             annotations = json.loads(metadata_path.read_text())
             annotations['regions'] = [{'id':'gimmick','start_seconds':1,'end_seconds':2,
                                        'processing':'exclude_timing','reason':'Nonlinear motion.'}]
             metadata_path.write_text(json.dumps(annotations))
-            result = register(data(), output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
+            result = register(source, output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
             self.assertEqual(result['status'], 'rebuilt')
             self.assertEqual(json.loads(metadata_path.read_text())['regions'], annotations['regions'])
             backup = next(chart.parent.parent.glob('phoenix.build-previous-*'))
             self.assertEqual((backup/'chart.ucs').read_bytes(), original)
             chart.write_text(chart.read_text().replace('X....', '....X', 1))
             with self.assertRaisesRegex(ValueError, 'manually edited'):
-                register(data(), output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
+                register(source, output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
             chart.write_bytes(original)
             metadata = chart.with_name('metadata.json'); saved = json.loads(metadata.read_text())
             saved['review_status'] = 'reviewed'; metadata.write_text(json.dumps(saved))
             with self.assertRaisesRegex(ValueError, 'reviewed'):
-                register(data(), output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
+                register(source, output, repository=repo, song_start=10, client=Provider(), rebuild_draft=True)
 
     def test_taps_holds_and_double_rows_preserve_song_timing(self):
         source = data()

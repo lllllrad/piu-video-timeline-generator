@@ -10,6 +10,20 @@ from piu_timeline.play.exclusions import exclusion_diagnostics, recognition_diag
 
 
 class ExclusionWarningTest(unittest.TestCase):
+    def test_skin_review_status_neither_blocks_nor_certifies_observation_evidence(self):
+        data={'start_seconds':0,'end_seconds':1,'notes':[],
+              'skin_detector':{'registration_reviewed':False},
+              'head_registration':{'warnings':[{'note':0,'lane':0,
+                  'reason':'conflicting_registered_image_anchors',
+                  'visible_start_seconds':.1,'visible_end_seconds':.2}]}}
+        original=deepcopy(data)
+        result=recognition_diagnostics(data,{'notes':{}})
+        self.assertEqual([w['reason']for w in result['warnings']],['conflicting_registered_image_anchors'])
+        data['skin_detector']['registration_reviewed']=True
+        self.assertEqual(recognition_diagnostics(data,{'notes':{}}),result)
+        data['skin_detector']['registration_reviewed']=False
+        self.assertEqual(data,original)
+
     def test_inspector_retains_warning_tab_artifact_and_final_output_path(self):
         from piu_timeline.play.presentation import prepare_report
         from piu_timeline.play.report import write_report as render_report

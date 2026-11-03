@@ -47,7 +47,6 @@ export function recognition(data: RecordData, ranges: RecordData): RecordData {
   const support = data.visual_support;
   const overview = {lane: 0, observed_points: 0, visible_start_seconds: data.start_seconds, visible_end_seconds: data.end_seconds};
   if (support && !support.chart_geometry) warnings.push({...overview, reason: 'unsupported_visual_profile', source_review: support});
-  if (data.skin_detector && !data.skin_detector.registration_reviewed) warnings.push({...overview, reason: 'skin_registration_unverified', skin_contract: data.skin_detector.contract});
   if (data.skin_detector?.missing_template_roles?.length) warnings.push({...overview, reason: 'skin_template_coverage_incomplete', missing_template_roles: data.skin_detector.missing_template_roles});
   warnings.push(...(data.object_interpretation?.warnings ?? []));
   const effects = new Map<string, RecordData>((data.chart_policy?.gimmick_candidates ?? []).map(e => [e.id, e]));
