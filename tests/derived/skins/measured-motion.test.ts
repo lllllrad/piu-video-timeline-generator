@@ -104,3 +104,15 @@ print(json.dumps({'basis':sorted(set(s['displacement_basis']for s in motion.samp
  assert.ok(Math.abs(r.fit.target_seconds-1)<r.fit.prediction_uncertainty_seconds);
  assert.equal(r.source_pts[0],80.2);
 });
+
+test('independent native lanes retain a measured capture jump without calling it ordinary elapsed motion',()=>{
+ const spacing=40,scene=nativeScene([[1,0],[1.1,1]],spacing,60,5,{end:1.3,renderTime:t=>t>=.7?t+5/60:t}),
+  receptor=scene.layout.receptor_y*scene.analysis_height,bottom=scene.layout.note_y_max*scene.analysis_height,
+  tracks=scene.notes.map(n=>({lane:n.lane,points:n.points,coordinate_basis:'native_cap_center',registration_uncertainty_pixels:1})),
+  r=registered(tracks,scene.scroll_motion.samples,scene.analysis_height,spacing,receptor,bottom);
+ assert.ok(r.coordinate_conflicts.some(w=>w.reason==='native_motion_cadence_unresolved'));
+ assert.ok(!r.coordinate_conflicts.some(w=>w.failure_detail==='excessive_frame_displacement'));
+ const before=r.samples.find(s=>Math.abs(s.time-(.7-1/60))<1e-8),after=r.samples.find(s=>Math.abs(s.time-.7)<1e-8);
+ assert.equal(before.chunk,after.chunk);assert.ok(after.support>=2);
+ assert.ok(after.native_displacement_interval.range_pixels[0]<=24&&after.native_displacement_interval.range_pixels[1]>=24);
+});

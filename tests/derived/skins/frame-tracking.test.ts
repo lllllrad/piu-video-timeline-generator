@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {execFileSync}from 'node:child_process';
 import {assign} from '../../../src/piu_timeline/derived/frame_tracking.ts';
 import {nativeScene} from '../fixtures.ts';
 
@@ -135,4 +136,39 @@ test(`generated moving notes retain identity through missing and repeated views:
   caps.forEach((cap,j)=>{if(!used.has(j)){created.set(cap.source,(created.get(cap.source)??0)+1);active.push({lane:0,source:cap.source,observations:[cap.observation],maximumGapSeconds:.12});}});
  }
  assert.equal(created.size,7);assert.ok([...created.values()].every(count=>count===1),'ordinary missing frames must not fragment a note');
+});
+
+for(const spacing of [20,40,80])for(const fps of [60,120])
+test(`a cross-lane capture jump retains identities and an explicit cadence warning: spacing=${spacing}, fps=${fps}`,()=>{
+ const tracks=[{...track(5*spacing),lane:0},{...track(7*spacing),lane:1}],time=1+1/fps,jump=spacing*.7;
+ const caps=tracks.map(t=>({...detection(t.observations[0].center.yPixels-jump,time),lane:t.lane}));
+ const before=structuredClone({tracks,caps}),r=assign(tracks,caps,time,spacing);
+ assert.deepEqual(r.matches,[[0,0],[1,1]]);assert.deepEqual(r.ambiguities,[]);
+ assert.equal(r.cadenceWarnings[0].reason,'observed_frame_step_exceeds_source_cadence');
+ assert.deepEqual({tracks,caps},before);
+ // One isolated cap cannot establish the cross-lane translation.
+ assert.deepEqual(assign(tracks.slice(0,1),caps.slice(0,1),time,spacing).matches,[]);
+ // A contradictory lane cannot certify an engine-time explanation.
+ caps[1].observation.center.yPixels+=spacing;
+ const conflict=assign(tracks,caps,time,spacing);assert.equal(conflict.measuredDisplacement,null);
+});
+test('ordinary capture steps do not acquire cadence warnings',()=>{
+ const r=assign([track(200),{...track(240),lane:1}],[detection(192),{...detection(232),lane:1}],1+1/60,40);
+ assert.deepEqual(r.matches,[[0,0],[1,1]]);assert.deepEqual(r.cadenceWarnings,[]);
+});
+
+test('the acquisition adapter retains cadence diagnostics with original source PTS',()=>{
+ const script=String.raw`
+import json
+from piu_timeline.play.tracking import NoteTracker
+layout={'receptor_y':.1,'note_y_max':.95,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+t=NoteTracker(layout,400,400)
+t.update(1.,[{'lane':0,'y':.5},{'lane':1,'y':.7}],101.)
+t.update(1.+1/60,[{'lane':0,'y':.43},{'lane':1,'y':.63}],101.+1/60)
+print(json.dumps([{'lane':a.lane,'points':a.points,'warnings':a.tracking_warnings}for a in t.active]))
+`;
+ const result=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{encoding:'utf8'}));
+ assert.equal(result.length,2);assert.ok(result.every(r=>r.points.length===2));
+ for(const r of result){assert.equal(r.warnings[0].reason,'observed_frame_step_exceeds_source_cadence');
+  assert.deepEqual(r.warnings[0].source_pts_seconds,[101,101+1/60]);}
 });

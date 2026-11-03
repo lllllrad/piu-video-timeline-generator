@@ -92,11 +92,11 @@ function matching(edges:boolean[][],ordered:boolean,except?:Edge):Edge[]{
 }
 
 /** Common signed translation in compatible views, before choosing identities. */
-function translation(tracks:Track[],detections:Detection[],time:number,spacing:number):Displacement|null{
+function translationAtLimit(tracks:Track[],detections:Detection[],time:number,spacing:number,intervalSeconds:number):Displacement|null{
  const fromSeconds=Math.max(...tracks.map(t=>t.observations.at(-1).time)),dt=time-fromSeconds;
  if(!(0<dt&&dt<=.05+1e-6))return null;
  const before=tracks.filter(t=>t.observations.at(-1).time===fromSeconds),
-  after=detections,limit=contracts.frame_tracking.maximum_speed_spacing_per_second*spacing*dt;
+  after=detections,limit=contracts.frame_tracking.maximum_speed_spacing_per_second*spacing*intervalSeconds;
  const intervals=before.map(t=>after.map(d=>{
   if(t.lane!==d.lane)return null;
   const range=displacement(t.observations.at(-1),d.observation);if(!range)return null;
@@ -117,6 +117,16 @@ function translation(tracks:Track[],detections:Detection[],time:number,spacing:n
  ranges.sort((a,b)=>a[0]-b[0]);let lo=ranges[0][0],hi=ranges[0][1];
  for(const r of ranges.slice(1)){if(r[0]>hi+1e-9)return null;hi=Math.max(hi,r[1]);}
  return {fromSeconds,pixels:(lo+hi)/2,uncertaintyPixels:(hi-lo)/2};
+}
+
+
+/** A unique cross-lane image translation can survive a compressed capture step.
+ * First prefer the ordinary one-frame gate. A larger measured jump retains a
+ * separate cadence warning; it does not establish elapsed engine time. */
+function translation(tracks:Track[],detections:Detection[],time:number,spacing:number):Displacement|null{
+ const dt=time-Math.max(...tracks.map(t=>t.observations.at(-1).time));
+ return translationAtLimit(tracks,detections,time,spacing,dt)??
+  translationAtLimit(tracks,detections,time,spacing,contracts.frame_tracking.maximum_capture_interval_seconds);
 }
 
 function orderedView(tracks:Track[],detections:Detection[]):{before:Position[];after:Position[]}|null{
@@ -192,5 +202,11 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
    if(intervals.length&&lo<=hi)step={fromSeconds,toSeconds:time,pixels:(lo+hi)/2,uncertaintyPixels:(hi-lo)/2,basis:'forced_identity_images'};
   }
  }
- return {matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step};
+ const limit=measured?contracts.frame_tracking.maximum_speed_spacing_per_second*spacing*(time-measured.fromSeconds):Infinity;
+ const cadenceWarnings=measured&&Math.abs(measured.pixels)-measured.uncertaintyPixels>limit+1e-8?[{
+  reason:'observed_frame_step_exceeds_source_cadence',check:'note_visibility',
+  visible_start_seconds:measured.fromSeconds,visible_end_seconds:time,
+  displacement_range_pixels:[measured.pixels-measured.uncertaintyPixels,measured.pixels+measured.uncertaintyPixels],
+  source_cadence_limit_pixels:limit,interpretation:'measured_image_translation_without_engine_time_assumption'}]:[];
+ return {cadenceWarnings,matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step};
 }

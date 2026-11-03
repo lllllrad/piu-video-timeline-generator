@@ -1,5 +1,6 @@
 import {linear, mean, median, rms, std, sum} from './math.ts';
 import {refine} from './registration.ts';
+import {contracts} from './contracts.ts';
 import type {RecordData} from './types.ts';
 
 export function registered(tracks: RecordData[], timeline: RecordData[], height: number, spacing: number, receptor: number, bottom: number): RecordData {
@@ -23,7 +24,10 @@ export function registered(tracks: RecordData[], timeline: RecordData[], height:
           Number.isFinite(tracks[p[2]].registration_uncertainty_pixels)&&tracks[p[2]].registration_uncertainty_pixels>0);
         if(qualified.length){
           const intervals=qualified.map(p=>[p[0]-2*tracks[p[2]].registration_uncertainty_pixels,p[0]+2*tracks[p[2]].registration_uncertainty_pixels]);
-          const lo=Math.max(0,...intervals.map(r=>r[0])),hi=Math.min(spacing*30*(time-previous.time),...intervals.map(r=>r[1]));
+          const distinctLanes=new Set(qualified.map(p=>p[1])).size,
+            cadenceLimit=spacing*30*(time-previous.time),
+            captureLimit=distinctLanes>=2?spacing*30*contracts.frame_tracking.maximum_capture_interval_seconds:cadenceLimit;
+          const lo=Math.max(0,...intervals.map(r=>r[0])),hi=Math.min(captureLimit,...intervals.map(r=>r[1]));
           if(lo<=hi+1e-8){
             displacement=Math.max(lo,Math.min(hi,median(qualified.map(p=>p[0]))));support=qualified.length;
             lanes=new Set(qualified.map(p=>p[1])).size;
@@ -31,6 +35,11 @@ export function registered(tracks: RecordData[], timeline: RecordData[], height:
             basis=support>1?'independent_registered_peers':'measured_cap_displacement';
             anchor=[time,new Set(qualified.map(p=>p[2]))];
             nativeInterval={range_pixels:[lo,hi],notes:qualified.map(p=>p[2]),endpoint_intervals_pixels:intervals};
+            if(lo>cadenceLimit+1e-8)for(const p of qualified)nativeConflicts.push({note:p[2],lane:p[1],
+              reason:'native_motion_cadence_unresolved',check:'timing_reconstruction',observed_points:qualified.length,
+              visible_start_seconds:previous.time,visible_end_seconds:time,source_pts_seconds:[previous.source_pts,native.source_pts],
+              displacement_range_pixels:[lo,hi],source_cadence_limit_pixels:cadenceLimit,
+              interpretation:'measured_displacement_without_engine_time_assumption'});
           }else{
             for(const p of qualified)nativeConflicts.push({note:p[2],lane:p[1],reason:'native_frame_displacement_conflict',check:'timing_reconstruction',
               visible_start_seconds:previous.time,visible_end_seconds:time,observed_points:2,

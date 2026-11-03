@@ -23,7 +23,7 @@ function futureCompatible(samples:RecordData[],last:number,end:number,velocity:n
 export function fit(state:RecordData,track:RecordData,receptor:number,layout:RecordData):RecordData|null{
  const error=track.registration_uncertainty_pixels,spacing=state.spacing;
  if(track.coordinate_basis!=='native_cap_center'||!Number.isFinite(error)||error<=0||!state.samples?.length)return null;
- if((state.coordinate_conflicts??[]).some(w=>w.note===track.note_index||w.peer_notes?.includes(track.note_index)))return null;
+ if((state.coordinate_conflicts??[]).some(w=>(w.note===track.note_index||w.peer_notes?.includes(track.note_index))&&w.reason!=='native_motion_cadence_unresolved'))return null;
  const samples:RecordData[]=state.samples,times=samples.map(s=>s.time),at=new Map<number,RecordData>(samples.map(s=>[s.time,s])),bottom=(layout.note_y_max??.95)*state.height;
  const visible=track.points.filter(([t,y])=>receptor+.85*spacing<y&&y<bottom-.55*spacing);
  let start=0;for(let i=1;i<visible.length;i++)if(visible[i][0]-visible[i-1][0]>F.maximum_capture_gap_seconds+1e-6)start=i;

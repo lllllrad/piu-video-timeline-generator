@@ -84,6 +84,10 @@ class NoteTracker:
             self.active[i].tracking_observations.append(observations[j])
             self.active[i].tracking_observations=self.active[i].tracking_observations[-CONTRACTS['frame_tracking']['history_frames']:]
             self.active[i].missed = 0
+            for warning in assignment['cadenceWarnings']:
+                before=self.motion.at_time.get(warning['visible_start_seconds'],{})
+                self.active[i].tracking_warnings.append({**warning,'observed_points':len(assignment['matches']),
+                    'source_pts_seconds':[before.get('source_pts'),source_pts]})
             used_tracks.add(i); used_notes.add(j)
         for i, track in enumerate(self.active):
             if i not in used_tracks:
