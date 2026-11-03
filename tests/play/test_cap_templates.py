@@ -73,12 +73,19 @@ class CapTemplateTest(unittest.TestCase):
         self.assertEqual(corrected['outer_bounds_in_patch'],[15,32,35,34])
         self.assertNotIn('target_seconds',corrected)
 
-    def test_uncertain_self_referenced_hidden_or_mismatched_pixels_do_not_erase_conflicts(self):
-        for case in ('self','effect','hud','pts','real_shift','shifted_box'):
+    def test_positive_independent_cap_reference_remains_usable_inside_potential_hud(self):
+        data,pixels,lookup,banks,records=self.refinement()
+        data['layout'].update(combo_roi=[.2,.3,.3,.2])
+        result=refine_outlines(data,pixels,lookup,banks,records,fit_offset)[0]
+        self.assertEqual(result['status'],'registered')
+        self.assertEqual(result['observations'][-1]['offset_pixels'],-1.)
+        self.assertEqual(result['observations'][-1]['outline_observation'],records[0]['observations'][-1])
+
+    def test_uncertain_self_referenced_or_mismatched_pixels_do_not_erase_conflicts(self):
+        for case in ('self','effect','pts','real_shift','shifted_box'):
             with self.subTest(case=case):
                 data,pixels,lookup,banks,records=self.refinement()
                 if case=='self':banks[0][0]['reference']={'note':2}
-                elif case=='hud':data['layout'].update(combo_roi=[.2,.3,.3,.2])
                 elif case=='pts':pixels['pts'][-1]+=1
                 elif case=='effect':
                     masks=patch();masks[1]=True;pixels['masks'][-1]=np.packbits(masks,axis=-1)

@@ -45,12 +45,15 @@ one of the named HUD rectangles to explain a missing outline. Sharing the same
 y coordinate in another lane does not establish occlusion. These footprints
 are conservative measurement approximations, not pixel-verified HUD opacity.
 
-Head coordinate registration has a measured silhouette box available. It checks
-that box's actual game-image bounds against the same HUD rectangles, including
-the vertical background margins required for an isolated cap. This can accept a
-fully visible cap near a HUD boundary while rejecting one whose edge overlaps
-despite its center being outside. It does not change visibility-gap exemptions,
-which still use the conservative footprint when no complete cap is observed.
+Positive image matches remain usable inside these rectangles. A named HUD
+footprint is not proof that matched pixels are hidden. Coordinate measurements
+keep their image-match and anchor-consistency requirements; rectangle overlap
+alone cannot reject an otherwise valid cap measurement.
+
+Negative evidence has a different contract. Blank bands used to prove absence
+of a hold connection must be outside potential HUD coverage: foreground artwork
+could conceal the body. A missing detection inside a footprint may be explained
+by occlusion, but does not prove a tap, a hold endpoint or note consumption.
 
 `screen_regions.note_occluders` supplies the named rectangles for both body
 measurement and visibility diagnostics. Existing tracking reconnect tolerances

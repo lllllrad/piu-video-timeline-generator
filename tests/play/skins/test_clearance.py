@@ -55,6 +55,19 @@ class NativeClearanceTest(unittest.TestCase):
         self.assertEqual(observed['notes'][0]['status'],'tap')
         self.assertEqual(observed['notes'][0]['observations'][0]['kind'],'unknown')
 
+    def test_visible_cap_inside_potential_hud_keeps_clearance_outside_hud(self):
+        from piu_timeline.play.skins.clearance import clear_regions
+        from piu_timeline.play.skins.detector import SkinDetector
+        data,frames,samples,bank,_=scenario()
+        template=next(t for t in SkinDetector(bank,data['layout'],325,200).templates if t['id']=='tap')
+        pattern=frames[0]['skin_observations'][0];planes=samples[0][2]
+        data['layout']['judgment_roi']=[.18,150/200,.04,1/200]
+        data['layout']['combo_roi']=[.8,.3,.1,.1]
+        self.assertEqual(len(clear_regions(data,pattern,template,planes)),2)
+        # Moving the footprint onto a blank band makes absence unknown.
+        data['layout']['judgment_roi']=[.18,140/200,.04,1/200]
+        self.assertIsNone(clear_regions(data,pattern,template,planes))
+
     def test_connections_flashes_hud_clipping_and_unregistered_caps_are_unknown(self):
         for case in ('upper_connection','lower_connection','flash','hud','clipped','unregistered','static','sparse'):
             with self.subTest(case=case):

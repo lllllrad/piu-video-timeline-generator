@@ -36,8 +36,9 @@ For each existing image observation, the model requires:
 
 - A positively matched tap-cap reference with source-bound native registration.
   Its upper and lower clearance boxes must both be declared outside the cap.
-- The complete cap and both boxes outside documented HUD footprints. Boxes
-  must lie entirely within actual acquired pixels; padding is not background.
+- A positive cap match is usable inside a documented HUD footprint. Both
+  clearance boxes must remain outside potential HUD coverage and lie entirely
+  within actual acquired pixels; padding is not background.
 - No relaxed lane-color pixel in either clearance box, and less than 5% white
   coverage. A saturated effect, colored connection or known overlay leaves the
   role unresolved. Black acquired pixels can establish a gap for this explicitly

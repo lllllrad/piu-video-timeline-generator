@@ -75,19 +75,15 @@ class HeadRegistrationTest(unittest.TestCase):
             else:changed['observations']*=2
             with self.subTest(kind=kind),self.assertRaises(ValueError):project_coordinates([[1.,100.]],changed)
 
-    def test_complete_cap_outside_hud_uses_measured_bounds_and_keeps_background_margin(self):
+    def test_positive_cap_geometry_retains_margins_despite_potential_hud_overlap(self):
         data={'analysis_width':400,'analysis_height':400,'layout':{'receptor_y':.1,
               'lanes':[{'x':.3},{'x':.38},{'x':.5}],
               'combo_roi':[.25,.5,.1,.1],'judgment_roi':[.25,.35,.1,.1]}}
         box=[15,32,35,34]
-        # The old center +/-0.8-spacing proxy overlaps the HUD here. The full
-        # measured cap plus both five-pixel background margins does not.
         self.assertEqual(visible_cap_bounds(data,0,266,box,(101,65),34,5),[103,243,138,287])
-        self.assertIsNone(visible_cap_bounds(data,0,261,box,(101,65),34,5))
-        # Cap itself is clear at 261, but its required background is not.
+        self.assertEqual(visible_cap_bounds(data,0,261,box,(101,65),34,5),[103,238,138,282])
         self.assertIsNotNone(visible_cap_bounds(data,0,261,box,(101,65),34))
-        # The center is horizontally outside the HUD, but the cap edge is not.
-        self.assertIsNone(visible_cap_bounds(data,1,220,box,(101,65),34,5))
+        self.assertIsNotNone(visible_cap_bounds(data,1,220,box,(101,65),34,5))
         self.assertIsNotNone(visible_cap_bounds(data,2,220,box,(101,65),34,5))
 
     def test_footprint_must_stay_inside_field_and_outside_receptor_effect_band(self):
@@ -97,10 +93,10 @@ class HeadRegistrationTest(unittest.TestCase):
             self.assertEqual(visible_cap_bounds(data,0,y,[15,32,35,34],(101,65),34,5)is not None,clear)
         self.assertIsNone(visible_cap_bounds(data,1,150,[15,32,35,34],(101,65),34,5))
 
-    def test_visible_cap_near_hud_supplies_native_registration_without_hidden_pixels(self):
+    def test_visible_cap_near_or_inside_potential_hud_supplies_native_registration(self):
         with tempfile.TemporaryDirectory()as tmp:
             path=Path(tmp)/'pixels.npz';times=np.arange(10)*.02+10
-            for y,expected in ((266,True),(261,False)):
+            for y in (266,261):
                 np.savez_compressed(path,masks=np.array([np.packbits(patch(),axis=-1)]*10),
                                     times=times,pts=times+30,lanes=np.zeros(10,dtype=int),
                                     ys=np.full(10,y),spacing=34,columns=65)
@@ -109,12 +105,11 @@ class HeadRegistrationTest(unittest.TestCase):
                                 'combo_roi':[.25,.5,.1,.1],'judgment_roi':[.25,.35,.1,.1]},
                       'notes':[{'lane':0,'points':[[float(t),y]for t in times]}]}
                 result=measure(data,path)
-                self.assertEqual(bool(result['notes']),expected)
-                if expected:
-                    fitted=result['notes'][0]
-                    self.assertEqual(fitted['offset_pixels'],-1)
-                    self.assertEqual(len(fitted['observations']),10)
-                    self.assertEqual(fitted['observations'][0]['support_bounds_pixels'],[103,243,138,287])
+                self.assertTrue(result['notes'])
+                fitted=result['notes'][0]
+                self.assertEqual(fitted['offset_pixels'],-1)
+                self.assertEqual(len(fitted['observations']),10)
+                self.assertEqual(fitted['observations'][0]['support_bounds_pixels'],[103,y-23,138,y+21])
 
     def test_fractional_detection_center_is_not_the_rounded_patch_center(self):
         with tempfile.TemporaryDirectory()as tmp:

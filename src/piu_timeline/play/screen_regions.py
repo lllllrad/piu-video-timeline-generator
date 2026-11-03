@@ -26,7 +26,11 @@ def occluders_at_bounds(layout,bounds,width,height):
 
 
 def visible_cap_bounds(data,lane,detected_y,box,patch_shape,spacing,margin=0):
-    """Check the measured cap footprint, including any required clear margins."""
+    """Bound an independently matched cap; HUD overlap does not erase pixels.
+
+    This validates positive geometry only. Callers proving absence of a body
+    must separately check whether foreground HUD could conceal that body.
+    """
     width,height=data['analysis_width'],data['analysis_height'];layout=data['layout']
     left=round(layout['lanes'][lane]['x']*width)-(patch_shape[1]-1)//2
     top=round(detected_y)-(patch_shape[0]-1)//2
@@ -35,5 +39,4 @@ def visible_cap_bounds(data,lane,detected_y,box,patch_shape,spacing,margin=0):
     if (bounds[0]<0 or bounds[2]>width
             or bounds[1]<layout['receptor_y']*height+.3*spacing
             or bounds[3]>layout.get('note_y_max',.95)*height):return None
-    if occluders_at_bounds(layout,bounds,width,height):return None
     return bounds

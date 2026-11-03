@@ -10,7 +10,7 @@ from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.skins.detector import SkinDetector
 from piu_timeline.play.skins.sampling import key,reference_scale
 
-FORMAT={'schema':1,'revision':1,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
+FORMAT={'schema':1,'revision':2,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
         'minimum_frames':4,'minimum_span_seconds':.065,'maximum_gap_seconds':.05,
         'minimum_motion_spacing':.5,'maximum_anchor_delta_spacing':.1,
         'body_core_halfwidth_spacing':.1,'minimum_clearance_halfwidth_spacing':.2,
@@ -57,10 +57,8 @@ def clear_regions(data,pattern,template,planes):
     left,top=pattern['bounds_pixels'][:2];result=[]
     current=template.get('sampling_origin_pixels',[0,0]);observed=pattern.get('sampling_origin_pixels',[0,0])
     left+=current[0]-observed[0];top+=current[1]-observed[1]
-    # The positive cap must also be outside documented foreground footprints.
-    cap=next(r['box']for r in template['regions']if r['name']=='cap')
-    if occluders_at_bounds(data['layout'],[(left+cap[0])*sx,(top+cap[1])*sy,
-                                         (left+cap[2])*sx,(top+cap[3])*sy],width,height):return None
+    # The cap has a positive RGB match. Potential HUD overlap cannot refute it.
+    # Blank bands remain unknown behind a HUD: it could conceal a connection.
     for region in regions:
         a,b,c,d=region['box']
         bounds=[int(np.floor((left+a)*sx)),int(np.floor((top+b)*sy)),

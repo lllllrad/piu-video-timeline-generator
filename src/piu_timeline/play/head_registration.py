@@ -9,7 +9,7 @@ import numpy as np
 from piu_timeline.play.note_types import cap_envelope, shape
 from piu_timeline.play.cap_templates import FORMAT as TEMPLATE_FORMAT
 
-FORMAT={'schema':1,'revision':11,'minimum_frames':8,'minimum_span_seconds':.12,
+FORMAT={'schema':1,'revision':12,'minimum_frames':8,'minimum_span_seconds':.12,
         'coordinate_projection':'per_frame_with_stable_offset_fallback',
         'offset_inlier_pixels':1.,'minimum_inlier_fraction':.95,'maximum_median_error_pixels':.5,
         'numeric_epsilon_pixels':1e-9,
