@@ -7,28 +7,35 @@ cap image with independently retained spatial masks around that cap. It does
 not detect heads or infer their times, and a failed hold match does not prove
 a tap.
 
-Enable the model explicitly in a selected source profile:
+A versioned bank can declare this model in `roles.json` beside `bank.json` in
+the separate skin repository:
 
 ```json
 {
   "schema": 1,
-  "profiles": [{
-    "segments": [1],
-    "bank": "relative/path/to/bank.json",
-    "role_clearance": {
-      "model": "phoenix_chromatic_gap",
-      "skin": "the-bank-skin-identity"
-    }
-  }]
+  "bank_contract": {"skin": "the-bank-skin-identity", "sha256": "EXACT_BANK_HASH"},
+  "clearance": {
+    "model": "phoenix_chromatic_gap",
+    "skin": "the-bank-skin-identity"
+  }
 }
 ```
 
-This configuration belongs in the ignored source's `note-skins.json`. The bank
-must provide all five kinds of hold body. At native feature resolution, every
-supported row of every body reference must retain its declared lane color in
+`bank_contract` must contain the complete contract returned by the native bank
+loader, not only the abbreviated fields shown above. Automatic and manual skin
+selection use the same declaration. A source profile's explicit `role_clearance`
+overrides it; `null` disables the model for that source profile. A changed bank
+contract fails rather than inheriting another bank's geometric assumptions.
+`just skins validate` also validates these declarations.
+
+The bank must provide all five kinds of hold body. At native feature resolution, every
+supported row of every positive `body` region must retain its declared lane color in
 the central 0.2-spacing-wide body core of the relaxed-color plane. Clearance
-boxes cover that core plus the allowed 0.1-spacing cap-anchor disagreement on
-each side. Lane colors must follow blue/red/yellow/red/blue.
+probes cover that core plus the allowed 0.1-spacing cap-anchor disagreement on
+each side. Interpolation context outside the declared body region supplies no
+body measurements. Reference gap boxes locate the vertical bands; horizontal
+measurement expands to cover the complete possible body core in actual retained
+game pixels, even when the reference background box is narrower. Lane colors must follow blue/red/yellow/red/blue.
 White-only, dark, differently colored or incompletely sampled bodies need a
 different model. Unsupported configuration produces an explicit report warning.
 

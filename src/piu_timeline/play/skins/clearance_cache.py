@@ -1,4 +1,4 @@
-"""Cache opt-in image-role evidence without changing native detections."""
+"""Cache bank-declared or explicitly selected roles without changing detections."""
 from hashlib import sha256
 import json
 from piu_timeline.play.observations.coordinates import detection_points
@@ -10,7 +10,11 @@ from piu_timeline.play.skins.clearance import FORMAT,derive
 def selected_profile(data,directory):
     from piu_timeline.play.skins.replay import selected_profile as selection
     profile=selection(directory.parent.parent,data['segment_number'])
-    return profile.get('role_clearance')if profile else None
+    if profile and 'role_clearance'in profile:return profile['role_clearance']
+    skin=data.get('skin_detector',{});path=skin.get('bank_path')
+    if not path:return None
+    from piu_timeline.play.skins.repository import role_model
+    return role_model(path,{'contract':skin['contract']['bank']})
 
 
 def prepare(data,directory):

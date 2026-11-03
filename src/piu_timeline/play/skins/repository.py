@@ -40,6 +40,20 @@ def profile_path(repository, source):
     return path
 
 
+def role_model(path, bank=None):
+    """Read a bank-bound interpretation policy independently of image pixels."""
+    path=Path(path);configuration=path.with_name('roles.json')
+    if not configuration.is_file():return None
+    saved=json.loads(configuration.read_text());bank=bank or load_bank(path)
+    if saved.get('schema')!=1 or saved.get('bank_contract')!=bank['contract']:
+        raise ValueError('Skin role model differs from its image bank')
+    profile=saved.get('clearance')
+    from piu_timeline.play.skins.clearance import FORMAT
+    if profile!={'model':FORMAT['model'],'skin':bank['contract'].get('skin')}:
+        raise ValueError('Unsupported skin role model')
+    return profile
+
+
 def validate_bank(path):
     """Check native image geometry and the published revision's content binding."""
     path = Path(path)
@@ -51,6 +65,7 @@ def validate_bank(path):
             or reference.get('status') not in STATUSES
             or reference.get('contract') != bank['contract']):
         raise ValueError(f'Skin revision identity or content changed: {path}')
+    role_model(path,bank)
     return reference
 
 

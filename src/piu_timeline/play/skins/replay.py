@@ -84,8 +84,8 @@ def configuration_current(data,directory,segment):
     if bank is None:return False
     if data.get('skin_detector',{}).get('contract')!=detector_contract(bank):return False
     if bank is not None and data['skin_detector'].get('bank_path')!=bank:return False
-    profile=selected_profile(directory,segment)
-    clearance=profile.get('role_clearance')if profile else None
+    from piu_timeline.play.skins.clearance_cache import selected_profile as role_profile
+    clearance=role_profile({**data,'segment_number':segment},directory/'play'/f'segment-{segment:03}')
     saved=data.get('skin_role_evidence')
     if clearance is None:return saved is None
     from piu_timeline.play.skins.clearance import FORMAT as CLEARANCE_FORMAT

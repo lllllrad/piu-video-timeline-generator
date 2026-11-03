@@ -23,7 +23,7 @@ def scenario():
              'anchor_pixels':[4,2],'regions':[{'name':'body','box':[0,0,8,4]}]}
             for i,color in enumerate(((0,100,255),(255,0,0),(255,220,0),(255,0,0),(0,100,255)))]
     bank={'skin':'test-skin','spacing_pixels':20,'templates':[cap,*bodies],
-          'contract':{'synthetic':'fixed-pixels'},'anchor_registrations':{'tap':{}}}
+          'contract':{'synthetic':'fixed-pixels','skin':'test-skin'},'anchor_registrations':{'tap':{}}}
     profile={'model':FORMAT['model'],'skin':bank['skin']}
     points=[(1+i*.025,150-i*5)for i in range(4)]
     data={'analysis_width':325,'analysis_height':200,'game_roi':[0,0,325,200],
@@ -95,6 +95,23 @@ class NativeClearanceTest(unittest.TestCase):
         observed=observe({**data,'skin_role_evidence':result},frames)
         self.assertEqual(observed['notes'][0]['status'],'conflict')
 
+    def test_sampling_context_is_not_body_and_narrow_reference_gaps_expand_to_full_measured_core(self):
+        data,frames,samples,bank,profile=scenario()
+        for template in bank['templates']:
+            if template['role']!='hold_body':continue
+            body=template['rgb'].copy()
+            template['rgb']=np.pad(body,((4,4),(0,0),(0,0)),constant_values=0)
+            template['mask']=np.ones(template['rgb'].shape[:2],dtype=bool)
+            template['regions']=[{'name':'body','box':[0,4,8,8]}]
+            template['anchor_pixels']=[4,6]
+        for region in bank['templates'][0]['regions']:
+            if region['name'].startswith('clear_'):region['box'][0:3:2]=[5,8]
+        result=derive(data,frames,samples,bank,profile)
+        self.assertIn('0',result['notes'])
+        # A body pixel outside the narrow reference gap is still observed.
+        for sample in samples:sample[2]['relaxed_blue'][140,61]=True
+        self.assertEqual(derive(data,frames,samples,bank,profile)['notes'],{})
+
     def test_profile_must_explain_body_colors_and_native_pts_must_agree(self):
         for case in ('skin','body','missing_kind','timestamps','mask_geometry'):
             with self.subTest(case=case):
@@ -152,3 +169,13 @@ class NativeClearanceTest(unittest.TestCase):
                         self.assertEqual(result['notes'],{})
                 selection.unlink()
                 self.assertNotIn('skin_role_evidence',prepare({**data,'skin_role_evidence':first},directory))
+                # Automatic selection uses a bank declaration, without a source profile.
+                bank_directory=source/'bank';bank_directory.mkdir()
+                data['skin_detector']['bank_path']=str(bank_directory/'bank.json')
+                path=bank_directory/'roles.json'
+                path.write_text(json.dumps({'schema':1,'bank_contract':bank['contract'],'clearance':profile}))
+                inherited=prepare(data,directory)['skin_role_evidence']
+                self.assertEqual(inherited['status'],'available')
+                self.assertIn('0',inherited['notes'])
+                path.write_text(json.dumps({'schema':1,'bank_contract':{'different':True},'clearance':profile}))
+                with self.assertRaisesRegex(ValueError,'differs from its image bank'):prepare(data,directory)

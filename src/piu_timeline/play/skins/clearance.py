@@ -10,7 +10,7 @@ from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.skins.detector import SkinDetector
 from piu_timeline.play.skins.sampling import key,reference_scale
 
-FORMAT={'schema':1,'revision':2,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
+FORMAT={'schema':1,'revision':3,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
         'minimum_frames':4,'minimum_span_seconds':.065,'maximum_gap_seconds':.05,
         'minimum_motion_spacing':.5,'maximum_anchor_delta_spacing':.1,
         'body_core_halfwidth_spacing':.1,'minimum_clearance_halfwidth_spacing':.2,
@@ -27,17 +27,17 @@ def validate_profile(data,bank,profile):
     height=round(PIXEL_FORMAT['width']*data['analysis_height']/data['analysis_width'])
     scale=reference_scale(bank,data['layout'],PIXEL_FORMAT['width'],height);kinds=set();count=0
     for template in bank['templates']:
-        if template['role']=='tap'and template['id']in bank['anchor_registrations']:
-            half=FORMAT['minimum_clearance_halfwidth_spacing']*bank['spacing_pixels']
-            for region in template['regions']:
-                if region['name']in('clear_above','clear_below')and not(
-                        region['box'][0]<=template['anchor_pixels'][0]-half
-                        and region['box'][2]>=template['anchor_pixels'][0]+half):
-                    raise ValueError('Clearance probe cannot cover the registered body core')
         if template['role']!='hold_body':continue
         h,w=template['mask'].shape;size=max(1,round(w*scale)),max(1,round(h*scale))
         rgb=cv2.resize(template['rgb'],size,interpolation=cv2.INTER_AREA)
-        support=cv2.resize(template['mask'].astype('uint8'),size,interpolation=cv2.INTER_NEAREST).astype(bool)
+        # Alpha includes interpolation context. Only declared positive body regions
+        # establish the body's expected color; surrounding artwork is not body.
+        measured=np.zeros(template['mask'].shape,dtype='uint8')
+        for region in template['regions']:
+            if region['name']!='body':continue
+            for a,b,c,d in region.get('comparison_boxes',[region['box']]):
+                measured[b:d,a:c]=template['mask'][b:d,a:c]
+        support=cv2.resize(measured,size,interpolation=cv2.INTER_NEAREST).astype(bool)
         color=measurements(rgb)['relaxed_'+COLORS[template['lane_kind']]]
         center=template['anchor_pixels'][0]*size[0]/w
         core=abs(np.arange(size[0])+.5-center)<=FORMAT['body_core_halfwidth_spacing']*spacing
@@ -63,6 +63,13 @@ def clear_regions(data,pattern,template,planes):
         a,b,c,d=region['box']
         bounds=[int(np.floor((left+a)*sx)),int(np.floor((top+b)*sy)),
                 int(np.ceil((left+c)*sx)),int(np.ceil((top+d)*sy))]
+        # The RGB reference's background box is not a limit on measurable game
+        # pixels. Inspect the entire possible body core, including anchor error.
+        spacing=float(np.median(np.diff([lane['x']*width for lane in data['layout']['lanes']])))
+        half=FORMAT['minimum_clearance_halfwidth_spacing']*spacing
+        center=pattern['x']*width
+        bounds[0]=min(bounds[0],int(np.floor(center-half)))
+        bounds[2]=max(bounds[2],int(np.ceil(center+half)))
         x0,y0,x1,y1=bounds
         if not 0<=x0<x1<=width or not 0<=y0<y1<=height:return None
         if occluders_at_bounds(data['layout'],bounds,width,height):return None
