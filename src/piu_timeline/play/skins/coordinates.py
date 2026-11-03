@@ -148,15 +148,8 @@ def measure(data,frames):
             'check':'timing_reconstruction','visible_start_seconds':missing[0]['time'],
             'visible_end_seconds':missing[-1]['time'],'observed_points':len(missing),
             'source_pts_seconds':[o['source_pts_seconds']for o in missing],'trace':'frames.jsonl'})
-        # An unmeasured RGB origin cannot stand in for a measured cap center.
-        # Keep one raw convention for this entire trajectory and expose every proof.
-        for o in observed:
-            if 'native_cap_projection_uncertainty_pixels'not in o:continue
-            keys=[k for k in o if k.startswith('native_cap_')]
-            o['unapplied_center_measurement']={'native_y_pixels':o['native_y_pixels'],**{k:o[k]for k in keys}}
-            o['native_y_pixels']=o['detected_y_pixels']
-            for key in keys:
-                if key!='native_cap_registration_status':o.pop(key)
+        # Retain both kinds of observation. Only measured centers enter the
+        # coordinate fit; missing centers never replace them with raw RGB origins.
     return {'format':FORMAT,'status':'failed'if warnings else'native_image_anchors','notes':records,'warnings':warnings,
             'absolute_registration':'reviewed'if data['skin_detector'].get('registration_reviewed')else'unverified',
             'skin_contract':data['skin_detector']['contract'],'trace':'frames.jsonl'}

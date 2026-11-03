@@ -138,9 +138,9 @@
   },
   "image_coordinates": {
     "schema": 1,
-    "revision": 8,
+    "revision": 9,
     "position_search": {"grid_pixels": 1, "uncertainty_pixels": 0.5},
-    "projection": "whole_trajectory_without_mixed_anchor_conventions",
+    "projection": "measured_center_frames_without_mixed_anchor_conventions",
     "uncertainty_units": "source_reference_pixels_scaled_to_analysis",
     "method": "native_image_anchors",
     "trace": "frames.jsonl"

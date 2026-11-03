@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {contracts} from '../../../src/piu_timeline/derived/contracts.ts';
 import {imagePosition} from '../../../src/piu_timeline/derived/coordinates/measurements.ts';
+import {measurementInput} from '../../../src/piu_timeline/derived/native_gaps.ts';
 
 const native=String.raw`
 import json,numpy as np
@@ -42,6 +43,9 @@ test('target-grid rounding is separate from scaled source uncertainty and reache
  const position=imagePosition(sample,100,contracts.image_coordinates);
  assert.equal(position.kind,'native_cap_center');
  if(position.kind==='native_cap_center')assert.equal(position.uncertaintyPixels,1);
+ const transported=measurementInput({format:contracts.image_coordinates,notes:[{note:0,
+  coordinate_method:'native_image_anchors',observations:[sample]}]});
+ assert.deepEqual(imagePosition(transported.notes[0].observations[0],100,transported.format),position);
  for(const bad of[{...sample,native_cap_sampling_uncertainty_pixels:1},
   {...sample,native_cap_coordinate_uncertainty_pixels:.5},
   {...sample,sampling_origin_pixels:undefined}])

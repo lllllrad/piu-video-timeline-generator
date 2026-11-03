@@ -133,11 +133,14 @@ independent coordinate-model support; raw detections and comparisons remain.
 Pair support counts use only jointly qualified source-frame measurements.
 
 Timing fits use each qualified frame's projected center and retain the raw
-trajectory as `detected_points`. A trajectory projects only when every frame has a qualified center hypothesis.
-A partially registered trajectory retains its entire original matching-anchor
-convention, with `image_center_registration_incomplete`; its unapplied measured
-centers remain inspectable. Mixing raw origins and corrected centers would create
-artificial motion. Conflicting localization hypotheses retain their explicit
+trajectory as `detected_points`. A partially registered trajectory uses only frames
+with measured center hypotheses for its coordinate fit. Its complete original
+detection trajectory stays in `detected_points`; unmeasured image origins never
+enter that fit. `image_center_registration_incomplete` identifies every frame
+still lacking a center. Missing frames are not interpolated, and ordinary timing
+and capture-gap checks must still pass with the measured subset. Mixing raw
+origins and corrected centers would create artificial motion.
+Conflicting localization hypotheses retain their explicit
 warning, a source-bound representative projection and an error covering every
 qualified hypothesis. They supply no independent chord/spacing coordinate proof.
 There is no lane-wide or neighboring-frame center correction. Reapplying

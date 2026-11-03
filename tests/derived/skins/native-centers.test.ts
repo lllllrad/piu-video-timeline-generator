@@ -9,6 +9,8 @@ test('per-frame source centers retain raw positions and never infer an unmeasure
   {time:1,detected_y_pixels:100,offset_pixels:2},{time:3,detected_y_pixels:60,offset_pixels:-1}]};
  assert.deepEqual(project(raw,record),[[1,102],[2,80],[3,59]]);
  assert.deepEqual(raw,before);
+ assert.deepEqual(project(raw,record,'measured_frames'),[[1,102],[3,59]]);
+ assert.deepEqual(project(raw,{...record,observations:[]},'measured_frames'),[]);
  for(const observations of [[...record.observations,record.observations[0]],
   [{time:4,detected_y_pixels:40,offset_pixels:1}],
   [{time:1,detected_y_pixels:101,offset_pixels:1}],
@@ -56,7 +58,7 @@ with tempfile.TemporaryDirectory()as tmp:
  # Resizing changes physical uncertainty in the same units as measured positions.
  smaller=deepcopy(trace);smaller['analysis_width']/=2
  assert measure(smaller,frames)['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels']==.5
- # A partially measurable trajectory must not alternate between two origins.
+ # Partial acquisition fits measured centers without mixing in an unknown origin.
  partial_document=json.loads(path.read_text());partial_document['templates'][1].pop('native_anchor_registration')
  partial_path=path.parent/'partial-bank.json';partial_path.write_text(json.dumps(partial_document))
  partial=deepcopy(raw);partial['skin_detector']={**partial['skin_detector'],'bank_path':str(partial_path),'contract':{'bank':load_bank(partial_path)['contract']}}
@@ -64,12 +66,14 @@ with tempfile.TemporaryDirectory()as tmp:
  partial_frames[0]['skin_observations'][0]['role']='unknown'
  (root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n'for f in partial_frames))
  unchanged=apply(partial,root)
- assert unchanged['notes'][0]['points']==raw['notes'][0]['points']
+ assert unchanged['notes'][0]['detected_points']==raw['notes'][0]['points']
+ assert len(unchanged['notes'][0]['points'])==len(raw['notes'][0]['points'])-1
+ assert all(t==a and abs(v-y-1)<1e-10 for(t,v),(a,y)in zip(unchanged['notes'][0]['points'],raw['notes'][0]['points'][1:],strict=True))
  record=unchanged['head_registration']['notes'][0]
  assert record['coordinate_status']=='incomplete'
  assert any(w['reason']=='image_center_registration_incomplete'for w in unchanged['head_registration']['warnings'])
- assert all(o['native_y_pixels']==o['detected_y_pixels']for o in record['observations'])
- assert record['observations'][1]['unapplied_center_measurement']['native_y_pixels']>record['observations'][1]['detected_y_pixels']
+ assert record['observations'][0]['native_y_pixels']==record['observations'][0]['detected_y_pixels']
+ assert record['observations'][1]['native_y_pixels']==record['observations'][1]['detected_y_pixels']+1
  # Conflicting localization hypotheses retain their warning and bounded center
  # projection, rather than inserting an arbitrary raw RGB origin into the fit.
  competing=deepcopy(frames)

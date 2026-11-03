@@ -133,7 +133,7 @@ def apply(data,directory,display_delay_ms=0):
         measured={}
         for r in registration['notes']:
             observations=[{**o,'offset_pixels':o['native_y_pixels']-o['detected_y_pixels']}
-                          for o in r['observations']if r.get('coordinate_status')=='projected']
+                          for o in r['observations']if 'native_cap_projection_uncertainty_pixels'in o]
             if observations:
                 measured[r['note']]={**r,'status':'measured_only','offset_pixels':0,
                     'coordinate_uncertainty_pixels':max(o['native_cap_projection_uncertainty_pixels']for o in observations),
@@ -169,7 +169,8 @@ def refit_coordinates(data,registration,measured,display_delay_ms):
                 **{k:v for k,v in record.items()if k not in ('observations','conflicting_observations')},
                 'measured_frames':len(record['observations']),
                 'unmeasured_frames':len(raw)-len(record['observations']),
-                'unmeasured_coordinate_basis':'stable_constant_offset'if record['status']=='registered'else'original_detection'})
+                'unmeasured_coordinate_basis':'excluded_from_coordinate_fit'if record.get('coordinate_method')=='native_image_anchors'
+                    else'stable_constant_offset'if record['status']=='registered'else'original_detection'})
         for key in ('tracking_method','source_track_fragments'):
             if key in original:note[key]=original[key]
         tracks.append(track);notes.append(note)
@@ -189,4 +190,5 @@ def refit_coordinates(data,registration,measured,display_delay_ms):
 def project_coordinates(raw,record):
     """Use each observed canonical center; infer an offset only if stable."""
     from piu_timeline.derived import call
-    return call('skinCenters.project',raw,record)
+    mode='measured_frames'if record.get('coordinate_method')=='native_image_anchors'else'all_frames'
+    return call('skinCenters.project',raw,record,mode)
