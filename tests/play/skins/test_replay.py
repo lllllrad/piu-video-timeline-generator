@@ -80,6 +80,18 @@ class SkinReplayTest(unittest.TestCase):
             decoded=[(f['source_pts_seconds'],f['playback_seconds'],image)for f in frames]
             with patch('piu_timeline.play.skins.replay.decode_frames',return_value=iter(decoded)):
                 metadata=refresh(data,root,bank/'bank.json')
+            # Independent capture is a real consumer path, not only an export format.
+            from piu_timeline.play.observations.bundle import acquire
+            from piu_timeline.play.skins.bank import load_bank
+            data['media']['container_start_seconds']=30
+            data['layout']['combo_roi']=[.3,.5,.2,.1]
+            data['observations_directory']=str(root/'observations')
+            with patch('piu_timeline.play.observations.bundle.decode_frames',return_value=iter(decoded)):
+                acquire(data,root/'observations',load_bank(bank/'bank.json'),width=200,jobs=1)
+            (root/'frames.jsonl').write_text(trace)
+            with patch('piu_timeline.play.skins.replay.decode_frames',side_effect=AssertionError('must reuse independent observations')),\
+                 patch('piu_timeline.play.skins.detector.SkinDetector.candidates',side_effect=AssertionError('must not rematch pixels')):
+                metadata=refresh(data,root,bank/'bank.json')
             updated=[json.loads(line)for line in (root/'frames.jsonl').read_text().splitlines()]
             self.assertFalse((root/'frames.outline.jsonl').exists())
             self.assertEqual((root/'frames.base.jsonl').read_text(),(root/'frames.jsonl').read_text())
@@ -87,7 +99,21 @@ class SkinReplayTest(unittest.TestCase):
                 self.assertEqual({k:new[k]for k in old if k!='notes'},{k:v for k,v in old.items()if k!='notes'})
                 self.assertEqual(new['notes'][0]['role'],'tap')
             self.assertTrue(metadata['missing_template_roles'])
+            # A different detector contract rematches the saved RGB, never the source.
+            notes_manifest=root/'observations/notes/manifest.json'
+            saved_notes=notes_manifest.read_bytes();notes_manifest.unlink()
+            with patch('piu_timeline.play.skins.replay.decode_frames',side_effect=AssertionError('must rematch cached RGB')):
+                refresh(data,root,bank/'bank.json')
+            notes_manifest.write_bytes(saved_notes)
             before=(root/'frames.jsonl').read_bytes()
+            shifted=[dict(f)for f in updated];shifted[0]['source_pts_seconds']=99.
+            shifted_trace=''.join(json.dumps(f)+'\n'for f in shifted)
+            (root/'frames.jsonl').write_text(shifted_trace)
+            with patch('piu_timeline.play.skins.replay.decode_frames',side_effect=AssertionError('cached timing must be checked')),self.assertRaises(ValueError):
+                refresh(data,root,bank/'bank.json')
+            self.assertEqual((root/'frames.jsonl').read_text(),shifted_trace)
+            (root/'frames.jsonl').write_bytes(before)
+            data.pop('observations_directory')
             with patch('piu_timeline.play.skins.replay.decode_frames',return_value=iter([(99.,1.,image)])),self.assertRaises(ValueError):
                 refresh(data,root,bank/'bank.json')
             self.assertEqual((root/'frames.jsonl').read_bytes(),before)

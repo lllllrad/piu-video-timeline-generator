@@ -8,6 +8,10 @@ auto +args:
 play +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.play.analysis "$@"
 
+# Inventory or acquire independent visual channels for local recordings.
+observe +args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.observations "$@"
+
 # Manage official UCS timing and editable chart drafts in a separate repository.
 charts +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.charts.data "$@"

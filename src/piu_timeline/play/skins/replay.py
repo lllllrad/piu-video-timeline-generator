@@ -103,13 +103,24 @@ def refresh(data, output, path):
     trace = output / 'frames.jsonl'
     target = output / 'frames.skin-build.jsonl'
     from piu_timeline.play.skins.reuse import reusable_groups, group, merge_observations
-    reused=reusable_groups(data,bank)
+    from piu_timeline.play.observations.notes import retained_frames
+    captured=retained_frames(data,bank)
+    reused=set()if captured is not None else reusable_groups(data,bank)
     selected={**bank,'templates':[t for t in bank['templates']if group(t)not in reused]}
     if reused:print('Reusing unchanged skin image groups: '+', '.join(sorted(reused)),flush=True)
     decoded=None
-    if selected['templates']:
-        source=decode_frames(data['media'], data['start_seconds'], data['end_seconds'],
-                             data['game_roi'], data['analysis_width'])
+    if captured is not None:
+        print('Reusing independent note observations; no decoding or image matching.',flush=True)
+        decoded=((pts,time,None,detector.resolve(candidates))for pts,time,candidates in captured)
+    elif selected['templates']:
+        from piu_timeline.play.observations.bundle import for_play,game_frames
+        pixel_directory=for_play(data)
+        if pixel_directory is not None:
+            print('Reusing independently acquired RGB; no original-video decoding.',flush=True)
+            source=game_frames(pixel_directory)
+        else:
+            source=decode_frames(data['media'], data['start_seconds'], data['end_seconds'],
+                                 data['game_roi'], data['analysis_width'])
         decoded=classified_frames(source,selected,data['layout'],data['analysis_width'],data['analysis_height'])
     detector=SkinDetector(bank,data['layout'],data['analysis_width'],data['analysis_height'])
     at_receptor=BodyAtReceptor(detector)

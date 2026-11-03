@@ -422,6 +422,8 @@ an unrelated anchored row just because the dynamic-programming score changes.
 
 ## Layer boundaries and replay
 
+See [independent pixel acquisition](independent-observations.md) for the stores before this aggregate view.
+
 The original recording is the source layer. PTS and recording playback time
 remain unchanged. Cached masks are measurements derived from that source;
 they are not lossless RGB frames and cannot establish features discarded by

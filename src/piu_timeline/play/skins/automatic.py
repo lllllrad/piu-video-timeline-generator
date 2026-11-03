@@ -80,7 +80,7 @@ def signature(directory,number):
             'candidates':candidates(),'evidence_sha256':sha256(path.read_bytes()).hexdigest()if path.is_file()else None}
 
 
-def prepare(directory,number,document,options,retry=False):
+def prepare(directory,number,document,options,retry=False,*,pixel_directory=None):
     banks=candidates()
     if not any(b['eligible']for b in banks):
         raise ValueError('Image note-skin bank required: no active automatic candidates; use just skins select or --note-skin')
@@ -97,7 +97,15 @@ def prepare(directory,number,document,options,retry=False):
             for window,fraction in enumerate(FORMAT['windows']):
                 start=source['start_seconds']+(source['end_seconds']-source['start_seconds'])*fraction
                 end=min(source['end_seconds'],start+.14);last=None
-                with closing(decode_frames(source['media'],start,end,source['game_roi'],width))as frames:
+                if pixel_directory is not None:
+                    from piu_timeline.play.observations.bundle import read_manifest,game_frames
+                    pixels=read_manifest(Path(pixel_directory));bound=pixels['contract']['source']
+                    if any(bound[k]!=source[k]for k in ('media','layout','game_roi','start_seconds','end_seconds'))or bound['width']!=width:
+                        raise ValueError('Skin sample pixels differ from source/window/geometry')
+                    sampled=game_frames(Path(pixel_directory),pixels,start,end)
+                else:
+                    sampled=decode_frames(source['media'],start,end,source['game_roi'],width)
+                with closing(sampled)as frames:
                     for pts,time,rgb in frames:
                         if last is not None and time-last<FORMAT['frame_gap_seconds']-1e-6:continue
                         digest=sha256(rgb.tobytes()).hexdigest()

@@ -114,6 +114,17 @@ OCR and native image evidence. Registered coordinates and prepared report data
 are reusable independently of beat reconstruction and HTML rendering. See
 [derived analysis](docs/derived-analysis.md) for `just derive` and `just render`.
 
+Independent channel acquisition can run before chart or input analysis:
+
+```sh
+just observe --acquire --jobs 2
+```
+
+It stores lossless acquired game/receptor/popup pixels and ungrouped detector
+observations under `.local/data/SOURCE/observations/`. Detectors can be rerun
+without decoding the original recording; a detector failure preserves other
+channels. See [independent observations](docs/independent-observations.md).
+
 ## Editable chart data
 
 Official UCS downloads contain timing and BPM changes, **not the actual chart notes**. Create a separate local Git repository, then fill a draft from an already analyzed play:
