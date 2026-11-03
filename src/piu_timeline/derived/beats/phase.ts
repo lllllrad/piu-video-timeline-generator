@@ -19,7 +19,7 @@ export function signature(fits: RecordData[]): unknown[] {
 
 export function fitGroups(groups: RecordData[], phase: number, consistent?: Validator): RecordData[] {
   const run = (g, blocks) => g.invalid ? {status: 'failed', reason: g.invalid} :
-    fitGrid(g.targets, g.errors, g.bpm, g.origin + phase, undefined, 0, g.native_chords ?? [], blocks);
+    fitGrid(g.targets, g.errors, g.bpm, g.origin + phase, undefined, 0, g.native_chords ?? [], blocks,g.native_gaps??[]);
   const initial = groups.map(g => run(g, g.native_coordinates ?? []));
   const qualified = consistent ? new Set(consistent(initial)) : null, unique = new Map();
   groups.forEach((g, i) => {
@@ -87,7 +87,7 @@ function sourcePhaseCandidates(groups: RecordData[], uncertainty: number, regula
   if (!uncertainty) return regular;
   const intervals=groups.flatMap(g=>{
     if(g.invalid)return [];
-    const fit=fitGrid(g.targets,g.errors,g.bpm,g.origin,undefined,uncertainty,g.native_chords??[]);
+    const fit=fitGrid(g.targets,g.errors,g.bpm,g.origin,undefined,uncertainty,g.native_chords??[],[],g.native_gaps??[]);
     if(fit.status!=='restored')return [];
     const lo=Math.max(-uncertainty,fit.phase_range[0]),hi=Math.min(uncertainty,fit.phase_range[1]);
     return lo<=hi?[[lo,hi]]:[];

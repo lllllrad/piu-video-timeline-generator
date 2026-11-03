@@ -66,7 +66,8 @@
   },
   "timing": {
     "schema": 1,
-    "revision": 18,
+    "revision": 19,
+    "native_gaps": "qualified_endpoint_intervals_constrain_row_differences",
     "audio_video_sync_search_seconds": 0.1,
     "group_beats": 4,
     "unsupported_rows": "retain_independently_unique_neighbors",
@@ -75,6 +76,13 @@
     "phase_selection": "native_spacing_constrained_with_source_interval_proposals",
     "neighbor_references": "initial_spatially_validated_rows",
     "stage_contract": "input_bound_artifacts_v1"
+  },
+  "beat_gaps": {
+    "schema": 1,
+    "method": "native_endpoint_intervals_under_one_covering_clock",
+    "minimum_clock_span_seconds": 0.3,
+    "slope_error_floor_pixels": 1.5,
+    "slope_error_residual_multiplier": 3
   },
   "registration": {
     "schema": 1,

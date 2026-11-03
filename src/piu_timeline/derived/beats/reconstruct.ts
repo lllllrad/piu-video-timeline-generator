@@ -9,6 +9,7 @@ import {recover,validateRecovery} from './recovery.ts';
 import {validate, spacingSupportedNotes} from './validation.ts';
 import type {Note, RecordData} from '../types.ts';
 import {validateBeatInput} from '../validate.ts';
+import {prepare as gapSupport} from './gaps.ts';
 
 export interface BeatInput {
   schema: 1;
@@ -74,6 +75,10 @@ export function reconstruct(input: BeatInput): RecordData {
     else Object.assign(g, {bpm: sections[si][2], origin: origin + sections[si][0]});
     return g;
   });
+  const gaps=gapSupport(data,proposals);
+  for(const g of proposals)g.native_gaps=gaps.filter(p=>p.peer_notes.every(i=>g.notes.includes(i)))
+   .map(p=>({...p,indices:p.peer_notes.map(i=>g.notes.indexOf(i))}));
+  result.native_gap_constraints=gaps;
   let support = spacing ? coordinateSupport(data, spacing) : null;
   if (support) for (const g of proposals) {
     g.native_coordinates = entries(support.chunks).filter(([, heads]) => entries(heads).some(([i]) => g.notes.includes(i))).map(([number, heads]) => ({
@@ -99,7 +104,7 @@ export function reconstruct(input: BeatInput): RecordData {
       if (!accepted && fit.status === 'partial') {
         const [lo, hi] = fit.row_domains[j];
         failure = (fit.unsupported_indices ?? []).includes(j) ? 'no_natural_beat_subdivision' : (fit.incompatible_chord_indices ?? []).includes(j) ?
-          'native_chord_domains_incompatible' : lo > hi ? 'native_coordinate_domains_incompatible' : 'ambiguous_beat_rows';
+          'native_chord_domains_incompatible' : (fit.incompatible_gap_indices??[]).includes(j)?'native_gap_domains_incompatible':lo > hi ? 'native_coordinate_domains_incompatible' : 'ambiguous_beat_rows';
       }
       n.beat_reconstruction = {status: accepted ? 'restored' : 'failed', group_index: result.groups.length - 1,
         ...Object.fromEntries(['split', 'phase_range'].filter(k => Object.hasOwn(fit, k)).map(k => [k, fit[k]])), ...(!accepted ? {reason: failure} : {})};

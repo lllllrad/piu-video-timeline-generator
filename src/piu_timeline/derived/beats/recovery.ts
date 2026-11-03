@@ -34,7 +34,7 @@ export function candidateWindow(note: Note, notes: Note[], groups: RecordData[])
     const seed = sum(note.video_target_range) / 2;
     return [seed, [seed - radius, seed + radius], omitted];
   }
-  const domain = note.reason === 'beat_timing_reconstruction_failed' && ['native_coordinate_domains_incompatible', 'ambiguous_beat_rows'].includes(beat.reason);
+  const domain = note.reason === 'beat_timing_reconstruction_failed' && ['native_coordinate_domains_incompatible','native_gap_domains_incompatible', 'ambiguous_beat_rows'].includes(beat.reason);
   const geometry = ['beat_grid_conflicts_with_spatial_spacing', 'beat_grid_conflicts_with_native_chord'].includes(note.reason);
   if (!(domain || geometry) || !Object.hasOwn(beat, 'group_index')) return null;
   const omitted = groups[beat.group_index].notes, intervals = omitted.map(i => notes[i].video_target_range);

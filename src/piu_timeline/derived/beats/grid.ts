@@ -2,10 +2,11 @@ import {contracts} from '../contracts.ts';
 import {compare} from '../math.ts';
 import {constrain as chordDomains} from './chords.ts';
 import {constrain as coordinateDomains} from './domains.ts';
+import {constrain as gapDomains} from './gaps.ts';
 import type {Interval, RecordData} from '../types.ts';
 
 export function fitGrid(targets: number[], errors: number[], bpm: number, origin: number,
-  splits = contracts.timing.natural_splits, phaseError = 0, chords: RecordData[] = [], coordinates: RecordData[] = []): RecordData {
+  splits = contracts.timing.natural_splits, phaseError = 0, chords: RecordData[] = [], coordinates: RecordData[] = [], gaps:RecordData[]=[]): RecordData {
   if (targets.length !== errors.length) throw new Error('Target and uncertainty counts differ');
   if (!Number.isFinite(bpm) || bpm <= 0) throw new Error('Beat fitting requires positive BPM');
   let incompatible = null, partial = null;
@@ -18,20 +19,27 @@ export function fitGrid(targets: number[], errors: number[], bpm: number, origin
     const [chordOptions, proofs] = chordDomains(original, step, chords);
     const chordIndices = chordOptions.flatMap(([lo, hi], i) => lo > hi && proofs.some(p => p.indices.includes(i)) ? [i] : []);
     if (chordIndices.length) incompatible = 'native_chord_domains_incompatible';
-    const [options, coordinateProofs] = coordinateDomains(chordOptions, step, origin, coordinates);
-    if (options.some(([lo, hi]) => lo > hi) && !unsupported.length && !chordIndices.length) incompatible = 'native_coordinate_domains_incompatible';
+    const [gapOptions,gapProofs]=gapDomains(chordOptions,step,gaps);
+    const gapIndices=gapOptions.flatMap(([lo,hi],i)=>lo>hi&&chordOptions[i][0]<=chordOptions[i][1]?[i]:[]);
+    if(gapIndices.length)incompatible='native_gap_domains_incompatible';
+    const [options, coordinateProofs] = coordinateDomains(gapOptions, step, origin, coordinates);
+    if (options.some(([lo, hi]) => lo > hi) && !unsupported.length && !chordIndices.length&&!gapIndices.length) incompatible = 'native_coordinate_domains_incompatible';
     if (options.every(([lo, hi]) => lo > hi)) continue;
     const rows = options.map(([lo, hi]) => lo === hi ? lo : null);
-    const known = targets.flatMap((t, i) => rows[i] != null ? [[t, rows[i]]] : []);
-    if (known.slice(1).some(([b, rb], i) => b - known[i][0] > .025 && rb <= known[i][1])) continue;
+    const known = targets.flatMap((t, i) => rows[i] != null ? [[t, rows[i],i]] : []);
+    if (known.slice(1).some(([b, rb,index], i) => b - known[i][0] > .025 && rb <= known[i][1]&&
+     !gapProofs.some(p=>p.indices.includes(index)&&p.indices.includes(known[i][2]))&&
+     !(rb===known[i][1]&&proofs.some(p=>p.indices.includes(index)&&p.indices.includes(known[i][2]))))) continue;
     const constraints = {...(proofs.length ? {native_chord_constraints: proofs} : {}),
       ...(coordinateProofs.length ? {native_coordinate_constraints: coordinateProofs} : {}),
-      ...(proofs.length || coordinateProofs.length ? {unconstrained_row_domains: original} : {})};
+      ...(gapProofs.length?{native_gap_constraints:gapProofs}:{}),
+      ...(proofs.length || coordinateProofs.length ||gapProofs.length ? {unconstrained_row_domains: original} : {})};
     if (rows.some(r => r == null)) {
       const reason = unsupported.length ? 'no_natural_beat_subdivision' : chordIndices.length ? 'native_chord_domains_incompatible' :
-        options.some(([lo, hi]) => lo > hi) ? 'native_coordinate_domains_incompatible' : 'ambiguous_beat_rows';
+        gapIndices.length?'native_gap_domains_incompatible':options.some(([lo, hi]) => lo > hi) ? 'native_coordinate_domains_incompatible' : 'ambiguous_beat_rows';
       const result: RecordData = {status: 'failed', reason, split, row_domains: options, ...constraints,
-        ...(chordIndices.length ? {incompatible_chord_indices: chordIndices} : {}), ...(unsupported.length ? {unsupported_indices: unsupported} : {})};
+        ...(chordIndices.length ? {incompatible_chord_indices: chordIndices} : {}),
+        ...(gapIndices.length?{incompatible_gap_indices:gapIndices}:{}), ...(unsupported.length ? {unsupported_indices: unsupported} : {})};
       if (known.length && phaseError === 0) Object.assign(result, {status: 'partial', rows, targets: rows.map(r => r == null ? null : origin + r * step),
         phase_range: [0, 0], unresolved_indices: rows.flatMap((r, i) => r == null ? [i] : [])});
       if (options.some(([lo, hi]) => lo > hi) && result.status === 'partial') {

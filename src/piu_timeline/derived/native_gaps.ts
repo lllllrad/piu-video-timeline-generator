@@ -22,6 +22,16 @@ export class NativeGapMeasurements {
     if(!Array.isArray(w.peer_notes)||w.peer_notes.length!==2||!Number.isFinite(w.reconstructed_gap_pixels))return failed('unsupported_gap_comparison');
     const predictionError=w.prediction_uncertainty_pixels??0;
     if(!Number.isFinite(predictionError)||predictionError<0)return failed('invalid_prediction_uncertainty');
+    const measured=this.measure(w);
+    if(measured.status!=='measured')return measured;
+    const [lo,hi]=measured.allowed_gap_range_pixels,predicted=w.reconstructed_gap_pixels,
+      predictionRange=[predicted-predictionError,predicted+predictionError];
+    return {...measured,status:lo<=hi+EPS&&lo-EPS<=predictionRange[1]&&predictionRange[0]<=hi+EPS?'explained':'unresolved',
+      reconstructed_gap_pixels:predicted,prediction_range_pixels:predictionRange,prediction_uncertainty_pixels:predictionError};
+  }
+  measure(w:RecordData):RecordData{
+    const failed=reason=>({status:'unresolved',reason,peer_notes:w.peer_notes});
+    if(!Array.isArray(w.peer_notes)||w.peer_notes.length!==2)return failed('unsupported_gap_comparison');
     const [a,b]=w.peer_notes,registration=this.data.head_registration;
     if(a===b)return failed('duplicate_peer_identity');
     if(!equal(registration?.format?.native_cap_registration,A))return failed('unsupported_registration_contract');
@@ -48,10 +58,8 @@ export class NativeGapMeasurements {
       samples.push({time,source_pts_seconds:timeline.get(time),positions_pixels:positions,coordinate_uncertainties_pixels:errors,gap_pixels:gap});
     }
     if(new Set(samples.map(s=>s.source_pts_seconds)).size!==samples.length)return failed('duplicate_source_pts');
-    const predicted=w.reconstructed_gap_pixels,predictionRange=[predicted-predictionError,predicted+predictionError];
-    return {status:lo<=hi+EPS&&lo-EPS<=predictionRange[1]&&predictionRange[0]<=hi+EPS?'explained':'unresolved',
-      reason:'declared_native_endpoint_errors',peer_notes:w.peer_notes,reconstructed_gap_pixels:predicted,
-      allowed_gap_range_pixels:[lo,hi],prediction_range_pixels:predictionRange,prediction_uncertainty_pixels:predictionError,samples};
+    return {status:lo<=hi+EPS?'measured':'unresolved',reason:'declared_native_endpoint_errors',peer_notes:w.peer_notes,
+      allowed_gap_range_pixels:[lo,hi],samples};
   }
 }
 

@@ -122,6 +122,16 @@ possible models for each head do not establish a consistent pair. If the model
 can include zero/reverse velocity, inverse timing is not identifiable and fails.
 Missing model bounds fail explicitly instead of reverting to a point estimate.
 
+Before subdivision selection, `beats/gaps.ts` measures co-observed endpoint
+intervals in one qualified coordinate system. A common positive clock must cover
+both native target intervals. Its residual and endpoint errors bound velocity;
+dividing the measured gap by that velocity interval bounds the difference between
+beat rows. Interval propagation removes incompatible row combinations before a
+split can win. An object without any candidate row cannot calibrate independent
+neighbors. Source gaps, PTS, clock bounds and row differences remain in the beat
+artifact. Unsupported clocks or image origins supply no such constraint and
+retain the existing explicit diagnostics.
+
 `derived/native_gaps.ts` validates source gap failures against acquired image-cap
 measurement errors before musical reconstruction. Every co-observed endpoint
 needs a qualified native center, declared registration uncertainty and matching
