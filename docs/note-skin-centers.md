@@ -106,8 +106,17 @@ or the leading boundary and dimensions measured from at least two independently
 sourced isolated caps. The dimension model requires matching full width and a
 visible lower glyph protrusion outside the stem; the body cannot define the cap
 height. Conflicting dimension/RGB estimates cannot supply a center. All supporting
-reference sources must independently pass original RGB/PTS verification. Hold ends
-require a complete tap-cap RGB comparison and have no boundary-only fallback.
+reference sources must independently pass original RGB/PTS verification.
+Hold ends use a complete tap-cap RGB correspondence when available. A different
+terminal texture can instead match the entire lower half of the filled cap
+silhouette, including its outside edges, against at least two independently
+sourced complete taps. Both silhouettes must lie within one source pixel of each
+other throughout their supported comparison regions. Matching cap heights may
+differ by at most one source pixel. The observed lower edge and those independent
+heights define the center; a stem edge alone supplies no height. Clipped,
+unsupported, competing or inconsistent lower shapes remain unregistered. Both
+full-RGB and silhouette estimates must agree when both are available. Saved
+measurements identify every source reference and the compared lower regions.
 The command independently
 checks the original source RGB, ROI, dimensions, PTS and unchanged media identity
 before issuing certificates. It saves measurement and verification artifacts,

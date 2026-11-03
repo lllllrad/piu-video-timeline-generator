@@ -67,6 +67,21 @@ with tempfile.TemporaryDirectory()as tmp:
  assert result['center_pixels']==[20,22] and result['lower_shoulder_pixels']>0
  leading['templates'][2]['rgb'][30:32]=0
  assert 'hold_start'not in proposals(leading),'a missing lower glyph boundary is not completed from its stem'
+ # A different tail texture can retain the complete lower glyph silhouette.
+ bank_path.write_text(json.dumps({**document,'templates':[document['templates'][0],duplicate,document['templates'][2]]}))
+ trailing=load_bank(bank_path);trailing['templates'][2]['rgb'][14:30,12:28]=[245,245,245]
+ result=proposals(trailing)['hold_end']
+ assert result['basis']=='trailing_cap_silhouette_with_independently_measured_dimensions'
+ assert result['center_pixels']==[20,22] and len(result['lower_cap_matches'])==2
+ single=load_bank(bank_path);single['templates'][2]['rgb'][14:30,12:28]=[245,245,245]
+ single['templates'][1]['source_evidence']=single['templates'][0]['source_evidence']
+ assert 'hold_end'not in proposals(single),'one source cannot pretend to be independent dimensions'
+ # A stem boundary or an incomplete/different lower shape cannot substitute
+ # for the complete registered glyph half, even at the expected cap position.
+ trailing['templates'][2]['rgb'][26:32,10:16]=0
+ assert 'hold_end'not in proposals(trailing),'a missing lower corner cannot borrow the tap center'
+ clipped=load_bank(bank_path);clipped['templates'][2]['rgb'][:]=255
+ assert 'hold_end'not in proposals(clipped),'a frame-filling body has no complete lower cap'
  bank_path.write_text(json.dumps(document))
  # Incomplete or clipped glyphs do not define a center.
  broken=load_bank(bank_path);broken['templates'][0]['rgb'][:]=255

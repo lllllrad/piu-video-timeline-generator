@@ -13,10 +13,11 @@ from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.calibration import frame_ranges
 from piu_timeline.play.frames import decode_frames
 
-FORMAT={'schema':1,'revision':3,'method':'bright_piu_complete_source_cap',
+FORMAT={'schema':1,'revision':4,'method':'bright_piu_source_cap_correspondence',
         'minimum_value':170,'minimum_saturation':65,'white_minimum':165,'white_chroma':110,
         'size_spacing_range':[.65,1.25],'maximum_height_difference_pixels':1,
-        'maximum_center_shift_spacing':.25,'coordinate_uncertainty_pixels':1.}
+        'maximum_center_shift_spacing':.25,'coordinate_uncertainty_pixels':1.,
+        'trailing_cap_fraction':.5,'maximum_silhouette_distance_pixels':1}
 
 
 def foreground(template):
@@ -71,6 +72,51 @@ def leading(template,references,spacing):
     return candidates[0]if len(candidates)==1 else None
 
 
+def trailing(template,references):
+    """Match the complete lower cap silhouette; a stem alone supplies no center."""
+    mask=foreground(template);candidates=[]
+    region=next(r['box']for r in template['regions']if r['name']=='cap')
+    radius=FORMAT['maximum_silhouette_distance_pixels'];kernel=np.ones((2*radius+1,2*radius+1),dtype='uint8')
+    for contour in cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)[0]:
+        if cv2.pointPolygonTest(contour,tuple(map(float,template['anchor_pixels'])),False)<0:continue
+        x,y,w,h=cv2.boundingRect(contour);bottom=y+h
+        if not 0<x<x+w<mask.shape[1]or not 0<bottom<mask.shape[0]:continue
+        shape=np.zeros_like(mask);cv2.drawContours(shape,[contour],-1,1,cv2.FILLED)
+        matches=[]
+        for reference,(a,b,width,height)in references:
+            if abs(w-width)>2*radius:continue
+            band=int(np.ceil(height*FORMAT['trailing_cap_fraction']))
+            xx=round(x+w/2-width/2);yy=bottom-band-2
+            refmask=foreground(reference);parts=[]
+            for c in cv2.findContours(refmask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)[0]:
+                if cv2.boundingRect(c)==(a,b,width,height):
+                    filled=np.zeros_like(refmask);cv2.drawContours(filled,[c],-1,1,cv2.FILLED);parts.append(filled)
+            if len(parts)!=1 or min(xx-2,yy,a-2,b+height-band-2)<0:continue
+            expected=parts[0][b+height-band-2:b+height+2,a-2:a+width+2]
+            actual=shape[yy:bottom+2,xx-2:xx+width+2]
+            if (actual.shape!=expected.shape or not actual.any()
+                    or not template['mask'][yy:bottom+2,xx-2:xx+width+2].all()
+                    or not reference['mask'][b+height-band-2:b+height+2,a-2:a+width+2].all()
+                    or (actual&~cv2.dilate(expected,kernel)).any()
+                    or (expected&~cv2.dilate(actual,kernel)).any()):continue
+            center=bottom-height/2
+            if not region[1]<=center<region[3]:continue
+            matches.append({'reference':reference['id'],'center_y_pixels':center,
+                            'source_lower_bounds':[xx-2,yy,xx+width+2,bottom+2],
+                            'reference_lower_bounds':[a-2,b+height-band-2,a+width+2,b+height+2]})
+        names={m['reference']for m in matches}
+        identities={(r.get('source_evidence',{}).get('source_pts_seconds'),
+                     tuple(r.get('source_evidence',{}).get('source_crop',[])))for r,_ in references if r['id']in names}
+        if len(identities)<2:continue
+        centers=[m['center_y_pixels']for m in matches]
+        if max(centers)-min(centers)>FORMAT['maximum_height_difference_pixels']/2:continue
+        candidates.append({'center_pixels':[x+w/2,float(np.median(centers))],
+            'basis':'trailing_cap_silhouette_with_independently_measured_dimensions',
+            'inferred_cap_bounds':[x,bottom-float(np.median([box[3]for r,box in references if r['id']in names])),x+w,bottom],
+            'reference_templates':sorted(names),'lower_cap_matches':matches})
+    return candidates[0]if len(candidates)==1 else None
+
+
 def proposals(bank):
     """Complete caps define centers; tails need a complete tap RGB comparison."""
     taps=defaultdict(list);measured={};spacing=bank['spacing_pixels']
@@ -86,7 +132,7 @@ def proposals(bank):
                                'basis':'complete_bright_cap_envelope'}
     for t in bank['templates']:
         if t['role']not in('hold_start','hold_end'):continue
-        geometry=leading(t,taps[t['lane_kind']],spacing)if t['role']=='hold_start'else None
+        geometry=leading(t,taps[t['lane_kind']],spacing)if t['role']=='hold_start'else trailing(t,taps[t['lane_kind']])
         target=t['rgb'].astype('float32')/255;matches=[]
         for ref,box in taps[t['lane_kind']]:
             cap=next(r for r in ref['regions']if r['name']=='cap');a,b,c,d=cap['box']
