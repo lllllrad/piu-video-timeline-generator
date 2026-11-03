@@ -174,6 +174,17 @@ class PlayCacheTest(unittest.TestCase):
             self.assertEqual(result['association_view_format'],FORMAT)
             self.assertEqual((final/'frames.jsonl').read_text(),trace)
             self.assertEqual((source.stat().st_size,source.stat().st_mtime_ns),(before.st_size,before.st_mtime_ns))
+            # Changing only image-coordinate rules must refit coordinates even
+            # when the application, image detector and counter are unchanged.
+            result['timing_format']['image_coordinates']['revision']=-1
+            (final/'analysis.json').write_text(json.dumps(result))
+            with patch.object(play,'LOCAL_DATA',root/'data'),patch.object(play,'source_id',return_value='id'), \
+                    patch.object(play,'refit_saved',wraps=play.refit_saved)as refit, \
+                    patch.object(play,'analyze_play',side_effect=AssertionError('must reuse pixels')):
+                play.run('id',width=320,display_delay_ms=30)
+            self.assertEqual(refit.call_count,1)
+            self.assertEqual(json.loads((final/'analysis.json').read_text())['timing_format'],play.TIMING_FORMAT)
+            self.assertEqual((final/'frames.jsonl').read_text(),trace)
 
     def test_all_plays_continues_after_individual_failure(self):
         with tempfile.TemporaryDirectory() as temporary:

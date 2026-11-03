@@ -32,7 +32,11 @@ export function imagePosition(sample:RecordData|undefined, trajectoryY:number, r
   const error=sample.native_cap_coordinate_uncertainty_pixels,scale=sample.native_cap_reference_scale_y;
   const contract=equal(registrationFormat?.native_cap_registration,contracts.native_anchor);
   const validScale=typeof scale==='number'&&Number.isFinite(scale)&&scale>0;
-  const nativeBound=validScale?scale*contracts.native_anchor.coordinate_uncertainty_pixels:NaN;
+  const sampling=sample.native_cap_sampling_uncertainty_pixels??0;
+  if(sampling!==0&&(!equal(registrationFormat?.position_search,contracts.image_coordinates.position_search)||
+    sampling!==contracts.image_coordinates.position_search.uncertainty_pixels||!Array.isArray(sample.sampling_origin_pixels)))
+    return unavailable('unqualified_search_uncertainty');
+  const nativeBound=validScale?scale*contracts.native_anchor.coordinate_uncertainty_pixels+sampling:NaN;
   if(sample.native_cap_registration_status==='conflicting'){
     const projection=sample.native_cap_projection_uncertainty_pixels;
     if(!contract||!validScale||typeof projection!=='number'||!Number.isFinite(projection)||projection<nativeBound||!sample.native_cap_reference_template)

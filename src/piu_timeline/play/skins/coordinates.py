@@ -54,10 +54,15 @@ def registered_comparison(image,bank,templates,lane,y,height,scale):
                     or candidate.get('sampling_kernel','area')not in SAMPLING_FORMAT['kernels']
                     or any(not any(abs(v-p)<1e-8 for p in phases(scale))for v in phase)):
                 raise ValueError('Registered comparison has incompatible reference sampling')
-        uncertainty=bank['anchor_registrations'][name]['coordinate_uncertainty_pixels']*sy
+        # The source center certificate and target search live on different grids.
+        # An integer match location rounds a continuous target translation by up
+        # to half a target pixel, independently of reference-image scaling.
+        sampling_error=FORMAT['position_search']['uncertainty_pixels']if 'sampling_origin_pixels'in candidate else 0
+        uncertainty=bank['anchor_registrations'][name]['coordinate_uncertainty_pixels']*sy+sampling_error
         center=row+bank['anchor_registrations'][name]['center_offset_y_pixels']*sy
         choices.append({'template':name,'comparison_index':index,'detected_y_pixels':row,'native_y_pixels':center,
-                        'cap_error':error,'scale_y':sy,'uncertainty_pixels':uncertainty})
+                        'cap_error':error,'scale_y':sy,'uncertainty_pixels':uncertainty,
+                        'sampling_uncertainty_pixels':sampling_error})
     if not choices:return {},None
     lo=max(c['native_y_pixels']-c['uncertainty_pixels']for c in choices)
     hi=min(c['native_y_pixels']+c['uncertainty_pixels']for c in choices)
@@ -69,6 +74,8 @@ def registered_comparison(image,bank,templates,lane,y,height,scale):
     return {'native_y_pixels':chosen['native_y_pixels'],
             'native_cap_projection_uncertainty_pixels':projection_error,
             **({'native_cap_coordinate_uncertainty_pixels':chosen['uncertainty_pixels']}if not conflict else{}),
+            **({'native_cap_sampling_uncertainty_pixels':chosen['sampling_uncertainty_pixels']}
+               if chosen['sampling_uncertainty_pixels']else{}),
             'native_cap_reference_scale_y':chosen['scale_y'],'native_cap_reference_template':chosen['template'],
             'native_cap_reference_error':chosen['cap_error'],'native_cap_comparison_index':chosen['comparison_index']},conflict
 

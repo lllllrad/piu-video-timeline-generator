@@ -146,16 +146,19 @@ joins and hold connectivity use raw matching positions and original PTS.
 
 Coordinates retain registration only for the reference that actually supplied
 the positive cap measurement. Uncertainty is converted through the actual
-vertical reference scale. The one-pixel bound belongs to the original
-reference image, including its native raster measurement; a half-size analysis
-therefore carries a half-analysis-pixel bound. Resampling retains the declared
-source-grid phase and does not introduce a second analysis-pixel floor.
+vertical reference scale. The one-pixel source bound belongs to the original
+reference image, including its native raster measurement. Integer target-image
+search adds an independent half-target-pixel translation bound. For example,
+half-size acquisition has a 0.5-pixel source bound plus a 0.5-pixel search bound.
+The latter is stored as `native_cap_sampling_uncertainty_pixels` and qualified
+against the image-coordinate `position_search` contract. Resampling phase is
+retained separately; scaling the reference does not scale the target search grid.
 Cross-template concurrency uses these centers only within the existing
 lane-spacing-relative coordinate budget and all ordinary gap, motion, duration and PTS checks. Larger scaled
 uncertainty cannot widen that budget; unregistered references retain the
 identical-reference constraint. Complete chord proofs list the registered
-image references they used. The bank-wide absolute registration warning and
-UCS export gate remain in force.
+image references they used. Bank review status does not block automatic UCS
+drafts; actual missing or contradictory coordinate evidence remains explicit.
 
 Cross-template image chord checks intersect the signed inter-head gap bounds
 from every qualified co-observed frame. Each bound uses both certified endpoint
