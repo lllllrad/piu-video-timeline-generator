@@ -408,10 +408,9 @@ def run(source, segment_number=1, force=False, **options):
             from piu_timeline.play.coordinate_replay import applicable,refresh,metadata_matches
             metadata_current=metadata_matches(cached,segments[segment_number-1],
                     result_reference(segments[segment_number-1],options.get('player')),options.get('display_delay_ms',0))
-            if producers_current and metadata_current and not upstream_current:
-                if applicable(cached,TIMING_FORMAT):
-                    refreshed=refresh(cached,final,segment_number,options.get('display_delay_ms',0),document['media'])
-                    if refreshed is not None:return refreshed
+            if producers_current and metadata_current and applicable(cached,TIMING_FORMAT):
+                refreshed=refresh(cached,final,segment_number,options.get('display_delay_ms',0),document['media'])
+                if refreshed is not None:return refreshed
             beat_ready=beat_current(cached,final)if upstream_current else False
             coordinates=None
             if upstream_current and not beat_ready:

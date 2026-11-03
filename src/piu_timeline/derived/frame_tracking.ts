@@ -47,7 +47,7 @@ function predict(points:{time:number;position:Position}[],time:number,spacing:nu
     delta=a.position.yPixels-b.position.yPixels,error=a.position.uncertaintyPixels+b.position.uncertaintyPixels+step;
    lo=Math.max(lo,(delta-error)/elapsed);hi=Math.min(hi,(delta+error)/elapsed);
   }
-  return lo<=hi?[last.position.yPixels-hi*dt-last.position.uncertaintyPixels,last.position.yPixels-lo*dt+last.position.uncertaintyPixels]:null;
+  return lo<=hi?[last.position.yPixels-hi*dt-last.position.uncertaintyPixels-step,last.position.yPixels-lo*dt+last.position.uncertaintyPixels+step]:null;
  }
  // A trajectory may stop, accelerate or reverse. Past velocity is not a bound
  // on its next step; the physical gate cannot certify a musical clock.

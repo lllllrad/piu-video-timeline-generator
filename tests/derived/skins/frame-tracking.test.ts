@@ -224,3 +224,13 @@ test('an unobserved final step cannot widen a disappeared cap into the following
  const r=assign([old,following],[detection(38,now)],now,20,[],steps);
  assert.deepEqual(r.matches,[[1,0]]);assert.deepEqual(r.ambiguousTracks,[]);
 });
+
+for(const spacing of [20,40,80])for(const fps of [30,60,120])
+test(`an observed render-step allowance follows a cap through occlusion and capture catch-up: spacing=${spacing}, fps=${fps}`,()=>{
+ const velocity=12*spacing,error=spacing/80,history=Array.from({length:6},(_,i)=>{
+  const o=observation(1+i/fps,8*spacing-velocity*(i-(i>=2?1:0))/fps);o.center.uncertaintyPixels=error;return o;
+ }),old={lane:0,maximumGapSeconds:.35,observations:history},time=1+12/fps,
+ cap=detection(8*spacing-velocity*12/fps,time);cap.observation.center.uncertaintyPixels=error;
+ const before=structuredClone({old,cap}),r=assign([old],[cap],time,spacing);
+ assert.deepEqual(r.matches,[[0,0]]);assert.deepEqual(r.ambiguousTracks,[]);assert.deepEqual({old,cap},before);
+});

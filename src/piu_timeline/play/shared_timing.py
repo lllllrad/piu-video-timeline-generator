@@ -47,10 +47,10 @@ def restore(notes, tracks, timeline, layout, width, height):
         receptor,layout)
     bounded=dict(zip(pending,native,strict=True))
     for index,(note,track) in enumerate(zip(notes,tracks,strict=True)):
-        # Short/noisy candidates already have explicit exclusion diagnostics.
-        if len(track.points)<4 or track.points[-1][0]-track.points[0][0]<.065:
-            continue
         fitted=fitted_tracks[index] or bounded.get(index)
+        # A short source-qualified cap can use its bounded shared-phase proof.
+        if (len(track.points)<4 or track.points[-1][0]-track.points[0][0]<.065)and not (fitted or {}).get('native_motion_support'):
+            continue
         peer_counts=defaultdict(int)
         for t,y in track.points:
             for peer,py in shared_frames[t].items():

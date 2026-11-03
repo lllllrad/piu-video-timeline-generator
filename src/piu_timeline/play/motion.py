@@ -70,7 +70,7 @@ class ScrollMotion:
                 'registered_positions':getattr(self,'registered_positions',None)}
 
     def _track(self,track):
-        return {'lane':track.lane,'points':track.points,
+        return {'lane':track.lane,'points':track.points,'coordinate_basis':getattr(track,'coordinate_basis',None),
                 'registration_uncertainty_pixels':getattr(track,'registration_uncertainty_pixels',0),
                 'registration_offsets':{chunk:v for (identity,chunk),v in getattr(self,'coordinate_offsets',{}).items()if identity==id(track)}}
 

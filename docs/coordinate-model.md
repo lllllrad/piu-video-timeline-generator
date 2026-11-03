@@ -133,6 +133,8 @@ Otherwise the search covers the declared maximum capture interval. Each possible
 translation uses its own complete matching; only links forced under every
 hypothesis survive. A guessed terminal step cannot replace measured displacement
 through a long visibility gap when repeated native positions constrain that gap.
+The observed render-step allowance covers both the historical velocity interval
+and the future endpoint of a visibility-gap prediction.
 
 Oversized steps retain original timestamps and explicit
 `observed_frame_step_exceeds_source_cadence` / `native_motion_cadence_unresolved`
@@ -145,3 +147,12 @@ interval with a precision or capture-cadence warning contributes to
 `restored_notes` and `warning_notes`, not `failed_notes`. Musical-row failures
 are reported by the beat stage. Any retained native warning keeps the overall
 native status failed until resolved; counting it separately does not suppress it.
+
+
+Short calibrated cap observations can locate a crossing in an independently
+covered displacement phase. Both the measured cap movement and phase movement
+must exceed their endpoint uncertainty; every retained position must agree with
+one bounded offset. The proof records original PTS, measured displacement,
+position errors and offset intersection as `native_motion_support`. Unregistered
+origins retain the ordinary fit requirements, and a static cap cannot borrow
+motion from neighboring notes.

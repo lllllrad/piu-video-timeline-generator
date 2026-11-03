@@ -4,6 +4,8 @@ import {frameBounds} from './frame_bounds.ts';
 import {compare, linear, lowerBound, median, rms} from './math.ts';
 import type {RecordData} from './types.ts';
 const F = contracts.local_clock;
+const qualified=(track:RecordData)=>track.coordinate_basis==='native_cap_center'&&
+ Number.isFinite(track.registration_uncertainty_pixels)&&track.registration_uncertainty_pixels>0;
 const cadenceOf = samples => median(samples.slice(1).map((s, i) => s.time - samples[i].time));
 
 export function* crossingWindows(samples: RecordData[], before: RecordData, after: RecordData): Generator<RecordData[]> {
@@ -118,7 +120,7 @@ export class MotionClock {
     const visible = track.points.filter(([t, y]) => receptor + .85 * spacing < y && y < bottom).map(([t, y]) => [t, y, this.at.get(t)]);
     if (!visible.length || !visible.at(-1)[2]) return null;
     const chunk = visible.at(-1)[2].chunk, latest = visible.filter(p => p[2]?.chunk === chunk);
-    if (latest.length >= 4 && latest.at(-1)[0] - latest[0][0] >= .065) return this.fitVisible(track, latest, receptor, layout);
+    if (latest.length >= (qualified(track)?2:4) && latest.at(-1)[0] - latest[0][0] >= (qualified(track)?Number.EPSILON:.065)) return this.fitVisible(track, latest, receptor, layout);
     const groups = new Map<number, any[]>();
     for (const p of visible) if (p[2]) { if (!groups.has(p[2].chunk)) groups.set(p[2].chunk, []); groups.get(p[2].chunk).push(p); }
     for (const [key, points] of [...groups].reverse()) {
@@ -138,14 +140,20 @@ export class MotionClock {
   }
   fitVisible(track, visible, receptor, layout): RecordData | null {
     const chunk = visible.at(-1)[2].chunk, spacing = this.state.spacing;
-    if (Object.hasOwn(this.state.coordinate_failures ?? {}, chunk) || visible.length < 4 || visible.at(-1)[0] - visible[0][0] < .065) return null;
-    const phase = visible.map(p => p[2].phase), y = visible.map(p => p[1]);
-    if (phase.at(-1) - phase[0] < .8 * spacing) return null;
+    const calibrated=qualified(track),policy=contracts.native_clock.shared_phase_support;
+    if (Object.hasOwn(this.state.coordinate_failures ?? {}, chunk) || visible.length < (calibrated?policy.minimum_frames:4) ||
+      visible.at(-1)[0]-visible[0][0]<(calibrated?Number.EPSILON:.065))return null;
+    const phase = visible.map(p => p[2].phase), y = visible.map(p => p[1]),travel=phase.at(-1)-phase[0],
+      short=visible.length<4||visible.at(-1)[0]-visible[0][0]<.065||travel<.8*spacing;
+    if(short&&(!calibrated||travel<=2*track.registration_uncertainty_pixels||y[0]-y.at(-1)<=2*track.registration_uncertainty_pixels))return null;
+    if(calibrated&&(visible.some(p=>!Number.isFinite(p[2].source_pts))||new Set(visible.map(p=>p[2].source_pts)).size!==visible.length))return null;
     const slope = linear(phase.map(p => p - phase.at(-1)), y)[0];
-    if (slope < -1.12 || slope > -.88) return null;
+    if (!short&&(slope < -1.12 || slope > -.88)) return null;
     const offset = track.registration_offsets?.[chunk], intercept = offset != null ? offset - phase.at(-1) : median(y.map((v, i) => v + phase[i] - phase.at(-1)));
-    const errors = y.map((v, i) => v + phase[i] - phase.at(-1) - intercept), inliers = errors.filter(v => Math.abs(v) <= .15 * spacing);
-    if (inliers.length < Math.max(4, Math.ceil(.85 * visible.length))) return null;
+    const errors = y.map((v, i) => v + phase[i] - phase.at(-1) - intercept),bound=policy.maximum_position_error_multiplier*track.registration_uncertainty_pixels,
+      inliers=short?errors:errors.filter(v=>Math.abs(v)<=.15*spacing);
+    if(short){if(errors.some(e=>!Number.isFinite(e)||Math.abs(e)>bound))return null;}
+    else if (inliers.length < Math.max(4, Math.ceil(.85 * visible.length))) return null;
     const residual = rms(inliers);
     let hud = false;
     if (layout?.combo_roi?.length) {
@@ -153,10 +161,13 @@ export class MotionClock {
       hud = x - .12 <= laneX && laneX <= x + width + .12 && top - .18 <= lastY && lastY <= top + height + .1;
     }
     if (intercept - receptor > (hud ? 6 : 2.5) * spacing) return null;
-    const target = phase.at(-1) + intercept - receptor, error = Math.max(.75, 2 * residual, track.registration_uncertainty_pixels ?? 0);
+    const target = phase.at(-1) + intercept - receptor, error = Math.max(.75, 2 * residual, short?bound:(track.registration_uncertainty_pixels ?? 0));
     const r = this.crossing(visible.at(-1)[2], target, error);
     if (!r || !(0 <= r.target_seconds - visible.at(-1)[0] && r.target_seconds - visible.at(-1)[0] <= (hud ? .65 : .25))) return null;
     return {...r, status: 'estimated', reason: null, velocity_pixels_per_second: -(phase.at(-1) - phase[0]) / (visible.at(-1)[0] - visible[0][0]), residual_pixels: residual,
+      ...(short?{native_motion_support:{policy,coordinate_basis:track.coordinate_basis,endpoint_uncertainty_pixels:track.registration_uncertainty_pixels,
+        source_pts_seconds:visible.map(p=>p[2].source_pts),phase_range_pixels:[phase[0],phase.at(-1)],cap_displacement_pixels:y[0]-y.at(-1),position_errors_pixels:errors,
+        allowed_offset_range_pixels:[Math.max(...y.map((v,i)=>v+phase[i]-bound)),Math.min(...y.map((v,i)=>v+phase[i]+bound))]}}:{}),
       motion_support_points: visible.length, motion_target_phase: target, motion_chunk: chunk, observed_phase_slope: slope};
   }
   bridge(sample, phase, error): RecordData | null {

@@ -1,7 +1,7 @@
 {
   "frame_tracking": {
     "schema": 1,
-    "revision": 7,
+    "revision": 8,
     "coordinates": "measured_centers_or_identical_reference_anchors",
     "assignment": "forced_edges_of_maximum_cardinality_matching",
     "order": "coobserved_separated_positions_in_one_coordinate_basis",
@@ -9,7 +9,7 @@
     "history_frames": 6,
     "motion": "signed_compatible_image_steps_with_retained_endpoint_intervals",
     "alternative_views": "positive_shared_cap_pixels_with_separate_reference_origins",
-    "gap_prediction": "observed_step_chain_or_repeated_compatible_positions",
+    "gap_prediction": "observed_step_chain_or_capture_phase_bounded_native_history",
     "maximum_capture_interval_seconds": 0.05,
     "compressed_capture_step": "unique_cross_lane_translation_with_explicit_cadence_warning",
     "ambiguous_capture_translation": "all_supported_translations_participate_in_identity_edges",
@@ -221,6 +221,11 @@
     "maximum_capture_gap_seconds": 0.05,
     "maximum_speed_spacing_per_second": 30,
     "maximum_extrapolation_seconds": 0.25,
-    "detector_gaps": "retain_same_identity_positions_across_continuous_source_frames_when_final_block_is_short"
+    "detector_gaps": "retain_same_identity_positions_across_continuous_source_frames_when_final_block_is_short",
+    "shared_phase_support": {
+      "method": "source_bound_offset_intersection",
+      "minimum_frames": 2,
+      "maximum_position_error_multiplier": 2
+    }
   }
 }
