@@ -20,12 +20,13 @@ def edge_flash_frame(radius=6):
     return color,light,reference,center+.2,radius,radius/.45
 
 
-def fixture(root,animated=False,hud=True,hold=False,hidden_frames=(),flash_frames=()):
+def fixture(root,animated=False,hud=True,hold=False,hidden_frames=(),flash_frames=(),hud_pixels=True,judgment_roi=None):
     source=root/'source.mkv';source.write_bytes(b'unchanged recording')
     layout={'lanes':[{'x':.2+.1*i,'color':'blue'}for i in range(5)],'receptor_y':.142,
             'note_y_max':.95,'combo_roi':[.34,.52,.12,.075],'judgment_roi':[.34,.32,.12,.19]}
     if not hud:
         layout.pop('combo_roi');layout.pop('judgment_roi')
+    elif judgment_roi is not None:layout['judgment_roi']=judgment_roi
     data={'layout':layout,'media':{'path':str(source)},'game_roi':[0,0,325,200],
           'analysis_width':325,'analysis_height':200,'start_seconds':0,'end_seconds':1.4,
           'notes':[{'lane':2,'status':'estimated','target_seconds':1.,'prediction_uncertainty_seconds':.01,
@@ -54,7 +55,7 @@ def fixture(root,animated=False,hud=True,hold=False,hidden_frames=(),flash_frame
                 if cap_y>28.4+32.5*.85 and i not in hidden_frames:
                     note['points'].append([t,cap_y])
         if i in flash_frames:image[0:100,110:151]=255
-        if hud:image[74:86,116:145]=255  # Known judgment foreground in the old learning band.
+        if hud and hud_pixels:image[74:86,116:145]=255  # Known judgment foreground in the old learning band.
         decoded.append((42+t,t,image))
     pixels=ReceptorPixels(layout,325,200)
     for pts,time,planes,_ in native_measurements(data,root,lambda *args:iter(decoded)):

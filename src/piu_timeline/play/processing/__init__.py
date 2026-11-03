@@ -10,7 +10,7 @@ from piu_timeline.play.processing.poses import overlap,compare
 
 PIXEL_FORMAT = {'schema': 1, 'width': 325, 'measurement': 'lane_color_white_and_visibility_masks',
                 'receptor_band_spacing': [-1.6, 3.6]}
-PROCESSING_FORMAT = {'schema': 1, 'revision': 9,'cap_coverage':CONTRACTS['cap_coverage'],'partial_confirmation_minimum_coverage':.8,
+PROCESSING_FORMAT = {'schema': 1, 'revision': 10,'cap_coverage':CONTRACTS['cap_coverage'],'partial_confirmation_minimum_coverage':.8,
                      'templates':TEMPLATE_FORMAT}
 
 
@@ -183,9 +183,9 @@ def observe_processing(data, path):
             reason=None
             if observation['unknown_reason']=='image_boundary':pass
             elif competing:reason='competing_head'
-            elif hidden:
+            elif hidden and observation['state']=='absent':
                 reason = 'hud_occlusion'
-            elif visibility.mean()<=.015:
+            elif observation['state']!='present'and visibility.mean()<=.015:
                 reason = 'screen_not_visible'
             if reason:observation.update(state='unknown',score=None,unknown_reason=reason)
             cap=observation.pop('positive_cap_support',None)

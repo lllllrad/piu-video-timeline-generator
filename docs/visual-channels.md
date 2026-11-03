@@ -96,13 +96,13 @@ frame. Dice overlap of at least 0.65 with one qualified shape supports presence;
 clear absence requires at most 0.18 with every qualified shape, including the
 majority silhouette. Bloom near any shape retains uncertainty. A cropped frame
 cannot establish absence if any shape lacks the required visible area or
-foreground coverage. Intermediate matches, white effects, HUD overlap, clipping, missing
-screen visibility and competing same-lane heads remain unknown. These are
-implementation thresholds, not measured engine judgment windows.
-HUD checks intersect the actual template window, including its edges; samples
-retain the named `occluders`. A known HUD-covered detection gap is separately
-accounted in continuity diagnostics and does not create a missing-head warning.
-An unobserved processing transition after leaving the HUD can still be unresolved.
+foreground coverage. Intermediate matches, effects, clipping, missing visibility and
+competing heads retain uncertainty. Positive presence survives potential HUD overlap
+and low global visibility; named `occluders` and measured effect/shape reasons remain.
+Potentially hidden absence stays unknown. Thresholds describe image comparisons.
+HUD checks cover the full template window. Known HUD-covered gaps are accounted
+in continuity without missing-head warnings; a transition after leaving that area
+may still be unresolved.
 
 A processing candidate requires at least three presence samples followed by
 two clear absence samples near the receptor. A short white-effect or partial

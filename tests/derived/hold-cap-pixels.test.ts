@@ -11,15 +11,21 @@ from tests.play.processing.fixtures import fixture
 from piu_timeline.play.processing import observe_processing
 with tempfile.TemporaryDirectory()as tmp:
  root=Path(tmp);case=sys.argv[1]
- data,times,pts=fixture(root,hud=False,hold=True,hidden_frames=(57,)if case=='missing_cap'else (),flash_frames=(57,)if case=='white_flash'else ())
+ data,times,pts=fixture(root,hud=case=='potential_popup',hud_pixels=False,
+  judgment_roi=[.34,.08,.12,.22]if case=='potential_popup'else None,
+  hold=True,hidden_frames=(57,)if case=='missing_cap'else (),flash_frames=(57,)if case=='white_flash'else ())
  before=deepcopy(data);out=observe_processing(data,root/'processing-features.npz');assert data==before
  n=out['notes'][0]
  assert n['status']=='hold_component' and n['reason']=='use_sustained_body_state'
  assert n['samples'] and n['cap_coverage']
- assert n['cap_observation']['status']=='disappeared_near_receptor'
+ if case=='potential_popup':
+  assert n['cap_observation']['status']=='unresolved', 'potential occlusion still cannot prove absence'
+  assert any(s.get('occluders')and s['state']=='present'for s in n['samples']), 'positive pixels survive a potential popup region'
+  assert any(s.get('unknown_reason')=='hud_occlusion'for s in n['samples'])
+ else:assert n['cap_observation']['status']=='disappeared_near_receptor'
  assert all(p['playback_seconds']<1 for p in n['cap_coverage'])
  assert not any(s['state']=='present'for s in n['samples']if s['time']>=1), 'body alone cannot prove cap presence'
- if case!='clear':assert not any(p['playback_seconds']==57/60 for p in n['cap_coverage'])
+ if case in ('missing_cap','white_flash'):assert not any(p['playback_seconds']==57/60 for p in n['cap_coverage'])
  if case=='white_flash':assert any(s['time']==57/60 and s['state']=='unknown'and s['unknown_reason']=='white_effect'for s in n['samples'])
  assert len(out['notes'])==2 and all(p['status']=='hold_component'for p in out['notes'])
  for p in n['cap_coverage']:
@@ -30,7 +36,7 @@ with tempfile.TemporaryDirectory()as tmp:
  assert (root/'source.mkv').read_bytes()==b'unchanged recording'
  print(json.dumps({'data':data,'processing':out,'timeline':list(zip(times,pts))}))
 `;
-for(const scenario of ['clear','missing_cap','white_flash'])test(`native hold pixels retain cap evidence without body or flash false positives: ${scenario}`,()=>{
+for(const scenario of ['clear','missing_cap','white_flash','potential_popup'])test(`native hold pixels retain cap evidence without body or flash false positives: ${scenario}`,()=>{
  const out=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script,scenario],{encoding:'utf8'}));
  const {data,processing}=out,n=processing.notes[0];
  assert.ok(n.cap_coverage.length>=3);assert.ok(n.samples.length>n.cap_coverage.length);
@@ -43,6 +49,7 @@ for(const scenario of ['clear','missing_cap','white_flash'])test(`native hold pi
   image_evidence:[{time,source_pts:42+time,missing_intervals_pixels:[[45,50]]}]}];
  data.visual_channels={timeline:{frames:out.timeline},processing};
  const result=accountCapCoverage(data);
- assert.equal(result.hold_analysis.unresolved_tracks.length,scenario==='clear'?0:1);
- if(scenario!=='clear')assert.deepEqual(result.hold_analysis.unresolved_tracks,data.hold_analysis.unresolved_tracks);
+ const positive=['clear','potential_popup'].includes(scenario);
+ assert.equal(result.hold_analysis.unresolved_tracks.length,positive?0:1);
+ if(!positive)assert.deepEqual(result.hold_analysis.unresolved_tracks,data.hold_analysis.unresolved_tracks);
 });
