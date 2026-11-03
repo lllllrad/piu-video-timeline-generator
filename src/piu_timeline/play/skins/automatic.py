@@ -12,7 +12,8 @@ from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.detector import SkinDetector,FORMAT as DETECTOR
 from piu_timeline.play.skins.repository import repository_root,bank_path,validate_bank
 
-FORMAT={'schema':1,'method':'independent_native_skin_samples','windows':[.08,.22,.38,.54,.7,.86],'frame_gap_seconds':.08}
+FORMAT={'schema':1,'method':'independent_native_skin_samples','windows':[.08,.22,.38,.54,.7,.86],'frame_gap_seconds':.08,
+        'refinement_windows':[.15,.30,.46,.62,.78,.94]}
 
 
 def candidates(repository=None):
@@ -59,9 +60,14 @@ def load_saved(directory,number,document,options,banks):
     path=cache_path(directory,number)
     if not path.is_file():return None
     saved=json.loads(path.read_text())
-    if saved.get('contract')!=contract(document,number,options,banks):return None
+    expected=contract(document,number,options,banks)
+    # Sampling plans describe acquisition; the decision depends on the actual
+    # retained image observations and their source/detector/policy/bank binding.
+    if ({k:v for k,v in saved.get('contract',{}).items()if k!='format'}
+            !={k:v for k,v in expected.items()if k!='format'}):return None
     if saved.get('decision')!=call('skinSelection.choose',saved['candidates']):
         raise ValueError('Automatic skin decision differs from its retained image evidence')
+    if saved['decision']['status']!='selected'and saved['contract'].get('format')!=FORMAT:return None
     return saved
 
 
@@ -80,6 +86,22 @@ def signature(directory,number):
             'candidates':candidates(),'evidence_sha256':sha256(path.read_bytes()).hexdigest()if path.is_file()else None}
 
 
+def sample_pixels(directory,number,source,explicit):
+    from piu_timeline.play.observations.bundle import read_manifest
+    path=Path(explicit)if explicit is not None else Path(directory)/'observations'/f'segment-{number:03}'
+    pixels=read_manifest(path)
+    if pixels is None:
+        if explicit is not None:raise ValueError('Skin sample pixels are unavailable')
+        return None,None
+    bound=pixels['contract']['source']
+    matches=(all(bound[k]==source[k]for k in ('media','layout','game_roi','start_seconds','end_seconds'))
+             and bound['width']==source['analysis_width'])
+    if not matches:
+        if explicit is not None:raise ValueError('Skin sample pixels differ from source/window/geometry')
+        return None,None
+    return path,pixels
+
+
 def prepare(directory,number,document,options,retry=False,*,pixel_directory=None):
     banks=candidates()
     if not any(b['eligible']for b in banks):
@@ -94,30 +116,31 @@ def prepare(directory,number,document,options,retry=False,*,pixel_directory=None
             detectors=[(b,SkinDetector(load_bank(b['path']),source['layout'],width,height))for b in banks if b['eligible']]
             measured=[{**b,'observations':[]}for b,_ in detectors];samples=[];seen=set()
             print('Identifying note skin from independent native image samples...',flush=True)
-            for window,fraction in enumerate(FORMAT['windows']):
-                start=source['start_seconds']+(source['end_seconds']-source['start_seconds'])*fraction
-                end=min(source['end_seconds'],start+.14);last=None
-                if pixel_directory is not None:
-                    from piu_timeline.play.observations.bundle import read_manifest,game_frames
-                    pixels=read_manifest(Path(pixel_directory));bound=pixels['contract']['source']
-                    if any(bound[k]!=source[k]for k in ('media','layout','game_roi','start_seconds','end_seconds'))or bound['width']!=width:
-                        raise ValueError('Skin sample pixels differ from source/window/geometry')
-                    sampled=game_frames(Path(pixel_directory),pixels,start,end)
-                else:
-                    sampled=decode_frames(source['media'],start,end,source['game_roi'],width)
-                with closing(sampled)as frames:
-                    for pts,time,rgb in frames:
-                        if last is not None and time-last<FORMAT['frame_gap_seconds']-1e-6:continue
-                        digest=sha256(rgb.tobytes()).hexdigest()
-                        if digest in seen:continue
-                        seen.add(digest);last=time
-                        samples.append({'window':window,'source_pts_seconds':pts,'playback_seconds':time,'rgb_sha256':digest})
-                        for record,(_,detector)in zip(measured,detectors,strict=True):
-                            record['observations'].extend({**o,'window':window,'source_pts_seconds':pts,'playback_seconds':time}
-                                                          for o in detector.detect(rgb)if o['template_role']!='hold_body')
+            pixel_directory,pixels=sample_pixels(directory,number,source,pixel_directory)
+            decision=None
+            for offset,fractions in [(0,FORMAT['windows']),(len(FORMAT['windows']),FORMAT['refinement_windows'])]:
+                if decision is not None and decision.get('reason')!='insufficient_skin_image_support':break
+                for window,fraction in enumerate(fractions,offset):
+                    start=source['start_seconds']+(source['end_seconds']-source['start_seconds'])*fraction
+                    end=min(source['end_seconds'],start+.14);last=None
+                    if pixel_directory is not None:
+                        from piu_timeline.play.observations.bundle import game_frames
+                        sampled=game_frames(pixel_directory,pixels,start,end)
+                    else:
+                        sampled=decode_frames(source['media'],start,end,source['game_roi'],width)
+                    with closing(sampled)as frames:
+                        for pts,time,rgb in frames:
+                            if last is not None and time-last<FORMAT['frame_gap_seconds']-1e-6:continue
+                            digest=sha256(rgb.tobytes()).hexdigest()
+                            if digest in seen:continue
+                            seen.add(digest);last=time
+                            samples.append({'window':window,'source_pts_seconds':pts,'playback_seconds':time,'rgb_sha256':digest})
+                            for record,(_,detector)in zip(measured,detectors,strict=True):
+                                record['observations'].extend({**o,'window':window,'source_pts_seconds':pts,'playback_seconds':time}
+                                                              for o in detector.detect(rgb)if o['template_role']!='hold_body')
+                decision=call('skinSelection.choose',measured)
             if context(document,number,options)!=source or candidates()!=banks:
                 raise ValueError('Automatic skin source or reference images changed during sampling')
-            decision=call('skinSelection.choose',measured)
             saved={'contract':binding,'samples':samples,'candidates':measured,'decision':decision}
             from piu_timeline.charts.official import write_json
             write_json(path,saved)

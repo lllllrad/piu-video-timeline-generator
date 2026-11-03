@@ -44,6 +44,44 @@ with tempfile.TemporaryDirectory()as temporary:
   evidence=json.loads(cache_path(source,1).read_text());first_calls=len(calls)
   with patch('piu_timeline.play.skins.automatic.decode_frames',side_effect=AssertionError('cached selection must not decode')):
    reused=prepare(source,1,document,options)==chosen and retained(source,1,options)==chosen
+  original_evidence=cache_path(source,1).read_text()
+  changed_plan={**automatic.FORMAT,'refinement_windows':[.17,.34]}
+  with patch.dict(automatic.FORMAT,changed_plan),patch.object(automatic,'decode_frames',side_effect=AssertionError('successful proof survives a sampling-plan extension')):
+   plan_reused=prepare(source,1,document,options)==chosen
+  class SparseDetector:
+   def __init__(self,bank,*args):self.skin=bank['skin'];self.count=0
+   def detect(self,rgb):
+    index=self.count;self.count+=1
+    if self.skin!='generated-a'or index==11:return []
+    return [{'lane':index%3,'y':.7,'quality':1.,'template_role':'tap','method':'skin_image','classification_status':'cap_only'}]
+  calls.clear()
+  with patch.object(automatic,'SkinDetector',SparseDetector),patch.object(automatic,'decode_frames',side_effect=decode):
+   sparse=prepare(source,1,document,options,retry=True)
+  sparse_evidence=json.loads(cache_path(source,1).read_text());sparse_calls=len(calls)
+  sparse_refined=sparse==chosen and any(x['window']>=6 for x in sparse_evidence['samples'])
+  sparse_caps=sparse_evidence['decision']['evidence'][0]['caps']
+  bound=automatic.context(document,1,options);pixels={'contract':{'source':{**bound,'width':options['width']}}}
+  calls.clear()
+  def stored_frames(path,manifest,start,end):yield from decode(document['media'],start,end,document['game_roi'],options['width'])
+  with patch.object(automatic,'SkinDetector',SparseDetector),patch.object(automatic,'decode_frames',side_effect=AssertionError('available source RGB must be reused')),patch('piu_timeline.play.observations.bundle.read_manifest',return_value=pixels),patch('piu_timeline.play.observations.bundle.game_frames',side_effect=stored_frames):
+   pixels_reused=prepare(source,1,document,options,retry=True)==chosen
+  before_mismatch=cache_path(source,1).read_text()
+  wrong={'contract':{'source':{**pixels['contract']['source'],'width':201}}}
+  with patch('piu_timeline.play.observations.bundle.read_manifest',return_value=wrong),patch.object(automatic,'decode_frames',side_effect=AssertionError('explicit mismatched RGB must fail')):
+   try:prepare(source,1,document,options,retry=True,pixel_directory=root/'wrong');pixel_mismatch=False
+   except ValueError:pixel_mismatch=cache_path(source,1).read_text()==before_mismatch
+  class EmptyDetector(SparseDetector):
+   def detect(self,rgb):return []
+  calls.clear()
+  with patch.object(automatic,'SkinDetector',EmptyDetector),patch.object(automatic,'decode_frames',side_effect=decode):
+   try:prepare(source,1,document,options,retry=True)
+   except ValueError as error:assert 'insufficient_skin_image_support'in str(error)
+   calls.clear()
+   with patch.dict(automatic.FORMAT,{**automatic.FORMAT,'refinement_windows':automatic.FORMAT['refinement_windows']+[.97]}):
+    try:prepare(source,1,document,options)
+    except ValueError as error:assert 'insufficient_skin_image_support'in str(error)
+   failed_plan_calls=len(calls);failed_plan_retried=failed_plan_calls==13
+  cache_path(source,1).write_text(original_evidence)
   before_signature=automatic.signature(source,1);native_call=automatic.call
   def altered_policy(operation,*args):
    value=native_call(operation,*args)
@@ -86,6 +124,8 @@ with tempfile.TemporaryDirectory()as temporary:
    try:prepare(source,1,document,options);failed_reused=False
    except ValueError:failed_reused=True
   print(json.dumps({'chosen':Path(chosen).parent.parent.name,'decision':evidence['decision'],'samples':len(evidence['samples']),
+   'failed_plan_calls':failed_plan_calls,'pixels_reused':pixels_reused,'pixel_mismatch':pixel_mismatch,'failed_plan_retried':failed_plan_retried,
+   'plan_reused':plan_reused,'sparse_refined':sparse_refined,'sparse_caps':sparse_caps,'sparse_calls':sparse_calls,
    'policy_invalid':policy_invalid,'tamper_rejected':tamper_rejected,'media_invalid':media_invalid,
    'calls':first_calls,'reused':reused,'window_invalid':window_invalid,'width_invalid':width_invalid,
    'workflow_automatic':workflow_automatic,'explicit_first':explicit_first,'registry_invalid':registry_invalid,
@@ -104,4 +144,13 @@ test('the public play command uses automatic selection while explicit selection 
 });
 test('ambiguous banks fail explicitly and unchanged failed evidence does not decode repeatedly',()=>{
  assert.equal(r.ambiguous,true);assert.equal(r.failed_reused,true);
+});
+
+test('insufficient samples collect independent additional windows while retaining the same evidence threshold',()=>{
+ assert.equal(r.sparse_refined,true);assert.equal(r.sparse_calls,12);assert.ok(r.sparse_caps>=12);
+ assert.equal(r.plan_reused,true);
+});
+
+test('refinement reuses bound RGB, rejects wrong geometry, and retries failed proofs after a sampling-plan extension',()=>{
+ assert.equal(r.pixels_reused,true);assert.equal(r.pixel_mismatch,true);assert.equal(r.failed_plan_retried,true,JSON.stringify({calls:r.failed_plan_calls}));
 });

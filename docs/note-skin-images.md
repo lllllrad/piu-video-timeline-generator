@@ -484,3 +484,16 @@ references without cap features keep their existing acquisition identity and rul
 
 Use [reference-anchor review](note-skin-anchor-review.md) to compare same-cap
 witnesses and align shared source-image landmarks before activating a candidate.
+
+
+Automatic selection first checks six independent playback windows. If the
+observations remain insufficient, it checks six additional windows with the
+same source, image banks, detector and evidence threshold. All candidates are
+compared in each additional window; competing supported banks remain ambiguous.
+Compatible retained full-game RGB supplies these samples before source decoding
+is considered. Explicit RGB with mismatched source or geometry fails.
+
+A selected bank remains reusable when only the sampling plan is extended:
+selection is bound to the observed pixels, source, detector, policy and bank
+identities. An unresolved result retries after a sampling-plan change. Stored
+sample times, PTS and hashes preserve the acquisition provenance in either case.
