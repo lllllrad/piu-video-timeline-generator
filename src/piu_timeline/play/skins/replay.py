@@ -50,6 +50,7 @@ def selected_profile(directory,segment):
 
 
 def selected_bank(directory, segment, explicit=None):
+    """Read manual configuration; automatic acquisition is prepared separately."""
     if explicit is not None:return str(Path(explicit).resolve())
     profile=selected_profile(directory,segment)
     if profile and isinstance(profile['bank'],dict):
@@ -64,7 +65,10 @@ def configuration_signature(directory,segment):
     try:
         profile=selected_profile(directory,segment)
         bank=selected_bank(directory,segment)
-        return {'profile':profile,'bank_path':bank,'detector':detector_contract(bank)}
+        from piu_timeline.play.skins.automatic import signature,retained
+        bank=bank or retained(directory,segment)
+        return {'profile':profile,'bank_path':bank,'detector':detector_contract(bank),
+                **({'automatic':signature(directory,segment)}if profile is None else{})}
     except (OSError,ValueError,KeyError)as error:
         try:digest=sha256(path.read_bytes()).hexdigest()
         except OSError:digest=None
@@ -74,6 +78,9 @@ def configuration_signature(directory,segment):
 def configuration_current(data,directory,segment):
     """Check persisted selection independently of acquired frame observations."""
     bank=selected_bank(directory,segment)
+    if bank is None:
+        from piu_timeline.play.skins.automatic import retained
+        bank=retained(directory,segment,{'width':data.get('analysis_width',650),'layout':data.get('layout')})
     if bank is None:return False
     if data.get('skin_detector',{}).get('contract')!=detector_contract(bank):return False
     if bank is not None and data['skin_detector'].get('bank_path')!=bank:return False

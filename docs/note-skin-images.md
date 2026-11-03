@@ -8,10 +8,35 @@ image, rather than an optional association inferred from a distant note.
 
 The image detector scans each lane directly. It does not need an outline
 candidate, a lane-color threshold, a successful judgment association or an
-existing UCS row to propose a location. Every play requires an explicitly selected
-image bank. Missing selection fails before frame decoding or OCR; missing image
-matches remain missing observations. Native note replay accepts image-template
-observations only.
+existing UCS row to propose a location. Every play uses one identified image
+bank. Explicit profiles and `--note-skin` override automatic identification.
+Unknown or ambiguous skins fail explicitly; unmatched images remain missing
+observations. Native note replay accepts image-template observations only.
+
+## Automatic identification
+
+`skins/automatic.json` in the separate data repository lists active candidates
+as `{"schema":1,"candidates":[{"skin":"NAME","revision":"REVISION"}]}`.
+Only these exact, content-validated banks are compared; unsupported revisions
+are excluded. Historical experimental revisions remain outside the candidate set
+unless explicitly registered. `just skins validate` validates this registry too.
+
+Six windows distributed across a segment supply pairs of original native frames.
+Repeated identical RGB frames count once. A candidate needs at least 12 strong
+cap matches across four frames, three windows and three lane directions. Exactly
+one candidate must qualify, including when revisions belong to the same skin.
+Cap-only matches identify appearance while keeping tap/hold roles unresolved.
+Mixed or unsupported skins may remain unresolved rather than selecting a winner.
+
+Selection policy and decision checks run in TypeScript; Python reads RGB and
+runs native image comparisons. `play/skin-selections/segment-NNN.json` retains
+source PTS, RGB hashes, candidate matches and the decision. Cache validity binds
+original media identity, segment range, crop, layout, analysis width, active
+reference content, detector rules and selection policy. Unchanged successful or
+failed evidence is reused without decoding. `--force` retries selection. Manual
+profiles remain authoritative and are never overwritten by automatic choices.
+After identification, acquisition compares only the selected bank. Skin identity
+alone does not establish note roles, calibrated timing or reviewed UCS geometry.
 
 ## References and measurements
 

@@ -4,6 +4,7 @@ import {StringDecoder} from 'node:string_decoder';
 import * as coordinateMeasurements from './coordinates/measurements.ts';
 import * as skinCenters from './skins/centers.ts';
 import * as skinAnchors from './skins/anchors.ts';
+import * as skinSelection from './skins/selection.ts';
 import * as coordinates from './beats/coordinates.ts';
 import * as chords from './beats/chords.ts';
 import * as domains from './beats/domains.ts';
@@ -54,7 +55,7 @@ import * as holdRisk from './holds/risk.ts';
 import {parseData, stringifyData} from './json.ts';
 
 const operations = {
-  coordinateMeasurements, skinAnchors, skinCenters, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription, retention,
+  coordinateMeasurements, skinAnchors, skinCenters, skinSelection, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription, retention,
   registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, localized,
   holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
   holdState, holdExtent, holdGeometry, holdRisk, stageCoordinates, nativeTiming, stageAssociations, beats: {...beats,fitGrid},

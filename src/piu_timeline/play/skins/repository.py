@@ -159,4 +159,6 @@ def validate(repository=None):
                 raise ValueError(f'Invalid or overlapping skin segments: {path}')
             seen.update(segments)
             resolve(profile['bank'], repository)
+    from piu_timeline.play.skins.automatic import candidates
+    candidates(repository)
     return {'banks': len(banks), 'sources': len(profiles)}

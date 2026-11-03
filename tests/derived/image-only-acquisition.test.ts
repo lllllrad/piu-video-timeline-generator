@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory()as temporary:
  (metadata/'analysis.json').write_text(json.dumps({'media':media,'segments':[{'start_seconds':1,'end_seconds':2}]}))
  final=directory/'play/segment-001';final.mkdir(parents=True)
  (final/'report.html').write_text('previous report');(final/'frames.jsonl').write_text('previous evidence')
- with patch.object(analysis,'LOCAL_DATA',root/'data'),patch.object(analysis,'source_id',return_value='example'),patch('piu_timeline.play.skins.replay.selected_bank',return_value=None),patch.object(analysis,'decode_frames',side_effect=AssertionError('no decoding')):
+ with patch('piu_timeline.charts.data.default_repository',return_value=root/'empty'),patch.object(analysis,'LOCAL_DATA',root/'data'),patch.object(analysis,'source_id',return_value='example'),patch('piu_timeline.play.skins.replay.selected_bank',return_value=None),patch.object(analysis,'decode_frames',side_effect=AssertionError('no decoding')):
   missing=rejected(lambda:analysis.run('example'))
   fresh=rejected(lambda:analysis.analyze_play({}, {},root/'build'))
  intact=(final/'report.html').read_text()=='previous report'and(final/'frames.jsonl').read_text()=='previous evidence'and not(root/'build').exists()

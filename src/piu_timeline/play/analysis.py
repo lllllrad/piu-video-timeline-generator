@@ -375,7 +375,8 @@ def run(source, segment_number=1, force=False, **options):
     from piu_timeline.play.skins.replay import selected_bank, detector_contract
     note_skin = selected_bank(directory, segment_number, options.get('note_skin'))
     if note_skin is None:
-        raise ValueError('Image note-skin bank required; select one with just skins select or --note-skin')
+        from piu_timeline.play.skins.automatic import prepare
+        note_skin=prepare(directory,segment_number,document,options,retry=force)
     options['note_skin'] = note_skin
     skin_contract = detector_contract(note_skin)
     root = directory / 'play'; root.mkdir(exist_ok=True)
