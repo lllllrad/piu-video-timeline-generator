@@ -1,0 +1,16 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 6cd65be11329a6332692599dc00e052cb210c9c2..8d9035895e0e6895a4bcb98f62eb477af35cbc13 100755
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -19,6 +19,11 @@ const alternateRootConfigNames = ["qg.config.yaml", "qg.config.yml"];
+ const ignoredDirectories = /* @__PURE__ */ new Set([
+ 	".git",
+ 	".qg",
++	".local",
++	".venv",
++	".codex",
++	"build",
++	"__pycache__",
+ 	"dist",
+ 	"node_modules"
+ ]);

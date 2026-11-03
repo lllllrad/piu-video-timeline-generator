@@ -4,13 +4,16 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@slop-lab/qg@0.1.0': 289127616841eb73337a9447751c013bb77981e454008fa121d220194fcda1f6
+
 importers:
 
   .:
     devDependencies:
       '@slop-lab/qg':
         specifier: 0.1.0
-        version: 0.1.0
+        version: 0.1.0(patch_hash=289127616841eb73337a9447751c013bb77981e454008fa121d220194fcda1f6)
       '@slop-lab/qg-rules-js':
         specifier: 0.1.0
         version: 0.1.0
@@ -337,7 +340,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@slop-lab/qg@0.1.0':
+  '@slop-lab/qg@0.1.0(patch_hash=289127616841eb73337a9447751c013bb77981e454008fa121d220194fcda1f6)':
     dependencies:
       '@slop-lab/qg-check-runner': 0.1.0
       '@slop-lab/qg-core': 0.1.0

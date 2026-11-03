@@ -1,3 +1,5 @@
 packages:
   - .
+patchedDependencies:
+  '@slop-lab/qg@0.1.0': patches/@slop-lab__qg@0.1.0.patch
 storeDir: .local/cache/pnpm
