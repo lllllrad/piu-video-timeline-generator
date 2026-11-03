@@ -6,6 +6,19 @@ from urllib.parse import quote
 from uuid import uuid4
 
 
+def write_summary(data,directory):
+    """Publish index fields from the prepared view, without running inference."""
+    summary={key:data.get(key)for key in ('coverage','combo_readable_fraction','play_analysis_version')}
+    path=directory/'report-summary.json'
+    pending=path.with_name(f'.report-summary.{uuid4().hex}.tmp')
+    try:
+        pending.write_text(json.dumps(summary,ensure_ascii=False)+'\n',encoding='utf-8')
+        pending.replace(path)
+    finally:
+        pending.unlink(missing_ok=True)
+    return summary
+
+
 def write_report(data,path,final_directory=None):
     """Render prepared view data only; never inspect observations or infer timing."""
     from piu_timeline.derived import call
@@ -17,6 +30,7 @@ def write_report(data,path,final_directory=None):
     try:
         pending.write_text(content,encoding='utf-8')
         pending.replace(path)
+        write_summary(data,path.parent)
     finally:
         pending.unlink(missing_ok=True)
     return path
@@ -28,8 +42,16 @@ def write_index(document,root):
     entries=[]
     for number,segment in enumerate(document['segments'],1):
         summary=root/f'segment-{number:03}'/'report-summary.json'
-        try:saved=json.loads(summary.read_text())
-        except FileNotFoundError:saved=None  # A parallel producer may be promoting this directory.
+        prepared=summary.with_name('report-data.json')
+        try:
+            saved=json.loads(summary.read_text())
+            if prepared.is_file() and prepared.stat().st_mtime_ns>summary.stat().st_mtime_ns:
+                saved=write_summary(json.loads(prepared.read_text()),summary.parent)
+        except FileNotFoundError:
+            # Existing prepared reports can repair a missing summary offline.
+            try:
+                saved=write_summary(json.loads(prepared.read_text()),summary.parent)if summary.with_name('report.html').is_file()else None
+            except FileNotFoundError:saved=None  # A producer may be promoting this directory.
         entries.append({'number':number,'song':segment.get('song'),'chart':segment.get('chart'),
                         'summary':saved})
     path=root/'index.html'

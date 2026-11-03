@@ -4,6 +4,11 @@ Open `.local/data/SOURCE_ID/play/segment-001/report.html` locally for the **Play
 inspector**. This stable filename is retained for existing links. The standalone page
 embeds its data and uses no external scripts, fonts or services.
 
+The source overview at `play/index.html` reads `report-summary.json`, published
+with each report from its prepared view. Rebuilding an index repairs missing or
+older summaries from saved `report-data.json` without decoding or inference.
+Links open saved reports, including reports with unresolved warnings.
+
 The recording and selected note/track stay shared while switching between tabs:
 
 | Tab | Evidence and navigation |
