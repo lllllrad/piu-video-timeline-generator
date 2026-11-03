@@ -101,6 +101,7 @@ segment lock:
 | Path | Entry point and work |
 | --- | --- |
 | Compatible saved result | `refresh_saved_play` reuses trajectories and refreshes compatible judgment/hold evidence and the inspector. |
+| Saved registered coordinates, changed native clock | `play/coordinate_replay.py` checks source, metadata and every observation producer, then refits retained coordinate measurements; no frame replay, decoding or OCR. |
 | Saved coordinates, outdated beats | `refresh_saved_play` first rebuilds physical/beat timing and associations from `coordinates.json`, without replaying frames. |
 | Saved native observations | `refit_saved` rebuilds tracks and clocks from retained frame records in a pending directory. Detector changes may require native pixels. |
 | Fresh acquisition | `analyze_play` reads the recording and retains frame/pixel observations in a pending directory. |

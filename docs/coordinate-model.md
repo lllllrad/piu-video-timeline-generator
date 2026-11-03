@@ -109,7 +109,9 @@ A short final observation block may lack enough support for a common affine
 clock. `derived/native_clock.ts` then retains all positive constant-speed models
 consistent with the same cap's measured centers, reference errors and original
 capture intervals. Repeated image positions widen the capture interval. Missing
-detector observations do not create missing source frames. Reverse or curved
+detector observations do not create missing source frames. If the final detector
+block is too short, earlier positions of the same identity can contribute while
+the original source timeline remains continuous. Reverse or curved
 motion, contradictory native steps, source gaps and extrapolation beyond the
 bounded recording support fail explicitly.
 

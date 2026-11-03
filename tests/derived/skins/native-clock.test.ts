@@ -83,3 +83,14 @@ test('processing consumes the native position domain without moving it to a beat
  assert.ok(Math.abs(path.target-.93)<.05);assert.deepEqual(note,before);
  note.timing_reconstruction.status='failed';assert.equal(processingPaths([note],data,receptor,40,1)[0].supported,false);
 });
+
+test('a long detector gap retains earlier same-identity positions when the source cadence is complete',()=>{
+ const {data,track,state,receptor}=scene();
+ const before=structuredClone(track.points);track.points=track.points.filter(([t],i)=>i<3||i>=before.length-2);
+ assert.ok(track.points[3][0]-track.points[2][0]>.05);
+ const r=fit(state,track,receptor,data.layout);assert.ok(r);
+ assert.equal(r.native_interval_model.observations.length,track.points.length);
+ assert.ok(r.native_interval_model.target_range_seconds[0]<=.93&&r.native_interval_model.target_range_seconds[1]>=.93);
+ const a=track.points[2][0],b=track.points[3][0];state.samples=state.samples.filter(s=>s.time<=a||s.time>=b);
+ assert.equal(fit(state,track,receptor,data.layout),null);
+});

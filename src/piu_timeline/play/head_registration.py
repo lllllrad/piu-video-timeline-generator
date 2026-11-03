@@ -130,16 +130,7 @@ def apply(data,directory,display_delay_ms=0):
         with (directory/'frames.jsonl').open()as stream:
             registration=measure_images(data,(json.loads(line)for line in stream))
         (directory/'head-registration.json').write_text(json.dumps(registration)+'\n')
-        measured={}
-        for r in registration['notes']:
-            observations=[{**o,'offset_pixels':o['native_y_pixels']-o['detected_y_pixels']}
-                          for o in r['observations']if 'native_cap_projection_uncertainty_pixels'in o]
-            if observations:
-                measured[r['note']]={**r,'status':'measured_only','offset_pixels':0,
-                    'coordinate_uncertainty_pixels':max(o.get('native_cap_coordinate_uncertainty_pixels',
-                                                              o['native_cap_projection_uncertainty_pixels'])for o in observations),
-                    'observations':observations}
-        return refit_coordinates(data,registration,measured,display_delay_ms)
+        return refit_registered({**data,'head_registration':registration},display_delay_ms)
     from piu_timeline.play.appearance import acquire
     if not data.get('media',{}).get('video_streams'):
         return {**data,'head_registration':{'format':FORMAT,'notes':[],'status':'unavailable'}}
@@ -149,6 +140,19 @@ def apply(data,directory,display_delay_ms=0):
     registration=measure(data,path)
     (directory/'head-registration.json').write_text(json.dumps(registration)+'\n')
     measured={r['note']:r for r in registration['notes']}
+    return refit_coordinates(data,registration,measured,display_delay_ms)
+
+
+def refit_registered(data,display_delay_ms=0):
+    registration=data['head_registration'];measured={}
+    for r in registration['notes']:
+        observations=[{**o,'offset_pixels':o['native_y_pixels']-o['detected_y_pixels']}
+                      for o in r['observations']if 'native_cap_projection_uncertainty_pixels'in o]
+        if observations:
+            measured[r['note']]={**r,'status':'measured_only','offset_pixels':0,
+                'coordinate_uncertainty_pixels':max(o.get('native_cap_coordinate_uncertainty_pixels',
+                                                          o['native_cap_projection_uncertainty_pixels'])for o in observations),
+                'observations':observations}
     return refit_coordinates(data,registration,measured,display_delay_ms)
 
 

@@ -220,6 +220,7 @@
     "minimum_displacement_spacing": 0.8,
     "maximum_capture_gap_seconds": 0.05,
     "maximum_speed_spacing_per_second": 30,
-    "maximum_extrapolation_seconds": 0.25
+    "maximum_extrapolation_seconds": 0.25,
+    "detector_gaps": "retain_same_identity_positions_across_continuous_source_frames_when_final_block_is_short"
   }
 }

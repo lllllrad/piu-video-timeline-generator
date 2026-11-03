@@ -27,9 +27,19 @@ export function fit(state:RecordData,track:RecordData,receptor:number,layout:Rec
  const samples:RecordData[]=state.samples,times=samples.map(s=>s.time),at=new Map<number,RecordData>(samples.map(s=>[s.time,s])),bottom=(layout.note_y_max??.95)*state.height;
  const visible=track.points.filter(([t,y])=>receptor+.85*spacing<y&&y<bottom-.55*spacing);
  let start=0;for(let i=1;i<visible.length;i++)if(visible[i][0]-visible[i-1][0]>F.maximum_capture_gap_seconds+1e-6)start=i;
- const points=visible.slice(start);
- if(points.length<F.minimum_frames||points.at(-1)[0]-points[0][0]<F.minimum_span_seconds||
-  points[0][1]-points.at(-1)[1]<F.minimum_displacement_spacing*spacing)return null;
+ const sufficient=p=>p.length>=F.minimum_frames&&p.at(-1)[0]-p[0][0]>=F.minimum_span_seconds&&
+  p[0][1]-p.at(-1)[1]>=F.minimum_displacement_spacing*spacing;
+ let points=visible.slice(start);
+ if(!sufficient(points)&&visible.length){
+  // Detector visibility and the recording cadence are separate channels.
+  // Earlier observations of this same identity remain usable across a detector
+  // gap when all original source frames still cover it.
+  let boundary=times[0];
+  for(let i=1;i<samples.length&&times[i]<=visible.at(-1)[0];i++)
+   if(times[i]-times[i-1]>F.maximum_capture_gap_seconds+1e-6)boundary=times[i];
+  points=visible.filter(([t])=>t>=boundary);
+ }
+ if(!sufficient(points))return null;
  if(points.some(([t,y])=>!Number.isFinite(t)||!Number.isFinite(y)||!Number.isFinite(at.get(t)?.source_pts)||
   state.coordinate_failures?.[at.get(t)?.chunk]==='joint_coordinates_contradict_forward_motion'))return null;
  const observations=points.map(([time,y])=>{

@@ -38,8 +38,6 @@ TIMING_FORMAT = {'schema':1,'counter_revision':6,'counter_reader':READER_FORMAT,
 FRAME_OBSERVATION_VERSION = 4
 
 
-
-
 def resolve_timing(tracker, combo, display_delay_ms):
     notes = tracker.finish()
     from piu_timeline.play.counter_refinement import refine_events, refinement_constraints
@@ -321,12 +319,13 @@ def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_sk
     return final / 'report.html'
 
 
-def finish_play(result, pending, final, segment_number, display_delay_ms, source_media):
+def finish_play(result, pending, final, segment_number, display_delay_ms, source_media, *, registered_coordinates=False):
     """Run derived stages, prepare/render the inspector, then atomically publish."""
     result['segment_number']=segment_number
-    result=interpret_objects(result,pending,display_delay_ms)
-    from piu_timeline.play.head_registration import apply as register_heads
-    result=register_heads(result,pending,display_delay_ms)
+    if not registered_coordinates:
+        result=interpret_objects(result,pending,display_delay_ms)
+        from piu_timeline.play.head_registration import apply as register_heads
+        result=register_heads(result,pending,display_delay_ms)
     from piu_timeline.play.stages import save_coordinates
     result=save_coordinates(result,pending)
     result=apply_beats(result,pending)
@@ -361,7 +360,6 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
     refresh_registration(result, final)
     print(final / 'report.html')
     return final / 'report.html'
-
 
 
 def run(source, segment_number=1, force=False, **options):
@@ -404,20 +402,23 @@ def run(source, segment_number=1, force=False, **options):
                          and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
                          and all(key in cached for key in ('layout','analysis_height','frame_count'))
                          and (final / 'frames.jsonl').is_file())
-            upstream_current=(same_source and same_settings and cached.get('play_analysis_version') == VERSION
-                    and cached.get('skin_detector',{}).get('contract') == skin_contract
-                    and cached.get('timing_format') == TIMING_FORMAT and objects_current(cached,final))
+            producers_current=(same_source and same_settings and cached.get('play_analysis_version') == VERSION
+                    and cached.get('skin_detector',{}).get('contract') == skin_contract and objects_current(cached,final))
+            upstream_current=producers_current and cached.get('timing_format')==TIMING_FORMAT
+            from piu_timeline.play.coordinate_replay import applicable,refresh,metadata_matches
+            metadata_current=metadata_matches(cached,segments[segment_number-1],
+                    result_reference(segments[segment_number-1],options.get('player')),options.get('display_delay_ms',0))
+            if producers_current and metadata_current and not upstream_current:
+                if applicable(cached,TIMING_FORMAT):
+                    refreshed=refresh(cached,final,segment_number,options.get('display_delay_ms',0),document['media'])
+                    if refreshed is not None:return refreshed
             beat_ready=beat_current(cached,final)if upstream_current else False
             coordinates=None
             if upstream_current and not beat_ready:
                 from piu_timeline.play.stages import load_coordinates
                 coordinates=load_coordinates(cached,final)
             if (upstream_current and (beat_ready or coordinates is not None)
-                    and cached.get('song')==segments[segment_number-1].get('song')
-                    and cached.get('chart')==segments[segment_number-1].get('chart')
-                    and cached.get('chart_identity')==segments[segment_number-1].get('chart_identity')
-                    and cached.get('display_delay_correction_ms',0) == options.get('display_delay_ms',0)
-                    and cached.get('result_reference') == result_reference(segments[segment_number-1],options.get('player'))
+                    and metadata_current
                     and digit_cache_current(cached,final,LOCAL_DATA)
                     and ((judgments_current := judgment_cache_current(cached,root,final))
                          or judgment_observations_current(cached,root,final))):
@@ -494,7 +495,6 @@ def main():
             run(args.source, args.segment, **options)
     except (ValueError, OSError, cv2.error) as error:
         parser.error(str(error))
-
 
 if __name__ == '__main__':
     main()
