@@ -131,7 +131,10 @@ def coverage_losses(data,native,proof,steps):
             if measured is not None:
                 delta,basis=measured['displacement_pixels'],measured['method'];available=sorted([*by_time[time],*hud],key=lambda interval:interval[0])
                 for lo,hi in by_time[previous['playback_seconds']]:
-                    cursor,end=max(top,lo-delta),min(bottom,hi-delta)
+                    delta_lo,delta_hi=measured.get('displacement_range_pixels',[delta,delta])
+                    # Only rows predicted under every source-supported shift are
+                    # guaranteed visible. Positive image spans are never widened.
+                    cursor,end=max(top,lo-delta_lo),min(bottom,hi-delta_hi)
                     for a,b in available:
                         if b<cursor:continue
                         if a>end:break
@@ -141,7 +144,9 @@ def coverage_losses(data,native,proof,steps):
                     if end>cursor+1:gaps.append([cursor,end])
                 if gaps:losses.append({'time':time,'source_pts':frame['source_pts_seconds'],
                                        'expected_from_source_pts':previous['source_pts_seconds'],
-                                       'missing_intervals_pixels':gaps,'displacement_pixels':delta,'motion_basis':basis})
+                                       'missing_intervals_pixels':gaps,'displacement_pixels':delta,'motion_basis':basis,
+                                       **({'displacement_range_pixels':measured['displacement_range_pixels']}
+                                          if 'displacement_range_pixels'in measured else{})})
             else:losses.append({'time':time,'source_pts':frame['source_pts_seconds'],
                                 'failure_detail':'temporal_image_displacement_unverified'})
         previous=frame

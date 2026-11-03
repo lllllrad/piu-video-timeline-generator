@@ -91,3 +91,18 @@ positive hold image plus qualified tap clearance becomes a role conflict and
 remains warned; this model does not suppress that conflict. Already observed
 tap roles need no duplicated per-frame evidence. The new role alone supplies
 neither a chart target nor an input timestamp.
+
+
+## Lost body coverage and measured displacement
+
+Frame-to-frame body coverage uses independently measured cap displacement. When
+the source coordinate stage supplies a bounded displacement, the motion record
+retains `displacement_range_pixels` with the exact original PTS pair. Invalid
+bounds or a mismatched PTS pair cannot fall back to an unbounded point estimate.
+
+For a previously compared body interval `[a,b]` and displacement `[lo,hi]`, only
+`[a-lo,b-hi]` is guaranteed to remain visible under every supported shift. The
+loss check compares that common region against current positive image spans and
+documented occluders. It never enlarges current image support or turns possible
+pixels into body evidence. Missing interior or endpoint regions still produce
+explicit warnings with their displacement bounds.

@@ -2,11 +2,11 @@
 import type {Trajectory} from '../coordinates/points.ts';
 import {median} from '../math.ts';
 interface Note {motion_trajectory:Trajectory<'fit'>; duplicate_of?: number | null}
-interface Sample {time: number; chunk: number; support: number; phase: number; coordinate_status?: string}
+interface Sample {time: number; chunk: number; support: number; phase: number; coordinate_status?: string; source_pts?:number; native_displacement_interval?:{range_pixels:number[]}}
 interface Frame {time: number; source_pts: number}
 export interface Step {
   time: number; method: string; displacement_pixels: number;
-  source_pts_range: [number, number]; source_notes?: number[];
+  source_pts_range: [number, number]; source_notes?: number[]; displacement_range_pixels?:number[];
 }
 export function steps(notes: Note[], samples: Sample[], timeline: Frame[], spacing: number): Step[] {
   if (!Number.isFinite(spacing) || spacing <= 0) throw Error('Invalid cap spacing');
@@ -32,9 +32,15 @@ export function steps(notes: Note[], samples: Sample[], timeline: Frame[], spaci
     if (dt > .05 + 1e-6) continue;
     const a = motion.get(before.time), b = motion.get(after.time);
     if (a?.coordinate_status === 'failed' || b?.coordinate_status === 'failed') continue;
-    let value: number, method: string, source_notes: number[] | undefined;
+    let value: number, method: string, source_notes: number[] | undefined, range:number[]|undefined;
     if (a && b && a.chunk === b.chunk && b.support) {
       value = b.phase - a.phase; method = 'registered_frame_displacement';
+      if(b.native_displacement_interval){
+        const bounds=b.native_displacement_interval.range_pixels;
+        if(a.source_pts!==before.source_pts||b.source_pts!==after.source_pts||!Array.isArray(bounds)||
+          bounds.length!==2||!bounds.every(Number.isFinite)||bounds[0]>bounds[1])continue;
+        range=[...bounds];
+      }
     } else {
       const first = positions.get(before.time), last = positions.get(after.time);
       const peers = [...last ?? []].filter(([id]) => first?.has(id));
@@ -44,7 +50,7 @@ export function steps(notes: Note[], samples: Sample[], timeline: Frame[], spaci
     }
     if (!Number.isFinite(value) || value < -.75 || value > 30 * spacing * dt) continue;
     result.push({time: after.time, method, displacement_pixels: value,
-      source_pts_range: [before.source_pts, after.source_pts], ...(source_notes ? {source_notes} : {})});
+      source_pts_range: [before.source_pts, after.source_pts], ...(range?{displacement_range_pixels:range}:{}), ...(source_notes ? {source_notes} : {})});
   }
   return result;
 }

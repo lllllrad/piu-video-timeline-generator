@@ -57,3 +57,45 @@ test('an RGB-observed untyped peer bridges a measured-motion hole in a longer-th
   assert.deepEqual(observed.warnings, observed.existing_warnings, 'independent image-loss warnings remain unchanged');
   assert.ok(observed.warnings.every(w => w.image_evidence.every(p => p.time !== 1.5))); 
 });
+
+test('registered image motion transports only source-bound ordered displacement intervals',()=>{
+ const source=[{time:1,source_pts:41,chunk:0,support:2,phase:0},
+  {time:1.025,source_pts:41.025,chunk:0,support:2,phase:5.96875,native_displacement_interval:{range_pixels:[4,8]}}],before=structuredClone(source),
+  result=steps([peer()],source,timeline,20);
+ assert.equal(result.length,1);assert.deepEqual(result[0].displacement_range_pixels,[4,8]);assert.deepEqual(source,before);
+ for(const bounds of [[8,4],[4],[4,NaN]]){
+  const invalid=structuredClone(source);invalid[1].native_displacement_interval.range_pixels=bounds;
+  assert.deepEqual(steps([peer()],invalid,timeline,20),[],'an invalid registered source cannot borrow an unbounded peer point');
+ }
+ source[1].source_pts+=.001;assert.deepEqual(steps([peer()],source,timeline,20),[]);
+});
+
+const coverageScript=String.raw`
+import json,sys
+from piu_timeline.play.skins.temporal import coverage_losses
+results=[]
+for case in json.load(sys.stdin):
+ scale=case['scale'];layout={'receptor_y':.05,'note_y_max':.95,'lanes':[{'x':.1},{'x':.2}]}
+ data={'analysis_width':200*scale,'analysis_height':300*scale,'layout':layout}
+ frames=[{'playback_seconds':t,'source_pts_seconds':40+t}for t in [1,1.025]]
+ def check(spans,step):
+  proof=[{'time':1.,'lane':0,'covered_bounds_pixels':[100*scale,120*scale]}]
+  proof.extend({'time':1.025,'lane':0,'covered_bounds_pixels':[a*scale,b*scale]}for a,b in spans)
+  return coverage_losses(data,frames,proof,{1.025:step})
+ step=case['step'];point={k:v for k,v in step.items()if k!='displacement_range_pixels'}
+ results.append({'scale':scale,'point':check([[94,112]],point),'bounded':check([[94,112]],step),
+  'lost_end':check([[94,109]],step),'lost_interior':check([[94,102],[105,112]],step)})
+print(json.dumps(results))
+`;
+test('uncertain motion cannot turn subpixel border drift into lost body pixels, while definite losses still warn',()=>{
+ const cases=[.5,1,2].map(scale=>({scale,step:steps([peer()],
+  [{time:1,source_pts:41,chunk:0,support:2,phase:0},
+   {time:1.025,source_pts:41.025,chunk:0,support:2,phase:5.96875*scale,native_displacement_interval:{range_pixels:[4*scale,8*scale]}}],timeline,20*scale)[0]})),
+  result=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',coverageScript],{encoding:'utf8',input:JSON.stringify(cases)}));
+ for(const r of result){
+  assert.equal(r.point.length,1);assert.deepEqual(r.bounded,[]);
+  assert.equal(r.lost_end.length,1);assert.deepEqual(r.lost_end[0].missing_intervals_pixels,[[109*r.scale,112*r.scale]]);
+  assert.equal(r.lost_interior.length,1);assert.deepEqual(r.lost_interior[0].missing_intervals_pixels,[[102*r.scale,105*r.scale]]);
+  assert.deepEqual(r.lost_end[0].displacement_range_pixels,[4*r.scale,8*r.scale]);
+ }
+});

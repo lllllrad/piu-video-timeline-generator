@@ -5,10 +5,11 @@ from piu_timeline.play.observations.coordinates import detection_points
 from piu_timeline.play.skins.observations import observe
 
 
-FORMAT = {'schema': 1, 'revision': 19, 'method': 'independent_image_hold_proof',
+FORMAT = {'schema': 1, 'revision': 20, 'method': 'independent_image_hold_proof',
           'interior_caps':'separate_observed_objects',
           'motion_peers':'explicit_fit_trajectory_displacement',
-          'cap_coverage':'all_qualified_cap_comparisons'}
+          'cap_coverage':'all_qualified_cap_comparisons',
+          'coverage_prediction':'intersection_of_source_bound_displacements'}
 
 def covered(lo, hi, boxes):
     cursor = lo
