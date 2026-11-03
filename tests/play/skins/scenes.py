@@ -19,6 +19,7 @@ from piu_timeline.play.skins.holds import measure_connections
 from piu_timeline.play.skins.observations import observe
 from piu_timeline.play.skins.coordinates import measure
 from piu_timeline.play.tracking import NoteTracker
+from tests.play.skins.reference_centers import certify
 
 
 BACKGROUND=np.array([12,14,18],dtype='uint8')
@@ -160,7 +161,8 @@ def acquire_task(task):
 def main():
     specs=json.load(sys.stdin)
     with tempfile.TemporaryDirectory()as tmp:
-        root=Path(tmp);banks={(4,False,None,1):(root,bank_at(root))};tasks=[]
+        root=Path(tmp);bank_at(root)
+        banks={(4,False,None,1):(root,certify(root/'bank.json'))};tasks=[]
         for spec in specs:
             margin=spec.get('reference_margin',4);cap_only=spec.get('reference_profile')=='cap_only';skin=spec.get('skin_profile')
             phases=spec.get('reference_appearance_phases',spec.get('appearance_phases',1))
@@ -173,7 +175,7 @@ def main():
                     from tests.play.skins.shoulders import bank_at as shouldered_bank
                     bank=shouldered_bank(directory,[cap(i)for i in range(5)],COLORS,BACKGROUND)
                 else:bank=bank_at(directory,margin=margin,cap_only=cap_only)
-                banks[profile]=directory,bank
+                banks[profile]=directory,certify(directory/'bank.json')
             directory,bank=banks[profile];tasks.append((spec,directory,bank))
         available=len(os.sched_getaffinity(0))if hasattr(os,'sched_getaffinity')else(os.cpu_count()or 1)
         workers=min(4,max(1,available))

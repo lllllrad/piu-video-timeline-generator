@@ -260,7 +260,8 @@ are retained with their original native timestamps; stepwise motion contributes 
 rather than automatically being called acceleration. Predictions bridge gaps up to 120 ms, or 350 ms
 for established tracks entering the judgment/combo overlay. If the whole fit fails, a sufficiently
 long linear span after that occlusion may establish a crossing. Same-lane crossing estimates within
-35 ms are treated as duplicate colored head fragments; excluded duplicates remain in the evidence.
+35 ms are duplicate hypotheses only when at least four shared native observations
+also identify the same physical head; excluded duplicates remain in the evidence.
 Nonlinear, stopped/reverse, distant and insufficient tracks are excluded. A sufficiently linear
 portion after a speed change may still be usable. There is no attempt to reconstruct arbitrary
 gimmicks, disappearing notes or unsupported skins.

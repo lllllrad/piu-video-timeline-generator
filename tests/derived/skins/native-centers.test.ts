@@ -41,6 +41,9 @@ with tempfile.TemporaryDirectory()as tmp:
  old=detector_metadata(root/'bank.json');path=register(root,rgb);bank=load_bank(path)
  assert reusable_groups({'skin_detector':old},bank)=={'caps/0','body/0'}
  trace,frames=chord_trace(path);trace.update(combo_events=[],unsupported_intervals=[])
+ trace['notes'][0]['tracking_warnings']=[{'reason':'ambiguous_note_tracking','check':'note_visibility',
+  'visible_start_seconds':frames[0]['playback_seconds'],'visible_end_seconds':frames[0]['playback_seconds'],
+  'source_pts_seconds':[frames[0]['source_pts_seconds']]}]
  trace['layout']['note_y_max']=.95
  trace['scroll_motion']={'samples':[{'time':f['playback_seconds'],'source_pts':f['source_pts_seconds'],
   'phase':500*f['playback_seconds'],'chunk':0,'support':2,'variance':0}for f in frames]}
@@ -51,6 +54,7 @@ with tempfile.TemporaryDirectory()as tmp:
  first=apply(trace,root);second=apply(first,root)
  assert frames==original and trace==raw
  for old,new,again in zip(raw['notes'],first['notes'],second['notes']):
+  assert new.get('tracking_warnings',[])==again.get('tracking_warnings',[])==old.get('tracking_warnings',[])
   assert new['detected_points']==old['points']
   assert all(t==a and abs(v-y-1)<1e-10 for (t,v),(a,y)in zip(new['points'],old['points']))
   assert again['points']==new['points'] and again['detected_points']==old['points']

@@ -59,6 +59,24 @@ class ImageCoordinateTest(unittest.TestCase):
             self.assertAlmostEqual(sample['native_y_pixels'],40)
             self.assertGreaterEqual(sample['native_cap_shared_pixel_evidence']['primary_fraction'],.8)
             self.assertGreaterEqual(sample['native_cap_shared_pixel_evidence']['reference_fraction'],.8)
+            # Tracking consumes the measured view while retaining each raw origin.
+            from piu_timeline.play.tracking import NoteTracker
+            tracker=NoteTracker(layout,200,160,skin_bank=bank)
+            detector=SkinDetector(bank,layout,200,160)
+            for index in range(4):
+                moving=np.zeros_like(canvas)
+                for top in(30,100):
+                    patch=rgb[60:95,10:30].copy()
+                    if index%2:patch[20:,6:14]=[35,160,230]
+                    moving[top-4*index:top-4*index+35,10:30]=patch
+                observed=[o for o in detector.detect(moving)if o['role']!='hold_body']
+                tracker.update(2+index*.025,observed,5+index*.025)
+            self.assertEqual(len(tracker.active),2)
+            first=min(tracker.active,key=lambda t:t.points[0][1])
+            self.assertEqual(len(first.points),4)
+            self.assertAlmostEqual(first.points[0][1],41)
+            self.assertAlmostEqual(first.points[1][1],36)
+            self.assertEqual([o['center']['yPixels']for o in first.tracking_observations],[40,36,32,28])
             # A genuine positive match of the other glyph cannot calibrate this one.
             other=max(caps,key=lambda o:o['y'])
             alternative=next(p for p in other['alternatives']if p['template']in bank['anchor_registrations'])

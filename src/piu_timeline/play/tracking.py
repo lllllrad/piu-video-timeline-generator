@@ -13,6 +13,8 @@ class Track:
     lane: int
     points: list = field(default_factory=list)
     missed: int = 0
+    tracking_observations: list = field(default_factory=list)
+    tracking_warnings: list = field(default_factory=list)
 
 
 class NoteTracker:
@@ -24,10 +26,14 @@ class NoteTracker:
         from piu_timeline.play.motion import ScrollMotion
         self.motion = ScrollMotion(height, self.spacing)
         self.skin_detector = None
+        self.frame_centers = None
+        self.frame_uncertainty = {}
         self.skin_observations = []
         if skin_bank is not None:
             from piu_timeline.play.skins.detector import SkinDetector
             self.skin_detector = SkinDetector(skin_bank, layout, width, height)
+            from piu_timeline.play.skins.frame_centers import FrameCenters
+            self.frame_centers = FrameCenters(self.skin_detector)
             from piu_timeline.play.skins.held import BodyAtReceptor
             self.body_at_receptor = BodyAtReceptor(self.skin_detector)
 
@@ -38,63 +44,73 @@ class NoteTracker:
             return [o for o in self.skin_observations if o['role'] != 'hold_body']
         raise ValueError('Image note-skin bank required for note detection')
 
+    def gap_limit(self,track):
+        region=self.layout.get('combo_roi')
+        if region is not None and len(track.points)>=4:
+            x,y,w,h=region;px=self.layout['lanes'][track.lane]['x'];py=track.points[-1][1]/self.height
+            if x-.10<=px<=x+w+.10 and y-.18<=py<=y+h+.10:return .35
+        return .12
+
+    def observations(self,seconds,detections):
+        result=[]
+        for image in detections:
+            if self.frame_centers is not None:position=self.frame_centers.position(image)
+            else:
+                # Direct non-image callers provide normalized cap-center coordinates.
+                center={'yPixels':image['y']*self.height,'uncertaintyPixels':.5,'basis':{'kind':'native_cap_center'}}
+                position={'anchor':center,'center':center}
+            result.append({'time':seconds,**position})
+        return result
+
     def update(self, seconds, detections, source_pts=None):
-        self.motion.update(seconds, detections, source_pts)
+        from piu_timeline.derived import call,CONTRACTS
+        observations=self.observations(seconds,detections)
+        centers=[{**image,'y':point['center']['yPixels']/self.height}for image,point in zip(detections,observations,strict=True)if point['center']]
+        self.frame_uncertainty[seconds]=max([p['center']['uncertaintyPixels']for p in observations if p['center']],default=0)
+        self.motion.update(seconds,centers,source_pts)
         if self.hold_candidate:
             if self.unsupported_intervals and seconds - self.unsupported_intervals[-1]['end_seconds'] < .1:
                 self.unsupported_intervals[-1]['end_seconds'] = seconds
             else:
                 self.unsupported_intervals.append({'start_seconds': seconds, 'end_seconds': seconds,
                                                    'reason': 'possible_hold_or_dense_stack'})
-        pairs = []
-        for i, track in enumerate(self.active):
-            last_t, last_y = track.points[-1]
-            dt = seconds - last_t
-            recent = track.points[-6:]
-            if len(recent) >= 2:
-                ts = [t-last_t for t, _ in recent]
-                ys = [y for _, y in recent]
-                n = len(recent)
-                velocity = (n*sum(t*y for t,y in zip(ts,ys))-sum(ts)*sum(ys)) / (n*sum(t*t for t in ts)-sum(ts)**2)
-            else:
-                velocity = -self.spacing*8
-            prediction = last_y + velocity * dt
-            displacement = self.motion.distance(last_t, seconds)
-            if displacement is not None:
-                prediction = last_y-displacement
-            for j, note in enumerate(detections):
-                y = note['y'] * self.height
-                if note['lane'] == track.lane and -.25 * self.spacing <= last_y - y <= self.spacing * 30 * dt:
-                    distance = abs(y - prediction)
-                    if distance <= self.spacing * .8:
-                        pairs.append((distance, i, j))
+        displacements=[]
+        for time in {o['time']for t in self.active for o in t.tracking_observations}:
+            distance=self.motion.distance(time,seconds)
+            if distance is not None:
+                error=self.frame_uncertainty[seconds]+self.frame_uncertainty[time]
+                error+=math.sqrt(max(0,self.motion.at_time[seconds]['variance']-self.motion.at_time[time]['variance']))
+                displacements.append({'fromSeconds':time,'pixels':distance,'uncertaintyPixels':error})
+        assignment=call('frameTracking.assign',
+            [{'lane':t.lane,'observations':t.tracking_observations,'maximumGapSeconds':self.gap_limit(t)}for t in self.active],
+            [{'lane':n['lane'],'observation':o}for n,o in zip(detections,observations,strict=True)],seconds,self.spacing,displacements)
         used_tracks, used_notes = set(), set()
-        for _, i, j in sorted(pairs):
-            if i in used_tracks or j in used_notes:
-                continue
+        for i,j in assignment['matches']:
             self.active[i].points.append((seconds, detections[j]['y'] * self.height))
+            self.active[i].tracking_observations.append(observations[j])
+            self.active[i].tracking_observations=self.active[i].tracking_observations[-CONTRACTS['frame_tracking']['history_frames']:]
             self.active[i].missed = 0
             used_tracks.add(i); used_notes.add(j)
         for i, track in enumerate(self.active):
             if i not in used_tracks:
                 track.missed += 1
-        # Judgment/combo graphics can briefly cover a moving head. Retain its
-        # prediction for a bounded source-time gap instead of just two frames.
-        def gap_limit(track):
-            region = self.layout.get('combo_roi')
-            if region is not None and len(track.points) >= 4:
-                x,y,w,h = region
-                px = self.layout['lanes'][track.lane]['x']
-                py = track.points[-1][1]/self.height
-                if x-.10 <= px <= x+w+.10 and y-.18 <= py <= y+h+.10:
-                    return .35
-            return .12
-        expired = [track for track in self.active if seconds - track.points[-1][0] > gap_limit(track)]
+        uncertain=set(assignment['ambiguousTracks'])
+        warning={'reason':'ambiguous_note_tracking','check':'note_visibility',
+                 'visible_start_seconds':seconds,'visible_end_seconds':seconds,'source_pts_seconds':[source_pts],
+                 'observed_points':len(assignment['ambiguities']),
+                 'candidate_edges':[{'previous_lane':self.active[i].lane,'previous_seconds':self.active[i].points[-1][0],
+                    'previous_image_y_pixels':self.active[i].points[-1][1],
+                    'observed_lane':detections[j]['lane'],'observed_image_y_pixels':detections[j]['y']*self.height,
+                    'current_observation_index':j}for i,j in assignment['ambiguities']]}
+        for i in uncertain:self.active[i].tracking_warnings.append(warning)
+        expired = [track for i,track in enumerate(self.active)if i in uncertain or seconds-track.points[-1][0]>self.gap_limit(track)]
         self.finished += expired
-        self.active = [track for track in self.active if seconds - track.points[-1][0] <= gap_limit(track)]
+        self.active = [track for i,track in enumerate(self.active)if i not in uncertain and seconds-track.points[-1][0]<=self.gap_limit(track)]
         for j, note in enumerate(detections):
             if j not in used_notes:
-                self.active.append(Track(note['lane'], [(seconds, note['y'] * self.height)]))
+                self.active.append(Track(note['lane'],[(seconds,note['y']*self.height)],
+                    tracking_observations=[observations[j]],
+                    tracking_warnings=[warning]if j in assignment['ambiguousDetections']else[]))
 
     def finish(self):
         from piu_timeline.play.fragments import stitch_tracks, same_native_head
@@ -107,6 +123,8 @@ class NoteTracker:
         for track, fragments in stitch_tracks(source_tracks, self.layout['receptor_y'] * self.height, self.spacing,
                                               motion=registered, layout=self.layout):
             note = fit_track(track, self.layout['receptor_y'] * self.height, self.spacing, motion=self.motion, layout=self.layout)
+            warnings=[w for i in fragments for w in source_tracks[i].tracking_warnings]
+            if warnings:note['tracking_warnings']=warnings
             if len(fragments) > 1:
                 note['tracking_method'] = 'corroborated_fragments'
                 if note.get('fit_method') not in ('shared_scroll_clock', 'shared_scroll_interpolation'):
@@ -117,8 +135,8 @@ class NoteTracker:
             tracks.append(track)
         from piu_timeline.play.shared_timing import restore
         self.motion,self.timing_reconstruction = restore(notes,tracks,self.motion.samples,self.layout,self.width,self.height)
-        # One arrow can yield multiple disconnected colored components. Keep the
-        # best trajectory when same-lane crossings coincide within two frames.
+        # Multiple image comparisons can describe one cap. Merge only when
+        # co-observed positions establish the same head, preserving nearby notes.
         kept = []
         for index in sorted(range(len(notes)), key=lambda i: (notes[i].get('prediction_uncertainty_seconds', math.inf),
                                                               -len(notes[i]['points']))):

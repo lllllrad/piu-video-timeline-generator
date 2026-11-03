@@ -24,6 +24,7 @@ import * as retention from './retention.ts';
 import * as registration from './registration.ts';
 import * as clocks from './clocks.ts';
 import * as tracks from './tracks.ts';
+import * as frameTracking from './frame_tracking.ts';
 import * as fragments from './fragments.ts';
 import * as holdMotion from './holds/image_motion.ts';
 import * as holdImages from './holds/image_timing.ts';
@@ -56,7 +57,7 @@ import {parseData, stringifyData} from './json.ts';
 
 const operations = {
   coordinateMeasurements, skinAnchors, skinCenters, skinSelection, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription, retention,
-  registration, clocks, tracks, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, localized,
+  registration, clocks, tracks, frameTracking, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, localized,
   holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
   holdState, holdExtent, holdGeometry, holdRisk, stageCoordinates, nativeTiming, stageAssociations, beats: {...beats,fitGrid},
 };

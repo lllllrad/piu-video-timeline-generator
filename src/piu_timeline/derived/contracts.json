@@ -1,4 +1,13 @@
 {
+  "frame_tracking": {
+    "schema": 1,
+    "revision": 1,
+    "coordinates": "measured_centers_or_identical_reference_anchors",
+    "assignment": "forced_edges_of_maximum_cardinality_matching",
+    "order": "coobserved_separated_positions_in_one_coordinate_basis",
+    "maximum_speed_spacing_per_second": 30,
+    "history_frames": 6
+  },
   "fragments": {
     "schema": 1,
     "revision": 2,

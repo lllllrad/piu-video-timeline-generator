@@ -3,7 +3,7 @@
 Saved observations are ordinary data, independent of the acquisition language.
 Python owns video decoding, image measurements and geometry, source-bound image
 proofs, OCR, audio alignment, downloads and acquisition orchestration. TypeScript under `src/piu_timeline/derived/` owns
-joint coordinate registration, saved-track and clock fitting, native spacing and
+coordinate-based frame assignment, joint coordinate registration, saved-track and clock fitting, native spacing and
 chord checks, common song-phase and beat-row reconstruction, speed estimates,
 exact UCS timing and per-measure row transcription, and HTML rendering.
 It also owns popup/row association and recovery, hold chart projection, concrete
@@ -19,6 +19,27 @@ The callback transport exists for callers supplying a phase-scoring function;
 the production beat stage supplies its spatial validator directly in TypeScript.
 
 ## Reusable boundaries
+
+Before trajectory identity is assigned, `play/skins/frame_centers.py` measures
+each positive image comparison independently. It exposes a certified cap-center
+interval when available and an original matching-anchor interval scoped to its
+exact reference identity. Both use analysis-image pixels with y downward.
+`derived/frame_tracking.ts` predicts in one compatible coordinate view at a time;
+raw origins from different references cannot substitute for cap centers.
+
+Frame assignment retains only links required by every maximum-cardinality
+matching. Co-observed, separated positions in a common basis establish note order;
+asynchronous or incomparable positions do not establish that order. Missing
+observations cannot make a following note inherit another identity through a
+wide proximity threshold. Ambiguous fragments are kept separately with
+`ambiguous_note_tracking`, original timestamps and candidate pixel positions.
+Later coordinate refitting preserves these warnings. Identity prediction can
+include capture-step slack; that slack does not enlarge a chart target range.
+
+Tracking appends original matching anchors to the immutable detection trajectory.
+The independently measured centers guide association and are projected into the
+later coordinate fit through their source-bound records. Counter values, judgment
+words, switch effects and the musical grid are absent from frame assignment.
 
 `coordinates.json` stores a schema-2 source-bound snapshot containing two schema-1
 artifacts: `track-observations` (original detection trajectories and geometry) and

@@ -10,6 +10,7 @@ import uuid
 
 import cv2
 import numpy as np
+from piu_timeline.derived import CONTRACTS
 
 from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, stage_saved_observations, validate_native_frame
 from piu_timeline.vision.ocr import ocr_images
@@ -33,7 +34,7 @@ from piu_timeline.play.counter_pixels import READER_FORMAT
 from piu_timeline.play.beats.timing import current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':6,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'object_roles':OBJECT_FORMAT,'fragment_identity':FRAGMENT_FORMAT}
+TIMING_FORMAT = {'schema':1,'counter_revision':6,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'object_roles':OBJECT_FORMAT,'fragment_identity':FRAGMENT_FORMAT,'frame_tracking':CONTRACTS['frame_tracking']}
 FRAME_OBSERVATION_VERSION = 4
 
 
@@ -140,7 +141,8 @@ def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
     if replaced_font or reader_changed or cached.get('frame_observation_version',2) < FRAME_OBSERVATION_VERSION:
         print('Refreshing counter crops; preserving saved note observations, no OCR.',flush=True)
         refreshed = refresh_counter_observations(cached,output,replace_font=replaced_font or reader_changed)
-    tracker = NoteTracker(cached['layout'], cached['analysis_width'], cached['analysis_height'])
+    from piu_timeline.play.skins.bank import load_bank
+    tracker = NoteTracker(cached['layout'], cached['analysis_width'], cached['analysis_height'],skin_bank=load_bank(note_skin))
     combo, count, last = ComboTracker(), 0, None
     with (output / 'frames.jsonl').open()as stream:
         for line in stream:
