@@ -45,6 +45,20 @@ with tempfile.TemporaryDirectory()as temporary:
   with patch('piu_timeline.play.skins.automatic.decode_frames',side_effect=AssertionError('cached selection must not decode')):
    reused=prepare(source,1,document,options)==chosen and retained(source,1,options)==chosen
   original_evidence=cache_path(source,1).read_text()
+  actual_selection_call=automatic.call
+  def adjusted_policy(operation,*args):
+   value=actual_selection_call(operation,*args)
+   return {**value,'minimum_quality':.25}if operation=='skinSelection.policy'else value
+  with patch.object(automatic,'call',side_effect=adjusted_policy),patch.object(automatic,'decode_frames',side_effect=AssertionError('policy evaluation must not decode')),patch.object(automatic,'SkinDetector',side_effect=AssertionError('policy evaluation must not repeat image comparisons')):
+   policy_reselected=prepare(source,1,document,options)==chosen
+  changed_evidence=json.loads(cache_path(source,1).read_text())
+  policy_reselected=policy_reselected and changed_evidence['contract']['policy']['minimum_quality']==.25
+  changed_evidence['decision']['selection']={'skin':'generated-b','revision':'one'}
+  cache_path(source,1).write_text(json.dumps(changed_evidence))
+  with patch.object(automatic,'decode_frames',side_effect=AssertionError('corrupt saved policy cannot hide behind reacquisition')):
+   try:prepare(source,1,document,options);policy_tamper_rejected=False
+   except ValueError:policy_tamper_rejected=True
+  cache_path(source,1).write_text(original_evidence)
   changed_plan={**automatic.FORMAT,'refinement_windows':[.17,.34]}
   with patch.dict(automatic.FORMAT,changed_plan),patch.object(automatic,'decode_frames',side_effect=AssertionError('successful proof survives a sampling-plan extension')):
    plan_reused=prepare(source,1,document,options)==chosen
@@ -129,6 +143,7 @@ with tempfile.TemporaryDirectory()as temporary:
    'policy_invalid':policy_invalid,'tamper_rejected':tamper_rejected,'media_invalid':media_invalid,
    'calls':first_calls,'reused':reused,'window_invalid':window_invalid,'width_invalid':width_invalid,
    'workflow_automatic':workflow_automatic,'explicit_first':explicit_first,'registry_invalid':registry_invalid,
+   'policy_reselected':policy_reselected,'policy_tamper_rejected':policy_tamper_rejected,
    'ambiguous':ambiguous,'failed_reused':failed_reused,'media_preserved':video.read_bytes()==b'original recording'}))
 `;
 const r=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{encoding:'utf8'}).trim().split('\n').at(-1));
@@ -153,4 +168,8 @@ test('insufficient samples collect independent additional windows while retainin
 
 test('refinement reuses bound RGB, rejects wrong geometry, and retries failed proofs after a sampling-plan extension',()=>{
  assert.equal(r.pixels_reused,true);assert.equal(r.pixel_mismatch,true);assert.equal(r.failed_plan_retried,true,JSON.stringify({calls:r.failed_plan_calls}));
+});
+
+test('changed selection policy reuses original comparisons and rejects inconsistent prior decisions',()=>{
+ assert.equal(r.policy_reselected,true);assert.equal(r.policy_tamper_rejected,true);
 });

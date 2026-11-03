@@ -109,3 +109,18 @@ does not repeat image connectivity measurement. Source PTS, image content, actua
 displacement or cap measurement-policy changes invalidate that evidence. Timed
 hold intervals remain a separate consumer and are projected again from the
 retained connections and current endpoint timing.
+
+
+Automatic skin identity counts cap comparisons that satisfy the active reference
+regions' declared error bounds. The nonnegative comparison quality ranks these
+accepted matches; an additional arbitrary ranking cutoff does not redefine image
+acceptance. The independent window, frame, direction and cap-count requirements
+still apply, and competing qualified banks remain ambiguous. This identifies a
+reference bank without asserting a cap's tap/hold role.
+
+A changed selection policy can consume saved comparisons under unchanged source,
+layout, detector and reference bindings. The producer first verifies the previous
+decision against its explicit previous requirements, then evaluates the current
+requirements and publishes a newly selected decision atomically. It preserves the
+original sampling plan, timestamps and pixel hashes. Corrupt decisions fail
+explicitly; read-only currency checks never rewrite evidence.

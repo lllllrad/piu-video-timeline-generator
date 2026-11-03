@@ -65,7 +65,7 @@ def load_saved(directory,number,document,options,banks):
     # retained image observations and their source/detector/policy/bank binding.
     if ({k:v for k,v in saved.get('contract',{}).items()if k!='format'}
             !={k:v for k,v in expected.items()if k!='format'}):return None
-    if saved.get('decision')!=call('skinSelection.choose',saved['candidates']):
+    if saved.get('decision')!=call('skinSelection.choose',saved['candidates'],saved['contract']['policy']):
         raise ValueError('Automatic skin decision differs from its retained image evidence')
     if saved['decision']['status']!='selected'and saved['contract'].get('format')!=FORMAT:return None
     return saved
@@ -102,6 +102,19 @@ def sample_pixels(directory,number,source,explicit):
     return path,pixels
 
 
+def reselect_saved(path,binding):
+    """Selection policy consumes saved comparisons, never new image evidence."""
+    if not path.is_file():return None
+    saved=json.loads(path.read_text());prior=saved.get('contract',{})
+    acquisition=lambda c:{k:v for k,v in c.items()if k not in ('format','policy')}
+    if acquisition(prior)!=acquisition(binding)or prior.get('policy')==binding['policy']or 'format'not in prior:return None
+    if saved['decision']!=call('skinSelection.choose',saved['candidates'],prior['policy']):
+        raise ValueError('Automatic skin decision differs from its declared retained image evidence')
+    decision=call('skinSelection.choose',saved['candidates'],binding['policy'])
+    if decision['status']!='selected':return None
+    return {**saved,'contract':{**binding,'format':prior['format']},'decision':decision}
+
+
 def prepare(directory,number,document,options,retry=False,*,pixel_directory=None):
     banks=candidates()
     if not any(b['eligible']for b in banks):
@@ -110,6 +123,15 @@ def prepare(directory,number,document,options,retry=False,*,pixel_directory=None
     with path.with_suffix('.lock').open('a')as lock:
         fcntl.flock(lock,fcntl.LOCK_EX)
         saved=None if retry else load_saved(directory,number,document,options,banks)
+        if saved is None and not retry:
+            binding=contract(document,number,options,banks)
+            saved=reselect_saved(path,binding)
+            if saved is not None:
+                if context(document,number,options)!=binding['source']or candidates()!=banks:
+                    raise ValueError('Automatic skin source or reference images changed during policy evaluation')
+                from piu_timeline.charts.official import write_json
+                write_json(path,saved)
+                print('Reusing independent skin comparisons under the current selection policy.',flush=True)
         if saved is None:
             binding=contract(document,number,options,banks);source=binding['source']
             width=source['analysis_width'];height=round(width*source['game_roi'][3]/source['game_roi'][2])
@@ -138,7 +160,7 @@ def prepare(directory,number,document,options,retry=False,*,pixel_directory=None
                             for record,(_,detector)in zip(measured,detectors,strict=True):
                                 record['observations'].extend({**o,'window':window,'source_pts_seconds':pts,'playback_seconds':time}
                                                               for o in detector.detect(rgb)if o['template_role']!='hold_body')
-                decision=call('skinSelection.choose',measured)
+                decision=call('skinSelection.choose',measured,binding['policy'])
             if context(document,number,options)!=source or candidates()!=banks:
                 raise ValueError('Automatic skin source or reference images changed during sampling')
             saved={'contract':binding,'samples':samples,'candidates':measured,'decision':decision}
