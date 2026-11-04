@@ -31,8 +31,8 @@ proof that an overlay exists.
 | Single-right lanes | x = 0.570, 0.629, 0.688, 0.747, 0.806 | Same lane order/colors |
 | Double lanes | x = 0.235, 0.29423, 0.35346, 0.41269, 0.47135, 0.52962, 0.58885, 0.64808, 0.7075, 0.76654 | Two panels with ten ordered lanes |
 | Combo digits | `layout.combo_roi`; default centered on lane-group mean, width 0.14, y = 0.52, height 0.075 | Known foreground HUD can break a moving outline |
-| COMBO caption and digits | Same x/width as digits, from y = 0.46 through 0.595 in the default layout | Named occluder `combo_label_and_digits` |
-| Judgment word | `layout.judgment_roi` when supplied; otherwise centered on the combo group, width up to 0.38, y = 0.32 through 0.51 | Named occluder `judgment_word`; PERFECT/GREAT/GOOD/BAD/MISS and their animation |
+| COMBO caption | Centered on the digits, 1.4 times their ROI width, y = 0.475 through 0.52 | Named occluder `combo_label`; digits separately use `combo_digits` |
+| Judgment word | `layout.judgment_roi` when supplied; otherwise twice the combo-digit ROI width, y = 0.385 through 0.475 for the default layout | Named occluder `judgment_word`; PERFECT/GREAT/GOOD/BAD/MISS and their animation |
 | Moving field | Below receptor centers through `note_y_max`, default 0.95 | Heads normally move upwards; holds have separate head, body and tail observations |
 | Credit/status text | Near the lower edge in the inspected recordings | Not automatically an occlusion exemption; actual location/overlap needs its own documented rule |
 | Song/player/chart labels and grade totals | Selection, cover and result scenes, with separate metadata OCR regions | These scene-specific regions do not mask gameplay trajectories |
@@ -43,7 +43,11 @@ spacing in each dimension. Actual dimensions and retained layout take precedence
 A cap's footprint, including half a spacing around its center, must intersect
 one of the named HUD rectangles to explain a missing outline. Sharing the same
 y coordinate in another lane does not establish occlusion. These footprints
-are conservative measurement approximations, not pixel-verified HUD opacity.
+are conservative foreground approximations, not pixel-verified HUD opacity.
+The larger judgment OCR search window is independent and grants no visibility
+exemption. The default word bounds include the observed Phoenix word animation;
+COMBO uses a separate 1.4-times digit-ROI width at y = 0.475 through 0.52, and
+digits use their own ROI. Positive matches remain usable throughout.
 
 Positive image matches remain usable inside these rectangles. A named HUD
 footprint is not proof that matched pixels are hidden. Coordinate measurements
@@ -90,7 +94,7 @@ visibility, fit success and a generic timing exclusion do not remove them.
 Native points, missing-frame counts, original source PTS, predicted positions
 and the position method remain available in `visibility-diagnostics.json` and
 the report's warnings. Explained occlusions and exits are retained separately.
-In particular, a gap overlapping `judgment_word` or `combo_label_and_digits`
+In particular, a gap overlapping `judgment_word`, `combo_label` or `combo_digits`
 is recorded under `known_occlusions`, not emitted as a missing-head warning.
 This does not turn a hidden frame into a valid shape-learning reference or
 establish an input/processing time after the head leaves the HUD.

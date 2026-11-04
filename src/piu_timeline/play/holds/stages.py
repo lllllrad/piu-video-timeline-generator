@@ -5,8 +5,9 @@ from piu_timeline.play.observations.artifacts import cached, files, producer
 def image_geometry_contract():
     """Only measurement policies consumed by native image/endpoint geometry."""
     from piu_timeline.derived import CONTRACTS
+    from piu_timeline.play.screen_regions import FORMAT
     return {'native_cap_registration':CONTRACTS['native_anchor'],
-            'position_search':CONTRACTS['image_coordinates']['position_search']}
+            'position_search':CONTRACTS['image_coordinates']['position_search'],'occlusion_regions':FORMAT}
 
 
 def geometry(data, directory, frames, reconstruct):

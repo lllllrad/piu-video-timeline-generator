@@ -1,14 +1,28 @@
 """Named game-image regions; only documented foreground HUD can hide heads."""
 
+FORMAT={'schema':1,'revision':2,'method':'foreground_hud_footprints',
+        'judgment_width_combo_ratio':2.,'judgment_top_offset':-.135,'judgment_height':.09,
+        'combo_label_width_ratio':1.4,'combo_label_top_offset':-.045}
+
+
+def _rect(center,top,width,height):
+    left,right=max(0,center-width/2),min(1,center+width/2)
+    bottom=min(1,top+height);top=max(0,top)
+    return [left,top,right-left,max(0,bottom-top)]
+
 
 def note_occluders(layout):
-    """Return existing HUD footprints in normalized full-game coordinates."""
+    """Foreground footprints, independent of the larger OCR search window."""
     if 'combo_roi' not in layout:
         return []
-    from piu_timeline.play.judgments import judgment_region
     x,y,w,h = layout['combo_roi']
-    return [{'id':'judgment_word','rect':judgment_region(layout)},
-            {'id':'combo_label_and_digits','rect':[x,max(0,y-.06),w,h+min(.06,y)]}]
+    center=x+w/2
+    word=layout.get('judgment_roi',_rect(center,y+FORMAT['judgment_top_offset'],
+                                      w*FORMAT['judgment_width_combo_ratio'],FORMAT['judgment_height']))
+    return [{'id':'judgment_word','rect':word},
+            {'id':'combo_label','rect':_rect(center,y+FORMAT['combo_label_top_offset'],
+                                           w*FORMAT['combo_label_width_ratio'],-FORMAT['combo_label_top_offset'])},
+            {'id':'combo_digits','rect':[x,y,w,h]}]
 
 
 def overlapping_occluders(layout, lane, center_y, width, height, spacing):
