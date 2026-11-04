@@ -7,6 +7,13 @@ cap image with independently retained spatial masks around that cap. It does
 not detect heads or infer their times, and a failed hold match does not prove
 a tap.
 
+Every qualified native-clearance proof is retained, including when another frame
+already has a raw tap candidate. Raw candidates can still lose their role when
+their required background bands overlap the HUD. Such a candidate must not erase
+an independent unoccluded proof from another frame. The final role join preserves
+original PTS and unknown observations, and reports a conflict when valid tap and
+hold evidence both exist. Classification is not a count of duplicate proofs.
+
 A failed endpoint-connector reference can also use independently matched body
 images from the same original frame. `skins/connections.py` unions only their
 positively compared `body` pixels, including retained alternatives. It requires

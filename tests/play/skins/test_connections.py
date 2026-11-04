@@ -44,7 +44,7 @@ class BodyConnectionTest(unittest.TestCase):
             sample[2]['relaxed_blue'][y+5:y+9,61:69]=True
         result=derive(data,frames,samples,bank,profile)
         self.assertEqual(result['counts']['connected_hold_roles'],1)
-        self.assertEqual(result['counts']['additional_tap_roles'],0)
+        self.assertEqual(result['counts']['qualified_clearance_notes'],0)
         channel=observe({**data,'skin_role_evidence':result},frames)
         self.assertEqual(channel['notes'][0]['status'],'hold')
         self.assertTrue(any(o['role']=='hold_start'for o in channel['notes'][0]['observations']))

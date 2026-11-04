@@ -10,7 +10,7 @@ from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.skins.detector import SkinDetector
 from piu_timeline.play.skins.sampling import key,reference_scale
 
-FORMAT={'schema':1,'revision':6,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
+FORMAT={'schema':1,'revision':7,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
         'minimum_frames':4,
         'minimum_motion_spacing':.5,'maximum_anchor_delta_spacing':.1,
         'body_core_halfwidth_spacing':.1,'minimum_clearance_halfwidth_spacing':.2,
@@ -101,7 +101,7 @@ def derive(data,native,samples,bank,profile):
         raise ValueError('Clearance bank differs from acquired cap images')
     width,height=data['analysis_width'],data['analysis_height']
     detector=SkinDetector(bank,data['layout'],width,height);templates={key(t):t for t in detector.templates}
-    owners=defaultdict(list);proofs=defaultdict(list);held=defaultdict(list);movement=defaultdict(list);already_taps=set()
+    owners=defaultdict(list);proofs=defaultdict(list);held=defaultdict(list);movement=defaultdict(list)
     for i,note in enumerate(data['notes']):
         for time,y in detection_points(note):
             owners[time,note['lane'],round(y,5)].append(i)
@@ -130,7 +130,6 @@ def derive(data,native,samples,bank,profile):
             if len(indices)!=1:continue
             movement[indices[0]].append({'playback_seconds':time,'source_pts_seconds':pts,
                                        'image_anchor':[image['x']*width,image['y']*height]})
-            if 'tap'in image.get('conflicting_roles',[image['role']]):already_taps.add(indices[0])
             for pattern in [image,*image.get('alternatives',[])]:
                 template=templates[key(pattern)]
                 if (pattern.get('template_role',pattern['role'])!='tap'
@@ -149,12 +148,13 @@ def derive(data,native,samples,bank,profile):
                     'clearance_pixel_dimensions':[PIXEL_FORMAT['width'],next(iter(planes.values())).shape[0]]})
                 break
     qualified={i:group for i,points in proofs.items()if(group:=qualify(points,detector.spacing,movement[i]))}
-    notes={str(i):group for i,group in qualified.items()if i not in already_taps}
+    # Raw tap candidates may later be invalidated by HUD clearance checks.
+    # Keep every qualified independent proof; the role join owns conflicts.
+    notes={str(i):group for i,group in qualified.items()}
     connected=0
     for (i,_),points in held.items():
         group=qualify(points,detector.spacing,movement[i])
         if group:notes.setdefault(str(i),[]).extend(group);connected+=1
     return {'status':'available','validation':validation,
-            'counts':{'qualified_clearance_notes':len(qualified),'already_observed_taps':len(qualified.keys()&already_taps),
-                      'additional_tap_roles':len(qualified.keys()-already_taps),'connected_hold_roles':connected},
+            'counts':{'qualified_clearance_notes':len(qualified),'connected_hold_roles':connected},
             'notes':notes,'warnings':[]}

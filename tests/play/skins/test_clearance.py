@@ -80,6 +80,46 @@ class NativeClearanceTest(unittest.TestCase):
         changed[1]['skin_observations'][0].update(role='hold_start',template_role='hold_start',classification_status='full_pattern')
         self.assertEqual(observe({**data,'skin_role_evidence':result},changed)['notes'][0]['status'],'conflict')
 
+    def test_later_hud_tap_candidates_cannot_discard_earlier_independent_clearance(self):
+        data,frames,samples,bank,profile=scenario()
+        data['skin_detector']['bank_path']='synthetic-bank'
+        original_times=[f['source_pts_seconds']for f in frames]
+        for i,y in enumerate((90,85,80)):
+            t=1.1+i*.025
+            image=deepcopy(frames[-1]['skin_observations'][0])
+            image.update(role='tap',classification_status='full_pattern',y=y/200,
+                         bounds_pixels=[59,y-11,71,y+11],
+                         region_errors={'cap':.001,'clear_above':.001,'clear_below':.001})
+            frames.append({'playback_seconds':t,'source_pts_seconds':10+t,'skin_observations':[image]})
+            samples.append((10+t,t,{k:np.zeros_like(v)for k,v in samples[0][2].items()},[]))
+            data['notes'][0]['points'].append((t,y))
+        data.update(frame_count=len(frames),end_seconds=frames[-1]['playback_seconds'])
+        before=deepcopy(frames)
+        with patch('piu_timeline.play.skins.coverage.load_bank',return_value=bank):
+            raw=observe(data,frames)['notes'][0]
+            self.assertEqual(raw['status'],'unknown')
+            self.assertEqual(sum(o['reason']=='skin_tap_clearance_occluded'for o in raw['observations']),3)
+            result=derive(data,frames,samples,bank,profile)
+            proofs=result['notes']['0']
+            self.assertEqual([o['source_pts_seconds']for o in proofs],original_times)
+            joined=observe({**data,'skin_role_evidence':result},frames)['notes'][0]
+            self.assertEqual(joined['status'],'tap')
+            self.assertEqual(sum(o['reason']=='skin_tap_clearance_occluded'for o in joined['observations']),3)
+            # A real hold observation must still conflict with the earlier tap proof.
+            changed=deepcopy(frames)
+            changed[-1]['skin_observations'][0].update(role='hold_start',template_role='hold_start')
+            self.assertEqual(observe({**data,'skin_role_evidence':result},changed)['notes'][0]['status'],'conflict')
+        self.assertEqual(frames,before)
+
+    def test_full_tap_candidates_do_not_remove_independent_proof_even_without_occlusion(self):
+        data,frames,samples,bank,profile=scenario()
+        image=frames[-1]['skin_observations'][0]
+        image.update(role='tap',classification_status='full_pattern',
+                     region_errors={'cap':.001,'clear_above':.001,'clear_below':.001})
+        result=derive(data,frames,samples,bank,profile)
+        self.assertEqual(len(result['notes']['0']),3)
+        self.assertEqual(observe({**data,'skin_role_evidence':result},frames)['notes'][0]['status'],'tap')
+
     def test_positive_cap_and_measured_blank_bands_do_not_need_matching_background_rgb(self):
         data,frames,samples,bank,profile=scenario();original=deepcopy(frames)
         result=derive(data,frames,samples,bank,profile)
