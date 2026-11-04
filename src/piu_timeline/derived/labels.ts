@@ -1,3 +1,4 @@
+import {incrementsCombo} from './judgment_rules.ts';
 import {associate, synchronizedRefreshes} from './association.ts';
 import {assignments, bracket, disputedRefresh, partition} from './evidence.ts';
 import {lowerBound, upperBound} from './math.ts';
@@ -17,7 +18,7 @@ export function attachRecoveredLabels(input: RecordData): RecordData {
     if (c.status !== 'matched' && !['possible_hold_or_dense_stack', 'ambiguous_note_or_combo_association', 'ongoing_hold_tick_not_new_press'].includes(c.reason)) continue;
     c.status = 'matched'; eligible.add(ci);
   }
-  const candidates = words.map(e => ({...e, status: ['PERFECT', 'GREAT', 'GOOD', 'BAD'].includes(e.label) ? (Object.hasOwn(e, 'detection_status') ? e.detection_status : 'candidate') : 'excluded'}));
+  const candidates = words.map(e => ({...e, status: incrementsCombo(e.label) ? (Object.hasOwn(e, 'detection_status') ? e.detection_status : 'candidate') : 'excluded'}));
   for (const [ji, ci] of synchronizedRefreshes({combo_events: counters}, candidates)) {
     if (!eligible.has(ci)) continue;
     const group = groups.get(ci), word = words[ji];
@@ -76,7 +77,7 @@ export function labelCounterFrames(data: RecordData, observations: RecordData[])
     const start = e.upper_seconds, stop = Math.min(start + .050001, ci + 1 < data.combo_events.length ? data.combo_events[ci + 1].lower_seconds - 1e-6 : Infinity);
     const frames = observations.slice(lowerBound(times, start - 1e-6), upperBound(times, stop)), labels = new Set(frames.filter(f => f.label != null).map(f => f.label));
     const known = frames.filter(f => f.label != null && f.confidence >= .8);
-    if (labels.size !== 1 || labels.has('MISS') || known.length < 2 || known[0].playback_seconds > start + .035 || !known.slice(1).some((b, i) => b.playback_seconds - known[i].playback_seconds <= .035) || new Set(known.map(f => f.source_pts_seconds)).size < 2) continue;
+    if (labels.size !== 1 || !incrementsCombo(known[0]?.label) || known.length < 2 || known[0].playback_seconds > start + .035 || !known.slice(1).some((b, i) => b.playback_seconds - known[i].playback_seconds <= .035) || new Set(known.map(f => f.source_pts_seconds)).size < 2) continue;
     const proof = {label: known[0].label, observations: known.map(f => Object.fromEntries(['source_pts_seconds', 'playback_seconds', 'label', 'confidence'].map(k => [k, f[k]])))};
     data.counter_judgment_labels[ci] = proof;
     for (const m of group) if (!m.judgment_label) {
@@ -114,7 +115,7 @@ export function mergeJudgments(data: RecordData, inputEvents: RecordData[], obse
     if (e.status !== 'candidate') return;
     const before = anchors.filter(([i]) => i < ji).flatMap(([, ids]) => ids.map(n => data.notes[n].target_seconds)), after = anchors.filter(([i]) => i > ji).flatMap(([, ids]) => ids.map(n => data.notes[n].target_seconds));
     const low = Math.max(-Infinity, ...before), high = Math.min(Infinity, ...after);
-    constraints[ji] = data.notes.flatMap((n, i) => n.status === 'estimated' && low < n.target_seconds && n.target_seconds < high ? [i] : []);
+    constraints[ji] = data.notes.flatMap((n, i) => n.status === 'estimated' && (incrementsCombo(e.label) || !byNote.has(i)) && low < n.target_seconds && n.target_seconds < high ? [i] : []);
   });
   const judged = associate(data.notes, events, .045, (data.display_delay_correction_ms ?? 0) / 1000, constraints), groups = new Map<number, RecordData[]>();
   for (const m of judged) { if (!groups.has(m.combo_event)) groups.set(m.combo_event, []); groups.get(m.combo_event).push(m); }
@@ -127,7 +128,7 @@ export function mergeJudgments(data: RecordData, inputEvents: RecordData[], obse
   };
   for (const [index, group] of groups) {
     const e = events[index], ids = new Set(group.map(m => m.note));
-    const conflicting = comboMatches.some(m => !ids.has(m.note) && !anchored.has(m.combo_event) && !constituent(m.combo_event, ids, e) && e.lower_seconds - .025 <= m.combo_upper_seconds && e.upper_seconds + .025 >= m.combo_lower_seconds);
+    const conflicting = incrementsCombo(e.label) && comboMatches.some(m => !ids.has(m.note) && !anchored.has(m.combo_event) && !constituent(m.combo_event, ids, e) && e.lower_seconds - .025 <= m.combo_upper_seconds && e.upper_seconds + .025 >= m.combo_lower_seconds);
     if (conflicting) { Object.assign(e, {status: 'excluded', reason: 'competing_combo_evidence'}); continue; }
     for (const m of group) {
       const existing = byNote.get(m.note);

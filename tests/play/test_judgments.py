@@ -128,7 +128,7 @@ class JudgmentTest(unittest.TestCase):
 
     def test_equally_close_refreshes_do_not_force_a_counter_anchor(self):
         data=self.combo_data([1.02],[(1.,1.02)])
-        events=[{'label':'GOOD','lower_seconds':.99,'upper_seconds':1.01},
+        events=[{'label':'GREAT','lower_seconds':.99,'upper_seconds':1.01},
                 {'label':'PERFECT','lower_seconds':1.01,'upper_seconds':1.03}]
         result=merge_judgments(data,events)
         self.assertFalse(any('anchor_combo_event' in e for e in result['judgment_events']))

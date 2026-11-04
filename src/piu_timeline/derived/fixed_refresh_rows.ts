@@ -1,3 +1,4 @@
+import {incrementsCombo} from './judgment_rules.ts';
 import {fitTrajectory} from './coordinates/points.ts';
 /** Separate a physically corroborated fixed row from another refresh's candidates. */
 import {contracts} from './contracts.ts';
@@ -31,7 +32,7 @@ export function fixedRefreshRow(data:RecordData,index:number,pending:number[],pa
   n.status!=='estimated'||n.type_status!=='tap'||n.note_type==='hold'||n.timing_reconstruction?.status!=='restored'||
   !pairs.some(([j,c])=>j===m.judgment_event&&c===m.combo_event))return null;
  const c=data.combo_events[m.combo_event],j=data.judgment_events[m.judgment_event];
- if(c.delta!==1||!['PERFECT','GREAT','GOOD','BAD'].includes(j.label)||j.detection_status==='excluded'||
+ if(c.delta!==1||!incrementsCombo(j.label)||j.detection_status==='excluded'||
   c.upper_seconds-c.lower_seconds>.1+1e-6||j.upper_seconds-j.lower_seconds>.05||
   j.anchor_combo_event!=null&&j.anchor_combo_event!==m.combo_event)return null;
  const a=Math.min(c.lower_seconds,j.lower_seconds),b=Math.max(c.upper_seconds,j.upper_seconds);

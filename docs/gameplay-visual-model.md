@@ -161,7 +161,9 @@ the assumption made explicit. This does not move the measured target, assert a p
 justify absorbing a separately observed next tap. Only actual receptor observations inside that
 search become recognition evidence; the window itself is not an input range.
 
-The interval from the last old display to the first new display brackets a visible refresh, not a physical switch closure. Confirming the new display in later frames must not move the bracket to the later confirmation. PERFECT/GREAT/GOOD/BAD can provide refresh evidence where combo digits are absent. MISS is failure evidence and must not receive a fabricated press time. A persistent word is not a fresh judgment for every nearby note.
+The interval from the last old display to the first new display brackets a visible refresh, not a physical switch closure. Confirming the new display in later frames must not move the bracket to the later confirmation. Only PERFECT and GREAT increase combo.
+GOOD and BAD can provide independent judgment refresh evidence without a positive counter update; neither may label or synchronize with a positive combo increment.
+PERFECT/GREAT/GOOD/BAD can provide refresh evidence where combo digits are absent. MISS is failure evidence and must not receive a fabricated press time. A persistent word is not a fresh judgment for every nearby note.
 
 Display updates can aggregate simultaneous notes, hold ticks or multiple judgments between captured frames. The analyzer's row-grouping model is an association assumption, not a verified universal rule for every game mode. Preserve aggregate brackets and competing interpretations instead of inventing per-note timestamps. Validate update-count semantics separately from head detection.
 

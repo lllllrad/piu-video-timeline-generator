@@ -128,8 +128,8 @@ test('a counter-owned row receives a word grade through its uniquely overlapping
  Object.assign(d.combo_events[0],{status:'matched',reason:null,lower_seconds:lo,upper_seconds:hi});
  d.matches=[{note:0,target_seconds:1,combo_event:0,row_note_count:1,combo_lower_seconds:lo,combo_upper_seconds:hi}];
  d.unsupported_intervals=[];d.coverage={};const before=structuredClone(d);
- const r=mergeJudgments(d,[{label:'GOOD',lower_seconds:frames[at+7],upper_seconds:frames[at+8],detection_status:'candidate'}]);
- assert.equal(r.matches.length,1);assert.equal(r.matches[0].judgment_label,'GOOD');
+ const r=mergeJudgments(d,[{label:'GREAT',lower_seconds:frames[at+7],upper_seconds:frames[at+8],detection_status:'candidate'}]);
+ assert.equal(r.matches.length,1);assert.equal(r.matches[0].judgment_label,'GREAT');
  assert.equal(r.matches[0].judgment_label_source,'synchronized_refresh');assert.equal(r.matches[0].judgment_event,0);
  assert.deepEqual([r.matches[0].combo_lower_seconds,r.matches[0].combo_upper_seconds],[lo,hi]);
  assert.equal(r.matches[0].target_seconds,1);assert.deepEqual(d.notes,before.notes);assert.deepEqual(d.scroll_motion,before.scroll_motion);

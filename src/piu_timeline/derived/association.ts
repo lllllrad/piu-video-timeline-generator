@@ -1,4 +1,5 @@
 /** Ordered row-to-refresh alignment. Chords share a row and aggregate bracket. */
+import {incrementsCombo} from './judgment_rules.ts';
 import type {RecordData} from './types.ts';
 
 export function associate(notes: RecordData[], events: RecordData[], window = .045, delay = 0, constraints: Record<string, number[]> | null = null): RecordData[] {
@@ -68,7 +69,7 @@ export function associate(notes: RecordData[], events: RecordData[], window = .0
 export function synchronizedRefreshes(data: RecordData, events: RecordData[]): number[][] {
   const links = [], overlaps = [];
   events.forEach((e, ji) => {
-    if (e.status !== 'candidate' || e.upper_seconds - e.lower_seconds > .05) return;
+    if (!incrementsCombo(e.label) || e.status !== 'candidate' || e.upper_seconds - e.lower_seconds > .05) return;
     (data.combo_events ?? []).forEach((c, ci) => {
       if (c.delta !== 1 || c.upper_seconds - c.lower_seconds > .1 + 1e-6 || c.status !== 'matched' && c.reason !== 'ambiguous_note_or_combo_association') return;
       const overlap = Math.min(e.upper_seconds, c.upper_seconds) - Math.max(e.lower_seconds, c.lower_seconds), distance = Math.abs(e.upper_seconds - c.upper_seconds);

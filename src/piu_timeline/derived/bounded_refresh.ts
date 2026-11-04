@@ -1,3 +1,4 @@
+import {incrementsCombo} from './judgment_rules.ts';
 /** Recover a uniquely owned synchronized refresh using acquired target bounds. */
 import {synchronizedRefreshes} from './association.ts';
 import {fixedRefreshRow} from './fixed_refresh_rows.ts';
@@ -14,7 +15,7 @@ export function boundedRefreshes(data:RecordData,choices:RecordData,events:Recor
   const owners=matches.filter(m=>m.combo_event===ci||m.judgment_event===ji);
   if(owners.some(m=>m.combo_event!==ci||m.judgment_event!==ji))continue;
   const c=data.combo_events[ci],j=words[ji];
-  if(!['PERFECT','GREAT','GOOD','BAD'].includes(j.label)||c.upper_seconds-c.lower_seconds>.1+1e-6||
+  if(!incrementsCombo(j.label)||c.upper_seconds-c.lower_seconds>.1+1e-6||
     j.anchor_combo_event!=null&&j.anchor_combo_event!==ci)continue;
   const lo=Math.min(c.lower_seconds,j.lower_seconds),hi=Math.max(c.upper_seconds,j.upper_seconds);
   if(holdRisk(lo,hi))continue;
