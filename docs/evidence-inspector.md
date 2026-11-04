@@ -32,9 +32,16 @@ dimensions disable overlays explicitly. Unknown channel values remain unknown.
 The nearest captured frame and its distance from playback are shown, rather than
 claiming a sample exists at every requested time.
 
-Warnings sharing a diagnostic identity are grouped with all original records and
-origins retained. Paging and search do not acknowledge or suppress warnings. Applied
-chart regions and effects remain inspectable separately. A warning without a recording
+Warnings are grouped first by saved note identity (including a hold's explicit
+`display_note` ownership), then by check, reason and failure detail. Repeated
+observations of one cause share a section with individually accessible recording
+intervals. Different causes stay visible within the same note card. Exact diagnostic
+copies share an observation with all source records retained. Unassigned warnings
+use an explicit hold/track identity when available; temporal proximity or a shared
+lane never implies ownership. Otherwise each unassigned observation stays separate.
+The badge counts cases; the panel also counts causes and observations. Search matches
+any original record and shows its whole case for context. Original JSON opens lazily.
+Paging and search do not acknowledge or suppress warnings. Applied chart regions and effects remain inspectable separately. A warning without a recording
 time exposes its diagnostic data without a fabricated seek position.
 
 Saved UCS provenance is read during view preparation, without registering or rebuilding

@@ -102,13 +102,13 @@ test('processing overlay uses its own feature height and expected trajectory cen
 
 
 test('warnings page without suppressing records, group original copies and retain untimed cases',()=>{
-  const warnings=Array.from({length:70},(_,i)=>({note:i%2,lane:0,reason:'unresolved_'+i,visible_start_seconds:10,visible_end_seconds:11}));
+  const warnings=Array.from({length:70},(_,i)=>({lane:0,reason:'unresolved_'+i,visible_start_seconds:10,visible_end_seconds:11}));
   const {elements,evaluate}=inspector({recognition_diagnostics:{warnings},visibility_diagnostics:{warnings:[warnings[0]],known_occlusions:[],accounted_exits:[]}});
   elements.get('tab-warnings').onclick();assert.equal(elements.get('warningRows').children.length,50);
   assert.equal(evaluate('inspectorWarnings[0].records.length'),2);assert.equal(evaluate('inspectorWarnings.length'),70);
   elements.get('moreWarnings').onclick();assert.equal(elements.get('warningRows').children.length,70);
   elements.get('warningSearch').value='unresolved_66';elements.get('warningSearch').oninput();assert.equal(elements.get('warningRows').children.length,1);
-  elements.get('warningSearch').value='lane 1';elements.get('warningScope').value='selected';elements.get('warningScope').onchange();assert.equal(elements.get('warningRows').children.length,35);
+  elements.get('warningSearch').value='lane 1';elements.get('warningScope').value='selected';elements.get('warningScope').onchange();assert.equal(elements.get('warningRows').children.length,0);
   const untimed=inspector({recognition_diagnostics:{warnings:[{reason:'missing_source_time'}]}});untimed.elements.get('tab-warnings').onclick();
   assert.equal(descendants(untimed.elements.get('warningRows')).filter(n=>n.tag==='button').length,0);
 });
@@ -121,4 +121,40 @@ test('uncertain repeated-frame crossings expose their source interval in the ins
   assert.ok(details.some(n=>n.textContent.includes('scroll pause and a repeated captured image')));
   details.find(n=>n.tag==='button'&&n.textContent==='Review repeated native frames').onclick();
   assert.equal(elements.get('video').currentTime,9.98);assert.equal(evaluate('activeInspectorTab'),'channels');
+});
+
+
+test('note warnings group independent causes and repeated observations without changing diagnostics',()=>{
+  const warnings=[
+    {note:0,lane:0,check:'motion',reason:'missing',playback_seconds:10},
+    {hold:'held',lane:0,check:'motion',reason:'missing',playback_seconds:12},
+    {note:0,lane:0,check:'type',reason:'conflicting_type',playback_seconds:11},
+    {note:1,lane:0,check:'motion',reason:'missing',playback_seconds:10},
+    {note:0,lane:0,check:'motion',reason:'missing',playback_seconds:10,failure_detail:'reverse'},
+    {note:0,lane:0,check:'motion',reason:'missing',playback_seconds:10,missing_frames:2}];
+  const {elements,evaluate,data,run}=inspector({recognition_diagnostics:{warnings},
+    visibility_diagnostics:{warnings:[warnings[0]],known_occlusions:[],accounted_exits:[]}});
+  run("holdById.set('held',{display_note:0});collectInspectorWarnings()");
+  elements.get('tab-warnings').onclick();
+  assert.equal(elements.get('warningRows').children.length,2);
+  assert.deepEqual(evaluate('inspectorWarningCases.map(c=>[c.note,c.causes.map(g=>g.items.length)])'),[[0,[3,1,1]],[1,[1]]]);
+  assert.equal(evaluate('inspectorWarnings[0].records.length'),2);
+  assert.equal(evaluate('inspectorWarnings.length'),6); // Different payloads at the same time remain distinct.
+  assert.match(elements.get('warningSummary').textContent,/2 cases.*4 causes.*6 observations/);
+  const repeated=descendants(elements.get('warningRows')).find(n=>n.tag==='details'&&n.children[0]?.textContent==='All 3 observed intervals');
+  assert.equal(repeated.children.length,1);repeated.open=true;repeated.handlers.toggle[0]();
+  const intervals=descendants(repeated).filter(n=>n.tag==='button'&&n.textContent==='Video + channels');
+  intervals[1].onclick();assert.equal(evaluate('playhead'),12);assert.equal(evaluate('selectedNote'),0);
+  assert.equal(evaluate('selectedWarning'),1);
+  elements.get('tab-warnings').onclick();elements.get('warningSearch').value='conflicting_type';elements.get('warningSearch').oninput();
+  assert.equal(elements.get('warningRows').children.length,1);
+  assert.match(elements.get('warningRows').children[0].children[0].textContent,/Note #1/);
+  assert.deepEqual(evaluate('data'),data);
+});
+
+test('unowned warnings do not acquire note ownership from lane or neighboring times',()=>{
+  const warnings=[{lane:0,reason:'gap',playback_seconds:10},{lane:0,reason:'gap',playback_seconds:10.01},
+    {hold:'unknown',lane:0,reason:'gap',playback_seconds:10},{hold:'unknown',lane:0,reason:'gap',playback_seconds:11}];
+  const {evaluate}=inspector({recognition_diagnostics:{warnings}});
+  assert.deepEqual(evaluate('inspectorWarningCases.map(c=>[c.note,c.items.length])'),[[null,1],[null,1],[null,2]]);
 });

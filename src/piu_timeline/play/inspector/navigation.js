@@ -6,6 +6,7 @@ const inspectorTabs=['chart','channels','analysis','ucs','warnings','data'];
 let inspectorNavigating=false;
 let inspectorReady=false,activeInspectorTab='chart',evidenceAnchor=null,evidenceLane=null,selectedWarning=null;
 const inspectorWarnings=[];
+let inspectorWarningCases=[];
 let warningLimit=50,inspectorFrame=-1;
 function selectInspectorTab(name,focus=false){
   if(!inspectorTabs.includes(name))return;
@@ -36,36 +37,55 @@ function warningTime(record){
   return null;
 }
 function collectInspectorWarnings(){
+  inspectorWarnings.length=0;
   const seen=new Map();
   const sources=[['exclusion_diagnostics',data.exclusion_diagnostics],['recognition_diagnostics',data.recognition_diagnostics],
     ['visibility_diagnostics',data.visibility_diagnostics],['beat_timing',data.beat_timing],['timing_reconstruction',data.timing_reconstruction],['head_registration',data.head_registration]];
   for(const [source,bundle] of sources)for(const record of bundle?.warnings||[]){
-    const key=JSON.stringify([record.reason,record.note,record.hold,record.lane,warningTime(record),record.visible_end_seconds,record.failure_detail]);
+    const key=JSON.stringify(record);
     let item=seen.get(key);
     if(!item){item={record,origins:[],records:[],id:inspectorWarnings.length};inspectorWarnings.push(item);seen.set(key,item)}
     item.origins.push(source);item.records.push({source,record});
   }
-  $('warningCount').textContent=String(inspectorWarnings.length);
+  inspectorWarningCases=groupWarningCases(inspectorWarnings,warningNote);
+  $('warningCount').textContent=String(inspectorWarningCases.length)+' cases';
 }
 function warningNote(record){
   if(Number.isInteger(record.note)&&data.notes[record.note])return record.note;
   const hold=holdById.get(record.hold);return hold?.display_note??null;
 }
+function warningActions(parent,item){
+  const record=item.record,note=warningNote(record),time=warningTime(record);
+  const actions=text('div','',parent);actions.className='row';
+  text('span',(time===null?'No recording time supplied':fmt(time)+(Number.isFinite(record.visible_end_seconds)?' … '+fmt(record.visible_end_seconds):''))+
+    (record.lane!=null?' · lane '+(record.lane+1):'')+' · '+item.origins.join(', '),actions);
+  if(time!==null)for(const [tab,label] of [['channels','Video + channels'],['analysis','Derived data'],['chart','Note chart']])
+    text('button',label,actions).onclick=()=>inspectAt(time,note,record.lane??null,tab,item.id);
+}
 function renderInspectorWarnings(){
   const query=$('warningSearch').value.toLowerCase(),scoped=$('warningScope').value==='selected';
-  const list=inspectorWarnings.filter(item=>(!scoped||selectedNote!==null&&warningNote(item.record)===selectedNote)&&
-    (!query||(JSON.stringify(item.records)+(warningNote(item.record)===null?'':' note '+(warningNote(item.record)+1))+(item.record.lane==null?'':' lane '+(item.record.lane+1))).toLowerCase().includes(query)));
-  $('warningSummary').textContent=list.length+' cases / '+inspectorWarnings.length+' total · showing '+Math.min(warningLimit,list.length)+'. Related diagnostic copies are grouped; all original records remain available.';
+  const list=inspectorWarningCases.filter(entry=>(!scoped||selectedNote!==null&&entry.note===selectedNote)&&
+    (!query||entry.items.some(item=>(JSON.stringify(item.records)+(entry.note===null?'':' note '+(entry.note+1))+
+      (item.record.lane==null?'':' lane '+(item.record.lane+1))).toLowerCase().includes(query))));
+  const observations=list.reduce((sum,entry)=>sum+entry.items.length,0),causes=list.reduce((sum,entry)=>sum+entry.causes.length,0);
+  $('warningSummary').textContent=list.length+' cases / '+inspectorWarningCases.length+' total · '+causes+' causes · '+observations+
+    ' observations · showing '+Math.min(warningLimit,list.length)+' cases. Grouped by saved note identity, then check / reason / failure detail. No warnings are suppressed.';
   const root=$('warningRows');root.replaceChildren();
-  for(const item of list.slice(0,warningLimit)){
-    const record=item.record,note=warningNote(record),time=warningTime(record),card=text('article','',root);card.className='warning-card';
-    text('h3',(record.reason||'Unspecified warning').replaceAll('_',' '),card);
-    text('p',(time===null?'No recording time supplied':fmt(time)+(Number.isFinite(record.visible_end_seconds)?' … '+fmt(record.visible_end_seconds):''))+
-      (record.lane!=null?' · lane '+(record.lane+1):'')+(note!==null?' · note #'+(note+1):'')+' · '+item.origins.join(', '),card);
-    const actions=text('div','',card);actions.className='row';
-    const jump=tab=>{inspectAt(time,note,record.lane??null,tab,item.id)};
-    if(time!==null){text('button','Video + channels',actions).onclick=()=>jump('channels');text('button','Derived data',actions).onclick=()=>jump('analysis');text('button','Note chart',actions).onclick=()=>jump('chart')}
-    const details=text('details','',card);text('summary','Diagnostic records',details);text('pre',JSON.stringify(item.records,null,2),details);
+  for(const entry of list.slice(0,warningLimit)){
+    const first=entry.items[0],card=text('article','',root);card.className='warning-card';
+    text('h3',(entry.note!==null?'Note #'+(entry.note+1):first.record.hold!=null?'Hold '+first.record.hold:'Unassigned observation')+
+      ' · '+entry.causes.length+' causes · '+entry.items.length+' observations',card);
+    for(const cause of entry.causes){
+      const section=text('div','',card);section.className='warning-cause';
+      text('h4',(cause.record.reason||'Unspecified warning').replaceAll('_',' ')+' · '+cause.items.length+' observations',section);
+      text('p',[cause.record.check,cause.record.failure_detail].filter(Boolean).join(' · '),section);
+      warningActions(section,cause.items[0]);
+      if(cause.items.length>1){
+        const repeated=text('details','',section);text('summary','All '+cause.items.length+' observed intervals',repeated);
+        let loaded=false;repeated.addEventListener('toggle',()=>{if(repeated.open&&!loaded){for(const item of cause.items)warningActions(repeated,item);loaded=true}});
+      }
+      inspectJSON(section,'Original diagnostic records ('+cause.items.reduce((sum,item)=>sum+item.records.length,0)+')',cause.items.flatMap(item=>item.records));
+    }
   }
   $('moreWarnings').hidden=warningLimit>=list.length;
 }

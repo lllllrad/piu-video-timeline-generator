@@ -30,8 +30,8 @@ function renderDerivation(){
     ['Applied chart policy and visual support',{policy:note.chart_policy,visual_support:data.visual_support,regions:(data.chart_policy?.regions||[]).filter(r=>{
       const t=note.target_seconds??note.points?.[0]?.[0];return r.playback_start_seconds<=t&&t<r.playback_end_seconds})}]];
   for(const [title,value] of blocks)inspectJSON(root,title,value);
-  const warnings=inspectorWarnings.filter(item=>warningNote(item.record)===index);
-  text('button',warnings.length+' warnings for this note',root).onclick=()=>{$('warningScope').value='selected';$('warningSearch').value='';warningLimit=50;selectInspectorTab('warnings')};
+  const warnings=inspectorWarningCases.find(entry=>entry.note===index);
+  text('button',(warnings?.causes.length??0)+' warning causes for this note',root).onclick=()=>{$('warningScope').value='selected';$('warningSearch').value='';warningLimit=50;selectInspectorTab('warnings')};
 }
 function renderUcsSelection(){
   const chart=data.inspector_artifacts?.chart,root=$('ucsSelection');root.replaceChildren();

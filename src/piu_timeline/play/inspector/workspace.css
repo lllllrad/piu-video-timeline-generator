@@ -38,3 +38,7 @@ header p{margin:4px 0 10px;font-size:13px}
 .selection-bar>label{flex:1 1 220px;font-size:12px;margin:0}
 .selection-bar>button{font-size:12px}
 .provenance-grid{margin-top:10px}
+
+.warning-cause{padding:10px 0;border-top:1px solid var(--edge)}
+.warning-cause h4{margin:0 0 6px;font-size:14px}
+.warning-cause>details{margin-top:8px}

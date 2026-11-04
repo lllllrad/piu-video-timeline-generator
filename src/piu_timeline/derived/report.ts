@@ -2,7 +2,7 @@
 import {readFileSync} from 'node:fs';
 const resource = name => readFileSync(new URL(`../play/${name}`, import.meta.url), 'utf8');
 const template = resource('report.html').replace('__STYLE__', () => resource('report.css') + '\n' + resource('inspector/workspace.css'))
-  .replace('__SCRIPT__', () => ['report-evidence.js', 'inspector/navigation.js', 'inspector/provenance.js', 'inspector/overlay.js', 'report.js'].map(resource).join('\n'));
+  .replace('__SCRIPT__', () => ['report-evidence.js', 'inspector/warning-groups.js', 'inspector/navigation.js', 'inspector/provenance.js', 'inspector/overlay.js', 'report.js'].map(resource).join('\n'));
 const escape = (value: string) => value.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;'}[c]));
 
 export function render(dataJSON: string, song: string, chart: string, media: string): string {
