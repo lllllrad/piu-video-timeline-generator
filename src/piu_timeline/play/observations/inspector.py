@@ -37,7 +37,9 @@ def snapshot(data, directory):
                            and metadata.get('generated_ucs_sha256') == sha256(text.encode()).hexdigest())
         chart['text'] = text
         chart['metadata'] = {key: metadata[key] for key in ('identity', 'source', 'alignment', 'review_status',
-                             'placements', 'unresolved', 'summary', 'hold_simplifications') if key in metadata}
+                             'placements', 'unresolved', 'summary', 'hold_simplifications',
+                             'combo_analysis', 'draft_merge', 'transcription') if key in metadata}
+        chart['metadata']['draft_sources'] = [{k:item[k]for k in ('id','source')}for item in metadata.get('draft_sources',[])]
     except (OSError, ValueError) as error:
         chart['error'] = f'Cannot read saved chart: {error}'
     return result

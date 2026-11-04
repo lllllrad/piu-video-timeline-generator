@@ -33,7 +33,7 @@ revision selections. Manage them with `just skins publish`, `list`, `select` and
 Original recordings and generated diagnostics stay outside this repository.
 
 Once initialized, successful `just play` runs register missing charts automatically, including
-compatible cached analyses. Registration never overwrites an existing chart directory. Download,
+compatible cached analyses. Untouched `unreviewed_draft` charts with retained source contributions merge new recordings automatically. Reviewed or manually edited UCS text remains protected. Download,
 identity or alignment failures write a pending reason in the play's `chart-registration.json`
 without invalidating its native analysis. `sync` attempts registration for completed local plays; it
 does not invoke metadata OCR or acquire gameplay frames. It may download missing reference archives
@@ -248,8 +248,7 @@ gaps, contained duplicates and censored holds are not simplified.
 `hold_simplifications` records the policy, every original head/tail interval and
 each bridged gap. Placements retain those source intervals too. Native observations,
 timing evidence and recognition warnings stay unchanged. This transformation does
-not establish identical hold tick counts; tick equivalence remains explicitly
-unverified. Internal decorative endpoints no longer force a finer UCS Split.
+not establish identical hold tick counts. Separate combo annotations preserve supported ticks; unobserved or conflicting weights remain unknown. Internal decorative endpoints no longer force a finer UCS Split.
 
 ### Reviewed chart facts
 
@@ -328,3 +327,87 @@ time or retimes the recording. The immutable audio measurement remains in
 `alignment`; `transcription_alignment` records the effective origin, uncertainty,
 phase bounds and timing digest. Source timestamps and observed target ranges
 are unchanged.
+
+## Hold combo row extension
+
+The local UCS extension adds `:Combo=1` before timing sections. The five/ten lane
+cells keep their standard meaning. A whitespace-separated nonnegative integer
+annotates the potential combo increment for that judgment row when judged
+PERFECT/GREAT. An omitted number means **1**; `0` means no combo judgment at that
+row; `?` means unknown. The count is for the entire simultaneous judgment row,
+not a separate number for each lane. Connectivity and judgment rows are independent:
+
+```text
+:Format=1
+:Mode=Single
+:Combo=1
+:BPM=120
+:Delay=0
+:Beat=4
+:Split=4
+M.... 0
+H.... ?
+H....
+H.... 10
+W.... 0
+```
+
+A visual head or tail does not imply an extra judgment. A generated unknown body
+row stays `?`; it must not become zero merely because that recording lacks a
+counter update. GOOD and BAD do not increase the observed counter, but a supported
+automatic hold judgment still identifies a potential chart judgment. Failed input
+never rewrites the chart's potential weight to zero. MISS supplies no press time.
+
+The separate `charts/combo.ts` stage annotates a completed geometry draft from
+native popup refreshes. Its unit is a timing row, independent of how many lanes
+are active or which hold owns an update. Simultaneous taps count as one ordinary
+judgment. Simultaneous holds and mixed tap/hold rows provisionally follow the same
+rule; `combo.RULE` records these assumptions separately from the confirmed tap
+rule. Raw deltas, labels, refresh brackets, source identities and the rule used
+are retained so contrary evidence can change the model without reacquisition.
+
+The stage corrects the configured display delay and requires exactly one existing
+chart row inside the observed bracket and fixed transcription residual budget.
+It never moves heads, tails or button presses onto musical rows. A larger counter
+jump is not one weighted tick unless a scoped `suspected_multi_increment` effect
+declares that exact increment. Broad brackets, aggregate jumps and unplaceable
+ticks are explicit `combo_analysis.unresolved` records. Unknown hold rows remain
+visible in the UCS text and inspector. These observations do not yet establish a
+complete hold tick schedule or total count for every chart.
+
+`ucs.standard(document)` removes the extension while preserving lane cells and
+exact timing. Standard exports lose combo annotations, so keep the extended file
+as the editable chart source. Official timing templates remain standard UCS.
+
+## Combining unreviewed recordings
+
+Registration stores each recording's draft under metadata `draft_sources`, keyed
+by source ID and segment number, with its analysis/media fingerprint, geometry and
+combo evidence. Reanalyzing that recording replaces its contribution rather than
+adding a duplicate. Reusing an unchanged contribution performs no alignment or
+transcription work. Different source contributions must use identical official
+timing and chart mode/revision. Each recording uses its own verified alignment.
+
+The merged draft unions positive note facts; a missing observation is not a
+negative chart fact. Equal hold boundaries are one hold, agreeing numeric weights
+are one value rather than a sum, and known values fill other recordings' unknowns.
+Conflicting tap/hold geometry is withheld and conflicting numeric weights stay
+`?`, with both source claims retained in `draft_merge.conflicts`. Missing or
+ambiguous merged rows are explicit failures. The union reconstructs minimal natural
+splits per measure from actual geometry endpoints and known tick rows; it does not
+retain a contributing recording's unnecessary dense grid. Current-recording source
+links are remapped to the final grid; other source identities remain in metadata.
+
+Only untouched `unreviewed_draft` UCS text can be updated. Reviewed charts and
+manual edits retain their existing bytes. Human regions, gimmick decisions and
+reviewed row assertions survive; assertions validate the merged result before an
+atomic replacement with an ignored rollback backup. A concurrent edit aborts the
+update. Legacy drafts without retained contributions require `add --rebuild-draft`
+once; the old chart/metadata are backed up and the new recording becomes the
+baseline. Normal automatic registration does not silently replace that legacy data.
+
+Saved `ucs-input.json` keeps geometry observations separate from hold combo evidence.
+`just derive ucs INPUT OUTPUT` replays both stages without media access.
+`just derive ucs-merge INPUT OUTPUT` accepts `timing_text` and `sources` containing
+unique `id` and extended `ucs_text` values. These derived entry points do not write
+the chart repository or bypass registration's review/edit protection.

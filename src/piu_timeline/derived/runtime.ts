@@ -35,6 +35,8 @@ import * as chartPhase from './charts/phase.ts';
 import * as chartHolds from './charts/holds.ts';
 import * as chartAssertions from './charts/assertions.ts';
 import * as chartDraft from './charts/draft.ts';
+import * as chartCombo from './charts/combo.ts';
+import * as chartMerge from './charts/merge.ts';
 import * as localized from './charts/localized.ts';
 import * as candidates from './candidates.ts';
 import * as ranges from './ranges.ts';
@@ -59,7 +61,7 @@ import {parseData, stringifyData} from './json.ts';
 
 const operations = {
   coordinateMeasurements, skinAnchors, skinCenters, skinSelection, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription, retention,
-  registration, clocks, nativeClock, tracks, frameTracking, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, localized,
+  registration, clocks, nativeClock, tracks, frameTracking, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, chartCombo, chartMerge, localized,
   holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, timingSummary, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
   holdState, holdExtent, holdGeometry, holdRisk, stageCoordinates, nativeTiming, stageAssociations, beats: {...beats,fitGrid},
 };

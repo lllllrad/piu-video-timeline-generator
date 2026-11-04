@@ -10,6 +10,7 @@ NATURAL_SPLITS=tuple(CONTRACTS['natural_splits'])
 class Section:
     directives:list
     rows:list
+    combo_counts:list|None=None
 
 
 @dataclass
@@ -29,12 +30,14 @@ class Document:
     def expanded(self,lanes,subdivisions=1):
         return document(call('ucs.expanded',asdict(self),lanes,subdivisions))
 
+    def standard(self):return document(call('ucs.standard',asdict(self)))
+
     def text(self):return call('ucs.text',asdict(self))
 
 
 def document(value):
     return Document([tuple(d)for d in value['header']],
-                    [Section([tuple(d)for d in s['directives']],s['rows'])for s in value['sections']])
+                    [Section([tuple(d)for d in s['directives']],s['rows'],s.get('combo_counts'))for s in value['sections']])
 
 
 def parse(text):return document(call('ucs.parse',text))

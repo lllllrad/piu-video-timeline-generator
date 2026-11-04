@@ -9,6 +9,8 @@ import {estimate} from './speed.ts';
 import {parse, text} from './charts/ucs.ts';
 import {transcribe} from './charts/transcription.ts';
 import {draft} from './charts/draft.ts';
+import {annotate} from './charts/combo.ts';
+import {merge} from './charts/merge.ts';
 import {parseData, stringifyData} from './json.ts';
 import {prepare, preview,materialize} from './pipeline/presentation.ts';
 import {timingRanges} from './ranges.ts';
@@ -33,10 +35,15 @@ export function derive(stage: string, input): unknown {
   if (stage === 'coordinates') return registered(input.tracks, input.timeline, input.height, input.spacing, input.receptor, input.bottom);
   if (stage === 'clocks') return fitMany(input.state, input.tracks, input.receptor, input.layout);
   if (stage === 'speed') return estimate(input);
+  if (stage === 'ucs-merge') {
+    const [doc, evidence] = merge(parse(input.timing_text), input.sources.map(s => ({id:s.id,document:parse(s.ucs_text)})));
+    return {ucs_text:text(doc),evidence};
+  }
   if (stage === 'ucs') {
     if (input.chart_observations) {
       const [doc, evidence] = draft(parse(input.timing_text), input.chart_observations, input.alignment, input.extend_constant_tempo ?? false);
-      return {ucs_text: text(doc), evidence};
+      const [annotated, combo] = annotate(doc,evidence,input.hold_combo_evidence ?? {});
+      return {ucs_text: text(annotated), evidence:{...evidence,combo_analysis:combo}};
     }
     const [doc, , accepted, failures, proof] = transcribe(parse(input.timing_text), input.endpoints);
     return {ucs_text: text(doc), accepted, failures, proof};

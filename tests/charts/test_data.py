@@ -232,6 +232,34 @@ class ChartDataTest(unittest.TestCase):
             self.assertEqual(json.loads(before)['review_status'], 'unreviewed_draft')
             self.assertNotIn('path', json.loads(before)['source'])
 
+    def test_unreviewed_sources_merge_union_and_replace_one_recording_idempotently(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);repo=initialize(root/'repo',Provider())
+            a=root/'first/play/segment-001';b=root/'second/play/segment-001'
+            a.mkdir(parents=True);b.mkdir(parents=True)
+            first=data();first['notes']=first['notes'][:1];prove_types(first)
+            result=register(first,a,repository=repo,song_start=10,client=Provider())
+            second=data();second['notes']=second['notes'][1:];prove_types(second)
+            merged=register(second,b,repository=repo,song_start=10,client=Provider())
+            self.assertEqual(merged['status'],'merged')
+            chart=Path(result['chart']);meta=chart.with_name('metadata.json')
+            saved=json.loads(meta.read_text())
+            self.assertEqual(len(saved['draft_sources']),2)
+            self.assertEqual(sum(row.count('X')for section in ucs.parse(chart.read_text()).sections for row in section.rows),3)
+            before=chart.read_bytes(),meta.read_bytes()
+            with patch.object(Provider,'template',side_effect=AssertionError('Current source must reuse contribution')):
+                self.assertEqual(register(second,b,repository=repo,client=Provider())['status'],'existing')
+            self.assertEqual((chart.read_bytes(),meta.read_bytes()),before)
+            first['notes'][0]['target_seconds']=10.75;prove_types(first)
+            self.assertEqual(register(first,a,repository=repo,song_start=10,client=Provider())['status'],'merged')
+            self.assertEqual(len(json.loads(meta.read_text())['draft_sources']),2)
+            times=[float(t)for si,ri,t in ucs.parse(chart.read_text()).grid()if ucs.parse(chart.read_text()).sections[si].rows[ri].startswith('X')]
+            self.assertEqual(times,[.75])
+            saved=json.loads(meta.read_text());saved['review_status']='reviewed';meta.write_text(json.dumps(saved))
+            before=chart.read_bytes(),meta.read_bytes()
+            self.assertEqual(register(second,b,repository=repo,client=Provider())['status'],'existing')
+            self.assertEqual((chart.read_bytes(),meta.read_bytes()),before)
+
     def test_identity_requires_unique_title_or_explicit_alias(self):
         with tempfile.TemporaryDirectory() as temporary:
             repo = initialize(Path(temporary)/'repo', Provider())

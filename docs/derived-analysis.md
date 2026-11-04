@@ -346,3 +346,9 @@ orchestration remain Python. Acquisition changes can require frame replay; consu
 retained inputs. Native observation refits use a transactional pending segment
 before promotion, while ordinary consumer refreshes use their stage artifacts.
 See [data flow](play-data-flow.md).
+
+UCS generation separates visible geometry (`charts/draft.ts`), automatic hold combo
+observations (`charts/combo.ts`) and the union of independent draft contributions
+(`charts/merge.ts`). Combo annotation cannot edit visual endpoints. Draft merging
+uses exact song-relative UCS times and rebuilds measure grids, retaining source
+claims and explicit conflicts. See [chart data](chart-data.md#hold-combo-row-extension).

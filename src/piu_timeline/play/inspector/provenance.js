@@ -39,6 +39,14 @@ function renderUcsSelection(){
   $('ucsStatus').textContent=chart?'Registration: '+chart.registration.status+(chart.registration.reason?' · '+chart.registration.reason:'')+
     (chart.error?' · '+chart.error:'')+(metadata?' · '+metadata.review_status+' · source association: '+(chart.linked?'exact saved analysis identity':'unlinked / different or edited analysis'):''):
     'No saved UCS registration or draft snapshot is attached. No UCS placements are inferred from judgment times.';
+  if(metadata?.combo_analysis){
+    const combo=metadata.combo_analysis,merge=metadata.draft_merge;
+    text('p','Hold combo rows: '+(combo.confirmed_hold_rows??combo.placed?.length??0)+' confirmed · '+(combo.unknown_hold_rows??0)+' unknown · '+
+      (metadata.draft_sources?.length??1)+' source(s) · '+(merge?.conflicts?.length??0)+' merge conflicts. Numbers are potential PERFECT/GREAT combo increments; ? remains unresolved.',root);
+    inspectJSON(root,'Hold combo observations and unresolved updates',combo);
+    if(merge)inspectJSON(root,'Draft merge sources and conflicts',merge);
+    inspectJSON(root,'Per-measure timing reconstruction',metadata.transcription);
+  }
   if(chart?.linked&&selectedNote!==null){
     const placements=(metadata?.placements||[]).filter(p=>p.note===selectedNote),unresolved=(metadata?.unresolved||[]).filter(p=>p.note===selectedNote);
     text('p',placements.length?'Selected note #'+(selectedNote+1)+' has '+placements.length+' saved placement(s).':

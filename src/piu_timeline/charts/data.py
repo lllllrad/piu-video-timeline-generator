@@ -14,7 +14,6 @@ import unicodedata
 import uuid
 
 from piu_timeline.charts import ucs
-from piu_timeline.charts.audio import align
 from piu_timeline.charts.official import Client, ROOT, index, write_json, atomic_write
 
 
@@ -42,8 +41,11 @@ def initialize(repository, client=None):
                 'Edit UCS rows directly: `.` empty, `X` tap, `M` hold head, `H` hold body, `W` hold tail. '
                 'Single has five columns; Double has ten. Review the metadata and change its '
                 '`review_status` to `reviewed` only after independent verification. '
-                'Automatic registration never replaces an existing chart directory. '
+                'Untouched unreviewed drafts merge independent recordings; reviewed or manually edited UCS files remain protected. '
                 'Use a new revision directory for game chart updates.\n\n'
+                'The local `:Combo=1` extension accepts a row suffix: a nonnegative integer is the potential combo increment, '
+                'omitted means 1, and `?` means unknown. Hold connectivity and judgment rows are independent. '
+                'Simultaneous holds and mixed tap/hold rows provisionally count once per timing row.\n\n'
                 'Use metadata `regions` for song-relative processing methods and scoped automatic-check exceptions. '
                 'Every region requires a reason. The root `schema.json` documents editable fields.\n\n'
                 'Reusable note-skin images and recording selections live under `skins/`; '
@@ -125,9 +127,12 @@ def draft(template,data,alignment,extend_constant_tempo=False,*,input_path=None)
     observations={key:view[key]for key in fields if key in view}
     if input_path is not None:
         write_json(input_path, {'timing_text':template.text(),'chart_observations':observations,
-                               'alignment':alignment,'extend_constant_tempo':extend_constant_tempo})
+                               'alignment':alignment,'extend_constant_tempo':extend_constant_tempo,
+                               'hold_combo_evidence':{k:view[k]for k in ('combo_events','judgment_events','display_delay_correction_ms','chart_policy')if k in view}})
     doc,proof=call('chartDraft.draft',asdict(template),observations,alignment,extend_constant_tempo)
-    return ucs.document(doc),proof
+    doc,combo=call('chartCombo.annotate',doc,proof,{k:view[k]for k in
+                   ('combo_events','judgment_events','display_delay_correction_ms','chart_policy')if k in view})
+    return ucs.document(doc),{**proof,'combo_analysis':combo}
 
 
 def register(data, output, code=None, repository=None, song_start=None, revision='phoenix', client=None, rebuild_draft=False):
@@ -150,6 +155,8 @@ def register(data, output, code=None, repository=None, song_start=None, revision
     resolved = index(resolved)
     target = repository / 'charts' / resolved / chart / revision
     previous = None
+    merge_update = False
+    analysis_hash = sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
     def existing_result():
         result = {'status': 'existing', 'chart': str(target / 'chart.ucs'), 'index': resolved,
                   'revision': revision, 'chart_mode': chart, 'repository': str(repository.resolve())}
@@ -164,14 +171,22 @@ def register(data, output, code=None, repository=None, song_start=None, revision
             if not (target / 'chart.ucs').is_file() or not (target / 'metadata.json').is_file():
                 raise ValueError(f'Existing chart directory is incomplete; inspect {target}')
             existing_document=ucs.parse((target / 'chart.ucs').read_text())
-            if not rebuild_draft:
-                from piu_timeline.charts.assertions import validate as validate_assertions
-                validate_assertions(existing_document,json.loads((target/'metadata.json').read_text()).get('row_assertions',[]))
-                return existing_result()
             old_chart = (target / 'chart.ucs').read_bytes()
             old_metadata = (target / 'metadata.json').read_bytes()
             old = json.loads(old_metadata)
-            if old.get('review_status') != 'unreviewed_draft' or old.get('generated_ucs_sha256') != sha256(old_chart).hexdigest():
+            untouched = old.get('review_status') == 'unreviewed_draft' and old.get('generated_ucs_sha256') == sha256(old_chart).hexdigest()
+            if not rebuild_draft:
+                from piu_timeline.charts.assertions import validate as validate_assertions
+                validate_assertions(existing_document,old.get('row_assertions',[]))
+                # Existing manual/reviewed data and legacy drafts remain protected.
+                sources = old.get('draft_sources', [])
+                same = any(item['source'].get('source_id') == output.parents[1].name
+                           and item['source'].get('segment_number') == data.get('segment_number')
+                           and item['source'].get('analysis_sha256') == analysis_hash for item in sources)
+                if not untouched or not sources or same:
+                    return existing_result()
+                merge_update = True
+            if not untouched:
                 raise ValueError('Cannot rebuild a reviewed or manually edited chart; create a new revision')
             previous = (old_chart, old_metadata)
     provider = client or Client()
@@ -179,30 +194,34 @@ def register(data, output, code=None, repository=None, song_start=None, revision
     if song_start is not None:
         alignment = {'method': 'explicit_song_start', 'song_start_seconds': song_start, 'uncertainty_seconds': 0, 'rate': 1}
     else:
-        alignment = align(data, music)
+        from piu_timeline.charts.audio import prepare_alignment
+        alignment = prepare_alignment(data, output, json.loads(previous[1]) if previous else {}, resolved, client=provider)
     code_entry = next(item for item in catalogue(repository)['songs'] if item['index'] == resolved)
     bpm = code_entry.get('bpm', '')
     constant = ucs.constant_tempo(template,bpm)
     document, evidence = draft(template, data, alignment, extend_constant_tempo=constant, input_path=output/'ucs-input.json')
-    content = document.text().encode()
     metadata = {'$schema': '../../../../schema.json', 'schema': 1, 'regions': [],
                 'identity': {'ucs_index': resolved, 'chart': chart, 'revision': revision},
                 'display_chart': data.get('chart'), 'chart_identity_evidence': data.get('chart_identity'),
-                'song': code_entry, 'review_status': 'unreviewed_draft', 'generated_ucs_sha256': sha256(content).hexdigest(),
+                'song': code_entry, 'review_status': 'unreviewed_draft', 'generated_ucs_sha256': None,
                 'timing_source': {'url': url, 'ucs_sha256': sha256(template.text().encode()).hexdigest()},
                 'source': {'source_id': output.parents[1].name, 'segment_number': data.get('segment_number'),
                            'media_size_bytes': data['media']['size_bytes'], 'media_mtime_ns': data['media']['mtime_ns'],
                            'playback_range': [data['start_seconds'], data['end_seconds']],
-                           'analysis_sha256': sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()},
+                           'analysis_sha256': analysis_hash},
                 'alignment': alignment, **evidence,
                 'limitations': ['Notes come from video geometry, independently of successful input or judgment association.',
                                 'Unobserved notes are not filled from the blank official template.',
                                 'This source-derived draft must not validate its own source observations.']}
+    from piu_timeline.charts.drafts import combine
+    document, metadata = combine(template, document, metadata, json.loads(previous[1]) if previous else None)
+    content = document.text().encode()
+    metadata['generated_ucs_sha256'] = sha256(content).hexdigest()
     with (repository / '.chart-data.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if target.exists():
             if previous is None:
-                return existing_result()
+                raise ValueError('Chart appeared during registration; retry to merge the new source')
             if previous != ((target/'chart.ucs').read_bytes(), (target/'metadata.json').read_bytes()):
                 raise ValueError('Chart changed while rebuilding; preserve the newer files')
             # Preserve user-added metadata fields when explicitly rebuilding an
@@ -235,8 +254,11 @@ def register(data, output, code=None, repository=None, song_start=None, revision
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary)
-    return {'status': 'rebuilt' if previous is not None else 'created', 'chart': str(target / 'chart.ucs'), 'index': resolved,
-            'alignment': alignment, 'revision': revision, 'chart_mode': chart, 'repository': str(repository.resolve()), **evidence['summary']}
+    return {'status': 'merged' if merge_update else 'rebuilt' if previous is not None else 'created', 'chart': str(target / 'chart.ucs'), 'index': resolved,
+            'alignment': alignment, 'revision': revision, 'chart_mode': chart, 'repository': str(repository.resolve()), **metadata['summary'],
+            'combo_unresolved': len(metadata['combo_analysis']['unresolved']),
+            'unknown_hold_rows': metadata['combo_analysis'].get('unknown_hold_rows', 0),
+            'merge_conflicts': len(metadata.get('draft_merge', {}).get('conflicts', []))}
 
 
 def auto_register(data, output, **options):
@@ -266,7 +288,7 @@ def auto_register(data, output, **options):
                 and previous.get('alignment', {}).get('method') == 'explicit_song_start'):
             result.update(alignment=previous['alignment'], alignment_media=previous['alignment_media'])
     write_json(registration, result)
-    if result['status'] in ('existing','created','rebuilt'):
+    if result['status'] in ('existing','created','rebuilt','merged'):
         from piu_timeline.charts.gimmicks import record_candidates
         try:
             candidates = record_candidates(data,Path(output),result)
@@ -280,6 +302,9 @@ def auto_register(data, output, **options):
         result['gimmick_candidates'] = candidates
     if result['status'] != 'disabled':
         print(f'Chart data: {result["status"]}; {result.get("chart", result.get("reason", ""))}', flush=True)
+        for key, label in (('combo_unresolved','unplaced hold combo updates'), ('unknown_hold_rows','hold rows with unknown combo weight'), ('merge_conflicts','draft merge conflicts')):
+            if result.get(key):
+                print(f'Warning: UCS draft has {result[key]} {label}; inspect its metadata.json.',flush=True)
         if result.get('unresolved_note_heads'):
             print(f'Warning: UCS draft has {result["unresolved_note_heads"]} unresolved note placements; inspect its metadata.json.',flush=True)
     return result
