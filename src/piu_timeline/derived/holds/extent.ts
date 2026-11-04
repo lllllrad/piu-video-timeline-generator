@@ -1,5 +1,5 @@
 /** A rigid body's length must satisfy every independently bounded endpoint pair. */
-export const format = {schema: 1, minimum_frames: 4, minimum_span_seconds: .065, method: 'registered_endpoint_interval_intersection'};
+export const format = {schema: 1, minimum_frames: 4, method: 'registered_endpoint_interval_intersection'};
 export interface Measurement {
   time: number; source_pts_seconds: number; head_y: number; tail_y: number;
   head_uncertainty?: number; tail_uncertainty?: number;
@@ -17,7 +17,7 @@ export function intersect(samples: Measurement[]) {
     qualified.push(s);
   }
   if (lower > upper + 1e-9) return {status: 'conflict', reason: 'incompatible_endpoint_length_intervals'};
-  if (qualified.length < format.minimum_frames || qualified.at(-1).time - qualified[0].time < format.minimum_span_seconds - 1e-9) {
+  if (qualified.length < format.minimum_frames) {
     return {status: 'unverified', reason: 'insufficient_registered_endpoint_pairs'};
   }
   return {status: 'consistent', format, length_range_pixels: [lower, Math.max(lower, upper)],

@@ -32,7 +32,7 @@ proof that an overlay exists.
 | Double lanes | x = 0.235, 0.29423, 0.35346, 0.41269, 0.47135, 0.52962, 0.58885, 0.64808, 0.7075, 0.76654 | Two panels with ten ordered lanes |
 | Combo digits | `layout.combo_roi`; default centered on lane-group mean, width 0.14, y = 0.52, height 0.075 | Known foreground HUD can break a moving outline |
 | COMBO caption | Centered on the digits, 1.4 times their ROI width, y = 0.475 through 0.52 | Named occluder `combo_label`; digits separately use `combo_digits` |
-| Judgment word | `layout.judgment_roi` when supplied; otherwise twice the combo-digit ROI width, y = 0.385 through 0.475 for the default layout | Named occluder `judgment_word`; PERFECT/GREAT/GOOD/BAD/MISS and their animation |
+| Judgment word | `layout.judgment_roi` when supplied; otherwise twice the combo-digit ROI width, y = 0.365 through 0.475 for the default layout | Named occluder `judgment_word`; PERFECT/GREAT/GOOD/BAD/MISS and their animation |
 | Moving field | Below receptor centers through `note_y_max`, default 0.95 | Heads normally move upwards; holds have separate head, body and tail observations |
 | Credit/status text | Near the lower edge in the inspected recordings | Not automatically an occlusion exemption; actual location/overlap needs its own documented rule |
 | Song/player/chart labels and grade totals | Selection, cover and result scenes, with separate metadata OCR regions | These scene-specific regions do not mask gameplay trajectories |
@@ -45,7 +45,8 @@ one of the named HUD rectangles to explain a missing outline. Sharing the same
 y coordinate in another lane does not establish occlusion. These footprints
 are conservative foreground approximations, not pixel-verified HUD opacity.
 The larger judgment OCR search window is independent and grants no visibility
-exemption. The default word bounds include the observed Phoenix word animation;
+exemption. The default word bounds include the observed Phoenix word animation
+(including high-confidence word boxes reaching y = 135 at 650 x 365);
 COMBO uses a separate 1.4-times digit-ROI width at y = 0.475 through 0.52, and
 digits use their own ROI. Positive matches remain usable throughout.
 

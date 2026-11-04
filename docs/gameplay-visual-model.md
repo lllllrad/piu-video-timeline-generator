@@ -493,3 +493,6 @@ Only a sufficiently visible partial window can confirm an earlier full clear
 absence; it never supplies the transition timestamp. See the [processing
 confirmation contract](visual-channels.md#a-clipped-confirmation-after-clear-disappearance)
 for coverage, reappearance and source-cadence requirements.
+
+Image hold connection rules and their source evidence are documented in
+[image hold connectivity](hold-image-connectivity.md).

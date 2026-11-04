@@ -5,14 +5,23 @@ from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.sampling import key,models,reference_scale
 
 
-def reference_rows(data, *, cap_only=False, body_only=False):
-    if cap_only and body_only:raise ValueError('Select cap or connector support, not both')
+def reference_models(data):
     bank=load_bank(data['skin_detector']['bank_path'])
     if bank['contract']!=data['skin_detector']['contract']['bank']:
         raise ValueError('Hold image references differ from the acquired observation bank')
     scale=reference_scale(bank,data['layout'],data['analysis_width'],data['analysis_height'])
+    return (model for original in bank['templates']for model in models(original,scale))
+
+
+def negative_regions(data):
+    return {key(t):[r for r in t['regions']if r['name']in('clear_above','clear_below')]
+            for t in reference_models(data)}
+
+
+def reference_rows(data, *, cap_only=False, body_only=False):
+    if cap_only and body_only:raise ValueError('Select cap or connector support, not both')
     result={}
-    for template in (model for original in bank['templates']for model in models(original,scale)):
+    for template in reference_models(data):
         support=template['cap_support']if cap_only else template['support']
         if body_only:
             support=np.zeros_like(support)

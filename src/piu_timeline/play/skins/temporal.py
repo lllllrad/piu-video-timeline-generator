@@ -4,6 +4,7 @@ from piu_timeline.play.observations.coordinates import detection_points,fit_traj
 
 from piu_timeline import derived
 from piu_timeline.play.skins.coverage import image_spans
+from piu_timeline.play.skins.occlusion import coverage,lane_regions
 
 
 def measured_steps(data,native):
@@ -29,6 +30,7 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
     steps=measured_steps(data,native)
     spacing=(data['layout']['lanes'][1]['x']-data['layout']['lanes'][0]['x'])*data['analysis_width']
     height=data['analysis_height'];nodes=[];parents=[];previous=[];before=None
+    regions={lane:lane_regions(data,lane)for lane in range(len(data['layout']['lanes']))}
     def root(i):
         while parents[i]!=i:parents[i]=parents[parents[i]];i=parents[i]
         return i
@@ -58,6 +60,16 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
                 nodes.append({'time':time,'source_pts':frame['source_pts_seconds'],'lane':lane,
                               'covered_bounds_pixels':[a,b],'body_template_support':body,'tags':tags,'image_node':index,'connected_to':[]})
                 current.append(index)
+        for lane in lanes:
+            adjacent=[i for i in current if nodes[i]['lane']==lane]
+            for a,b in zip(adjacent,adjacent[1:]):
+                first,last=nodes[a],nodes[b]
+                if not first['body_template_support']or not last['body_template_support']:continue
+                spans=[first['covered_bounds_pixels'],last['covered_bounds_pixels']]
+                hidden=coverage(spans[0][0],spans[1][1],spans,regions[lane])
+                if hidden is not None and hidden.get('occluded_intervals'):
+                    parents[root(b)]=root(a)
+                    last.setdefault('occlusion_links',[]).append({'image_node':a,'occluded_intervals':hidden['occluded_intervals']})
         measured=steps.get(time)if before is not None else None
         if measured is not None:
             delta=measured['displacement_pixels']
@@ -71,11 +83,22 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
         previous=current;before=time
     components=defaultdict(list)
     for i,node in enumerate(nodes):components[root(i)].append(node)
-    pairs=defaultdict(list);refuted=defaultdict(list)
+    pairs=defaultdict(list);refuted=defaultdict(list);endpoint_components=[]
     for component in components.values():
         tags={tag for node in component for tag in node['tags']}
         heads={i for i,role in tags if role=='head'};tails={i for i,role in tags if role=='tail'}
-        if len(heads)!=1 or len(tails)!=1:continue
+        if len(heads)!=1 or len(tails)!=1:
+            if not tags or any(role=='barrier'for i,role in tags)or len(heads)>1 or len(tails)>1:continue
+            proof=[]
+            for node in component:
+                point={k:v for k,v in node.items()if k!='tags'}
+                point['trace']='frames.jsonl'
+                point['endpoint_observations']=[{'note':i,'role':role,'y_pixels':dict(detection_points(data['notes'][i]))[node['time']]}
+                                                for i,role in node['tags']]
+                proof.append(point)
+            endpoint_components.append({'endpoint_notes':sorted(heads|tails),'proof':proof,
+                                        'missing':coverage_losses(data,native,proof,steps)})
+            continue
         head,tail=next(iter(heads)),next(iter(tails));first,last=data['notes'][head],data['notes'][tail]
         times={n['time']for n in component}
         if len(times)<4 or max(times)-min(times)<.065:continue
@@ -107,7 +130,8 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
     return {'pairs':[{'head':head,'tail':tail,'proof':sorted(proof,key=lambda p:(p['time'],p['image_node'])),
                       'missing':coverage_losses(data,native,proof,steps)}
                      for (head,tail),proof in pairs.items()if (head,tail)not in refuted],
-            'refuted':[{'head':head,'tail':tail,'evidence':evidence}for (head,tail),evidence in refuted.items()]}
+            'refuted':[{'head':head,'tail':tail,'evidence':evidence}for (head,tail),evidence in refuted.items()],
+            'endpoint_components':endpoint_components}
 
 
 def coverage_losses(data,native,proof,steps):

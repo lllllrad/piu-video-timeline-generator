@@ -24,7 +24,7 @@ def geometry(data, directory, frames, reconstruct):
         fields=('time','source_pts','phase','chunk','support','coordinate_status','native_displacement_interval')
         values['scroll_motion']={'samples':[{k:s[k]for k in fields if k in s}
                                            for s in data.get('scroll_motion',{}).get('samples',[])]}
-    modules=['play/holds/stages.py','play/skins/holds.py','play/skins/temporal.py','play/skins/coverage.py',
+    modules=['play/holds/stages.py','play/skins/holds.py','play/skins/temporal.py','play/skins/coverage.py','play/skins/occlusion.py',
              'play/skins/observations.py','play/skins/extents.py','play/skins/detector.py','play/skins/bank.py',
              'derived/holds/extent.ts','derived/holds/image_motion.ts','derived/coordinates/measurements.ts','play/observations/coordinates.py','play/object_roles.py']if image else[
              'play/holds/stages.py','play/holds/reconstruction.py','play/holds/geometry.py','play/holds/continuity.py',

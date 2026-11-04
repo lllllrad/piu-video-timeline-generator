@@ -18,7 +18,7 @@ def reconstruct_images(*args,**kwargs):
     return image_analysis(*args,**kwargs)
 
 
-def fixture(root,tap=False,unknown_peer=False):
+def fixture(root,tap=False,unknown_peer=False,hud=False):
     items,manifest=examples(root)
     if unknown_peer:
         entry=deepcopy(manifest['templates'][0]);entry.update(id='peer_cap',lane_kind=1)
@@ -26,6 +26,7 @@ def fixture(root,tap=False,unknown_peer=False):
         (root/'bank.json').write_text(json.dumps(manifest))
     bank=load_bank(root/'bank.json')
     layout={'receptor_y':.05,'note_y_max':.95,'lanes':[{'x':.1+i*.1,'color':'blue'}for i in range(5)]}
+    if hud:layout.update(combo_roi=[.7,.8,.14,.075],judgment_roi=[.05,.4,.1,.25])
     detector=SkinDetector(bank,layout,200,300);native=[];receptors=[];points=[[],[]];motion=[];peer_points=[]
     def paste(image,y,patch,left=10):
         a,b=max(0,y),min(300,y+len(patch))
@@ -38,6 +39,7 @@ def fixture(root,tap=False,unknown_peer=False):
         paste(image,head-10,items[1][1]);paste(image,tail-25,items[2][1])
         if tap and index==60:paste(image,130,items[0][1])
         if unknown_peer and index in (59,60,61):paste(image,130+5*(60-index),items[0][1],left=30)
+        if hud:image[120:195,10:30]=0
         observations=detector.detect(image)
         if unknown_peer:
             peer_points.extend([time,o['y']*300]for o in observations if o['lane']==1 and o['role']=='unknown')

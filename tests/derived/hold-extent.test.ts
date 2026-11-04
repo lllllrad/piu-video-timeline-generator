@@ -13,7 +13,15 @@ for(const scale of [.5,1,2,4])test(`registered endpoints preserve a rigid short 
 test('unknown endpoint errors cannot create a rigid body, and frame order is preserved',()=>{
   const missing=holdEndpointScene(43).map(s=>({...s,head_uncertainty:undefined}));assert.equal(intersect(missing).status,'unverified');
   const sparse=holdEndpointScene(43).slice(0,3);assert.equal(intersect(sparse).status,'unverified');
-  const short=holdEndpointScene(43).map((s,i)=>({...s,time:i*.001}));assert.equal(intersect(short).status,'unverified');
   const duplicate=holdEndpointScene(43);duplicate[1].source_pts_seconds=duplicate[0].source_pts_seconds;assert.throws(()=>intersect(duplicate),/timeline/);
   const reversed=holdEndpointScene(43);reversed[1].time=reversed[0].time;assert.throws(()=>intersect(reversed),/timeline/);
+});
+test('native length bounds do not depend on capture duration or duplicated rendered positions',()=>{
+ for(const fps of [30,60,120]){
+  const samples=holdEndpointScene(43).slice(0,4).map((s,i)=>({...s,time:i/fps,source_pts_seconds:50+i/fps}));
+  samples[2]={...samples[1],time:2/fps,source_pts_seconds:50+2/fps};
+  const result=intersect(samples);assert.equal(result.status,'consistent');
+  assert.ok(result.length_range_pixels[0]<=43&&result.length_range_pixels[1]>=43);
+  assert.deepEqual(result.source_pts_seconds,samples.map(s=>s.source_pts_seconds));
+ }
 });

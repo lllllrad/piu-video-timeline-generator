@@ -170,8 +170,9 @@ def augment_channels(data, directory, frames=None):
         'play/note_types.py', 'play/holds/type_links.py', 'play/holds/geometry.py', 'play/skins/observations.py')
     contract['measurement_producers']['motion'] = derived_motion_contract()
     if data.get('skin_detector'):
-        from piu_timeline.play.skins.observations import FORMAT as IMAGE_ROLE_FORMAT
+        from piu_timeline.play.skins.observations import FORMAT as IMAGE_ROLE_FORMAT,producer_contract
         contract['image_roles'] = IMAGE_ROLE_FORMAT
+        contract['measurement_producers'].update(producer_contract())
     path = directory/'visual-channels.json'
     if path.is_file():
         saved = json.loads(path.read_text())

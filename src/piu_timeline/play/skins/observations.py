@@ -3,12 +3,31 @@ from collections import Counter
 from piu_timeline.play.observations.coordinates import detection_points
 
 
-FORMAT = {'schema': 1, 'revision': 2, 'evidence': 'native_image_trace_references'}
+FORMAT = {'schema': 1, 'revision': 3, 'evidence': 'native_image_trace_references',
+          'negative_evidence':'unoccluded_clearance_regions'}
+
+
+def producer_contract():
+    from piu_timeline.play.observations.artifacts import producer
+    return producer('play/skins/observations.py','play/skins/coverage.py','play/skins/sampling.py',
+                    'play/skins/detector.py','play/skins/bank.py','play/screen_regions.py')
+
+
+def clearance_occlusions(image,references,layout,width,height):
+    from piu_timeline.play.skins.sampling import key
+    from piu_timeline.play.skins.detector import occluded_support
+    left,top=image['bounds_pixels'][:2];ox,oy=image.get('sampling_origin_pixels',[0,0])
+    return [r['name']for r in references[key(image)]
+            if occluded_support(layout,r['mask'],left-ox+r['box'][0],top-oy+r['box'][1],width,height)]
 
 def observe(data, native):
     by_time = {f['playback_seconds']: f for f in native}
     records = []
     height = data['analysis_height']
+    references={}
+    if data.get('skin_detector',{}).get('bank_path'):
+        from piu_timeline.play.skins.coverage import negative_regions
+        references=negative_regions(data)
     for index, note in enumerate(data['notes']):
         observations = []
         for time, y in detection_points(note):
@@ -25,6 +44,8 @@ def observe(data, native):
                 proof=next((p for p in [image,*image.get('alternatives',[])]
                             if p.get('template_role',p['role'])==observed_role
                             and p.get('classification_status','full_pattern')in('full_pattern','conflict')),image)
+                obscured=clearance_occlusions(proof,references,data['layout'],data['analysis_width'],height)if observed_role=='tap'and references else []
+                if obscured:observed_role='unknown'
                 observations.append({'kind': 'tap' if observed_role == 'tap' else 'hold' if observed_role in ('hold_start', 'hold_end') else 'unknown',
                                  'role': observed_role, 'reason': image.get('reason','skin_image_' + role), 'source_note': index,
                                  'playback_seconds': time, 'source_pts_seconds': frame['source_pts_seconds'],
@@ -33,6 +54,10 @@ def observe(data, native):
                                  'image_anchor':[proof.get('x',image.get('x')),proof.get('y',image.get('y'))],
                                  'source_image_anchor':[image.get('x'),image.get('y')],
                                  'classification_status':proof.get('classification_status','full_pattern')})
+                if obscured:
+                    observations[-1].update(reason='skin_tap_clearance_occluded',classification_status='cap_only',
+                                            comparison_classification_status=proof.get('classification_status','full_pattern'),
+                                            occluded_clearance_regions=obscured)
                 observations[-1].update({k:proof[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')if k in proof})
         for proof in data.get('skin_role_evidence',{}).get('notes',{}).get(str(index),[]):
             observations.append({**proof,'image_anchor':[proof['image_anchor'][0]/data['analysis_width'],

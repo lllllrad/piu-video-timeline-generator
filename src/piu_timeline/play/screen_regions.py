@@ -1,7 +1,7 @@
 """Named game-image regions; only documented foreground HUD can hide heads."""
 
 FORMAT={'schema':1,'revision':2,'method':'foreground_hud_footprints',
-        'judgment_width_combo_ratio':2.,'judgment_top_offset':-.135,'judgment_height':.09,
+        'judgment_width_combo_ratio':2.,'judgment_top_offset':-.155,'judgment_height':.11,
         'combo_label_width_ratio':1.4,'combo_label_top_offset':-.045}
 
 

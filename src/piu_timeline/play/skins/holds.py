@@ -3,14 +3,16 @@ from collections import defaultdict
 from piu_timeline.play.observations.coordinates import detection_points
 
 from piu_timeline.play.skins.observations import observe
+from piu_timeline.play.skins.occlusion import coverage,lane_regions,supported,SUPPORT
 
 
-FORMAT = {'schema': 1, 'revision': 21, 'method': 'independent_image_hold_proof',
+FORMAT = {'schema': 1, 'revision': 22, 'method': 'independent_image_hold_proof',
           'interior_caps':'separate_observed_objects',
           'motion_peers':'explicit_fit_trajectory_displacement',
           'cap_coverage':'all_qualified_cap_comparisons',
           'coverage_prediction':'intersection_of_source_bound_displacements',
-          'temporal_body_support':'qualified_body_or_endpoint_connection_regions'}
+          'temporal_body_support':'qualified_body_or_endpoint_connection_regions',
+          'direct_support':SUPPORT,'occlusion':'visible_rows_with_named_hidden_intervals'}
 
 def covered(lo, hi, boxes):
     cursor = lo
@@ -34,6 +36,7 @@ def image_pairs(data, native, roles, references, cap_references, lengths,body_re
         if roles[head] != {'hold_start'}:
             continue
         before = dict(detection_points(first))
+        regions=lane_regions(data,first['lane'])
         for tail, last in enumerate(data['notes']):
             if roles[tail] != {'hold_end'} or last['lane'] != first['lane']:
                 continue
@@ -58,15 +61,13 @@ def image_pairs(data, native, roles, references, cap_references, lengths,body_re
                              and o.get('classification_status')=='cap_only'
                              and min(abs(o['y']*data['analysis_height']-a),abs(o['y']*data['analysis_height']-b))<1e-5
                              for span in image_spans(o,cap_references,cap_only=True))
-                if covered(a, b, boxes):
-                    proof.append({'time': time, 'source_pts': frame['source_pts_seconds'], 'head_y': a, 'tail_y': b})
+                observed=coverage(a,b,boxes,regions)
+                if observed is not None:
+                    proof.append({'time': time, 'source_pts': frame['source_pts_seconds'], 'head_y': a, 'tail_y': b,**observed})
                 else:
-                    from piu_timeline.play.screen_regions import occluders_at_bounds
-                    bounds = [center-.25*spacing, a, center+.25*spacing, b]
-                    if not occluders_at_bounds(data['layout'],bounds,width,data['analysis_height']):
-                        missing.append({'time': time, 'source_pts': frame['source_pts_seconds']})
-            if (len(proof) < 4 or proof[-1]['time'] - proof[0]['time'] < .065
-                    or proof[0]['head_y'] - proof[-1]['head_y'] < .5 * spacing):
+                    missing.append({'time': time, 'source_pts': frame['source_pts_seconds'],
+                                    'failure_detail':'visible_hold_connection_unobserved'})
+            if not supported(proof,spacing):
                 continue
             gaps = [p['tail_y'] - p['head_y'] for p in proof]
             if max(gaps) - min(gaps) > 2 and lengths.check(head, tail)['status'] != 'consistent':
@@ -79,10 +80,22 @@ def image_pairs(data, native, roles, references, cap_references, lengths,body_re
         head,tail=pair['head'],pair['tail']
         if (head,tail)in existing:
             proof,missing=existing[head,tail];times={p['time']for p in pair['proof']}
-            proof[:]=sorted([*[p for p in proof if p['time']not in times],*pair['proof']],key=lambda p:p['time'])
+            proof[:]=sorted([*[p for p in proof if p['time']not in times or p.get('occluded_intervals')],*pair['proof']],key=lambda p:p['time'])
             missing.extend(pair['missing'])
         else:proposals.append((head,tail,pair['proof'],pair['missing']))
         heads[head].add(tail);tails[tail].add(head)
+    for head,tail,proof,missing in proposals:
+        for component in temporal['endpoint_components']:
+            if not set(component['endpoint_notes'])<={head,tail}:continue
+            if not any(p['body_template_support']for p in component['proof']):continue
+            for point in component['proof']:
+                observed={k:v for k,v in point.items()if k!='endpoint_observations'}
+                for cap in point['endpoint_observations']:
+                    observed['head_y'if cap['note']==head else'tail_y']=cap['y_pixels']
+                proof.append(observed)
+            missing.extend(component['missing'])
+        proof.sort(key=lambda p:(p['time'],p.get('image_node',-1)))
+        missing.sort(key=lambda p:p['time'])
     refuted={(p['head'],p['tail']):list(p['evidence'])for p in temporal['refuted']}
     positions=defaultdict(list)
     for i,note in enumerate(data['notes']):
@@ -177,8 +190,9 @@ def measure_connections(data,native,diagnostics,*,references=None,cap_references
     accounted = defaultdict(list)
     for hold in image_connections:
         for point in hold['image_connection_evidence']:
-            accounted[hold['lane'], point['time']].append(
-                point['covered_bounds_pixels']if 'covered_bounds_pixels'in point else(point['head_y'],point['tail_y']))
+            spans=point.get('observed_intervals_pixels',
+                            [point['covered_bounds_pixels']]if 'covered_bounds_pixels'in point else[(point['head_y'],point['tail_y'])])
+            accounted[hold['lane'], point['time']].extend(spans)
     pending_bodies = defaultdict(list)
     for frame in native:
         for image in frame.get('skin_observations', []):

@@ -35,6 +35,9 @@ def note_types(data, directory, native, frames, observe):
               'native': files(directory, (baseline,)),
               'files': files(directory, ('processing-features.npz', 'appearance-features.npz')),
               'producer': producer('play/observations/channel_stages.py', 'play/note_types.py', 'play/holds/type_links.py', 'play/holds/geometry.py', 'play/skins/observations.py')}
+    if data.get('skin_detector'):
+        from piu_timeline.play.skins.observations import producer_contract
+        inputs['producer'].update(producer_contract())
     result = cached(directory, 'note-types', inputs, lambda: observe(source))
     # A first acquisition may have created the appearance cache. Bind the same
     # result to the finalized measurement inputs without performing it twice.

@@ -8,6 +8,7 @@ from piu_timeline.play.judgments import judgment_region
 layout={'combo_roi':[.43,.52,.14,.075]}
 print(json.dumps({'search':judgment_region(layout),'regions':note_occluders(layout),
  'old_padding':occluders_at_bounds(layout,[220,120,230,130],650,365),
+ 'launch':occluders_at_bounds(layout,[290,135,360,169],650,365),
  'word':occluders_at_bounds(layout,[250,148,400,164],650,365),
  'label':occluders_at_bounds(layout,[270,177,380,187],650,365),
  'digits':occluders_at_bounds(layout,[294,197,356,211],650,365)}))`;
@@ -18,7 +19,7 @@ test('the wide OCR search window is not a note occluder',()=>{
  assert.deepEqual(result.old_padding,[]);
 });
 test('word, label and digits retain their own foreground footprints',()=>{
- assert.deepEqual(result.word,['judgment_word']);assert.deepEqual(result.label,['combo_label']);
+ assert.deepEqual(result.launch,['judgment_word']);assert.deepEqual(result.word,['judgment_word']);assert.deepEqual(result.label,['combo_label']);
  assert.deepEqual(result.digits,['combo_digits']);
  assert.deepEqual(result.regions.map(r=>r.id),['judgment_word','combo_label','combo_digits']);
 });

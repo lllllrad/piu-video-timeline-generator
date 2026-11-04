@@ -85,3 +85,9 @@ support. Cap pixels and failed connector comparisons do not count as body.
 Reconstruction still requires a unique pair of observed endpoints, positive
 regions connected through measured source motion, and sustained multi-frame
 support. Missing pixels, motion and endpoint timing remain explicit failures.
+
+Hold connection proof keeps `observed_intervals_pixels` separate from
+`occluded_intervals`, which name the foreground HUD region for each explained
+hole. Original endpoint/component PTS and source frame links remain inspectable
+in the derivation JSON. Positive body/tail observations after head processing
+retain the proven hold identity without a fabricated head position.
