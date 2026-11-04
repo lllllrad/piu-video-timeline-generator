@@ -75,6 +75,28 @@ export function expanded(doc: Document, count: number, subdivisions = 1): Docume
   });
   return {header, sections};
 }
+/** Canonicalize generated timing sections before assigning section/row provenance. */
+export function compact(doc: Document): Document {
+  const sections: Section[] = [];
+  let split: string | null = null;
+  for (const original of doc.sections) {
+    const section = structuredClone(original);
+    section.directives = section.directives.filter(([key,value]) => {
+      if (key !== 'Split') return true;
+      const redundant = split !== null && q(value).cmp(q(split)) === 0;
+      split = value;return !redundant;
+    });
+    if (!section.directives.length && sections.length) {
+      const previous = sections.at(-1), before = previous.rows.length;
+      previous.rows.push(...section.rows);
+      if (previous.combo_counts != null || section.combo_counts != null) {
+        previous.combo_counts ??= Array(before).fill(1);
+        previous.combo_counts.push(...(section.combo_counts ?? Array(section.rows.length).fill(1)));
+      }
+    } else sections.push(section);
+  }
+  return {header:doc.header,sections};
+}
 /** Remove the local extension for consumers that require standard UCS. */
 export function standard(doc: Document): Document {
   return {header: doc.header.filter(([k]) => k !== 'Combo'), sections: doc.sections.map(s => ({directives: s.directives, rows: s.rows}))};

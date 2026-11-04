@@ -64,8 +64,10 @@ alignment remains an explicit beat reconstruction warning.
 UCS `Delay` is applied in milliseconds at each section boundary, while `BPM` and `Split` determine
 row duration. Drafts infer a separate split for each measure, also preserving original timing-change
 boundaries and fractional measure phase. They maximize uniquely supported head/tail intervals and
-prefer the smallest natural split on ties. Empty measures use the coarsest split that preserves
-their exact duration. Original BPM, delay and measure-length directives remain intact; blank
+prefer the smallest natural split on ties. Empty interior measures use the coarsest split that preserves
+their exact duration. Trailing empty measures inherit the preceding split when compatible
+with their exact duration. Generated sections omit unchanged Split directives and combine
+adjacent sections without a remaining timing change before assigning row provenance. Original BPM, delay and measure-length directives remain intact; blank
 template rows are not evidence of note subdivision.
 
 There is no nearest-row fallback or fixed additive matching allowance. A measured target interval,

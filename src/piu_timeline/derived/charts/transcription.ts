@@ -1,7 +1,7 @@
 import {contracts, NATURAL_SPLITS} from '../contracts.ts';
 import {lowerBound, upperBound} from '../math.ts';
 import {q, lcm, type Rational} from './rational.ts';
-import {grid, lanes, type Document, type Directive, type Section} from './ucs.ts';
+import {compact, grid, lanes, type Document, type Directive, type Section} from './ucs.ts';
 import type {Interval, RecordData} from '../types.ts';
 const F = contracts.transcription, EPS = 1e-8;
 
@@ -51,10 +51,15 @@ export function transcribe(doc: Document, endpoints: Record<string, Interval>): 
     groups[Math.max(0, Math.min(spans.length - 1, upperBound(starts, center) - 1))].push([key, interval]);
   }
   const sections: Section[] = [], fits: RecordData[] = [], assigned = {}, failures = {};
-  let flat = 0;
+  const lastOccupied = groups.reduce((last, group, index) => group.length ? index : last, -1);
+  let flat = 0, previousSplit: number | null = null;
   spans.forEach((span, index) => {
     const following = starts[index + 1] ?? null, factor = lcm(Number(span.phase.d), Number(span.beats.d));
-    const splits = [...new Set(NATURAL_SPLITS.map(s => lcm(factor, s)).filter(s => s <= 1536))].sort((a, b) => a - b);
+    let splits = [...new Set(NATURAL_SPLITS.map(s => lcm(factor, s)).filter(s => s <= 1536))].sort((a, b) => a - b);
+    if (index >= lastOccupied && previousSplit !== null && previousSplit % factor === 0 && groups[index].every(([, [lo, hi]]) => {
+      const matches = choices(span, previousSplit, lo, hi, following);
+      return matches.length === 1 && Math.abs(matches[0][0] - span.start.number()) <= EPS;
+    })) splits = [previousSplit];
     const trials = [];
     let best = null;
     for (const split of splits) {
@@ -72,6 +77,7 @@ export function transcribe(doc: Document, endpoints: Record<string, Interval>): 
     }
     if (!best) throw new Error('Official timing boundaries cannot form an increasing measure grid');
     const {split, matches, rejected} = best;
+    previousSplit = split;
     const directives: Directive[] = [...span.directives.filter(([k]) => k !== 'Split'), ['Split', String(split)]];
     sections.push({directives, rows: Array(span.beats.mul(q(split)).integer()).fill('.'.repeat(lanes(doc)))});
     for (const [key, [time, row]] of Object.entries<number[]>(matches)) assigned[key] = [time, flat + row, index];
@@ -82,7 +88,7 @@ export function transcribe(doc: Document, endpoints: Record<string, Interval>): 
       endpoints: groups[index].length, unique_endpoints: Object.keys(matches).length, tested_splits: trials});
     flat += sections.at(-1).rows.length;
   });
-  const result = {header: doc.header, sections}, rows = grid(result), times = rows.map(r => r[2].number());
+  const result = compact({header: doc.header, sections}), rows = grid(result), times = rows.map(r => r[2].number());
   if (times.slice(1).some((t, i) => t <= times[i])) throw new Error('Overlapping UCS timing sections need manual placement');
   const accepted = {};
   for (const [key, [time, row, index]] of Object.entries<number[]>(assigned)) {

@@ -245,6 +245,8 @@ class ChartDataTest(unittest.TestCase):
             chart=Path(result['chart']);meta=chart.with_name('metadata.json')
             saved=json.loads(meta.read_text())
             self.assertEqual(len(saved['draft_sources']),2)
+            self.assertEqual([item['alignment']['song_start_seconds']for item in saved['draft_sources']],[10,10])
+            self.assertEqual([len(item['placements'])for item in saved['draft_sources']],[1,2])
             self.assertEqual(sum(row.count('X')for section in ucs.parse(chart.read_text()).sections for row in section.rows),3)
             before=chart.read_bytes(),meta.read_bytes()
             with patch.object(Provider,'template',side_effect=AssertionError('Current source must reuse contribution')):

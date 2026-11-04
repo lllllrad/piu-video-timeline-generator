@@ -73,3 +73,32 @@ test('every target outside the template has an explicit failure', () => {
   assert.deepEqual(accepted, {});
   assert.deepEqual(Object.keys(failed).sort(), Object.keys(points).sort());
 });
+
+test('equal consecutive measure splits serialize once and retain exact placement indexes',()=>{
+ const [doc,rows,accepted,,proof]=transcribe(template(),intervals([.25,2.25],.006));
+ assert.deepEqual(proof.measures.map(m=>m.split),[2,2]);
+ assert.equal((text(doc).match(/:Split=2/g)??[]).length,1);
+ assert.equal(doc.sections.length,1);assert.deepEqual(parse(text(doc)),doc);
+ assert.equal(rows[accepted['1']][0],0);assert.equal(rows[accepted['1']][1],9);
+ assert.equal(rows[accepted['1']][2].toString(),'9/4');
+});
+test('trailing empty measures inherit the preceding split without a final Split=1 reset',()=>{
+ const source=template(),[doc,,,failed,proof]=transcribe(source,intervals([.125],.005));
+ assert.deepEqual(failed,{});assert.deepEqual(proof.measures.map(m=>m.split),[4,4]);
+ assert.equal((text(doc).match(/:Split=/g)??[]).length,1);assert.ok(!text(doc).includes(':Split=1'));
+ assert.equal(duration(doc),duration(source));assert.deepEqual(parse(text(doc)),doc);
+});
+test('equal splits across a tempo change omit the repeated split but preserve the timing boundary',()=>{
+ const source=parse(':Format=1\n:Mode=Single\n:BPM=120\n:Delay=0\n:Beat=4\n:Split=1\n'+
+ '.....\n'.repeat(4)+':BPM=180\n:Delay=10\n:Split=1\n'+'.....\n'.repeat(4));
+ const [doc,rows]=transcribe(source,{});
+ assert.equal((text(doc).match(/:Split=1/g)??[]).length,1);assert.equal(doc.sections.length,2);
+ assert.equal(rows.find(r=>r[0]===1)[2].toString(),'201/100');assert.equal(duration(doc),duration(source));
+});
+
+test('a final boundary endpoint does not introduce a redundant coarse tail section',()=>{
+ const [doc,rows,accepted,,proof]=transcribe(template(),intervals([.125,2],.005));
+ assert.deepEqual(proof.measures.map(m=>m.split),[4,4]);
+ assert.equal((text(doc).match(/:Split=/g)??[]).length,1);
+ assert.equal(rows[accepted['1']][2].toString(),'2');assert.deepEqual(parse(text(doc)),doc);
+});

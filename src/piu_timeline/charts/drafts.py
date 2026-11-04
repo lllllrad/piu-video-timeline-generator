@@ -14,7 +14,9 @@ def combine(template, document, metadata, previous=None):
     identity = contribution_id(source)
     contributions = [item for item in (previous or {}).get('draft_sources', []) if item['id'] != identity]
     contributions.append({'id': identity, 'source': source, 'document': asdict(document),
-                          'combo_analysis': metadata['combo_analysis']})
+                          'combo_analysis': metadata['combo_analysis'], 'alignment': metadata['alignment'],
+                          'transcription_alignment': metadata['transcription_alignment'],
+                          'placements': metadata['placements'], 'unresolved': metadata['unresolved']})
     metadata['draft_sources'] = contributions
     if len(contributions) == 1:
         metadata['combo_analysis'] = call('chartMerge.comboSummary', asdict(document), metadata['combo_analysis'])
