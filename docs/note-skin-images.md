@@ -64,8 +64,9 @@ Additional same-role templates can cover animation and rendering variants.
 
 Hold-start and hold-end templates must have separate `cap` and `connection`
 regions. A start's connection lies below its anchor; an end's lies above it.
-Every region must independently pass its masked mean squared RGB error limit.
-A large matching cap cannot average away a contradictory small connection.
+Each region passes its own masked mean squared RGB error limit. Connection and
+body masks also check every nonempty cell of a 3 by 3 partition, including
+disconnected shoulders and corners. Empty cells supply no evidence.
 For a short hold, the opposite cap can overlap a long connection window.
 Additional references can compare the nearest visible body rows instead, using
 the same independent cap and connection limits. A failed longer window is not
@@ -82,11 +83,11 @@ require a stricter limit. This is an appearance metric, not a timing allowance.
 
 A confirmed tap additionally requires `clear_above` and `clear_below` image
 regions outside the cap. A cap-only reference still locates candidates, but
-cannot distinguish a tap from a hold boundary. Missing, hidden or mismatching
-context therefore retains the position with `role: unknown` and
+cannot distinguish a tap from a hold boundary. Missing or mismatching context retains the position with `role: unknown` and
 `classification_status: cap_only`. Failed connection comparisons on endpoint
 images work the same way. Unknown context does not assert a tap or a background
 gap. Its reason and all region comparisons remain in the source observation.
+See [overlapping note observations](note-skin-overlap.md) for partial-cap proof.
 
 Use the declared full-game reference grid for uniform image transforms, with
 lane-spacing scale for undeclared banks and nonuniform grids. Preserve horizontal
@@ -484,7 +485,6 @@ references without cap features keep their existing acquisition identity and rul
 
 Use [reference-anchor review](note-skin-anchor-review.md) to compare same-cap
 witnesses and align shared source-image landmarks before activating a candidate.
-
 
 Automatic selection first checks six independent playback windows. If the
 observations remain insufficient, it checks six additional windows with the

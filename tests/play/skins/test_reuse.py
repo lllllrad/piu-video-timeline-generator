@@ -89,6 +89,17 @@ class ImageReuseTest(unittest.TestCase):
             data['skin_detector']['contract']['detector']['horizontal_search_spacing']=.5
             self.assertEqual(reusable_groups(data,bank),set())
 
+    def test_changed_foreground_cap_invalidates_every_lane_cap_but_not_body_pixels(self):
+        from tests.play.skins.scenes import bank_at
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);old=root/'old';new=root/'new';old.mkdir();new.mkdir()
+            bank_at(old);bank_at(new)
+            image=new/'1-tap.png';rgba=cv2.imread(str(image),cv2.IMREAD_UNCHANGED)
+            rgba[12:16,4:8,:3]=[60,80,90];cv2.imwrite(str(image),rgba)
+            data={'skin_detector':detector_metadata(old/'bank.json')}
+            reusable=reusable_groups(data,load_bank(new/'bank.json'))
+            self.assertEqual(reusable,{f'body/{kind}'for kind in range(5)})
+
     def test_changed_rules_or_unverifiable_old_bank_cannot_authorize_reuse(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);examples(root);bank=load_bank(root/'bank.json')

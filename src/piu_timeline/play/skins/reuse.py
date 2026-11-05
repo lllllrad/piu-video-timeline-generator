@@ -39,7 +39,12 @@ def reusable_groups(data,bank):
             or old['spacing_pixels']!=bank['spacing_pixels']
             or old.get('reference_frame')!=bank.get('reference_frame')):return set()
     a,b=signatures(old),signatures(bank)
-    return {key for key in a.keys()&b.keys()if a[key]==b[key]and(key.startswith('caps/')or previous==FORMAT)}
+    # Caps can occlude one another across lanes. A changed cap reference can
+    # expose or hide a candidate from any other kind, so caps form one input set.
+    cap_inputs=lambda signatures:{k:v for k,v in signatures.items()if k.startswith('caps/')}
+    same_caps=cap_inputs(a)==cap_inputs(b)
+    return {key for key in a.keys()&b.keys()if a[key]==b[key]
+            and(same_caps if key.startswith('caps/')else previous==FORMAT)}
 
 
 def merge_observations(native,detected,reused):

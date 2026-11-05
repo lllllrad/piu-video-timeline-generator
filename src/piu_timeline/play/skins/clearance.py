@@ -10,10 +10,10 @@ from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.skins.detector import SkinDetector
 from piu_timeline.play.skins.sampling import key,reference_scale
 
-FORMAT={'schema':1,'revision':7,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
+FORMAT={'schema':1,'revision':8,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
         'minimum_frames':4,
         'minimum_motion_spacing':.5,'maximum_anchor_delta_spacing':.1,
-        'body_core_halfwidth_spacing':.1,'minimum_clearance_halfwidth_spacing':.2,
+        'body_geometry':'declared_components_all_rows','minimum_clearance_halfwidth_spacing':.2,
         'maximum_white_fraction':.05}
 COLORS=('blue','red','yellow','red','blue')
 
@@ -23,9 +23,8 @@ def validate_profile(data,bank,profile):
         raise ValueError('Unsupported native clearance profile or skin identity')
     if any(lane.get('color')!=COLORS[i%5]for i,lane in enumerate(data['layout']['lanes'])):
         raise ValueError('Native clearance profile differs from lane colors')
-    spacing=np.median(np.diff([lane['x']*PIXEL_FORMAT['width']for lane in data['layout']['lanes']]))
     height=round(PIXEL_FORMAT['width']*data['analysis_height']/data['analysis_width'])
-    scale=reference_scale(bank,data['layout'],PIXEL_FORMAT['width'],height);kinds=set();count=0
+    scale=reference_scale(bank,data['layout'],PIXEL_FORMAT['width'],height);kinds=set();count=0;footprints={}
     for template in bank['templates']:
         if template['role']!='hold_body':continue
         h,w=template['mask'].shape;size=max(1,round(w*scale)),max(1,round(h*scale))
@@ -39,16 +38,22 @@ def validate_profile(data,bank,profile):
                 measured[b:d,a:c]=template['mask'][b:d,a:c]
         support=cv2.resize(measured,size,interpolation=cv2.INTER_NEAREST).astype(bool)
         color=measurements(rgb)['relaxed_'+COLORS[template['lane_kind']]]
-        center=template['anchor_pixels'][0]*size[0]/w
-        core=abs(np.arange(size[0])+.5-center)<=FORMAT['body_core_halfwidth_spacing']*spacing
-        if not support.any()or not core.any()or not (color&support)[:,core].any(axis=1)[support.any(axis=1)].all():
-            raise ValueError('A body reference can disappear from the clearance color plane')
+        if not support.any():raise ValueError('Body reference has no measured support')
+        count_components,labels=cv2.connectedComponents(support.astype('uint8'),connectivity=8)
+        for component in range(1,count_components):
+            footprint=labels==component;rows=footprint.any(axis=1)
+            if not(color&footprint).any(axis=1)[rows].all():
+                raise ValueError('A body component can disappear from the clearance color plane')
+        xs=np.nonzero(support)[1];center=template['anchor_pixels'][0]*size[0]/w
+        lo,hi=float(xs.min()-center),float(xs.max()+1-center)
+        kind=str(template['lane_kind']);before=footprints.get(kind,[lo,hi])
+        footprints[kind]=[min(lo,before[0]),max(hi,before[1])]
         kinds.add(template['lane_kind']);count+=1
     if kinds!=set(range(5)):raise ValueError('Clearance needs body references for every lane kind')
-    return {'validated_body_templates':count,'lane_kinds':sorted(kinds)}
+    return {'validated_body_templates':count,'lane_kinds':sorted(kinds),'body_x_offsets_pixels':footprints}
 
 
-def clear_regions(data,pattern,template,planes):
+def clear_regions(data,pattern,template,planes,body_footprints=None):
     width=PIXEL_FORMAT['width'];height=next(iter(planes.values())).shape[0]
     sx,sy=width/data['analysis_width'],height/data['analysis_height']
     regions=[r for r in template['regions']if r['name']in('clear_above','clear_below')]
@@ -64,12 +69,13 @@ def clear_regions(data,pattern,template,planes):
         bounds=[int(np.floor((left+a)*sx)),int(np.floor((top+b)*sy)),
                 int(np.ceil((left+c)*sx)),int(np.ceil((top+d)*sy))]
         # The RGB reference's background box is not a limit on measurable game
-        # pixels. Inspect the entire possible body core, including anchor error.
+        # pixels. Inspect the measured body footprint, including off-center shoulders.
         spacing=float(np.median(np.diff([lane['x']*width for lane in data['layout']['lanes']])))
         half=FORMAT['minimum_clearance_halfwidth_spacing']*spacing
         center=pattern['x']*width
-        bounds[0]=min(bounds[0],int(np.floor(center-half)))
-        bounds[2]=max(bounds[2],int(np.ceil(center+half)))
+        lo,hi=(body_footprints or{}).get(str(pattern['lane']%5),[-half,half])
+        bounds[0]=min(bounds[0],int(np.floor(center+min(-half,lo))))
+        bounds[2]=max(bounds[2],int(np.ceil(center+max(half,hi))))
         x0,y0,x1,y1=bounds
         if not 0<=x0<x1<=width or not 0<=y0<y1<=height:return None
         if occluders_at_bounds(data['layout'],bounds,width,height):return None
@@ -136,7 +142,7 @@ def derive(data,native,samples,bank,profile):
                         or pattern['classification_status']!='cap_only'
                         or pattern['template']not in bank['anchor_registrations']):continue
                 if max(abs(pattern['x']-image['x'])*width,abs(pattern['y']-image['y'])*height)>FORMAT['maximum_anchor_delta_spacing']*detector.spacing:continue
-                regions=clear_regions(data,{**pattern,'lane':image['lane']},template,planes)
+                regions=clear_regions(data,{**pattern,'lane':image['lane']},template,planes,validation['body_x_offsets_pixels'])
                 if regions is None:continue
                 proofs[indices[0]].append({'kind':'tap','role':'tap','reason':'image_cap_with_native_clearance',
                     'source_note':indices[0],'playback_seconds':time,'source_pts_seconds':pts,

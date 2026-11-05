@@ -48,16 +48,18 @@ overrides it; `null` disables the model for that source profile. A changed bank
 contract fails rather than inheriting another bank's geometric assumptions.
 `just skins validate` also validates these declarations.
 
-The bank must provide all five kinds of hold body. At native feature resolution, every
-supported row of every positive `body` region must retain its declared lane color in
-the central 0.2-spacing-wide body core of the relaxed-color plane. Clearance
-probes cover that core plus the allowed 0.1-spacing cap-anchor disagreement on
-each side. Interpolation context outside the declared body region supplies no
-body measurements. Reference gap boxes locate the vertical bands; horizontal
-measurement expands to cover the complete possible body core in actual retained
-game pixels, even when the reference background box is narrower. Lane colors must follow blue/red/yellow/red/blue.
-White-only, dark, differently colored or incompletely sampled bodies need a
-different model. Unsupported configuration produces an explicit report warning.
+The bank must provide all five kinds of hold body. At native feature resolution,
+every supported row of each connected component of the declared `body` footprint
+must retain lane color somewhere in that component in the relaxed-color plane.
+This checks all rows and off-center, disconnected shoulders as well as central
+artwork; white borders need not themselves be colored. Interpolation context outside
+the declared body region supplies no body measurements. Reference gap boxes
+locate the vertical bands; horizontal measurement expands over the complete
+measured body footprint and the minimum anchor-uncertainty margin, even when the
+reference background box is narrower. It never assumes the stem passes through
+the center column. Lane colors must follow blue/red/yellow/red/blue. White-only,
+dark, differently colored or incompletely sampled bodies need a different model.
+Unsupported configuration produces an explicit report warning.
 
 For each existing image observation, the model requires:
 

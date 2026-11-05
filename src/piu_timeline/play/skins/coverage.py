@@ -47,6 +47,9 @@ def image_spans(image,references,*,cap_only=False,full_only=False):
     if image.get('role')in('hold_start','hold_body','hold_end'):
         patterns.extend(p for p in image.get('alternatives',[])
                         if p['role']==image['role'] and p.get('classification_status')=='full_pattern')
+    if cap_only and 'visible_cap_runs'in image:
+        rows=sorted({image['bounds_pixels'][1]+row for row,_,_ in image['visible_cap_runs']})
+        return [(row,row+1)for row in rows]
     return [(p['bounds_pixels'][1]+a-p.get('sampling_origin_pixels',[0,0])[1],
              p['bounds_pixels'][1]+b-p.get('sampling_origin_pixels',[0,0])[1])
             for p in patterns if not full_only or p.get('classification_status','full_pattern')=='full_pattern'

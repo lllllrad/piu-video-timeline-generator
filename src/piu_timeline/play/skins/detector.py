@@ -8,8 +8,10 @@ from piu_timeline.play.skins.sampling import models,key,reference_scale,FORMAT a
 from piu_timeline.play.skins.subfeatures import account
 from piu_timeline.play.skins.canvas import comparison_canvas
 from piu_timeline.play.skins.matching import RegionSearch,prepare_regions
+from piu_timeline.play.skins.spatial import FORMAT as SPATIAL_FORMAT
+from piu_timeline.play.skins.overlap import FORMAT as OVERLAP_FORMAT,recover
 
-FORMAT = {'schema': 1, 'revision': 7, 'method': 'lane_masked_rgb_regions','sampling':SAMPLING_FORMAT,
+FORMAT = {'schema': 1, 'revision': 8, 'method': 'lane_masked_rgb_regions','spatial_support':SPATIAL_FORMAT,'overlap':OVERLAP_FORMAT,'sampling':SAMPLING_FORMAT,
           'scale_basis':'declared_uniform_game_frame_or_lane_spacing',
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor',
           'body_candidates': {'schema':1,'selection':'qualified_rows_horizontal_minima'}}
@@ -29,6 +31,7 @@ class SkinDetector:
     def __init__(self, bank, layout, width, height):
         self.bank, self.layout, self.width, self.height = bank, layout, width, height
         self.spacing = float(np.median(np.diff([lane['x'] * width for lane in layout['lanes']])))
+        self.same_anchor_pixels=FORMAT['same_anchor_spacing']*self.spacing
         self.templates = []
         scale = reference_scale(bank,layout,width,height)
         for original in bank['templates']:
@@ -37,6 +40,14 @@ class SkinDetector:
             self.templates.extend(variants)
         self.by_sampling={key(t):t for t in self.templates}
         for template in self.templates:prepare_regions(template)
+
+    def search_bounds(self,column,template):
+        h,w=template['mask'].shape;ax,ay=template['anchor']
+        radius=max(1,round(FORMAT['horizontal_search_spacing']*self.spacing))
+        left=max(0,round(column['x']*self.width-ax)-radius)
+        right=min(self.width,round(column['x']*self.width-ax)+w+radius)
+        top=max(0,int(self.layout['receptor_y']*self.height+.55*self.spacing-ay))
+        return [left,top,right,self.height]if right-left>=w and self.height-top>=h else None
 
     def detect(self, rgb):
         return self.resolve(self.candidates(rgb))
@@ -53,19 +64,15 @@ class SkinDetector:
         searcher=RegionSearch(image)
         candidates = []
         for lane, column in enumerate(self.layout['lanes']):
-            center = column['x'] * self.width
             for template in self.templates:
                 if template['lane_kind'] != lane % 5:
                     continue
                 h, w = template['mask'].shape
                 ax, ay = template['anchor']
-                radius = max(1, round(FORMAT['horizontal_search_spacing'] * self.spacing))
-                left, right = max(0, round(center - ax) - radius), min(self.width, round(center - ax) + w + radius)
-                top = max(0, int(self.layout['receptor_y'] * self.height + .55 * self.spacing - ay))
-                bottom = self.height
-                if right - left < w or bottom - top < h:
-                    continue
-                evaluated=searcher.evaluate(template,[left,top,right,bottom])
+                search=self.search_bounds(column,template)
+                if search is None:continue
+                left,top,right,bottom=search
+                evaluated=searcher.evaluate(template,search)
                 if evaluated is None:continue
                 scores,proposal_scores,errors=evaluated
                 allowed = np.isfinite(proposal_scores) & (proposal_scores <= 1)
@@ -93,20 +100,21 @@ class SkinDetector:
                                        **({'unavailable_regions':[name for name,values in errors.items()if not np.isfinite(values[row,col])]}
                                           if any(not np.isfinite(values[row,col])for values in errors.values())else{}),
                                        'bounds_pixels': bounds, 'method': 'skin_image', 'skin': self.bank['skin']})
+        candidates.extend(recover(self,image,candidates))
         return candidates
 
     def resolve(self, candidates):
         retained = []
         for candidate in sorted(candidates, key=lambda c: c['quality'], reverse=True):
             peers = [r for r in retained if r['lane'] == candidate['lane']
-                     and abs(r['y'] - candidate['y']) * self.height < FORMAT['same_anchor_spacing'] * self.spacing
+                     and abs(r['y'] - candidate['y']) * self.height < self.same_anchor_pixels
                      and (r['role'] == 'hold_body') == (candidate['role'] == 'hold_body')]
             if not peers:
                 retained.append({**candidate, 'alternatives': []})
                 continue
             current = peers[0]
             fields=('role','template_role','classification_status','template','quality','region_errors',
-                    'x','y','bounds_pixels','sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')
+                    'x','y','bounds_pixels','visible_cap_runs','occlusion_evidence','sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')
             proof = {k: candidate[k] for k in fields if k in candidate}
             current['alternatives'].append(proof)
             full={r['template_role']for r in (current,candidate)if r['classification_status']=='full_pattern'}

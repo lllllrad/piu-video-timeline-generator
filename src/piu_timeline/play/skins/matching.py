@@ -7,15 +7,21 @@ import numpy as np
 
 
 def prepare_regions(template):
+    from piu_timeline.play.skins.spatial import cells
     for region in template['regions']:
-        x0,y0,x1,y1=region['box']
-        reference=template['rgb'][y0:y1,x0:x1]
-        region['_reference']=reference
-        region['_pixels']=int(region['mask'].sum())
-        digest=sha256(str(reference.shape).encode())
-        digest.update(reference.tobytes());digest.update(region['mask'].tobytes())
-        region['_identity']=digest.digest()
+        region['_cells']=list(cells(region))if region['name']in('connection','body')else[]
+        for cell in region['_cells']:prepare_region(template,cell)
+        prepare_region(template,region)
 
+
+def prepare_region(template,region):
+    x0,y0,x1,y1=region['box']
+    reference=template['rgb'][y0:y1,x0:x1]
+    region['_reference']=reference
+    region['_pixels']=int(region['mask'].sum())
+    digest=sha256(str(reference.shape).encode())
+    digest.update(reference.tobytes());digest.update(region['mask'].tobytes())
+    region['_identity']=digest.digest()
 
 class RegionSearch:
     """No scores survive a frame boundary or skip competing image roles."""
@@ -41,6 +47,10 @@ class RegionSearch:
         if len(self.cache)>256:self.cache.popitem(last=False)
         return value
 
+    def region_error(self,template,region,bounds):
+        measured=region.get('_cells')or[region]
+        return np.maximum.reduce([self.error(template,cell,bounds)for cell in measured])
+
     def evaluate(self,template,bounds):
         regions=template['regions']
         has_cap=any(r['name']=='cap'for r in regions)
@@ -49,13 +59,13 @@ class RegionSearch:
         primary=sorted((r for r in regions if r['name']in required),key=lambda r:r['name']!='cap')
         errors={};proposal=None
         for region in primary:
-            error=self.error(template,region,bounds);errors[region['name']]=error
+            error=self.region_error(template,region,bounds);errors[region['name']]=error
             normalized=error/region.get('maximum_error',.015)
             proposal=normalized if proposal is None else np.maximum(proposal,normalized)
             if not (np.isfinite(proposal)&(proposal<=1)).any():return None
         scores=proposal
         for region in regions:
             if region['name']in required:continue
-            error=self.error(template,region,bounds);errors[region['name']]=error
+            error=self.region_error(template,region,bounds);errors[region['name']]=error
             scores=np.maximum(scores,error/region.get('maximum_error',.015))
         return scores,proposal,errors

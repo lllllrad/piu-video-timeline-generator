@@ -22,11 +22,18 @@ def exhaustive(searcher,template,bounds):
  left,top,right,bottom=bounds;h,w=template['mask'].shape
  search=searcher.image[top:bottom,left:right];scores=None;errors={}
  for region in template['regions']:
-  a,b,c,d=region['box'];mask=region['mask']
-  area=search[b:search.shape[0]-h+d,a:search.shape[1]-w+c]
-  value=(cv2.matchTemplate(area,template['rgb'][b:d,a:c],cv2.TM_SQDIFF,mask=mask)/(3*int(mask.sum()))
-    if mask.any() else np.full((search.shape[0]-h+1,search.shape[1]-w+1),np.inf,dtype='float32'))
-  errors[region['name']]=np.maximum(value,0)
+  a,b,c,d=region['box'];mask=region['mask'];parts=[]
+  # Independent exhaustive spatial oracle: all connector/body cells run, even
+  # where a cap comparison has already ruled out the entire template.
+  xs=np.unique(np.linspace(0,c-a,4,dtype=int));ys=np.unique(np.linspace(0,d-b,4,dtype=int))
+  ranges=[(int(x),int(y),int(z),int(v))for x,z in zip(xs,xs[1:])for y,v in zip(ys,ys[1:])]if region['name']in('connection','body')else[(0,0,c-a,d-b)]
+  for x,y,z,v in ranges:
+   support=mask[y:v,x:z]
+   if not support.any():continue
+   area=search[b+y:search.shape[0]-h+b+v,a+x:search.shape[1]-w+a+z]
+   value=cv2.matchTemplate(area,template['rgb'][b+y:b+v,a+x:a+z],cv2.TM_SQDIFF,mask=support)/(3*int(support.sum()))
+   parts.append(np.maximum(value,0))
+  errors[region['name']]=np.maximum.reduce(parts)if parts else np.full((search.shape[0]-h+1,search.shape[1]-w+1),np.inf,dtype='float32')
   normalized=errors[region['name']]/region.get('maximum_error',.015)
   scores=normalized if scores is None else np.maximum(scores,normalized)
  proposal=scores
@@ -57,11 +64,17 @@ with tempfile.TemporaryDirectory() as temporary:
  blank=render([],0,180,300,91,None,0)
  detector=SkinDetector(bank,layout,180,300);original=cv2.matchTemplate
  comparisons=[];observations=[]
+ def measured(rgb,evaluate):
+  searched=[0]
+  def counted(searcher,template,bounds):
+   before=calls.call_count;result=evaluate(searcher,template,bounds)
+   searched[0]+=calls.call_count-before;return result
+  with patch.object(cv2,'matchTemplate',wraps=original) as calls,patch.object(RegionSearch,'evaluate',counted):
+   result=detector.detect(rgb)
+  return result,searched[0]
  for rgb in (image,blank,image):
-  with patch.object(cv2,'matchTemplate',wraps=original) as calls:
-   optimized=detector.detect(rgb);fast=calls.call_count
-  with patch.object(RegionSearch,'evaluate',exhaustive),patch.object(cv2,'matchTemplate',wraps=original) as calls:
-   full=detector.detect(rgb);slow=calls.call_count
+  optimized,fast=measured(rgb,RegionSearch.evaluate)
+  full,slow=measured(rgb,exhaustive)
   assert optimized==full
   comparisons.append([fast,slow]);observations.append(optimized)
  caps=[{'lane':o['lane'],'role':o['role'],'y':round(o['y']*300,6)} for o in observations[0] if o['role']!='hold_body']

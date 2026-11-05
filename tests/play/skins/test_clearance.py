@@ -188,6 +188,20 @@ class NativeClearanceTest(unittest.TestCase):
         for i,sample in enumerate(samples):sample[2]['relaxed_blue'][140-5*i,61]=True
         self.assertEqual(derive(data,frames,samples,bank,profile)['notes'],{})
 
+    def test_off_center_body_footprints_are_validated_and_cannot_hide_outside_a_center_probe(self):
+        data,frames,samples,bank,profile=scenario()
+        for body in bank['templates'][1:]:
+            color=body['rgb'][0,0].copy()
+            body['rgb']=np.full((6,40,3),30,dtype='uint8')
+            body['rgb'][:,:4]=color;body['rgb'][:,36:]=color
+            body['mask']=np.zeros((6,40),dtype=bool);body['mask'][:,:4]=True;body['mask'][:,36:]=True
+            body['anchor_pixels']=[20,3];body['regions']=[{'name':'body','box':[0,0,40,6]}]
+        result=derive(data,frames,samples,bank,profile)
+        self.assertIn('0',result['notes'])
+        # These body shoulders are far outside the old central probe.
+        for i,sample in enumerate(samples):sample[2]['relaxed_blue'][140-5*i,46]=True
+        self.assertEqual(derive(data,frames,samples,bank,profile)['notes'],{})
+
     def test_profile_must_explain_body_colors_and_native_pts_must_agree(self):
         for case in ('skin','body','missing_kind','timestamps','mask_geometry'):
             with self.subTest(case=case):

@@ -2,6 +2,7 @@
 import numpy as np
 
 from piu_timeline.play.skins.sampling import key
+from piu_timeline.play.skins.support import cap_support
 
 
 def shared_cap_pixels(first,second,templates,fraction):
@@ -11,7 +12,7 @@ def shared_cap_pixels(first,second,templates,fraction):
     a,b,c,d=first['bounds_pixels'];x,y,z,w=second['bounds_pixels']
     lo,top,hi,bottom=max(a,x),max(b,y),min(c,z),min(d,w)
     if lo>=hi or top>=bottom:return None
-    before,after=(templates[key(p)]['cap_support']for p in(first,second))
+    before,after=(cap_support(templates[key(p)],p)for p in(first,second))
     if not before.any()or not after.any():return None
     count=int((before[top-b:bottom-b,lo-a:hi-a]&after[top-y:bottom-y,lo-x:hi-x]).sum())
     ratios=count/int(before.sum()),count/int(after.sum())
@@ -25,7 +26,7 @@ def account(images,templates,width,height):
         if image['role']=='hold_body':continue
         parts=[]
         for pattern in [image,*image.get('alternatives',[])]:
-            model=templates[key(pattern)];support=model['cap_support']
+            model=templates[key(pattern)];support=cap_support(model,pattern)
             if not support.any():continue
             a,b,c,d=pattern['bounds_pixels']
             if image['lane']not in unions:unions[image['lane']]=np.zeros((height,width),dtype=bool)

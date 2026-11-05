@@ -68,10 +68,11 @@ print(json.dumps(results))
 `;
 const results=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{
  encoding:'utf8',maxBuffer:8*1024*1024}).trim().split('\n').at(-1));
-for(const r of results)test(`one new cap appearance reuses other lane kinds with full-detection equivalence: ${r.scale}`,()=>{
- assert.deepEqual(r.reused,['body/0','body/1','body/2','body/3','body/4','caps/0','caps/1','caps/2','caps/3']);
+for(const r of results)test(`a cap update reacquires occlusion-dependent caps and reuses bodies with full-detection equivalence: ${r.scale}`,()=>{
+ assert.deepEqual(r.reused,['body/0','body/1','body/2','body/3','body/4']);
  assert.ok(r.selected.length>0);
- assert.ok(r.selected.every(([kind,role])=>kind===4&&role!=='hold_body'));
+ assert.ok(r.selected.every(([,role])=>role!=='hold_body'));
+ assert.deepEqual([...new Set(r.selected.map(([kind])=>kind))].sort(),[0,1,2,3,4]);
  assert.deepEqual(r.before_caps,[8,8,8]);assert.deepEqual(r.after_caps,[11,11,11]);
  assert.deepEqual(r.changed_lanes,[4,9]);
  assert.equal(r.exact_full_equivalence,true,'including alternatives, bodies and recomputed cap-subfeature ownership');
