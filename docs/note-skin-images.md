@@ -4,7 +4,7 @@ A skin reference describes a complete image pattern: a tap, a hold's leading
 cap with its lower connection, an interior body tile, or a trailing cap with its
 upper connection. The cap of a hold is a visual boundary of one held interval.
 Neither cap requires an extra tap. A trailing cap's upper body is part of its
-image, rather than an optional association inferred from a distant note.
+image, rather than an optional association inferred from a distant note. [Shared cap appearance and hold context](shared-cap-roles.md) separates reusable glyph poses from independent connector proof.
 
 The image detector scans each lane directly. It does not need an outline
 candidate, a lane-color threshold, a successful judgment association or an

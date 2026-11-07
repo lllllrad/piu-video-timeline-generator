@@ -18,9 +18,14 @@ def negative_regions(data):
             for t in reference_models(data)}
 
 
+class ReferenceRows(dict):
+    def __init__(self,selection):
+        super().__init__();self.selection=selection
+
+
 def reference_rows(data, *, cap_only=False, body_only=False):
     if cap_only and body_only:raise ValueError('Select cap or connector support, not both')
-    result={}
+    result=ReferenceRows('cap'if cap_only else'body'if body_only else'all')
     for template in reference_models(data):
         support=template['cap_support']if cap_only else template['support']
         if body_only:
@@ -50,7 +55,15 @@ def image_spans(image,references,*,cap_only=False,full_only=False):
     if cap_only and 'visible_cap_runs'in image:
         rows=sorted({image['bounds_pixels'][1]+row for row,_,_ in image['visible_cap_runs']})
         return [(row,row+1)for row in rows]
-    return [(p['bounds_pixels'][1]+a-p.get('sampling_origin_pixels',[0,0])[1],
+    combined=[]
+    for pattern in patterns:
+        shared=pattern.get('shared_role')
+        if shared is None:continue
+        selection='cap'if cap_only else getattr(references,'selection','all')
+        if selection!='body':combined.extend(tuple(r)for r in shared['cap_rows_pixels'])
+        if selection!='cap':combined.extend(tuple(r)for r in shared['context']['connection_rows_pixels'])
+    ordinary=[p for p in patterns if 'shared_role'not in p]
+    return combined+[(p['bounds_pixels'][1]+a-p.get('sampling_origin_pixels',[0,0])[1],
              p['bounds_pixels'][1]+b-p.get('sampling_origin_pixels',[0,0])[1])
-            for p in patterns if not full_only or p.get('classification_status','full_pattern')=='full_pattern'
+            for p in ordinary if not full_only or p.get('classification_status','full_pattern')=='full_pattern'
             for a,b in references[key(p)]]

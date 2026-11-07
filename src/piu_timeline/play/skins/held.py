@@ -47,8 +47,13 @@ class BodyAtReceptor:
             for pattern in [image,*image.get('alternatives',[])]:
                 if (pattern.get('template_role',pattern['role'])in('hold_start','hold_end')
                         and pattern.get('classification_status')in('full_pattern','conflict')):
+                    if 'shared_role'in pattern:
+                        spans=[(a,b)for a,b in pattern['shared_role']['context']['connection_rows_pixels']
+                               if a<=r+band and b>=r-band]
+                    else:
+                        spans=None
                     top=pattern['bounds_pixels'][1]-pattern.get('sampling_origin_pixels',[0,0])[1]
-                    spans=[(top+a,top+b)for a,b in self.connections[key(pattern)]
+                    spans=spans if spans is not None else[(top+a,top+b)for a,b in self.connections[key(pattern)]
                            if top+a<=r+band and top+b>=r-band]
                     if spans:causes.append({'kind':'cap_connection','lane':image['lane'],'image_indices':[index],
                         'template':pattern['template'],'vertical_range_pixels':[min(a for a,b in spans),max(b for a,b in spans)]})

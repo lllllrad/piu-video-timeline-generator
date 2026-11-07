@@ -136,8 +136,11 @@ def load_bank(path):
                           'tap_clearance':entry['role']=='tap' and bool(clearance)})
     if not templates:
         raise ValueError('Skin bank contains no image templates')
+    from piu_timeline.play.skins.shared_roles import validate as validate_shared
+    families=validate_shared(document.get('shared_cap_families',[]),templates)
     bank={'skin': document['skin'], 'spacing_pixels': spacing, 'templates': templates,
           'contract': {'format': FORMAT, 'sha256': fingerprint.hexdigest(), 'skin': document['skin']}}
+    if families:bank['shared_cap_families']=families
     if frame:bank['reference_frame']=frame
     if any('comparison_boxes'in r for t in templates for r in t['regions']):
         bank['contract']['comparison_geometry']=COMPARISON_FORMAT

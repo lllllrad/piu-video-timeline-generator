@@ -76,7 +76,7 @@ def bank_at(root,clearance_rows=4,connection_rows=6,margin=4,cap_only=False,glyp
     return load_bank(path)
 
 
-def appearance_bank(root,phases,margin,cap_only,skin):
+def appearance_bank(root,phases,margin,cap_only,skin,role_phases=None,share=False):
     """Keep source appearances independent of object timing and generated scenes."""
     entries=[]
     for phase in range(phases):
@@ -87,10 +87,21 @@ def appearance_bank(root,phases,margin,cap_only,skin):
             bank=shouldered_bank(directory,glyphs,COLORS,BACKGROUND)
         else:bank=bank_at(directory,margin=margin,cap_only=cap_only,glyphs=glyphs)
         for entry in json.loads((directory/'bank.json').read_text())['templates']:
+            if role_phases and entry['role']!='hold_body':
+                entries.append({**entry,'id':f'appearance-{phase}-'+entry['id'],'role':'tap',
+                    'regions':[r for r in entry['regions']if r['name']=='cap'],
+                    'image':f'pose-{phase}/'+entry['image']})
+            if phase>=(role_phases or{}).get(entry['role'],phases):continue
             if phase and entry['role']=='hold_body':continue
             entries.append({**entry,'id':f'pose-{phase}-'+entry['id'],'image':f'pose-{phase}/'+entry['image']})
-    (root/'bank.json').write_text(json.dumps({'schema':1,'skin':bank['skin'],
-        'spacing_pixels':bank['spacing_pixels'],'templates':entries}))
+    document={'schema':1,'skin':bank['skin'],'spacing_pixels':bank['spacing_pixels'],'templates':entries}
+    if share:
+        document['shared_cap_families']=[{'id':f'kind-{kind}',
+            'appearance_templates':[e['id']for e in entries if e['lane_kind']==kind and e['role']=='tap'],
+            'role_templates':[e['id']for e in entries if e['lane_kind']==kind and e['role']in('hold_start','hold_end')],
+            'body_templates':[e['id']for e in entries if e['lane_kind']==kind and e['role']=='hold_body']}
+            for kind in range(5)]
+    (root/'bank.json').write_text(json.dumps(document))
     return load_bank(root/'bank.json')
 
 
@@ -149,7 +160,7 @@ def acquire(spec,root,bank):
             'expected_source_pts':expected_pts,'source_preserved':preserved,
             'cap_subfeature_frames':sum(any(o.get('cap_subfeature')for o in f['skin_observations'])for f in native),
             'frames':[{'time':f['playback_seconds'],'pts':f['source_pts_seconds'],
-                       'caps':[{k:o[k]for k in ('lane','y','role','classification_status')}for o in f['skin_observations']if o['role']!='hold_body']}
+                       'caps':[{k:o[k]for k in ('lane','y','role','classification_status','shared_role')if k in o}for o in f['skin_observations']if o['role']!='hold_body']}
                       for f in native]}
 
 
@@ -162,15 +173,16 @@ def main():
     specs=json.load(sys.stdin)
     with tempfile.TemporaryDirectory()as tmp:
         root=Path(tmp);bank_at(root)
-        banks={(4,False,None,1):(root,certify(root/'bank.json'))};tasks=[]
+        banks={(4,False,None,1,(),False):(root,certify(root/'bank.json'))};tasks=[]
         for spec in specs:
             margin=spec.get('reference_margin',4);cap_only=spec.get('reference_profile')=='cap_only';skin=spec.get('skin_profile')
             phases=spec.get('reference_appearance_phases',spec.get('appearance_phases',1))
             if type(phases)is not int or not 1<=phases<=4:raise ValueError('Reference appearance count must be 1..4')
-            profile=margin,cap_only,skin,phases
+            role_phases=spec.get('reference_role_appearance_phases',{});share=spec.get('share_cap_appearances',False)
+            profile=margin,cap_only,skin,phases,tuple(sorted(role_phases.items())),share
             if profile not in banks:
-                directory=root/f'context-{margin}-{cap_only}-{skin}-{phases}';directory.mkdir()
-                if phases>1:bank=appearance_bank(directory,phases,margin,cap_only,skin)
+                directory=root/f'context-{len(banks)}-{margin}-{cap_only}-{skin}-{phases}';directory.mkdir()
+                if phases>1 or share:bank=appearance_bank(directory,phases,margin,cap_only,skin,role_phases,share)
                 elif skin=='shouldered':
                     from tests.play.skins.shoulders import bank_at as shouldered_bank
                     bank=shouldered_bank(directory,[cap(i)for i in range(5)],COLORS,BACKGROUND)
