@@ -118,7 +118,7 @@ class SkinDetector:
                 continue
             current = peers[0]
             fields=('role','template_role','classification_status','template','quality','region_errors',
-                    'x','y','bounds_pixels','shared_role','visible_cap_runs','occlusion_evidence','sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')
+                    'x','y','bounds_pixels','shared_role','visible_cap_runs','visible_connection_runs','occlusion_evidence','sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')
             proof = {k: candidate[k] for k in fields if k in candidate}
             current['alternatives'].append(proof)
             full={r['template_role']for r in (current,candidate)if r['classification_status']=='full_pattern'}

@@ -109,6 +109,21 @@ class SharedRoleTest(unittest.TestCase):
             data['skin_detector']['contract']['bank']=load_bank(old/'bank.json')['contract']
             self.assertIn('caps/0',reusable_groups(data,load_bank(new/'bank.json')))
 
+    def test_shared_context_uses_only_the_visible_part_of_each_connector_cell(self):
+        from piu_timeline.play.skins.shared_roles import contexts
+        with tempfile.TemporaryDirectory()as temporary:
+            detector,image,_=self.fixture(Path(temporary))
+            cap=next(c for c in detector.detect(image)if c['role']=='hold_start')
+            template=next(t for t in detector.templates if t['id']=='hold_start')
+            rgb=image.astype('float32')/255;hidden=np.zeros((300,200),bool)
+            hidden[102:115,16]=True;rgb[hidden]=[.9,.2,.7]
+            body=(np.zeros_like(hidden),[])
+            result=contexts(detector,rgb,cap,template,hidden,body)
+            self.assertIsNotNone(result);self.assertEqual(result['visible_connection_pixels'],7*13)
+            self.assertIsNone(contexts(detector,rgb,cap,template,np.zeros_like(hidden),body))
+            hidden[102:115,16:19]=True
+            self.assertIsNone(contexts(detector,rgb,cap,template,hidden,body))
+
     def test_a_family_cannot_share_across_lanes_or_missing_references(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);_,_,document=self.fixture(root)

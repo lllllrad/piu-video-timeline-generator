@@ -4,11 +4,12 @@ import numpy as np
 
 from piu_timeline.play.skins.sampling import key
 from piu_timeline.play.skins.visible_search import VisibleSearch
+from piu_timeline.play.skins.spatial import VISIBLE_FORMAT,visible_region
 
 FORMAT={'schema':1,'method':'visible_cap_with_measured_foreground','proposal':'visible_mask_ssd_correlations',
         'required_cap_features':'fully_visible','foreground_basis':'visible_matching_cap_pixels',
         'minimum_visible_fraction':.25,'minimum_visible_width_fraction':.5,
-        'minimum_visible_height_fraction':.2}
+        'minimum_visible_height_fraction':.2,'connection_visibility':VISIBLE_FORMAT}
 
 
 def proposals(searcher,template,bounds):
@@ -66,11 +67,17 @@ def recovery_record(detector,image,template,lane,left,top,known,owners):
     measured=visible_support(image,template,known,left,top)
     if measured is None:return None
     visible,hidden,errors=measured;h,w=template['mask'].shape
-    unavailable=[name for name,value in errors.items()if value is None]
+    unavailable=[name for name,value in errors.items()if value is None];connection_support=np.zeros((h,w),bool)
     for region in template['regions']:
         name=region['name']
         if name in errors:continue
         a,b,c,d=region['box']
+        if name=='connection':
+            measured=visible_region(image,template,region,left,top,known)
+            if measured is None:errors[name]=None;unavailable.append(name);continue
+            errors[name],support=measured
+            if errors[name]<=region.get('maximum_error',.015):connection_support[b:d,a:c]|=support
+            continue
         if (region['mask'].astype(bool)&known[top+b:top+d,left+a:left+c]).any():
             errors[name]=None;unavailable.append(name);continue
         # Positive connection/body checks retain their spatial cell thresholds.
@@ -83,10 +90,14 @@ def recovery_record(detector,image,template,lane,left,top,known,owners):
     full=all(errors[r['name']]is not None and errors[r['name']]<=r.get('maximum_error',.015)for r in template['regions'])
     full=full and(template['role']!='tap'or template['tap_clearance'])
     ax,ay=template['anchor'];bounds=[left,top,left+w,top+h]
-    sources=[]
+    sources=[];obstructed=hidden.copy()
+    for region in template['regions']:
+        if region['name']!='connection':continue
+        a,b,c,d=region['box']
+        obstructed[b:d,a:c]|=region['mask'].astype(bool)&known[top+b:top+d,left+a:left+c]
     for record,mask in owners:
         a,b,c,d=record['bounds_pixels'];x,y,z,v=max(left,a),max(top,b),min(left+w,c),min(top+h,d)
-        if x<z and y<v and(hidden[y-top:v-top,x-left:z-left]&mask[y-b:v-b,x-a:z-a]).any():
+        if x<z and y<v and(obstructed[y-top:v-top,x-left:z-left]&mask[y-b:v-b,x-a:z-a]).any():
             sources.append({k:record[k]for k in('lane','template','bounds_pixels','x','y','sampling_phase_pixels','sampling_kernel','sampling_origin_pixels')if k in record})
     cap=next(r for r in template['regions']if r['name']=='cap')
     from piu_timeline.play.skins.detector import occluded_support
@@ -97,6 +108,7 @@ def recovery_record(detector,image,template,lane,left,top,known,owners):
         'quality':float(1-errors['cap']/cap.get('maximum_error',.015)),'region_errors':errors,
         'bounds_pixels':bounds,'method':'skin_image','skin':detector.bank['skin'],
         'hud_region_overlap':hidden_hud,'visible_cap_runs':runs(visible),
+        'visible_connection_runs':runs(connection_support),
         'occlusion_evidence':{'method':FORMAT['method'],'visible_cap_pixels':int(visible.sum()),
             'hidden_cap_pixels':int(hidden.sum()),'foreground_caps':sources},
         **({'unavailable_regions':unavailable}if unavailable else{}),

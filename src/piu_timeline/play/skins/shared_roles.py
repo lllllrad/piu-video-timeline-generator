@@ -3,11 +3,13 @@ import numpy as np
 
 from piu_timeline.play.skins.sampling import key
 from piu_timeline.play.skins.support import cap_support
+from piu_timeline.play.skins.spatial import VISIBLE_FORMAT,visible_region
+from piu_timeline.play.skins.overlap import positive_pixels,runs
 
 FORMAT={'schema':1,'method':'declared_cap_family_with_independent_context',
         'maximum_center_rounding_pixels':.5,'context':'all_spatial_cells',
         'foreground':'other_measured_cap_support','context_cap_overlap':'exclude_measured_own_cap',
-        'minimum_independent_connection_fraction':.5,'body_coverage':'all_remaining_connection_pixels'}
+        'minimum_independent_connection_fraction':.5,'body_coverage':'all_remaining_connection_pixels','connection_visibility':VISIBLE_FORMAT}
 FIELDS=('template','x','y','bounds_pixels','sampling_phase_pixels','reference_scale_y',
         'sampling_kernel','sampling_origin_pixels')
 
@@ -71,16 +73,13 @@ def contexts(detector,image,cap,template,obstructions,bodies):
         if region['name']=='connection':
             mask=mask&~own[top+b:top+d,left+a:left+c]
             if mask.sum()<FORMAT['minimum_independent_connection_fraction']*region['mask'].sum():return None
-        if not mask.any()or(obstructions[top+b:top+d,left+a:left+c]&mask).any():return None
-        values=[]
-        for part in region.get('_cells')or[region]:
-            x,y,z,v=part['box'];selected=part['mask'].astype(bool)
-            if region['name']=='connection':selected=selected&~own[top+y:top+v,left+x:left+z]
-            if not selected.any():continue
-            delta=image[top+y:top+v,left+x:left+z]-template['rgb'][y:v,x:z]
-            values.append(float(np.square(delta[selected]).mean()))
-        if not values:return None
-        error=max(values)
+            measured=visible_region(image,template,region,left,top,obstructions,~own[top:top+h,left:left+w])
+            if measured is None:return None
+            error,mask=measured
+        else:
+            if not mask.any()or(obstructions[top+b:top+d,left+a:left+c]&mask).any():return None
+            delta=image[top+b:top+d,left+a:left+c]-template['rgb'][b:d,a:c]
+            error=float(np.square(delta[mask]).mean())
         if not np.isfinite(error)or error>region.get('maximum_error',.015):
             if region['name']!='connection' or (mask&~bodies[0][top+b:top+d,left+a:left+c]).any():return None
             matched=[]
@@ -99,6 +98,7 @@ def contexts(detector,image,cap,template,obstructions,bodies):
             'bounds_pixels':[int(left),int(top),int(left+w),int(top+h)],
             **{k:template[k]for k in FIELDS if k.startswith('sampling_')or k=='reference_scale_y'if k in template},
             'region_errors':errors,'connection_rows_pixels':row_runs(support,int(top)),
+            'visible_connection_pixels':int(support.sum()),'visible_connection_runs':runs(support),
             **({'body_coverage':body_proof}if body_proof is not None else{})}
 
 
@@ -121,7 +121,7 @@ def candidates(detector,image,measured):
         for other in roots:
             if other['role']=='hold_body'or other is root:continue
             a,b,c,d=other['bounds_pixels']
-            obstructions[b:d,a:c]|=cap_support(detector.by_sampling[key(other)],other)
+            obstructions[b:d,a:c]|=positive_pixels(image,detector.by_sampling[key(other)],other)
         seen=set()
         for cap in [root,*root.get('alternatives',[])]:
             for family in families:

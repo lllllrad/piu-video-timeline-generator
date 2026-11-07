@@ -115,5 +115,86 @@ class OverlappingCapsTest(unittest.TestCase):
             caps=[c for c in detector.detect(image)if c['role']!='hold_body']
             self.assertEqual([round(c['y']*300)for c in caps],[100])
 
+    def test_partial_connector_requires_visible_support_in_every_spatial_cell(self):
+        from tests.play.skins.test_detector import examples
+        from piu_timeline.play.skins.bank import load_bank
+        from piu_timeline.play.skins.overlap import recovery_record
+        from piu_timeline.play.skins.coverage import ReferenceRows,image_spans
+        for role in ('hold_start','hold_end'):
+            with self.subTest(role=role),tempfile.TemporaryDirectory()as temporary:
+                root=Path(temporary);items,_=examples(root)
+                layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+                detector=SkinDetector(load_bank(root/'bank.json'),layout,200,300)
+                template=next(t for t in detector.templates if t['id']==role)
+                source=next(rgb for name,rgb,_,_ in items if name==role)
+                image=np.zeros((300,200,3),dtype='uint8');image[80:115,10:30]=source
+                image=image.astype('float32')/255
+                # A thin measured neighboring stroke crosses cap and connector.
+                known=np.zeros((300,200),bool);known[80:115,16]=True
+                image[known]=[.9,.2,.7]
+                record=recovery_record(detector,image,template,0,10,80,known,[])
+                self.assertIsNotNone(record);self.assertEqual(record['role'],role)
+                self.assertTrue(record['visible_connection_runs'])
+                self.assertTrue(all(a>6 for _,a,_ in record['visible_connection_runs']))
+                rows=image_spans(record,ReferenceRows('body'))
+                expected=range(102,115)if role=='hold_start'else range(80,92)
+                self.assertEqual({y for a,b in rows for y in range(a,b)},set(expected))
+                from piu_timeline.play.skins.observations import observe
+                data={'analysis_width':200,'analysis_height':300,'layout':layout,
+                    'skin_detector':{'bank_path':str(root/'bank.json'),'contract':{'bank':detector.bank['contract']}},
+                    'notes':[{'lane':0,'points':[[1.25,record['y']*300]]}]}
+                channel=observe(data,[{'playback_seconds':1.25,'source_pts_seconds':31.25,
+                                      'skin_observations':[record]}])
+                proof=channel['notes'][0]['observations'][0]
+                self.assertEqual(proof['visible_connection_runs'],record['visible_connection_runs'])
+                self.assertEqual(proof['source_pts_seconds'],31.25)
+                # Foreground concealing one whole spatial cell is insufficient.
+                blocked=known.copy();blocked[80:115,16:19]=True
+                self.assertEqual(recovery_record(detector,image,template,0,10,80,blocked,[])['role'],'unknown')
+                # Unexplained corruption in still-visible body stays a failure.
+                damaged=image.copy()
+                a,b,c,d=next(r['box']for r in template['regions']if r['name']=='connection')
+                damaged[80+b:80+d,20:24]=[.9,.2,.7]
+                self.assertEqual(recovery_record(detector,damaged,template,0,10,80,known,[])['role'],'unknown')
+                # Without independently measured foreground, no pixels are excluded.
+                absent=np.zeros_like(known)
+                self.assertIsNone(recovery_record(detector,image,template,0,10,80,absent,[]))
+
+    def test_hidden_connector_rows_do_not_become_positive_body_support(self):
+        from tests.play.skins.test_detector import examples
+        from piu_timeline.play.skins.bank import load_bank
+        from piu_timeline.play.skins.overlap import recovery_record
+        from piu_timeline.play.skins.coverage import ReferenceRows,image_spans
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);items,_=examples(root)
+            layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+            detector=SkinDetector(load_bank(root/'bank.json'),layout,200,300)
+            template=next(t for t in detector.templates if t['id']=='hold_end')
+            image=np.zeros((300,200,3),dtype='uint8');image[80:115,10:30]=items[2][1]
+            known=np.zeros((300,200),bool);known[100:115,16]=True;known[85,16:24]=True
+            image=image.astype('float32')/255;image[known]=[.9,.2,.7]
+            record=recovery_record(detector,image,template,0,10,80,known,[])
+            self.assertEqual(record['role'],'hold_end')
+            rows=image_spans(record,ReferenceRows('body'))
+            self.assertEqual({y for a,b in rows for y in range(a,b)},set(range(80,92))-{85})
+
+    def test_partial_connector_never_relaxes_required_terminal_features(self):
+        from tests.play.skins.test_detector import examples
+        from piu_timeline.play.skins.bank import load_bank
+        from piu_timeline.play.skins.overlap import recovery_record
+        import json
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);items,document=examples(root)
+            end=next(t for t in document['templates']if t['role']=='hold_end')
+            end['cap_features']=['terminal'];end['regions'].append(
+                {'name':'terminal','box':[0,31,20,35],'maximum_error':.001})
+            (root/'bank.json').write_text(json.dumps(document))
+            layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+            detector=SkinDetector(load_bank(root/'bank.json'),layout,200,300)
+            template=next(t for t in detector.templates if t['id']=='hold_end')
+            image=np.zeros((300,200,3),dtype='uint8');image[80:115,10:30]=items[2][1]
+            known=np.zeros((300,200),bool);known[80:115,16]=True
+            self.assertIsNone(recovery_record(detector,image.astype('float32')/255,template,0,10,80,known,[]))
+
 
 if __name__=='__main__':unittest.main()

@@ -50,6 +50,10 @@ class BodyAtReceptor:
                     if 'shared_role'in pattern:
                         spans=[(a,b)for a,b in pattern['shared_role']['context']['connection_rows_pixels']
                                if a<=r+band and b>=r-band]
+                    elif 'visible_connection_runs'in pattern:
+                        top=pattern['bounds_pixels'][1]
+                        spans=[(top+y,top+y+1)for y,_,_ in pattern['visible_connection_runs']
+                               if top+y<=r+band and top+y+1>=r-band]
                     else:
                         spans=None
                     top=pattern['bounds_pixels'][1]-pattern.get('sampling_origin_pixels',[0,0])[1]

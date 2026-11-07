@@ -58,7 +58,7 @@ def observe(data, native):
                     observations[-1].update(reason='skin_tap_clearance_occluded',classification_status='cap_only',
                                             comparison_classification_status=proof.get('classification_status','full_pattern'),
                                             occluded_clearance_regions=obscured)
-                observations[-1].update({k:proof[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','shared_role','unavailable_regions','visible_cap_runs','occlusion_evidence')if k in proof})
+                observations[-1].update({k:proof[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','shared_role','unavailable_regions','visible_cap_runs','visible_connection_runs','occlusion_evidence')if k in proof})
         for proof in data.get('skin_role_evidence',{}).get('notes',{}).get(str(index),[]):
             observations.append({**proof,'image_anchor':[proof['image_anchor'][0]/data['analysis_width'],
                                                         proof['image_anchor'][1]/height]})

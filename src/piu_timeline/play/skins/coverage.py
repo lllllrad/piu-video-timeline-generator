@@ -62,8 +62,16 @@ def image_spans(image,references,*,cap_only=False,full_only=False):
         selection='cap'if cap_only else getattr(references,'selection','all')
         if selection!='body':combined.extend(tuple(r)for r in shared['cap_rows_pixels'])
         if selection!='cap':combined.extend(tuple(r)for r in shared['context']['connection_rows_pixels'])
-    ordinary=[p for p in patterns if 'shared_role'not in p]
+    ordinary=[]
+    selection='cap'if cap_only else getattr(references,'selection','all')
+    for p in patterns:
+        if 'shared_role'in p:continue
+        if full_only and p.get('classification_status','full_pattern')!='full_pattern':continue
+        if 'visible_connection_runs'not in p:
+            ordinary.append(p);continue
+        top=p['bounds_pixels'][1]
+        if selection!='body':combined.extend((top+y,top+y+1)for y,_,_ in p['visible_cap_runs'])
+        if selection!='cap':combined.extend((top+y,top+y+1)for y,_,_ in p['visible_connection_runs'])
     return combined+[(p['bounds_pixels'][1]+a-p.get('sampling_origin_pixels',[0,0])[1],
              p['bounds_pixels'][1]+b-p.get('sampling_origin_pixels',[0,0])[1])
-            for p in ordinary if not full_only or p.get('classification_status','full_pattern')=='full_pattern'
-            for a,b in references[key(p)]]
+            for p in ordinary for a,b in references[key(p)]]

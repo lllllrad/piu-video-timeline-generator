@@ -37,7 +37,11 @@ available to coordinate and track consumers.
 Connector pixels already positively measured as part of this cap are excluded
 from a second, potentially incompatible animation comparison. At least half of
 the original connector footprint must remain independent. Every remaining
-spatial cell must pass; another measured cap covering it makes it unavailable.
+spatial cell must pass. A positively measured foreground cap may hide part of a
+connector, provided at least half of the independent support in every nonempty
+spatial cell remains visible. Every visible cell keeps its original RGB limit.
+A fully hidden cell remains unavailable; negative tap-clearance checks and
+required terminal features still require their complete support.
 A hidden connector never becomes positive from a presumed chart or scroll rate.
 
 If a connector RGB reference does not match, explicitly listed body references
@@ -67,3 +71,16 @@ connections and warnings at multiple scales, including cut-corner artwork.
 Negative tests cover absent connections, remote body evidence, missing references,
 cross-lane sharing and required tail features. Source-specific images and
 recognition fixtures belong in the separate skin/chart data repository.
+
+Partial connector evidence retains the visible two-dimensional runs and exposes
+only those rows to body connectivity and receptor consumers. Foreground removal
+never grants body support to a hidden pixel. The same per-cell rule applies to
+ordinary overlapping endpoint references and declared shared-cap contexts.
+
+Short holds can place the start artwork over the tail reference's upper body.
+A complete long-hold tail reference can then fail even while its terminal border
+is visible. Partial connector comparison alone does not solve missing cap
+appearances, hidden identifying tail features, or an entirely covered connector
+cell. Nearby frames must provide the missing positive evidence; a fixed overlap
+that persists across frames needs a separately validated short-hold pattern.
+Neither an expected hold duration nor a nearby terminal-like line establishes it.
