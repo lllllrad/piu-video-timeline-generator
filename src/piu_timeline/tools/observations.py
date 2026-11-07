@@ -67,19 +67,19 @@ def capture_one(root, source, number, jobs=1):
         from piu_timeline.play.skins.automatic import prepare
         from piu_timeline.play.skins.bank import load_bank
         data={**document,**segment,'layout':task['layout']}
-        # Publish all independent pixels before running a fallible detector.
+        # Publish the timeline and spatial masks before running a fallible detector.
         from piu_timeline.play.observations.bundle import acquire_pixels
         acquire_pixels(data,output)
         bank=None;failure=None
         try:
             path=selected_bank(directory,number)
-            if path is None:path=prepare(directory,number,document,{'layout':task['layout']},pixel_directory=output)
+            if path is None:path=prepare(directory,number,document,{'layout':task['layout']})
             bank=load_bank(path)
         except (ValueError,OSError,KeyError)as error:
             failure=str(error)
         result=acquire(data,output,bank,jobs=jobs)
         if failure:
-            # Unsupported note images cannot prevent acquisition of the other three channels.
+            # Unsupported note images cannot discard the independently captured masks.
             save_input(output.parent/f'segment-{number:03}-selection.json',{'status':'unresolved','reason':failure})
         return {'status':'complete'if bank else'partial','frames':result['frame_count'],
                 'skin':bank['skin']if bank else None,'selection_failure':failure,'manifest':str(output/'manifest.json')}

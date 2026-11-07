@@ -16,10 +16,9 @@ from piu_timeline.play.judgments import judgment_region
 from piu_timeline.play.pixel_cache import measurements, FIELDS, FORMAT as MASK_FORMAT
 from piu_timeline.play.observations.artifacts import save_input
 
-FORMAT = {'schema': 1, 'revision': 1, 'chunk_frames': 64,
-          'coordinates': 'normalized_full_game_top_left', 'pixels': 'rgb24',
-          'input': 'uninterpreted_receptor_rgb', 'input_extent_spacing': 2.0,
-          'rgb_encoding': 'planar_green_difference_temporal_delta_v1'}
+FORMAT = {'schema': 1, 'revision': 2, 'chunk_frames': 64,
+          'coordinates': 'normalized_full_game_top_left', 'input_extent_spacing': 2.0,
+          'storage': 'timeline_and_spatial_masks'}
 
 
 def source(data, width):
@@ -53,11 +52,6 @@ def rectangles(bound):
             'popup_regions': {'combo': layout['combo_roi'], 'judgment': judgment_region(layout)}}
 
 
-def crop(rgb, bounds):
-    a,b,c,d = bounds
-    return rgb[b:d,a:c].copy()
-
-
 def digest(path):
     value = sha256()
     with path.open('rb') as stream:
@@ -69,7 +63,8 @@ def read_manifest(directory, expected=None, verify=False):
     path = directory/'manifest.json'
     if not path.is_file(): return None
     saved = json.loads(path.read_text())
-    if saved.get('schema') != 1: raise ValueError('Invalid independent observation manifest')
+    if saved.get('schema') != 1 or saved.get('contract', {}).get('format') != FORMAT:
+        raise ValueError('Unsupported independent observation manifest')
     source_current(saved['contract']['source'])
     if expected is not None and saved['contract'] != expected: return None
     count = 0
@@ -87,53 +82,12 @@ def read_manifest(directory, expected=None, verify=False):
     return saved
 
 
-def encode_rgb(images):
-    """Reversible byte predictors only; no quantization or frame removal."""
-    color=np.asarray(images).copy()
-    color[:,:,:,0]-=color[:,:,:,1];color[:,:,:,2]-=color[:,:,:,1]
-    delta=np.concatenate((color[:1],color[1:]-color[:-1]))
-    return delta.transpose(0,3,1,2).tobytes()
-
-
-def decode_rgb(raw, count, width, height):
-    if len(raw)!=count*width*height*3: raise ValueError('Cached RGB shape differs')
-    values=np.frombuffer(raw,dtype='uint8').reshape(count,3,height,width)
-    values=np.add.accumulate(values,axis=0,dtype='uint8').transpose(0,2,3,1).copy()
-    values[:,:,:,0]+=values[:,:,:,1];values[:,:,:,2]+=values[:,:,:,1]
-    return values
-
-
-def game_frames(directory, saved=None, start=None, end=None):
-    """Replay exact acquired game pixels; decoder and other channels are unnecessary."""
-    saved = saved or read_manifest(directory)
-    if saved is None: raise ValueError('No reusable game pixels')
-    bound = saved['contract']['source'];size = bound['width']*bound['height']*3
-    for chunk in saved['chunks']:
-        origin=bound['media']['container_start_seconds']
-        if start is not None and chunk['last_source_pts_seconds']-origin<start: continue
-        if end is not None and chunk['first_source_pts_seconds']-origin>=end: continue
-        def read(suffix):
-            names=[name for name in chunk['files'] if name.endswith('.'+suffix)]
-            if len(names)!=1: raise ValueError('Missing independent channel file')
-            path=directory/names[0]
-            if digest(path)!=chunk['files'][names[0]]: raise ValueError('Corrupt independent observation channel')
-            return gzip.decompress(path.read_bytes())
-        rows=[json.loads(line)for line in read('frames.jsonl.gz').decode().splitlines()]
-        raw=read('game.rgb.gz')
-        if len(rows)!=chunk['frames'] or len(raw)!=size*chunk['frames']: raise ValueError('Game pixel timeline differs')
-        values=decode_rgb(raw,chunk['frames'],bound['width'],bound['height'])
-        for row,image in zip(rows,values,strict=True):
-            if start is not None and row['playback_seconds']<start: continue
-            if end is not None and row['playback_seconds']>=end: continue
-            yield row['source_pts_seconds'],row['playback_seconds'],image
-
-
 class Writer:
     """Bounded chunks share one original timeline across independent channels."""
     def __init__(self, directory, binding):
         self.directory, self.binding = directory, binding
         self.geometry = rectangles(binding['source'])
-        self.frames, self.inputs, self.popups, self.masks, self.games = [], [], [], [], []
+        self.frames, self.masks = [], []
         self.chunks, self.count, self.previous = [], 0, None
         directory.mkdir(parents=True)
 
@@ -150,8 +104,6 @@ class Writer:
         self.previous = pts,time
         index = self.count+len(self.frames)
         self.frames.append({'frame': index, 'source_pts_seconds': pts, 'playback_seconds': time})
-        self.inputs.append(crop(rgb,self.geometry['input']));self.popups.append(crop(rgb,self.geometry['popup']))
-        self.games.append(rgb.copy())
         # Full-field spatial masks are independent of selected notes and accepted roles.
         small = cv2.resize(rgb,(MASK_FORMAT['width'],round(MASK_FORMAT['width']*bound['height']/bound['width'])),interpolation=cv2.INTER_AREA)
         planes = measurements(small)
@@ -167,19 +119,16 @@ class Writer:
             return ''.join(json.dumps(f,separators=(',',':'),allow_nan=False)+'\n' for f in records).encode()
         timeline = [{k:f[k] for k in ('frame','source_pts_seconds','playback_seconds')} for f in self.frames]
         payloads = {'frames.jsonl.gz': lines(timeline),
-                    'game.rgb.gz': encode_rgb(self.games),
-                    'input.rgb.gz': encode_rgb(self.inputs),
-                    'popup.rgb.gz': encode_rgb(self.popups),
                     'masks.bin.gz': np.asarray(self.masks).tobytes()}
         files = {}
         for suffix, value in payloads.items():
             name = prefix+'.'+suffix;path = self.directory/name
-            path.write_bytes(gzip.compress(value,compresslevel=6 if suffix.endswith('.rgb.gz')else 1,mtime=0));files[name] = digest(path)
+            path.write_bytes(gzip.compress(value,compresslevel=1,mtime=0));files[name] = digest(path)
         self.chunks.append({'first_frame': self.count, 'frames': len(self.frames), 'files': files,
                             'first_source_pts_seconds': self.frames[0]['source_pts_seconds'],
                             'last_source_pts_seconds': self.frames[-1]['source_pts_seconds']})
         self.count += len(self.frames)
-        self.frames.clear();self.inputs.clear();self.popups.clear();self.masks.clear();self.games.clear()
+        self.frames.clear();self.masks.clear()
 
     def finish(self):
         self.flush()
@@ -190,11 +139,10 @@ class Writer:
                   'recognition_state': 'not_evaluated',
                   'channels': {'notes': {'status': 'not_measured', 'artifact': 'notes/manifest.json',
                                          'representation': 'independent_detector_stage'},
-                               'input_effects': {'status': 'available', 'representation': 'receptor_rgb_before_interpretation',
-                                                'interpretation_status': 'not_measured',
+                               'input_effects': {'status': 'not_measured', 'representation': 'original_source_recording',
                                                 'physical_switch_calibration': None},
-                               'popup': {'status': 'available', 'representation': 'rgb_before_ocr'},
-                               'note_processing': {'status': 'available', 'representation': 'full_field_rgb_and_spatial_masks'}},
+                               'popup': {'status': 'not_measured', 'representation': 'original_source_recording'},
+                               'note_processing': {'status': 'available', 'representation': 'full_field_spatial_masks'}},
                   'masks': {'width': MASK_FORMAT['width'], 'height': round(MASK_FORMAT['width']*self.binding['source']['height']/self.binding['source']['width']),
                             'fields': FIELDS, 'encoding': 'packbits_big'}, 'chunks': self.chunks}
         save_input(self.directory/'manifest.json',result)
@@ -202,19 +150,14 @@ class Writer:
 
 
 def acquire_pixels(data, directory, width=650):
-    """One decode for independent pixels; a note detector cannot abort acquisition."""
+    """Stream original video into compact masks; retain no decoded RGB frames."""
     binding = contract(data,width);source_current(binding['source'])
     saved = read_manifest(directory,binding)
     if saved is not None: return saved
     pending = directory.with_name('.'+directory.name+'.'+uuid4().hex+'.build')
     writer = Writer(pending,binding)
     try:
-        prior=read_manifest(directory)
-        rgb_keys=('media','game_roi','start_seconds','end_seconds','width','height')
-        reusable=prior and prior['contract']['format'].get('rgb_encoding')==FORMAT['rgb_encoding'] and all(
-            prior['contract']['source'][k]==binding['source'][k]for k in rgb_keys)
-        decoded=game_frames(directory,prior)if reusable else decode_frames(
-            data['media'],data['start_seconds'],data['end_seconds'],data['game_roi'],width)
+        decoded=decode_frames(data['media'],data['start_seconds'],data['end_seconds'],data['game_roi'],width)
         with closing(decoded) if hasattr(decoded,'close') else nullcontext(decoded):
             for pts,time,rgb in decoded: writer.append(pts,time,rgb)
         result = writer.finish()
@@ -232,7 +175,7 @@ def acquire_pixels(data, directory, width=650):
 
 
 def acquire(data, directory, bank=None, width=650, jobs=None, *, detector=None):
-    """Explicit orchestration: publish pixels first, then independent detections."""
+    """Publish timeline/masks first, then independent detections from source media."""
     pixels=acquire_pixels(data,directory,width)
     if bank is not None or detector is not None:
         from piu_timeline.play.observations.notes import detect_notes
@@ -243,7 +186,7 @@ def acquire(data, directory, bank=None, width=650, jobs=None, *, detector=None):
 
 
 def for_play(data):
-    """Locate only a source/window/geometry-identical independent pixel store."""
+    """Locate only a source/window/geometry-identical observation store."""
     explicit=data.get('observations_directory');media=Path(data['media']['path'])
     if explicit:directory=Path(explicit)
     elif media.parent.name=='raw' and data.get('segment_number'):

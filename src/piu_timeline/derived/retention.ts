@@ -19,11 +19,6 @@ function inside(path:string,root:string):boolean {
   return suffix===''||suffix!=='..'&&!suffix.startsWith('..'+sep)&&!suffix.startsWith(sep);
 }
 
-function timestamp(path:string):number {
-  try {return statSync(join(path,'analysis.json')).mtimeMs;}
-  catch(error) {if(error.code==='ENOENT')return statSync(path).mtimeMs;throw error;}
-}
-
 function manifest(path:string):boolean {
   try {
     const document=JSON.parse(readFileSync(join(path,'analysis.json'),'utf8'));
@@ -42,18 +37,14 @@ export function prune(finalPath:string,newPrevious:string|null=null,protectedPat
   const pattern=new RegExp(`^${name}\\.(previous|build)-[a-f0-9]+$`);
   const candidates=readdirSync(parent).filter(entry=>pattern.test(entry))
     .map(entry=>join(parent,entry)).filter(directory);
-  const previous=candidates.filter(path=>basename(path).startsWith(name+'.previous-'))
-    .sort((a,b)=>timestamp(b)-timestamp(a)||a.localeCompare(b));
-  const recoverable=(path:string)=>file(join(path,'analysis.json'))&&(!play||file(join(path,'frames.jsonl')))&&manifest(path);
   const explicit=newPrevious===null?null:resolve(newPrevious);
-  if(explicit!==null&&!previous.includes(explicit))throw new Error('Published rollback must be a sibling snapshot');
-  const retained=explicit&&recoverable(explicit)?explicit:previous.find(recoverable)??previous[0];
+  if(explicit!==null&&(!candidates.includes(explicit)||!basename(explicit).startsWith(name+'.previous-')))throw new Error('Published rollback must be a sibling snapshot');
   const protectedLocations=protectedPaths.flatMap(path=>{
     const absolute=resolve(path);
     try {return [absolute,realpathSync(absolute)];}
     catch(error) {if(error.code==='ENOENT')return [absolute];throw error;}
   });
-  const kept=candidates.filter(path=>path===retained||protectedLocations.some(source=>inside(source,path)));
+  const kept=candidates.filter(path=>protectedLocations.some(source=>inside(source,path)));
   const removed=candidates.filter(path=>!kept.includes(path));
   for(const path of removed)rmSync(path,{recursive:true});
   return {removed,kept};

@@ -20,17 +20,16 @@ than the size of the recording alone.
 
 ## Automatic retention
 
-Successful metadata and play publication retains the current directory and one
-most recent `analysis.previous-*` or `segment-NNN.previous-*` rollback. Older
-snapshots and abandoned build directories for that same canonical result are
-removed after the new result is published. Successful metadata cache reuse and
-cached play refreshes also apply retention. Unrelated segments, original media and human-named directories
-are outside its scope. Symlink directories are never followed for deletion.
+Successful metadata and play publication keeps the current directory and removes
+all superseded `analysis.previous-*` and `segment-NNN.previous-*` snapshots, along
+with abandoned builds for that canonical result. Successful metadata cache reuse
+and cached play refreshes also apply retention. Unrelated segments, original
+media and human-named directories are outside its scope. Symlink directories
+are never followed for deletion.
 
 Failed analysis does not trigger retention. A play without its saved native trace,
 immutable baseline or report also keeps its history. Original recording paths,
-including symlink targets, protect containing directories from removal; this can
-retain more than one rollback when a recording was placed inside a snapshot.
+including symlink targets, protect containing directories from removal.
 
 Publication remains protected by the source/segment writer lock. A shared
 `.retention.lock` additionally pins snapshot selection and staging while another
@@ -43,3 +42,15 @@ Interrupted builds whose current result has not been successfully refreshed
 remain available for recovery. They are not automatically treated as completed
 analysis. Diagnostic experiments under `.local/reports/` and `.local/cache/`
 have separate lifetimes; analysis retention does not erase them.
+
+## RGB storage
+
+Decoded game, receptor and popup RGB streams are not cached. Pixel detectors
+read the unchanged original recording when their source, geometry or detector
+contract changes. Compatible note observations, compact spatial masks, counter
+measurements and derived artifacts remain reusable independently. Input effects
+and popup channels without measurements stay explicitly `not_measured`; a source
+recording is not a completed measurement.
+
+Keep review folders small: prose, selected images and links to the current
+inspector. Do not copy complete play directories into `.local/reports/`.

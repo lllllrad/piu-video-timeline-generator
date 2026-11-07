@@ -155,8 +155,8 @@ Analysis is authoritative and presentation is disposable. A format reads `analys
 Analyzer changes that affect saved results increment `ANALYSIS_VERSION`. `just auto` rebuilds an
 older cache into a unique temporary directory and replaces it only after the new analysis succeeds.
 Source size/mtime, explicit game ROI and OCR backend/device changes invalidate the cache too. A
-per-source advisory lock prevents concurrent writers on macOS/Linux. Successful publication retains
-one rollback and removes older versions and abandoned builds; see [storage retention](local-storage.md).
+per-source advisory lock prevents concurrent writers on macOS/Linux. Successful publication removes
+superseded versions and abandoned builds; see [storage retention](local-storage.md).
 Promotion rewrites nested evidence paths to their final location. Original media is never rewritten.
 
 The metadata planner schedules OCR from screen transitions before acquiring text. Two small

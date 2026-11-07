@@ -86,22 +86,6 @@ def signature(directory,number):
             'candidates':candidates(),'evidence_sha256':sha256(path.read_bytes()).hexdigest()if path.is_file()else None}
 
 
-def sample_pixels(directory,number,source,explicit):
-    from piu_timeline.play.observations.bundle import read_manifest
-    path=Path(explicit)if explicit is not None else Path(directory)/'observations'/f'segment-{number:03}'
-    pixels=read_manifest(path)
-    if pixels is None:
-        if explicit is not None:raise ValueError('Skin sample pixels are unavailable')
-        return None,None
-    bound=pixels['contract']['source']
-    matches=(all(bound[k]==source[k]for k in ('media','layout','game_roi','start_seconds','end_seconds'))
-             and bound['width']==source['analysis_width'])
-    if not matches:
-        if explicit is not None:raise ValueError('Skin sample pixels differ from source/window/geometry')
-        return None,None
-    return path,pixels
-
-
 def reselect_saved(path,binding):
     """Selection policy consumes saved comparisons, never new image evidence."""
     if not path.is_file():return None
@@ -115,7 +99,7 @@ def reselect_saved(path,binding):
     return {**saved,'contract':{**binding,'format':prior['format']},'decision':decision}
 
 
-def prepare(directory,number,document,options,retry=False,*,pixel_directory=None):
+def prepare(directory,number,document,options,retry=False):
     banks=candidates()
     if not any(b['eligible']for b in banks):
         raise ValueError('Image note-skin bank required: no active automatic candidates; use just skins select or --note-skin')
@@ -138,18 +122,13 @@ def prepare(directory,number,document,options,retry=False,*,pixel_directory=None
             detectors=[(b,SkinDetector(load_bank(b['path']),source['layout'],width,height))for b in banks if b['eligible']]
             measured=[{**b,'observations':[]}for b,_ in detectors];samples=[];seen=set()
             print('Identifying note skin from independent native image samples...',flush=True)
-            pixel_directory,pixels=sample_pixels(directory,number,source,pixel_directory)
             decision=None
             for offset,fractions in [(0,FORMAT['windows']),(len(FORMAT['windows']),FORMAT['refinement_windows'])]:
                 if decision is not None and decision.get('reason')!='insufficient_skin_image_support':break
                 for window,fraction in enumerate(fractions,offset):
                     start=source['start_seconds']+(source['end_seconds']-source['start_seconds'])*fraction
                     end=min(source['end_seconds'],start+.14);last=None
-                    if pixel_directory is not None:
-                        from piu_timeline.play.observations.bundle import game_frames
-                        sampled=game_frames(pixel_directory,pixels,start,end)
-                    else:
-                        sampled=decode_frames(source['media'],start,end,source['game_roi'],width)
+                    sampled=decode_frames(source['media'],start,end,source['game_roi'],width)
                     with closing(sampled)as frames:
                         for pts,time,rgb in frames:
                             if last is not None and time-last<FORMAT['frame_gap_seconds']-1e-6:continue

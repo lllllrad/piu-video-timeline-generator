@@ -74,16 +74,6 @@ with tempfile.TemporaryDirectory()as temporary:
   sparse_evidence=json.loads(cache_path(source,1).read_text());sparse_calls=len(calls)
   sparse_refined=sparse==chosen and any(x['window']>=6 for x in sparse_evidence['samples'])
   sparse_caps=sparse_evidence['decision']['evidence'][0]['caps']
-  bound=automatic.context(document,1,options);pixels={'contract':{'source':{**bound,'width':options['width']}}}
-  calls.clear()
-  def stored_frames(path,manifest,start,end):yield from decode(document['media'],start,end,document['game_roi'],options['width'])
-  with patch.object(automatic,'SkinDetector',SparseDetector),patch.object(automatic,'decode_frames',side_effect=AssertionError('available source RGB must be reused')),patch('piu_timeline.play.observations.bundle.read_manifest',return_value=pixels),patch('piu_timeline.play.observations.bundle.game_frames',side_effect=stored_frames):
-   pixels_reused=prepare(source,1,document,options,retry=True)==chosen
-  before_mismatch=cache_path(source,1).read_text()
-  wrong={'contract':{'source':{**pixels['contract']['source'],'width':201}}}
-  with patch('piu_timeline.play.observations.bundle.read_manifest',return_value=wrong),patch.object(automatic,'decode_frames',side_effect=AssertionError('explicit mismatched RGB must fail')):
-   try:prepare(source,1,document,options,retry=True,pixel_directory=root/'wrong');pixel_mismatch=False
-   except ValueError:pixel_mismatch=cache_path(source,1).read_text()==before_mismatch
   class EmptyDetector(SparseDetector):
    def detect(self,rgb):return []
   calls.clear()
@@ -138,7 +128,7 @@ with tempfile.TemporaryDirectory()as temporary:
    try:prepare(source,1,document,options);failed_reused=False
    except ValueError:failed_reused=True
   print(json.dumps({'chosen':Path(chosen).parent.parent.name,'decision':evidence['decision'],'samples':len(evidence['samples']),
-   'failed_plan_calls':failed_plan_calls,'pixels_reused':pixels_reused,'pixel_mismatch':pixel_mismatch,'failed_plan_retried':failed_plan_retried,
+   'failed_plan_calls':failed_plan_calls,'failed_plan_retried':failed_plan_retried,
    'plan_reused':plan_reused,'sparse_refined':sparse_refined,'sparse_caps':sparse_caps,'sparse_calls':sparse_calls,
    'policy_invalid':policy_invalid,'tamper_rejected':tamper_rejected,'media_invalid':media_invalid,
    'calls':first_calls,'reused':reused,'window_invalid':window_invalid,'width_invalid':width_invalid,
@@ -166,8 +156,8 @@ test('insufficient samples collect independent additional windows while retainin
  assert.equal(r.plan_reused,true);
 });
 
-test('refinement reuses bound RGB, rejects wrong geometry, and retries failed proofs after a sampling-plan extension',()=>{
- assert.equal(r.pixels_reused,true);assert.equal(r.pixel_mismatch,true);assert.equal(r.failed_plan_retried,true,JSON.stringify({calls:r.failed_plan_calls}));
+test('refinement retries failed proofs after a sampling-plan extension',()=>{
+ assert.equal(r.failed_plan_retried,true,JSON.stringify({calls:r.failed_plan_calls}));
 });
 
 test('changed selection policy reuses original comparisons and rejects inconsistent prior decisions',()=>{

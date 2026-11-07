@@ -20,8 +20,7 @@ The command downloads or opens the source, detects plays, recognizes songs, char
     +-- default.txt
 ```
 
-Successful analysis updates retain one previous rollback and clean older analysis
-versions and abandoned builds. Original recordings and current native evidence
+Successful analysis updates remove superseded analysis versions and abandoned builds. Original recordings and current native evidence
 are preserved. See [local storage](docs/local-storage.md).
 
 Local files work the same way:
@@ -120,10 +119,10 @@ Independent channel acquisition can run before chart or input analysis:
 just observe --acquire --jobs 2
 ```
 
-It stores lossless acquired game/receptor/popup pixels and ungrouped detector
-observations under `.local/data/SOURCE/observations/`. Detectors can be rerun
-without decoding the original recording; a detector failure preserves other
-channels. See [independent observations](docs/independent-observations.md).
+It stores source-bound timelines, compact spatial masks and ungrouped detector
+observations under `.local/data/SOURCE/observations/`. Compatible detector observations are reused directly. Changed pixel detectors decode
+the original recording; decoded RGB frames are never cached. A detector failure
+preserves the acquired timeline and masks. See [independent observations](docs/independent-observations.md).
 
 ## Editable chart data
 

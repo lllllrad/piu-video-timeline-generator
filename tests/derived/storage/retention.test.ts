@@ -17,7 +17,7 @@ function workspace(t):string {
   t.after(()=>rmSync(path,{recursive:true,force:true}));return path;
 }
 
-test('repeated publication retains current native evidence and exactly the most recent rollback',t=>{
+test('repeated publication retains current native evidence and removes all superseded snapshots',t=>{
   const root=workspace(t),final=join(root,'segment-001'),media=join(root,'original.mkv');
   writeFileSync(media,'original media');snapshot(final,0);
   const rawTimestamp=new Date(100000);utimesSync(media,rawTimestamp,rawTimestamp);
@@ -28,10 +28,10 @@ test('repeated publication retains current native evidence and exactly the most 
     const abandoned=join(root,`segment-001.build-${String(version).padStart(8,'0')}`);
     snapshot(abandoned,version-1);
     const result=prune(final,previous,[media]);
-    assert.deepEqual(result.kept,[previous]);
+    assert.deepEqual(result.kept,[]);
     assert.equal(existsSync(abandoned),false);
-    assert.equal(readdirSync(root).filter(name=>name.startsWith('segment-001.previous-')).length,1);
-    assert.equal(JSON.parse(readFileSync(join(previous,'analysis.json'),'utf8')).version,version-1);
+    assert.equal(readdirSync(root).filter(name=>name.startsWith('segment-001.previous-')).length,0);
+    assert.equal(existsSync(previous),false);
     assert.equal(readFileSync(join(final,'frames.base.jsonl'),'utf8'),frames);
   }
   assert.equal(existsSync(join(root,'segment-002.build-00000001')),true);
@@ -53,13 +53,13 @@ test('incomplete current evidence preserves histories, baselines and failed atte
   assert.equal(existsSync(old),true);
 });
 
-test('a malformed newest rollback cannot evict an older usable snapshot',t=>{
+test('successful publication removes superseded snapshots including malformed results',t=>{
   const root=workspace(t),final=join(root,'analysis');snapshot(final,3,false);
   const good=join(root,'analysis.previous-00000001'),broken=join(root,'analysis.previous-00000002');
   snapshot(good,1,false);snapshot(broken,2,false);writeFileSync(join(broken,'analysis.json'),'{truncated');
   const result=prune(final,broken);
-  assert.deepEqual(result.kept,[good]);
-  assert.equal(JSON.parse(readFileSync(join(good,'analysis.json'),'utf8')).version,1);
+  assert.deepEqual(result.kept,[]);assert.equal(existsSync(good),false);assert.equal(existsSync(broken),false);
+
 });
 
 test('metadata history uses the same policy and protects original media even through a symlink',t=>{
@@ -69,7 +69,7 @@ test('metadata history uses the same policy and protects original media even thr
   writeFileSync(join(older,'original.mkv'),'irreplaceable source');
   const media=join(root,'media-link.mkv');symlinkSync(join(older,'original.mkv'),media);
   const result=prune(final,newer,[media]);
-  assert.deepEqual(new Set(result.kept),new Set([older,newer]));
+  assert.deepEqual(new Set(result.kept),new Set([older]));
   assert.equal(readFileSync(media,'utf8'),'irreplaceable source');
 });
 
@@ -109,7 +109,7 @@ with tempfile.TemporaryDirectory()as temporary:
   assert request.exists()and process.poll()is None
   shutil.copytree(old,copied)
  assert process.wait(timeout=20)==0
- pinned=copied.joinpath('frames.jsonl').read_text()=='1'and not old.exists()and latest.exists()
+ pinned=copied.joinpath('frames.jsonl').read_text()=='1'and not old.exists()and not latest.exists()
  statuses=[]
  for fail in (False,True):
   data=root/('failure'if fail else'success');source=data/'synthetic';current=source/'analysis';current.mkdir(parents=True)
@@ -139,7 +139,7 @@ test('native adapters pin copied observations and prune metadata only after a su
   const result=JSON.parse(stdout.split('\n').find(line=>line.startsWith('RETENTION_RESULT ')).slice('RETENTION_RESULT '.length));
   assert.equal(result.pinned,true);
   assert.deepEqual(result.statuses,[
-    {failed:false,old_exists:false,build_exists:false,backups:1,media:'original recording',version:result.version},
+    {failed:false,old_exists:false,build_exists:false,backups:0,media:'original recording',version:result.version},
     {failed:true,old_exists:true,build_exists:true,backups:1,media:'original recording',version:0},
   ]);
 });

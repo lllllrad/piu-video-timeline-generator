@@ -1,5 +1,5 @@
-"""Ungrouped detector observations from published pixels; no timing or popup input."""
-from contextlib import closing
+"""Ungrouped detector observations from original source frames; no timing or popup input."""
+from contextlib import closing, nullcontext
 import gzip
 import json
 from pathlib import Path
@@ -7,7 +7,8 @@ import shutil
 from uuid import uuid4
 
 from piu_timeline.play.observations.artifacts import save_input
-from piu_timeline.play.observations.bundle import read_manifest, game_frames, digest, source_current
+from piu_timeline.play.frames import decode_frames
+from piu_timeline.play.observations.bundle import read_manifest, digest, source_current
 
 FORMAT={'schema':1,'revision':1,'measurement':'ungrouped_localized_detections'}
 
@@ -16,7 +17,7 @@ def detect_notes(directory,bank=None,*,jobs=None,detector=None):
     if (bank is None)==(detector is None):raise ValueError('Choose exactly one note detector')
     from piu_timeline.play.skins.detector import FORMAT as IMAGE_FORMAT
     pixels=read_manifest(directory)
-    if pixels is None:raise ValueError('Acquire independent game pixels before detecting notes')
+    if pixels is None:raise ValueError('Acquire the independent timeline before detecting notes')
     bound=pixels['contract']['source']
     detector_contract=detector.contract if detector is not None else {'method':'skin_image','bank':bank['contract'],'format':IMAGE_FORMAT}
     binding={'format':FORMAT,'pixels':digest(directory/'manifest.json'),'detector':detector_contract}
@@ -31,15 +32,29 @@ def detect_notes(directory,bank=None,*,jobs=None,detector=None):
     pending=directory/('.notes.'+uuid4().hex+'.build');pending.mkdir()
     previous=directory/'.notes.previous'
     try:
-        decoded=game_frames(directory,pixels)
+        decoded=decode_frames(bound['media'],bound['start_seconds'],bound['end_seconds'],bound['game_roi'],bound['width'])
         if detector is not None:
             frames=((pts,time,rgb,detector.candidates(rgb))for pts,time,rgb in decoded)
         else:
             from piu_timeline.play.skins.pipeline import classified_frames
             frames=classified_frames(decoded,bank,bound['layout'],bound['width'],bound['height'],jobs=jobs,retain_candidates=True)
         chunks=[];rows=[];index=0;ci=0
-        with closing(frames):
+        lifetime=closing(decoded)if hasattr(decoded,'close')else nullcontext(decoded)
+        with lifetime,closing(frames):
             for pts,time,rgb,candidates in frames:
+                if ci>=len(pixels['chunks']):raise ValueError('Extra source frame during note detection')
+                if not rows:
+                    native=pixels['chunks'][ci]
+                    names=[name for name in native['files']if name.endswith('.frames.jsonl.gz')]
+                    if len(names)!=1:raise ValueError('Missing captured frame timeline')
+                    file=directory/names[0]
+                    if digest(file)!=native['files'][names[0]]:raise ValueError('Corrupt captured frame timeline')
+                    timeline=[json.loads(line)for line in gzip.decompress(file.read_bytes()).splitlines()]
+                    if len(timeline)!=native['frames']:raise ValueError('Incomplete captured frame timeline')
+                expected=timeline[len(rows)]
+                if (expected['frame']!=index or abs(expected['source_pts_seconds']-pts)>1e-6
+                        or abs(expected['playback_seconds']-time)>1e-6):
+                    raise ValueError('Source frame differs from captured original PTS')
                 rows.append({'frame':index,'source_pts_seconds':pts,'playback_seconds':time,
                              'note_candidates':[{**c,'candidate':i}for i,c in enumerate(candidates)]})
                 index+=1

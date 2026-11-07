@@ -86,7 +86,8 @@ class SkinReplayTest(unittest.TestCase):
             data['media']['container_start_seconds']=30
             data['layout']['combo_roi']=[.3,.5,.2,.1]
             data['observations_directory']=str(root/'observations')
-            with patch('piu_timeline.play.observations.bundle.decode_frames',return_value=iter(decoded)):
+            with patch('piu_timeline.play.observations.bundle.decode_frames',return_value=iter(decoded)),\
+                 patch('piu_timeline.play.observations.notes.decode_frames',return_value=iter(decoded)):
                 acquire(data,root/'observations',load_bank(bank/'bank.json'),width=200,jobs=1)
             (root/'frames.jsonl').write_text(trace)
             with patch('piu_timeline.play.skins.replay.decode_frames',side_effect=AssertionError('must reuse independent observations')),\
@@ -99,11 +100,13 @@ class SkinReplayTest(unittest.TestCase):
                 self.assertEqual({k:new[k]for k in old if k!='notes'},{k:v for k,v in old.items()if k!='notes'})
                 self.assertEqual(new['notes'][0]['role'],'tap')
             self.assertTrue(metadata['missing_template_roles'])
-            # A different detector contract rematches the saved RGB, never the source.
+            # Missing detector observations require original source frames again.
             notes_manifest=root/'observations/notes/manifest.json'
             saved_notes=notes_manifest.read_bytes();notes_manifest.unlink()
-            with patch('piu_timeline.play.skins.replay.decode_frames',side_effect=AssertionError('must rematch cached RGB')):
+            with patch('piu_timeline.play.skins.replay.decode_frames',return_value=iter(decoded))as decode:
+                data.pop('skin_detector',None)
                 refresh(data,root,bank/'bank.json')
+                decode.assert_called_once()
             notes_manifest.write_bytes(saved_notes)
             before=(root/'frames.jsonl').read_bytes()
             shifted=[dict(f)for f in updated];shifted[0]['source_pts_seconds']=99.

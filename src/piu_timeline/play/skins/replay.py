@@ -113,14 +113,8 @@ def refresh(data, output, path):
         print('Reusing independent note observations; no decoding or image matching.',flush=True)
         decoded=((pts,time,None,detector.resolve(candidates))for pts,time,candidates in captured)
     elif selected['templates']:
-        from piu_timeline.play.observations.bundle import for_play,game_frames
-        pixel_directory=for_play(data)
-        if pixel_directory is not None:
-            print('Reusing independently acquired RGB; no original-video decoding.',flush=True)
-            source=game_frames(pixel_directory)
-        else:
-            source=decode_frames(data['media'], data['start_seconds'], data['end_seconds'],
-                                 data['game_roi'], data['analysis_width'])
+        source=decode_frames(data['media'], data['start_seconds'], data['end_seconds'],
+                             data['game_roi'], data['analysis_width'])
         decoded=classified_frames(source,selected,data['layout'],data['analysis_width'],data['analysis_height'])
     detector=SkinDetector(bank,data['layout'],data['analysis_width'],data['analysis_height'])
     at_receptor=BodyAtReceptor(detector)
