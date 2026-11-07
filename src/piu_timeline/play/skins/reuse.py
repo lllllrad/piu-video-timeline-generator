@@ -42,8 +42,12 @@ def reusable_groups(data,bank):
     # Caps can occlude one another across lanes. A changed cap reference can
     # expose or hide a candidate from any other kind, so caps form one input set.
     cap_inputs=lambda signatures:{k:v for k,v in signatures.items()if k.startswith('caps/')}
+    families=bank.get('shared_cap_families',[])
+    body_dependencies={group(t)for t in bank['templates']
+                       if any(t['id']in f.get('body_templates',[])for f in families)}
     same_caps=(cap_inputs(a)==cap_inputs(b)
-               and old.get('shared_cap_families',[])==bank.get('shared_cap_families',[]))
+               and old.get('shared_cap_families',[])==families
+               and all(a.get(k)==b.get(k)for k in body_dependencies))
     return {key for key in a.keys()&b.keys()if a[key]==b[key]
             and(same_caps if key.startswith('caps/')else previous==FORMAT)}
 

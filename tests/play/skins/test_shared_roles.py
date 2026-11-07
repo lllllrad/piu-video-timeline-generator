@@ -86,6 +86,29 @@ class SharedRoleTest(unittest.TestCase):
             cap=next(c for c in detector.detect(image)if c['role']!='hold_body')
             self.assertEqual(cap['role'],'unknown')
 
+    def test_changed_body_references_invalidate_dependent_cap_classification(self):
+        from piu_timeline.play.skins.reuse import reusable_groups
+        from piu_timeline.play.skins.detector import FORMAT
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);old=root/'old';new=root/'new';old.mkdir();new.mkdir()
+            for path in (old,new):
+                _,_,document=self.fixture(path)
+                document['shared_cap_families'][0]['body_templates']=['hold_body']
+                (path/'bank.json').write_text(json.dumps(document))
+            before=load_bank(old/'bank.json')
+            body=cv2.imread(str(new/'hold_body.png'),cv2.IMREAD_UNCHANGED)
+            body[0,0,0]+=1;cv2.imwrite(str(new/'hold_body.png'),body)
+            data={'skin_detector':{'bank_path':str(old/'bank.json'),
+                'contract':{'bank':before['contract'],'detector':FORMAT}}}
+            self.assertNotIn('caps/0',reusable_groups(data,load_bank(new/'bank.json')))
+            # The same body edit does not invalidate caps with no declared dependency.
+            for path in (old,new):
+                document=json.loads((path/'bank.json').read_text())
+                document['shared_cap_families'][0].pop('body_templates')
+                (path/'bank.json').write_text(json.dumps(document))
+            data['skin_detector']['contract']['bank']=load_bank(old/'bank.json')['contract']
+            self.assertIn('caps/0',reusable_groups(data,load_bank(new/'bank.json')))
+
     def test_a_family_cannot_share_across_lanes_or_missing_references(self):
         with tempfile.TemporaryDirectory()as temporary:
             root=Path(temporary);_,_,document=self.fixture(root)

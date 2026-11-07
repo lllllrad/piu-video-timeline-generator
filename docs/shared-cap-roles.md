@@ -58,6 +58,8 @@ bands from an appearance reference are negative evidence and never become
 positive body support. Receptor-risk, image connectivity, role joins and native
 coordinate projection retain the independent evidence. A family change
 invalidates cap classification while body acquisition remains separately reusable.
+Changing a body reference used by a family also invalidates dependent cap
+classifications; their stored coverage proof cannot refer to superseded pixels.
 
 Synthetic integration varies reference appearance counts independently by role.
 It checks exact cap counts, per-frame roles, native centers/PTS, separate hold
