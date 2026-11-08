@@ -15,6 +15,7 @@ class Track:
     missed: int = 0
     tracking_observations: list = field(default_factory=list)
     tracking_warnings: list = field(default_factory=list)
+    tracking_connections: list = field(default_factory=list)
 
 
 class NoteTracker:
@@ -65,6 +66,8 @@ class NoteTracker:
     def update(self, seconds, detections, source_pts=None):
         from piu_timeline.derived import call,CONTRACTS
         observations=self.observations(seconds,detections)
+        if source_pts is not None:
+            for observation in observations:observation['sourcePtsSeconds']=source_pts
         centers=[{**image,'y':point['center']['yPixels']/self.height}for image,point in zip(detections,observations,strict=True)if point['center']]
         self.motion.update(seconds,centers,source_pts)
         if self.hold_candidate:
@@ -82,7 +85,12 @@ class NoteTracker:
         for i,j in assignment['matches']:
             self.active[i].points.append((seconds, detections[j]['y'] * self.height))
             self.active[i].tracking_observations.append(observations[j])
-            self.active[i].tracking_observations=self.active[i].tracking_observations[-CONTRACTS['frame_tracking']['history_frames']:]
+            history=self.active[i].tracking_observations
+            self.active[i].tracking_observations=[o for k,o in enumerate(history)
+                if seconds-o['time']<=CONTRACTS['frame_tracking']['identity_history_seconds']+1e-6
+                or k>=len(history)-CONTRACTS['frame_tracking']['history_frames']]
+            for proof in assignment['gapConnections']:
+                if proof['track']==i:self.active[i].tracking_connections.append({**proof,'source_pts_seconds':source_pts})
             self.active[i].missed = 0
             for warning in assignment['cadenceWarnings']:
                 before=self.motion.at_time.get(warning['visible_start_seconds'],{})
@@ -124,6 +132,8 @@ class NoteTracker:
             note = fit_track(track, self.layout['receptor_y'] * self.height, self.spacing, motion=self.motion, layout=self.layout)
             warnings=[w for i in fragments for w in source_tracks[i].tracking_warnings]
             if warnings:note['tracking_warnings']=warnings
+            connections=[p for i in fragments for p in source_tracks[i].tracking_connections]
+            if connections:note['tracking_connections']=connections
             if len(fragments) > 1:
                 note['tracking_method'] = 'corroborated_fragments'
                 if note.get('fit_method') not in ('shared_scroll_clock', 'shared_scroll_interpolation'):

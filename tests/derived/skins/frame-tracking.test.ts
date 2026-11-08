@@ -26,18 +26,20 @@ test('a disappearing note cannot steal the following close note',()=>{
  assert.deepEqual(r.matches,[[1,0]]);assert.deepEqual(r.ambiguities,[]);
 });
 
-test('coobserved separated caps preserve order while learning their first velocity',()=>{
+test('a complete rigid cap pair measures translation while an incomplete repeating pattern stays ambiguous',()=>{
  const r=assign([track(200),track(208)],[detection(199.5),detection(191.5)],1+1/60,40);
- assert.deepEqual(r.matches,[[0,1],[1,0]]);
+ assert.deepEqual(r.matches,[[0,1],[1,0]]);assert.deepEqual(r.ambiguousTracks,[]);
+ const incomplete=assign([track(200),track(208)],[detection(191.5),detection(199.5),detection(207.5)],1+1/60,40);
+ assert.deepEqual(incomplete.matches,[]);assert.deepEqual(incomplete.ambiguousTracks,[0,1]);
  const asynchronous=[track(200,.99),track(208)];
  const ambiguous=assign(asynchronous,[detection(199.5),detection(191.5)],1+1/60,40);
  assert.deepEqual(ambiguous.matches,[]);assert.deepEqual(ambiguous.ambiguousTracks.sort(),[0,1]);
 });
 
-test('a unique global assignment can resolve an individually ambiguous candidate',()=>{
+test('maximum cardinality cannot certify an individually ambiguous candidate',()=>{
  const tracks=[track(200),track(208)];tracks[0].observations[0].center.uncertaintyPixels=8;
  const r=assign(tracks,[detection(192),detection(200)],1+1/60,40,motion);
- assert.deepEqual(r.matches.sort((a,b)=>a[0]-b[0]),[[0,0],[1,1]]);assert.deepEqual(r.ambiguities,[]);
+ assert.deepEqual(r.matches,[]);assert.deepEqual(r.ambiguousTracks,[0,1]);
 });
 
 test('equally feasible source identities remain an explicit ambiguity',()=>{
@@ -101,7 +103,8 @@ test('a vanished lower cap cannot return as the following note after retained fo
  assert.deepEqual(result.matches,[[1,0]]);assert.deepEqual(result.ambiguities,[]);
  // A missing displacement link cannot be silently interpolated.
  const reappeared=[detection(77,now)];
- assert.deepEqual(assign([tracks[0]],reappeared,now,40,[],steps).matches,[[0,0]]);
+ const unsupported=assign([tracks[0]],reappeared,now,40,[],steps);
+ assert.deepEqual(unsupported.matches,[]);assert.deepEqual(unsupported.ambiguousTracks,[0]);
  const broken=assign([tracks[0]],reappeared,now,40,[],steps.slice(1));
  assert.deepEqual(broken.matches,[]);
 });
@@ -110,32 +113,37 @@ test('a lone new cap cannot reuse an old identity after an unobserved field inte
  const previous=track(74,1),now=1+.117;
  const result=assign([previous],[detection(144,now)],now,64);
  assert.deepEqual(result.matches,[]);assert.equal(result.step,null);
- // Independent observed displacement can still bridge a visibility gap.
+ // A bare displacement interval without independent peer identities is only a search bound.
  const observed=assign([previous],[detection(44,now)],now,64,[{fromSeconds:1,pixels:30,uncertaintyPixels:1}]);
- assert.deepEqual(observed.matches,[[0,0]]);
+ assert.deepEqual(observed.matches,[]);assert.deepEqual(observed.ambiguousTracks,[0]);
 });
 
 for(const spacing of [20,40,80])for(const fps of [30,60,120])
-test(`generated moving notes retain identity through missing and repeated views: spacing=${spacing}, fps=${fps}`,()=>{
- const scene=nativeScene(Array.from({length:7},(_,i)=>[.9+i*.125,0]),spacing,fps,5,{end:2.1,repeated:[[.65,.68]],dropped:[11]});
+test(`generated moving notes retain identity or explicitly split an unsupported source gap: spacing=${spacing}, fps=${fps}`,()=>{
+ const scene=nativeScene(Array.from({length:7},(_,i)=>[.9+i*.125,i%3]),spacing,fps,5,{end:2.1,repeated:[[.65,.68]],dropped:[11]});
  const sources=scene.notes.map(n=>new Map<number,number>(n.points)),phases=new Map<number,number>(scene.scroll_motion.samples.map(s=>[s.time,s.phase]));
- let active:any[]=[];const created=new Map<number,number>();
+ let active:any[]=[];const created=new Map<number,number>(),warned=new Set<number>();
  for(const [index,sample]of scene.scroll_motion.samples.entries()){
   const time=sample.time,caps=sources.flatMap((points,source)=>points.has(time)&&!(source===1&&index%17===0)?[{
-   source,lane:0,observation:observation(time,points.get(time),`pose-${index%2}`,points.get(time)+(index%2?1:-1)*spacing/3)}]:[]);
+   source,lane:scene.notes[source].lane,observation:observation(time,points.get(time),`pose-${index%2}`,points.get(time)+(index%2?1:-1)*spacing/3)}]:[]);
   const times=new Set<number>(active.flatMap(t=>t.observations.map(o=>o.time)));
   const movements=[...times].map(fromSeconds=>({fromSeconds,pixels:sample.phase-phases.get(fromSeconds),uncertaintyPixels:spacing/80}));
   const r=assign(active,caps,time,spacing,movements);
-  assert.deepEqual(r.ambiguousTracks,[]);
+  if(r.ambiguousTracks.length){
+   assert.equal(fps,30,'short ordinary gaps have independent peer evidence');
+   r.ambiguousTracks.forEach(i=>warned.add(active[i].source));
+  }
   const used=new Set<number>();
   for(const [i,j]of r.matches){
    assert.equal(active[i].source,caps[j].source,`identity switched at ${time}`);
-   active[i].observations.push(caps[j].observation);active[i].observations=active[i].observations.slice(-6);used.add(j);
+   active[i].observations.push(caps[j].observation);active[i].observations=active[i].observations.filter(o=>time-o.time<=.35+1e-6);used.add(j);
   }
-  active=active.filter(t=>time-t.observations.at(-1).time<=.12);
-  caps.forEach((cap,j)=>{if(!used.has(j)){created.set(cap.source,(created.get(cap.source)??0)+1);active.push({lane:0,source:cap.source,observations:[cap.observation],maximumGapSeconds:.12});}});
+  active=active.filter((t,i)=>!r.ambiguousTracks.includes(i)&&time-t.observations.at(-1).time<=.12);
+  caps.forEach((cap,j)=>{if(!used.has(j)){created.set(cap.source,(created.get(cap.source)??0)+1);active.push({lane:cap.lane,source:cap.source,observations:[cap.observation],maximumGapSeconds:.12});}});
  }
- assert.equal(created.size,7);assert.ok([...created.values()].every(count=>count===1),'ordinary missing frames must not fragment a note');
+ assert.equal(created.size,7);
+ for(const [source,count]of created)assert.ok(count===1||warned.has(source),'unsupported gap must retain its warning');
+ if(fps>30)assert.ok([...created.values()].every(count=>count===1),'supported missing views must not fragment a note');
 });
 
 for(const spacing of [20,40,80])for(const fps of [60,120])
@@ -175,7 +183,7 @@ print(json.dumps([{'lane':a.lane,'points':a.points,'warnings':a.tracking_warning
 
 for(const spacing of [20,40,80])for(const fps of [30,60,120])for(const burst of [false,true])
 test(`generated production-style tracking learns its own movement across a capture burst: spacing=${spacing}, fps=${fps}, burst=${burst}`,()=>{
- const scene=capFrames(Array.from({length:9},(_,i)=>[1+Math.floor(i/2)*.125,i%2]),spacing,fps,
+ const scene=capFrames(Array.from({length:12},(_,i)=>[1+Math.floor(i/3)*.125,i%3]),spacing,fps,
   burst?{end:2.3,repeated:[[.5,.5+1/fps]],renderTime:t=>t>=.7?t+2/fps:t}:{end:2.3});
  let active:any[]=[],steps:any[]=[];const created=new Map<number,number>(),uncertainSources=new Set<number>();let warnings=0;
  for(const [index,sample]of scene.frames.entries()){
@@ -183,13 +191,13 @@ test(`generated production-style tracking learns its own movement across a captu
    source:n.source,lane:n.lane,observation:observation(time,n.y_pixels)}));
   const r=assign(active,caps,time,spacing,[],steps);warnings+=r.cadenceWarnings.length;
   if(r.ambiguousTracks.length){
-   assert.ok(r.translationAlternatives.length>1,`unexplained ambiguity at ${time}`);
+   assert.ok(r.ambiguities.length>0,`ambiguity must retain candidate evidence at ${time}`);
    assert.ok(r.ambiguousDetections.length>0);
    warnings++;r.ambiguousTracks.forEach(i=>uncertainSources.add(active[i].source));
   }
   const used=new Set<number>();
   for(const [i,j]of r.matches){assert.equal(active[i].source,caps[j].source,`identity switched at ${time}`);
-   active[i].observations.push(caps[j].observation);active[i].observations=active[i].observations.slice(-6);used.add(j);}
+   active[i].observations.push(caps[j].observation);active[i].observations=active[i].observations.filter(o=>time-o.time<=.35+1e-6);used.add(j);}
   active=active.filter((t,i)=>!r.ambiguousTracks.includes(i)&&time-t.observations.at(-1).time<=.12);
   caps.forEach((cap,j)=>{if(!used.has(j)){
    if(created.has(cap.source))assert.ok(uncertainSources.has(cap.source),`unexplained fragmentation at ${time}`);
@@ -197,7 +205,7 @@ test(`generated production-style tracking learns its own movement across a captu
    active.push({lane:cap.lane,source:cap.source,observations:[cap.observation],maximumGapSeconds:.12});}});
   steps=steps.filter(s=>time-s.toSeconds<=.35);if(r.step)steps.push(r.step);
  }
- assert.equal(created.size,9);if(burst){if(spacing>=40||fps<=60)assert.ok(warnings>0);}
+ assert.equal(created.size,12);if(burst){if(spacing>=40||fps<=60)assert.ok(warnings>0);}
  else{assert.equal(uncertainSources.size,0);assert.ok([...created.values()].every(n=>n===1));}
 });
 
@@ -226,11 +234,11 @@ test('an unobserved final step cannot widen a disappeared cap into the following
 });
 
 for(const spacing of [20,40,80])for(const fps of [30,60,120])
-test(`an observed render-step allowance follows a cap through occlusion and capture catch-up: spacing=${spacing}, fps=${fps}`,()=>{
+test(`a plausible render-step extrapolation remains unresolved without independent gap evidence: spacing=${spacing}, fps=${fps}`,()=>{
  const velocity=12*spacing,error=spacing/80,history=Array.from({length:6},(_,i)=>{
   const o=observation(1+i/fps,8*spacing-velocity*(i-(i>=2?1:0))/fps);o.center.uncertaintyPixels=error;return o;
  }),old={lane:0,maximumGapSeconds:.35,observations:history},time=1+12/fps,
  cap=detection(8*spacing-velocity*12/fps,time);cap.observation.center.uncertaintyPixels=error;
  const before=structuredClone({old,cap}),r=assign([old],[cap],time,spacing);
- assert.deepEqual(r.matches,[[0,0]]);assert.deepEqual(r.ambiguousTracks,[]);assert.deepEqual({old,cap},before);
+ assert.deepEqual(r.matches,[]);assert.deepEqual(r.ambiguousTracks,[0]);assert.deepEqual({old,cap},before);
 });

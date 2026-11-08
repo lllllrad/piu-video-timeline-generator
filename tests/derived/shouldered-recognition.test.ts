@@ -59,7 +59,8 @@ for(const scene of scenes.filter(s=>!s.mode))test(`cut-corner caps retain near-t
 
 for(const scene of scenes.filter(s=>s.mode))test(`near-touching caps cannot prove a hold without their connector: ${scene.id}`,()=>{
  const r=results.find(r=>r.id===scene.id)!;
- assert.equal(r.notes.length,2);
+ if(scene.scale===1)assert.equal(r.notes.length,2);
+ else{assert.ok(r.notes.length>2);assert.ok(r.notes.some(n=>n.tracking_warnings.length>0));}
  for(const [i,f]of r.frames.entries()){
   assert.ok(f.caps.length<=2,'an obscured connection cannot create another cap');
   for(const c of f.caps){

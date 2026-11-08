@@ -71,17 +71,6 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual({m['aggregate_row_count'] for m in matches},{2})
         self.assertEqual({(m['combo_lower_seconds'],m['combo_upper_seconds']) for m in matches},{(1.,1.1)})
 
-    def test_prediction_survives_combo_overlay_occlusion(self):
-        layout = {'lanes':[{'x':.1+.2*i} for i in range(5)],'receptor_y':.2,
-                  'combo_roi':[.4,.52,.2,.075]}
-        tracker = NoteTracker(layout,320,180)
-        for t in (0,.05,.10,.15,.20,.25,.30,.35):
-            visible = t <= .15 or t >= .35
-            tracker.update(t,[{'lane':2,'y':(180-400*t)/180}] if visible else [])
-        self.assertEqual(len(tracker.active),1)
-        self.assertEqual(len(tracker.finished),0)
-        self.assertEqual(len(tracker.active[0].points),5)
-
     def test_counter_jump_cannot_be_explained_by_head_count(self):
         notes = [{'status': 'estimated', 'target_seconds': 1., 'lane': lane} for lane in (0, 1)]
         event = {'status': 'candidate', 'delta': 2, 'lower_seconds': .99, 'upper_seconds': 1.02}

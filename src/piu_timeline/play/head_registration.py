@@ -179,7 +179,7 @@ def refit_coordinates(data,registration,measured,display_delay_ms):
                 'unmeasured_frames':len(raw)-len(record['observations']),
                 'unmeasured_coordinate_basis':'excluded_from_coordinate_fit'if record.get('coordinate_method')=='native_image_anchors'
                     else'stable_constant_offset'if record['status']=='registered'else'original_detection'})
-        for key in ('tracking_method','source_track_fragments','tracking_warnings'):
+        for key in ('tracking_method','source_track_fragments','tracking_warnings','tracking_connections'):
             if key in original:note[key]=original[key]
         tracks.append(track);notes.append(note)
     motion,timing=restore(notes,tracks,data['scroll_motion']['samples'],data['layout'],width,height)

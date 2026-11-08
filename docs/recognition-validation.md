@@ -75,6 +75,25 @@ occlusion/capture gaps and chords with missing/conflicting channels. Avoid a
 large Cartesian product of unrelated options that adds cost without testing an
 interaction.
 
+## Identity refusal checks
+
+Candidate compatibility is insufficient to certify identity. A sole candidate,
+maximum partial matching or downstream diagnostic cannot repair missing proof.
+Keep unsupported observations separate with explicit warnings and prevent
+consumers from inheriting speculative connections. Test plausible wrong
+candidates while the actual object is hidden, as well as positive cases. Expected
+identities and refusals come from independent truth.
+
+The frame-tracking tests include a unique maximum-cardinality assignment that
+must remain unresolved, and a sole visible wrong candidate while the actual cap
+is hidden. `tests/derived/skins/gap-identity.test.ts` exercises direct peer-endpoint
+proof across three scales, 30/60/120 fps, slow movement, stops, reversals and
+acceleration. Missing peer origins, source gaps, contradictory travel, a single
+peer and accumulated step errors cannot establish a connection. A native adapter
+case verifies retained observations and original endpoint PTS. A whole-source
+gap above the capture bound produces explicit fragments; an ordinary missing cap
+with intact independent peers retains its identity.
+
 ## Connected native scene checks
 
 `tests/derived/recognition-scenes.test.ts` supplies chart objects to

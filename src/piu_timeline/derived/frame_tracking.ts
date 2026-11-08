@@ -3,7 +3,7 @@ import {contracts} from './contracts.ts';
 import {sameBasis,type CoordinateBasis} from './coordinates/measurements.ts';
 
 type Position={yPixels:number;uncertaintyPixels:number;basis:CoordinateBasis};
-type Observation={time:number;anchor:Position;anchors?:Position[];center:Position|null};
+type Observation={time:number;anchor:Position;anchors?:Position[];center:Position|null;sourcePtsSeconds?:number};
 type Track={lane:number;observations:Observation[];maximumGapSeconds:number};
 type Detection={lane:number;observation:Observation};
 type Edge=[number,number];
@@ -35,8 +35,8 @@ function predict(points:{time:number;position:Position}[],time:number,spacing:nu
   const y=last.position.yPixels-displacement.pixels,error=last.position.uncertaintyPixels+displacement.uncertaintyPixels;
   return [y-error,y+error];
  }
- // A visibility gap needs observed displacement or a repeated compatible
- // trajectory. A lone cap cannot establish a reversal and return to the field.
+ // Past velocity only bounds a candidate search. Gap identity is certified
+ // separately by directly observed independent endpoint travel.
  if(dt>.05+1e-6){
   if(points.length<4)return null;
   const speed=contracts.frame_tracking.maximum_speed_spacing_per_second*spacing;
@@ -69,19 +69,9 @@ function compatible(track:Track,detection:Detection,time:number,spacing:number,m
  });
 }
 
-function matching(edges:boolean[][],ordered:boolean,except?:Edge):Edge[]{
- const n=edges.length,m=edges[0]?.length??0,allowed=(i,j)=>edges[i][j]&&!(except&&except[0]===i&&except[1]===j);
- if(ordered){
-  const score=Array.from({length:n+1},()=>Array(m+1).fill(0));
-  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)
-   score[i][j]=Math.max(score[i+1][j],score[i][j+1],allowed(i,j)?1+score[i+1][j+1]:0);
-  const result:Edge[]=[];let i=0,j=0;
-  while(i<n&&j<m){
-   if(allowed(i,j)&&score[i][j]===1+score[i+1][j+1]){result.push([i++,j++]);}
-   else if(score[i+1][j]>=score[i][j+1])i++;else j++;
-  }
-  return result;
- }
+/** Test whether a rigid image constellation exists; never certify identity here. */
+function matching(edges:boolean[][]):Edge[]{
+ const n=edges.length,m=edges[0]?.length??0,allowed=(i,j)=>edges[i][j];
  const owners=Array(m).fill(-1);
  const augment=(i:number,seen:Set<number>):boolean=>{
   for(let j=0;j<m;j++)if(allowed(i,j)&&!seen.has(j)){
@@ -106,18 +96,32 @@ function translationsAtLimit(tracks:Track[],detections:Detection[],time:number,s
   return lo<=hi?[lo,hi]:null;
  }));
  const boundaries=[...new Set(intervals.flat().filter(Boolean).flat())].sort((a,b)=>a-b);
- let score=[0,0],ranges:number[][]=[];
+ const ranges:number[][]=[],completePatterns:number[][]=[];
  const inspect=(lo:number,hi:number)=>{
   const value=(lo+hi)/2,edges=intervals.map(row=>row.map(r=>!!r&&r[0]-1e-9<=value&&value<=r[1]+1e-9));
-  const pairs=matching(edges,false),lanes=new Set(pairs.map(([i])=>before[i].lane)).size;
-  if(pairs.length<2||lanes<2)return;
-  if(pairs.length>score[0]||pairs.length===score[0]&&lanes>score[1]){score=[pairs.length,lanes];ranges=[];}
-  if(pairs.length===score[0]&&lanes===score[1])ranges.push([lo,hi]);
+  const pairs=matching(edges);
+  const independent=pairs.some(([i],k)=>pairs.slice(k+1).some(([j])=>{
+   if(before[i].lane!==before[j].lane)return true;
+   const a=before[i].observations.at(-1),b=before[j].observations.at(-1),range=displacement(a,b);
+   return !!range&&(range[0]>0||range[1]<0);
+  }));
+  if(!independent)return;
+  ranges.push([lo,hi]);
+  // A rigid, complete observed constellation is an image reference, unlike
+  // the largest partial matching. Keep every such translation, without ranking
+  // candidates by how many unrelated objects they happen to connect.
+  const completeLanes=new Set([...new Set(before.map(t=>t.lane))].filter(lane=>{
+   const n=before.filter(t=>t.lane===lane).length,m=after.filter(d=>d.lane===lane).length;
+   return n===m&&pairs.filter(([i])=>before[i].lane===lane).length===n;
+  }));
+  const complete=pairs.filter(([i])=>completeLanes.has(before[i].lane));
+  if(complete.length>=2&&(completeLanes.size>=2||independent))completePatterns.push([lo,hi]);
  };
  boundaries.forEach((p,i)=>{inspect(p,p);if(i)inspect(boundaries[i-1],p);});
- if(!ranges.length)return [];
- ranges.sort((a,b)=>a[0]-b[0]);const merged:number[][]=[];
- for(const r of ranges){const last=merged.at(-1);if(!last||r[0]>last[1]+1e-9)merged.push([...r]);else last[1]=Math.max(last[1],r[1]);}
+ const supported=completePatterns.length?completePatterns:ranges;
+ if(!supported.length)return [];
+ supported.sort((a,b)=>a[0]-b[0]);const merged:number[][]=[];
+ for(const r of supported){const last=merged.at(-1);if(!last||r[0]>last[1]+1e-9)merged.push([...r]);else last[1]=Math.max(last[1],r[1]);}
  return merged.map(([lo,hi])=>({fromSeconds,pixels:(lo+hi)/2,uncertaintyPixels:(hi-lo)/2}));
 }
 
@@ -152,23 +156,39 @@ function translations(tracks:Track[],detections:Detection[],time:number,spacing:
  return translationsAtLimit(tracks,detections,time,spacing,contracts.frame_tracking.maximum_capture_interval_seconds);
 }
 
-function orderedView(tracks:Track[],detections:Detection[]):{before:Position[];after:Position[]}|null{
- const previous=tracks.map(t=>t.observations.at(-1));
- if(new Set(previous.map(o=>o.time)).size!==1)return null;
- const views=(o:Observation)=>[o.center,...o.anchors??[o.anchor]].filter(Boolean);
- for(const reference of views(previous[0])){
-  const before=previous.map(o=>views(o).find(p=>sameBasis(p.basis,reference.basis))),
-   after=detections.map(d=>views(d.observation).find(p=>sameBasis(p.basis,reference.basis)));
-  if([...before,...after].some(p=>!p))continue;
-  const separated=(positions:Position[])=>positions.sort((a,b)=>a.yPixels-b.yPixels).slice(1).every((p,i)=>positions[i].yPixels+positions[i].uncertaintyPixels<p.yPixels-p.uncertaintyPixels);
-  if(separated([...before])&&separated([...after]))return {before,after};
- }
- return null;
+/** Endpoint measurements of independently continuous peers, never a sum of step errors. */
+function gapDisplacement(trackIndex:number,tracks:Track[],detections:Detection[],pairs:Edge[],time:number){
+ const fromSeconds=tracks[trackIndex].observations.at(-1).time;
+ const references=pairs.flatMap(([i,j])=>{
+  if(i===trackIndex)return [];
+  const history=tracks[i].observations,at=history.findIndex(o=>Math.abs(o.time-fromSeconds)<1e-9);
+  if(at<0)return [];
+  const span=[...history.slice(at),detections[j].observation];
+  if(history.length<4||span.length<2||span.slice(1).some((o,k)=>o.time-span[k].time>.05+1e-6))return [];
+  if(span.some(o=>o.sourcePtsSeconds!==undefined)&&span.some((o,k)=>
+   !Number.isFinite(o.sourcePtsSeconds)||k>0&&(o.sourcePtsSeconds<=span[k-1].sourcePtsSeconds||
+    Math.abs((o.sourcePtsSeconds-span[k-1].sourcePtsSeconds)-(o.time-span[k-1].time))>1e-6)))return [];
+  const range=displacement(span[0],span.at(-1));
+  return range?[{track:i,detection:j,lane:tracks[i].lane,from:span[0],to:span.at(-1),range}]:[];
+ });
+ if(new Set(references.map(r=>r.lane)).size<2)return null;
+ const lo=Math.max(...references.map(r=>r.range[0])),hi=Math.min(...references.map(r=>r.range[1]));
+ if(lo>hi)return null;
+ return {fromSeconds,pixels:(lo+hi)/2,uncertaintyPixels:(hi-lo)/2,
+  proof:{fromSeconds,toSeconds:time,displacementRangePixels:[lo,hi],references}};
+}
+
+// Maximum matching answers how many edges can be selected, not whether an
+// identity exists. Missing old caps and newly visible caps are always possible.
+function uniqueEdges(edges:boolean[][]):Edge[]{
+ return edges.flatMap((row,i)=>row.flatMap((allowed,j)=>allowed&&
+  row.filter(Boolean).length===1&&edges.filter(r=>r[j]).length===1?[[i,j] as Edge]:[]));
 }
 
 export function assign(tracks:Track[],detections:Detection[],time:number,spacing:number,motion:Displacement[]=[],pastSteps:Step[]=[]){
  if(!Number.isFinite(time)||!Number.isFinite(spacing)||spacing<=0)throw Error('Tracking requires finite time and positive lane spacing');
  for(const o of [...tracks.flatMap(t=>t.observations),...detections.map(d=>d.observation)]){
+  if(o.sourcePtsSeconds!==undefined&&!Number.isFinite(o.sourcePtsSeconds))throw Error('Tracking requires finite source PTS');
   if(!Number.isFinite(o.time))throw Error('Tracking requires original observation times');
   if(o.center&&o.center.basis.kind!=='native_cap_center')throw Error('Unqualified cap center basis');
   for(const p of [o.anchor,o.center,...o.anchors??[]].filter(Boolean))if(![p.yPixels,p.uncertaintyPixels].every(Number.isFinite)||p.uncertaintyPixels<0||p.basis.kind==='unavailable')throw Error('Unqualified tracking coordinates');
@@ -196,27 +216,34 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
   const previous=steps.get(origin);pixels+=previous.pixels;uncertaintyPixels+=previous.uncertaintyPixels;origin=previous.fromSeconds;
   displacements.set(origin,{fromSeconds:origin,pixels,uncertaintyPixels,...(!step?{unobservedTerminalStep:true}:{})});
  }
+ const latestObservation=Math.max(...tracks.map(t=>t.observations.at(-1).time));
+ const isGap=(t:Track)=>time-t.observations.at(-1).time>.05+1e-6||t.observations.at(-1).time<latestObservation-1e-9;
+ const adjacentPairs:Edge[]=[],gapConnections:(NonNullable<ReturnType<typeof gapDisplacement>>['proof']&{track:number;detection:number})[]=[];
+ // Only independently unique adjacent identities can certify a gap. Gap edges
+ // never bootstrap other gap edges, and ordering/cardinality supplies no proof.
+ const adjacentTables=(alternatives.length>1?alternatives.map(d=>new Map(displacements).set(d.fromSeconds,d)):[displacements])
+  .map(m=>tracks.map(t=>detections.map(d=>!isGap(t)&&compatible(t,d,time,spacing,m))));
+ for(const edge of uniqueEdges(adjacentTables[0]))if(adjacentTables.every(table=>uniqueEdges(table).some(([i,j])=>i===edge[0]&&j===edge[1])))adjacentPairs.push(edge);
+ const gapMotion=new Map(tracks.flatMap((t,i)=>isGap(t)?[[i,gapDisplacement(i,tracks,detections,adjacentPairs,time)] as const]:[]));
  const matches:Edge[]=[],uncertainTracks=new Set<number>(),uncertainDetections=new Set<number>(),ambiguities:Edge[]=[];
  for(const lane of new Set([...tracks,...detections].map(x=>x.lane))){
   const a=tracks.flatMap((t,i)=>t.lane===lane?[i]:[]),b=detections.flatMap((d,i)=>d.lane===lane?[i]:[]);
   if(!a.length||!b.length)continue;
-  const view=orderedView(a.map(i=>tracks[i]),b.map(j=>detections[j]));
-  if(view){
-   const before=new Map(a.map((id,i)=>[id,view.before[i]])),after=new Map(b.map((id,i)=>[id,view.after[i]]));
-   a.sort((i,j)=>before.get(i).yPixels-before.get(j).yPixels);b.sort((i,j)=>after.get(i).yPixels-after.get(j).yPixels);
-  }
   const hypotheses=alternatives.length>1?alternatives.map(d=>new Map(displacements).set(d.fromSeconds,d)):[displacements];
-  const tables=hypotheses.map(m=>a.map(i=>b.map(j=>compatible(tracks[i],detections[j],time,spacing,m))));
-  const forcedByModel=tables.map(edges=>{
-   const chosen=matching(edges,!!view);
-   return chosen.filter(edge=>matching(edges,!!view,edge).length<chosen.length);
-  });
-  // Each assignment must use one coherent image translation. Combining edges
-  // from different translations could fabricate a larger matching and force
-  // a false identity when one actual cap is missing.
+  const search=hypotheses.map(m=>a.map(i=>b.map(j=>compatible(tracks[i],detections[j],time,spacing,m))));
+  const tables=hypotheses.map((m,k)=>a.map((i,ii)=>b.map((j,jj)=>{
+   if(!gapMotion.has(i))return search[k][ii][jj];
+   const measured=gapMotion.get(i);
+   return !!measured&&compatible(tracks[i],detections[j],time,spacing,new Map([[measured.fromSeconds,measured]]));
+  })));
+  const forcedByModel=tables.map(uniqueEdges);
   const forced=forcedByModel[0].filter(([i,j])=>forcedByModel.every(edges=>edges.some(([a,b])=>a===i&&b===j)));
-  const edges=a.map((_,i)=>b.map((_,j)=>tables.some(edges=>edges[i][j])));
-  for(const [i,j]of forced)matches.push([a[i],b[j]]);
+  const edges=a.map((_,i)=>b.map((_,j)=>tables.some(edges=>edges[i][j])||search.some(edges=>edges[i][j])));
+  for(const [i,j]of forced){
+   matches.push([a[i],b[j]]);
+   const measured=gapMotion.get(a[i]);
+   if(measured)gapConnections.push({track:a[i],detection:b[j],...measured.proof});
+  }
   const fixedA=new Set(forced.map(([i])=>i)),fixedB=new Set(forced.map(([,j])=>j));
   // Retire the uncertain fragments before beginning the newly observed ones.
   // They remain separate evidence, rather than contaminating a later identity.
@@ -239,5 +266,5 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
   visible_start_seconds:measured.fromSeconds,visible_end_seconds:time,
   displacement_range_pixels:[measured.pixels-measured.uncertaintyPixels,measured.pixels+measured.uncertaintyPixels],
   source_cadence_limit_pixels:limit,interpretation:'measured_image_translation_without_engine_time_assumption'}]:[];
- return {translationAlternatives:alternatives,cadenceWarnings,matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step};
+ return {gapConnections,translationAlternatives:alternatives,cadenceWarnings,matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step};
 }

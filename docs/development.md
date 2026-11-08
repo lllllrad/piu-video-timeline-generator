@@ -21,11 +21,9 @@ declarations trigger an update. Failed installations are retried on the next run
 tools are already on PATH, `just` can be used directly.
 
 No shell activation is required; recipes use `scripts/run.sh` to apply project-local cache paths and invoke `.venv` explicitly.
-
 Use mise shell activation or `mise exec -- COMMAND` to supply the configured tools.
 An editor or agent launched through `mise exec` passes that environment to its
 child commands, so `pnpm`, `just` and Git hooks can run directly in that session.
-
 Codex-only environment generation and optional mise installation are documented in [codex-environment.md](codex-environment.md). They are not part of normal project setup.
 
 ## Architecture
@@ -292,6 +290,8 @@ writers. Update relative media links when relocating HTML reports.
 - Keep downloaded media, analysis output, caches and personal formats under `.local/`.
 - Never overwrite or retime source media.
 - Preserve unknown and conflicting OCR values as `null` or explicit field states.
+- Unproven identities stay separate with explicit warnings. Require independently
+  supported connections and refusal tests; see [identity validation](recognition-validation.md#identity-refusal-checks).
 - Keep P1 and P2 result evidence separate.
 - Keep local playback time distinct from YouTube time unless an explicit reviewed offset exists.
 - Automatic gameplay boundaries do not establish silent publication boundaries.

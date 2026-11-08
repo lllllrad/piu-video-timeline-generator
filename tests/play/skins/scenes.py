@@ -150,7 +150,7 @@ def acquire(spec,root,bank):
         detections=tracker.detect(image);tracker.update(time,detections,pts)
         native.append({'playback_seconds':time,'source_pts_seconds':pts,'skin_observations':tracker.skin_observations})
     # Raw acquired tracks, not scene-supplied endpoints or fitted truth.
-    notes=[{'lane':t.lane,'points':t.points}for t in tracker.finished+tracker.active]
+    notes=[{'lane':t.lane,'points':t.points,'tracking_warnings':t.tracking_warnings}for t in tracker.finished+tracker.active]
     data={'analysis_width':width,'analysis_height':height,'layout':layout,'notes':notes,
           'start_seconds':0,'end_seconds':.2,'skin_detector':{'bank_path':str(root/'bank.json'),'contract':{'bank':bank['contract']}}}
     warnings=[];connections=measure_connections(data,native,warnings)

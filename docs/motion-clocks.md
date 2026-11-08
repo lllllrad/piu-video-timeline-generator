@@ -95,6 +95,36 @@ revalidated note retires its original timing-failure warning; other motion or
 visibility warnings remain.
 
 
+## Online identity and visibility gaps
+
+Image compatibility creates a search edge. It does not prove that the observed
+cap is the old one: the old cap can remain hidden while a different cap becomes
+visible. Online assignment accepts only mutually unique edges in every supported
+translation hypothesis. A complete rigid constellation of at least two distinct
+observed caps can qualify a frame translation: all caps in each supporting lane
+must have compatible partners in that same translation, in both frames. A single
+lane needs separated cap-coordinate intervals. Keep every qualified translation;
+a larger partial matching cannot erase a competing translation. Neither cap
+ordering nor matching cardinality alone establishes individual identity.
+
+A track missing from an intervening observed frame, or absent for more than
+50 ms, needs independent gap evidence before online reconnection. At least two
+mature peer identities in different lanes must be continuously observed across
+the same endpoints, with no interval above 50 ms. Their directly measured net
+travel intervals must intersect. This uses endpoint coordinate errors rather
+than accumulating every frame-step error. It supports observed stops, reversals
+and acceleration without assuming the earlier velocity persists. Gap connections
+cannot certify each other. Retain the reference identities, coordinate views,
+endpoint recording times and original source PTS in `tracking_connections`.
+Keep 350 ms of peer observations alongside the minimum tracking history.
+
+Summed step bounds, an inferred terminal step and extrapolated history remain
+search envelopes. Missing or conflicting direct evidence leaves separate
+fragments and `ambiguous_note_tracking`, including when only one candidate is
+visible. Later registered fragment reconstruction may establish identity under
+its own full evidence contract. A timing fit or downstream warning cannot
+retroactively justify a speculative online connection.
+
 ## Fragment identity before clock fitting
 
 A tracker can briefly alternate two identities for the same physical head.
