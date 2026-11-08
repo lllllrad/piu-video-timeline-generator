@@ -58,7 +58,19 @@ def row_runs(mask,top):
     return result
 
 
-def contexts(detector,image,cap,template,obstructions,bodies):
+def contexts(detector,image,cap,template,obstructions,bodies,cache=None):
+    """Reuse identical pixel measurements, retaining each appearance's provenance."""
+    if cache is None:return measure_context(detector,image,cap,template,obstructions,bodies)
+    donor=detector.by_sampling[key(cap)]
+    center=np.array([cap['x']*detector.width,cap['y']*detector.height])+native_offset(donor)
+    footprint=donor['cap_foreground_fraction']>.5+1e-7
+    identity=(key(template),tuple(center),tuple(cap['bounds_pixels']),footprint.shape,footprint.tobytes())
+    if identity not in cache:
+        cache[identity]=measure_context(detector,image,cap,template,obstructions,bodies)
+    return cache[identity]
+
+
+def measure_context(detector,image,cap,template,obstructions,bodies):
     donor=detector.by_sampling[key(cap)]
     center=np.array([cap['x']*detector.width,cap['y']*detector.height])+native_offset(donor)
     desired=center-native_offset(template)-template['anchor']
@@ -124,6 +136,7 @@ def candidates(detector,image,measured):
             a,b,c,d=other['bounds_pixels']
             cap_weight[b:d,a:c]+=detector.by_sampling[key(other)]['cap_foreground_fraction']
         obstructions=cap_weight>.5+1e-7
+        context_cache={family['id']:{}for family in families}
         seen=set()
         for cap in [root,*root.get('alternatives',[])]:
             for family in families:
@@ -133,7 +146,7 @@ def candidates(detector,image,measured):
                     identity=key(cap),tuple(cap['bounds_pixels']),key(template)
                     if identity in seen:continue
                     seen.add(identity)
-                    context=contexts(detector,image,cap,template,obstructions,bodies[family['id']])
+                    context=contexts(detector,image,cap,template,obstructions,bodies[family['id']],context_cache[family['id']])
                     if context is None:continue
                     a,b,_,_=cap['bounds_pixels']
                     support=cap_support(detector.by_sampling[key(cap)],cap)

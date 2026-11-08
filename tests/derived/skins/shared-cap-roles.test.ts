@@ -44,3 +44,48 @@ for(const scene of scenes)test(`independent role context with uneven appearance 
   assert.deepEqual(note.observations.map(o=>o.source_pts_seconds),r.expected_source_pts);
  }
 });
+
+const reuseScript=String.raw`
+import copy,json,tempfile
+from pathlib import Path
+from unittest.mock import patch
+import numpy as np
+from tests.play.skins.test_shared_roles import SharedRoleTest
+from piu_timeline.play.skins.bank import load_bank
+from piu_timeline.play.skins.detector import SkinDetector
+from piu_timeline.play.skins import shared_roles
+results=[]
+with tempfile.TemporaryDirectory()as temporary:
+ root=Path(temporary);_,source,document=SharedRoleTest().fixture(root)
+ appearance=next(t for t in document['templates']if t['id']=='appearance')
+ for index in range(5):
+  alias=copy.deepcopy(appearance);alias['id']=f'alias-{index}';document['templates'].append(alias)
+ document['shared_cap_families'][0]['appearance_templates']=['appearance',*[f'alias-{i}'for i in range(5)]]
+ path=root/'bank.json';path.write_text(json.dumps(document))
+ layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+ detector=SkinDetector(load_bank(path),layout,200,300)
+ for mode in ['positive','missing_body','unexplained_obstruction','different_frame']:
+  image=source.copy()
+  if mode=='missing_body':image[100:115]=0
+  if mode=='unexplained_obstruction':image[105:108,16:24]=[180,15,140]
+  if mode=='different_frame':image=np.roll(image,13,axis=0)
+  actual=shared_roles.contexts;measure=shared_roles.measure_context
+  def uncached(*args):return actual(*args[:6])
+  with patch.object(shared_roles,'contexts',side_effect=uncached),patch.object(shared_roles,'measure_context',wraps=measure)as spy:
+   baseline=detector.candidates(image);before=spy.call_count
+  with patch.object(shared_roles,'measure_context',wraps=measure)as spy:
+   cached=detector.candidates(image);after=spy.call_count
+  results.append({'mode':mode,'same':cached==baseline,'before':before,'after':after,
+   'appearance_sources':sorted({r['template']for r in cached if r.get('shared_role')})})
+ print(json.dumps(results))
+`;
+const reuseResults:RecordData[]=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',reuseScript],{
+ encoding:'utf8',maxBuffer:8*1024*1024,
+}));
+for(const result of reuseResults)test(`identical context pixels reuse measurements without changing evidence: ${result.mode}`,()=>{
+ assert.equal(result.same,true,'every candidate and its evidence must equal the uncached calculation');
+ assert.ok(result.after<result.before/2,'aliases must share actual image comparisons');
+ if(result.mode==='positive'||result.mode==='different_frame')
+  assert.deepEqual(result.appearance_sources,['alias-0','alias-1','alias-2','alias-3','alias-4','appearance']);
+ else assert.deepEqual(result.appearance_sources,[],'failure measurements remain explicit and frame-local');
+});
