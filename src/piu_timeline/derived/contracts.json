@@ -132,6 +132,7 @@
     "schema": 1,
     "revision": 5,
     "long_approach": "continuous_independent_peer_motion_through_crossing",
+    "distant_cap": "observed_peer_travel_required_beyond_local_spatial_limit",
     "selection": "precision_then_native_support",
     "position_floor_pixels": 0.75,
     "maximum_radius_seconds": 0.5,

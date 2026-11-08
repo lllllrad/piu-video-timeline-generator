@@ -36,3 +36,26 @@ test(`a long approach cannot use an unobserved or unqualified continuation: ${mo
  if(mode==='unmeasured-motion')sample.displacement_basis='unsupported';
  assert.equal(fit(s.state,s.track,s.receptor,s.layout),null);
 });
+
+
+for(const spacing of[20,40,80])for(const fps of[30,60,120])
+test(`a briefly visible distant cap uses source-supported travel after it is hidden: spacing=${spacing}, fps=${fps}`,()=>{
+ const s=scene(spacing,fps);s.track.points=s.track.points.filter(([t])=>.8<=t&&t<=1.1);
+ assert.ok(s.track.points.at(-1)[1]-s.receptor>2.5*spacing);
+ const result=fit(s.state,s.track,s.receptor,s.layout);
+ assert.equal(result?.status,'estimated');assert.ok(Math.abs(result.target_seconds-s.truth)<1e-8);
+ assert.ok(result.motion_clock_validation.supported_approach.playback_range_seconds[0]<=1.1);
+ assert.equal(result.motion_clock_validation.supported_approach.source_pts_seconds.at(-1),80+s.truth);
+ const stop=s.state.samples.findIndex(p=>p.time>=2);s.state.samples[stop].support=0;
+ assert.equal(fit(s.state,s.track,s.receptor,s.layout),null,'an unsupported interval cannot carry an early fragment to its target');
+});
+
+test('a hidden cap uses observed acceleration after disappearance instead of extrapolating its earlier speed',()=>{
+ const s=scene(),turn=1.5;
+ s.track.points=s.track.points.filter(([t])=>t<=1.1);
+ s.state.samples.forEach(p=>{p.phase=80*(p.time<=turn?p.time:turn+2*(p.time-turn));});
+ const truth=turn+(s.truth-turn)/2,result=fit(s.state,s.track,s.receptor,s.layout);
+ assert.equal(result?.status,'estimated');assert.ok(Math.abs(result.target_seconds-truth)<1e-8);
+ assert.ok(Math.abs(result.target_seconds-s.truth)>.8);
+ assert.ok(result.motion_clock_validation.supported_approach.phase_range_pixels[1]>=result.motion_target_phase);
+});

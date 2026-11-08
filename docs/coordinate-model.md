@@ -218,5 +218,7 @@ source PTS, nondecreasing shared phase, and independent multi-lane displacement
 support on every intervening captured step in the same registered chunk. Retain
 those source timestamps as `motion_clock_validation.supported_approach`.
 Missing frames, unsupported steps and one-lane observations do not qualify this
-extension. The existing local time limits still bound unsupported extrapolation;
+extension. The same complete proof is required when a cap disappears beyond the
+local spatial horizon: distant partial trajectories cannot extrapolate to a target
+from their own speed alone. The existing local time limits still bound unsupported extrapolation;
 position-error and crossing-uncertainty limits are unchanged.

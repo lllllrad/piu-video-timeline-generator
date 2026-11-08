@@ -183,11 +183,11 @@ export class MotionClock {
       const [x, top, width, height] = layout.combo_roi, laneX = layout.lanes[track.lane].x, lastY = visible.at(-1)[1] / this.state.height;
       hud = x - .12 <= laneX && laneX <= x + width + .12 && top - .18 <= lastY && lastY <= top + height + .1;
     }
-    if (intercept - receptor > (hud ? 6 : 2.5) * spacing) return null;
+    const distant=intercept-receptor>(hud?6:2.5)*spacing;
     const target = phase.at(-1) + intercept - receptor, error = Math.max(.75, 2 * residual, short?bound:(track.registration_uncertainty_pixels ?? 0));
     const r = this.crossing(visible.at(-1)[2], target, error);
     if(!r||r.target_seconds<visible.at(-1)[0])return null;
-    if(r.target_seconds-visible.at(-1)[0]>(hud?.65:.25)){
+    if(distant||r.target_seconds-visible.at(-1)[0]>(hud?.65:.25)){
       const proof=supportedApproach(this.chunks.get(chunk),visible.at(-1)[2],target);
       if(!proof)return null;
       r.motion_clock_validation={...r.motion_clock_validation,supported_approach:proof};
