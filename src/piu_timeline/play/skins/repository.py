@@ -95,12 +95,17 @@ def publish(source, revision, repository=None, status='experimental', descriptio
         raise ValueError('Unsupported skin review status')
     source = Path(source).resolve()
     bank = load_bank(source)
+    role_model(source, bank)
+    roles = source.with_name('roles.json')
+    role_bytes = roles.read_bytes() if roles.is_file() else None
     destination = bank_path(repository, bank['skin'], revision)
     with locked(repository):
         if destination.parent.exists():
             existing = validate_bank(destination)
             if (existing['contract'] != bank['contract'] or existing['status'] != status
-                    or existing.get('description', '') != description):
+                    or existing.get('description', '') != description
+                    or (destination.with_name('roles.json').read_bytes()
+                        if destination.with_name('roles.json').is_file() else None) != role_bytes):
                 raise ValueError('Skin revision already exists; use a new revision')
             return destination
         destination.parent.parent.mkdir(parents=True, exist_ok=True)
@@ -116,6 +121,8 @@ def publish(source, revision, repository=None, status='experimental', descriptio
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source.parent / relative, target)
             shutil.copyfile(source, staging / 'bank.json')
+            if role_bytes is not None:
+                (staging / 'roles.json').write_bytes(role_bytes)
             if load_bank(staging / 'bank.json')['contract'] != bank['contract']:
                 raise ValueError('Skin bank changed during publication')
             reference = {'schema': 1, 'skin': bank['skin'], 'revision': revision,

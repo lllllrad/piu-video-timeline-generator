@@ -65,6 +65,19 @@ with tempfile.TemporaryDirectory() as temporary:
  image.write_bytes(image.read_bytes()+b'changed-image-bytes')
  image_tamper=rejected(lambda:store.validate(repo))
  image.write_bytes(before[image.name])
+ policy={'schema':1,'bank_contract':bank['contract'],
+  'clearance':{'model':'phoenix_chromatic_gap','skin':bank['skin']}}
+ roles=original/'roles.json';roles.write_text(json.dumps(policy,indent=2)+'\n')
+ bound=store.publish(original/'bank.json','with-roles',repo)
+ role_exact=bound.with_name('roles.json').read_bytes()==roles.read_bytes()
+ role_active=store.role_model(bound)==policy['clearance']
+ role_missing=rejected(lambda:store.publish(original/'bank.json','v1',repo))
+ saved_roles=roles.read_bytes();roles.unlink()
+ role_removed=rejected(lambda:store.publish(original/'bank.json','with-roles',repo))
+ policy['bank_contract']={};roles.write_text(json.dumps(policy))
+ role_stale=rejected(lambda:store.publish(original/'bank.json','stale-roles',repo))
+ role_atomic=not store.bank_path(repo,bank['skin'],'stale-roles').parent.exists()
+ roles.write_bytes(saved_roles)
  destination.unlink()
  with patch('piu_timeline.charts.data.default_repository',return_value=repo):
   missing=rejected(lambda:selected_bank(source,1))
@@ -72,7 +85,8 @@ with tempfile.TemporaryDirectory() as temporary:
  print(json.dumps(dict(exact=exact,clean=clean,same=same,overwrite=overwrite,traversal=traversal,
   reused=reused,resolved=resolved,clearance=clearance,unselected=unselected,explicit=explicit,
   valid=valid,retained=retained,unsupported=unsupported,tamper=tamper,image_tamper=image_tamper,
-  missing=missing,preserved=preserved,retry=retry)))
+  missing=missing,preserved=preserved,retry=retry,role_exact=role_exact,role_active=role_active,
+  role_missing=role_missing,role_removed=role_removed,role_stale=role_stale,role_atomic=role_atomic)))
 `;
 const result=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{encoding:'utf8'}));
 
@@ -92,4 +106,9 @@ test('shared segment selections resolve portable revisions and preserve independ
 
 test('conflicting publication, escaped revisions, unsupported selections and missing or modified assets fail explicitly',()=>{
   for(const key of ['overwrite','traversal','unsupported','tamper','image_tamper','missing']) assert.equal(result[key],true,key);
+});
+
+test('publication preserves bank-bound role policy and rejects missing or stale policy revisions',()=>{
+  for(const key of ['role_exact','role_active','role_missing','role_removed','role_stale','role_atomic'])
+    assert.equal(result[key],true,key);
 });

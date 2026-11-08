@@ -42,7 +42,10 @@ the separate skin repository:
 ```
 
 `bank_contract` must contain the complete contract returned by the native bank
-loader, not only the abbreviated fields shown above. Automatic and manual skin
+loader, not only the abbreviated fields shown above. Publication validates and
+copies this policy with the image bank. An existing immutable revision cannot
+gain, lose or replace its policy; publish a new revision for such changes.
+Automatic and manual skin
 selection use the same declaration. A source profile's explicit `role_clearance`
 overrides it; `null` disables the model for that source profile. A changed bank
 contract fails rather than inheriting another bank's geometric assumptions.
