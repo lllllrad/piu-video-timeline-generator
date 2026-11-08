@@ -23,7 +23,7 @@ with tempfile.TemporaryDirectory()as tmp:
  layout={'receptor_y':.05,'note_y_max':.95,'combo_roi':[0,0,0,0],'judgment_roi':[0,0,0,0],
   'lanes':[{'x':.1+i*.1}for i in range(5)]}
  for scale in [.5,1,1.5,2]:
-  for mode in ['exposed_terminal','hidden_terminal','damaged_terminal','unexplained_obstruction','stem','full_cap_declaration']:
+  for mode in ['exposed_terminal','partial_body','hidden_terminal','damaged_terminal','unexplained_obstruction','stem','full_cap_declaration']:
    spec=copy.deepcopy(document)
    if mode=='full_cap_declaration':spec['templates'][2]['cap_role_identification']='distinct_full_cap'
    (root/'bank.json').write_text(json.dumps(spec));bank=load_bank(root/'bank.json')
@@ -31,6 +31,7 @@ with tempfile.TemporaryDirectory()as tmp:
    if mode in ['exposed_terminal','full_cap_declaration','damaged_terminal']:
     image[80:100,10:30]=items[0][1][10:30]
    elif mode=='hidden_terminal':image[110:130,10:30]=items[0][1][10:30]
+   elif mode=='partial_body':image[64:84,10:30]=items[0][1][10:30]
    elif mode=='unexplained_obstruction':image[95:100,10:30]=[180,15,140]
    else:image[50:180,16:24]=[25,140,210];image[95:115,10:30]=0
    if mode=='damaged_terminal':image[110:115,12:28]=[25,140,210]
@@ -60,6 +61,18 @@ const measured:RecordData=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/
 }));
 
 for(const result of measured.results)test(`terminal role requires an exposed discriminating feature: ${result.mode}, ${result.scale}`,()=>{
+ if(result.mode==='partial_body'){
+  assert.equal(result.tails.length,1);
+  const tail=result.tails[0];
+  assert.equal(tail.classification_status,'full_pattern');
+  assert.equal(tail.connector_ownership.comparison_classification_status,'cap_only');
+  assert.ok(tail.connector_ownership.full_region_error>.001);
+  assert.ok(tail.connector_ownership.visible_connector_error<=.001);
+  assert.ok(result.body_rows.length>0,'the actually visible body remains reusable');
+  assert.ok(result.body_rows.every(([a,b])=>a>=84*result.scale&&b<=92*result.scale+1));
+  assert.equal(result.proof.observations[0].source_pts_seconds,31.25);
+  return;
+ }
  if(result.mode!=='exposed_terminal'){
   assert.deepEqual(result.tails,[],'hidden, damaged or unexplained pixels cannot establish the terminal role');
   return;

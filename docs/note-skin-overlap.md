@@ -80,3 +80,13 @@ A same-lane endpoint can cover complete rows at the connector's far edge. At
 least half the original connector must remain, and its remaining spatial cells
 must pass unchanged. Record clipped rows without treating them as body pixels;
 side-column occlusion and interior holes cannot use this edge rule.
+
+A previous cap-only result can reuse this measurement when its complete cap
+context, source-qualified foreground recovery, or declared discriminating
+features already establish the cap. An unverified interior alone cannot supply
+that qualification. Compare the actual remaining connector again: the original
+whole-window failure is not its visible-region error. Preserve that original
+value under `connector_ownership.full_region_error` and
+`region_errors.connection_context`, alongside the successful visible error,
+cap-identification basis and observed runs. A fully hidden connector and any
+remaining unexplained mismatch stay unavailable. No missing pixel is filled.
