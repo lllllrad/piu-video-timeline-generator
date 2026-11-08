@@ -45,3 +45,21 @@ test('near-row coordinates remain in the shared registration used by neighboring
  assert.equal(notes[0].status,'estimated');assert.ok(Math.abs(notes[0].target_seconds-1.2)<1e-8);
  assert.deepEqual(spacingFailures(notes,spacing,motion),[]);
 });
+
+for(const spacing of[20,40,80])test(`a certified cap at the field boundary retains its full observed approach: spacing=${spacing}`,()=>{
+ const d=nativeScene([[4.2,0]],spacing,60,5,{end:4.5,speedSpacingPerSecond:2}),receptor=d.layout.receptor_y*d.analysis_height;
+ const track={lane:0,note_index:0,coordinate_basis:'native_cap_center',registration_uncertainty_pixels:.025*spacing,
+  points:d.scroll_motion.samples.filter(p=>.6<=p.time&&p.time<=.7).map(p=>[p.time,receptor+2*spacing*(4.2-p.time)])};
+ assert.ok(track.points.every(([,y])=>y>.95*d.analysis_height-.55*spacing));
+ const state={...d.scroll_motion,height:d.analysis_height,spacing,samples:d.scroll_motion.samples.map(p=>({...p,lanes:5,displacement_basis:'independent_registered_peers'}))};
+ const result=fit(state,track,receptor,d.layout);
+ assert.equal(result?.status,'estimated');assert.ok(Math.abs(result.target_seconds-4.2)<1e-8);
+});
+for(const spacing of[20,40,80])test(`two intact near-row positions still need enough native displacement: spacing=${spacing}`,()=>{
+ const s=scene(spacing),r=s.receptor;
+ s.track.points=s.state.samples.map(p=>[p.time,r+2*spacing*(1.2-p.time)]).filter(([,y])=>r+.65*spacing<y&&y<r+.92*spacing);
+ const ordinary=s.track.points.filter(([,y])=>y>r+.85*spacing);
+ assert.equal(ordinary.length,2);assert.ok(ordinary[0][1]-ordinary.at(-1)[1]<2*s.track.registration_uncertainty_pixels);
+ const result=fit(s.state,s.track,r,s.layout);
+ assert.equal(result?.status,'estimated');assert.ok(Math.abs(result.target_seconds-1.2)<1e-8);
+});
