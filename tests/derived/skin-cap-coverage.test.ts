@@ -41,8 +41,24 @@ with tempfile.TemporaryDirectory()as tmp:
   return coverage_losses(data,frames,proof,steps)
  rejected=copy.deepcopy(caps[1])
  for alt in rejected['alternatives']:alt['classification_status']='conflict'
+ wrong=reference.copy();wrong[32:40,16:24]=[210,25,140]
+ cv2.imwrite(str(root/'lower.png'),np.dstack([wrong[:,:,::-1],np.full((50,40),255,dtype='uint8')]))
+ document=json.loads(path.read_text());document['templates'][1]['image']='lower.png'
+ path.write_text(json.dumps(document));typed_bank=load_bank(path)
+ typed_detector=SkinDetector(typed_bank,layout,200,300)
+ image=np.zeros((300,200,3),dtype='uint8');image[95:115,10:30]=glyph;image[117:125,16:24]=[25,140,210]
+ typed=next(o for o in typed_detector.detect(image)if o['lane']==0 and o['role']=='hold_start')
+ typed_data={**data,'skin_detector':{'bank_path':str(path),'contract':{'bank':typed_bank['contract']}}}
+ typed_cap=image_spans(typed,reference_rows(typed_data,cap_only=True),cap_only=True)
+ typed_all=image_spans(typed,reference_rows(typed_data))
+ typed_body=image_spans(typed,reference_rows(typed_data,body_only=True),full_only=True)
+ typed_rejected=copy.deepcopy(typed)
+ for alt in typed_rejected['alternatives']:
+  if alt['template']=='lower':alt['classification_status']='conflict'
+ typed_rejected=image_spans(typed_rejected,reference_rows(typed_data,cap_only=True),cap_only=True)
  print(json.dumps({'caps':caps,'primary':primary,'combined':combined,'lost_primary':losses(primary[1]),
-  'lost_combined':losses(combined[1]),'rejected':image_spans(rejected,rows,cap_only=True)}))
+  'lost_combined':losses(combined[1]),'rejected':image_spans(rejected,rows,cap_only=True),
+  'typed':typed,'typed_cap':typed_cap,'typed_all':typed_all,'typed_body':typed_body,'typed_rejected':typed_rejected}))
 `;
 const observed=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{encoding:'utf8'}));
 test('independently matched cap alternatives retain their actual positive boundary rows',()=>{
@@ -63,4 +79,15 @@ test('the extra positively compared rows resolve the loss without growing a cove
 });
 test('conflicted alternative comparisons cannot fill missing rows',()=>{
   assert.deepEqual(observed.rejected,observed.primary[1]);
+});
+
+test('a qualified hold role retains the other positively measured cap boundary without its failed connector',()=>{
+  assert.equal(observed.typed.role,'hold_start');
+  assert.ok(observed.typed.alternatives.some(p=>p.template==='lower'&&p.classification_status==='cap_only'));
+  for(const selection of ['typed_cap','typed_all'])
+    for(let row=95;row<115;row++)assert.ok(observed[selection].some(([a,b])=>a<=row&&b>row),`${selection}: ${row}`);
+  assert.ok(observed.typed_body.length>0);
+  assert.ok(observed.typed_body.every(([a,b])=>a>=117&&b<=125));
+  assert.ok(observed.typed_cap.every(([a,b])=>a>=95&&b<=115));
+  assert.ok(observed.typed_rejected.every(([a,b])=>b<=113),'a conflicted alternative cannot restore the lower edge');
 });

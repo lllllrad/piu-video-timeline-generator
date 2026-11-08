@@ -57,6 +57,10 @@ pixels are checked separately as `cap_context`; a failed boundary comparison
 cannot erase the independently matched interior or identify a distinct full
 cap. `cap_context_qualified` and `visible_cap_runs` retain which footprint was
 actually qualified. Required cap features remain independent mandatory checks.
+
+Cap coverage retains every independently positive same-anchor comparison even
+when another reference supplies the hold role. A failed connector cannot erase
+that cap footprint or contribute body rows. Conflicted alternatives are excluded.
 A successful full boundary comparison can provide additional observed edge
 support; an unverified boundary cannot. Body and connector regions retain
 their declared context rules.

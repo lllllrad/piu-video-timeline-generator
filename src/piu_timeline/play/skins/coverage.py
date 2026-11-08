@@ -43,12 +43,21 @@ def reference_rows(data, *, cap_only=False, body_only=False):
     return result
 
 
+def observed_cap_rows(pattern):
+    rows=sorted({pattern['bounds_pixels'][1]+row for row,_,_ in pattern['visible_cap_runs']})
+    spans=[]
+    for row in rows:
+        if spans and spans[-1][1]==row:spans[-1][1]=row+1
+        else:spans.append([row,row+1])
+    return list(map(tuple,spans))
+
+
 def image_spans(image,references,*,cap_only=False,full_only=False):
     """These are compared image rows, not a claim of solid foreground pixels."""
     patterns=[image]
-    if cap_only and image.get('role')=='unknown'and image.get('classification_status')=='cap_only':
-        patterns.extend(p for p in image.get('alternatives',[])
-                        if p.get('role')=='unknown'and p.get('classification_status')=='cap_only')
+    cap_alternatives=[p for p in image.get('alternatives',[])
+                      if p.get('role')=='unknown'and p.get('classification_status')=='cap_only']
+    if cap_only:patterns.extend(cap_alternatives)
     if image.get('role')in('hold_start','hold_body','hold_end'):
         patterns.extend(p for p in image.get('alternatives',[])
                         if p['role']==image['role'] and p.get('classification_status')=='full_pattern')
@@ -60,12 +69,7 @@ def image_spans(image,references,*,cap_only=False,full_only=False):
                 spans.extend((pattern['bounds_pixels'][1]+a-origin,pattern['bounds_pixels'][1]+b-origin)
                              for a,b in references[key(pattern)])
                 continue
-            rows=sorted({pattern['bounds_pixels'][1]+row for row,_,_ in pattern['visible_cap_runs']})
-            observed=[]
-            for row in rows:
-                if observed and observed[-1][1]==row:observed[-1][1]=row+1
-                else:observed.append([row,row+1])
-            spans.extend(map(tuple,observed))
+            spans.extend(observed_cap_rows(pattern))
         return spans
     combined=[]
     for pattern in patterns:
@@ -84,6 +88,18 @@ def image_spans(image,references,*,cap_only=False,full_only=False):
         top=p['bounds_pixels'][1]
         if selection!='body':combined.extend((top+y,top+y+1)for y,_,_ in p['visible_cap_runs'])
         if selection!='cap':combined.extend((top+y,top+y+1)for y,_,_ in p['visible_connection_runs'])
-    return combined+[(p['bounds_pixels'][1]+a-p.get('sampling_origin_pixels',[0,0])[1],
+    result=combined+[(p['bounds_pixels'][1]+a-p.get('sampling_origin_pixels',[0,0])[1],
              p['bounds_pixels'][1]+b-p.get('sampling_origin_pixels',[0,0])[1])
             for p in ordinary for a,b in references[key(p)]]
+    if selection=='all'and not full_only:
+        # Retain positive cap pixels even when only another reference proved
+        # the role. The failed connector supplies no body coverage.
+        for pattern in cap_alternatives:
+            if 'visible_cap_runs'not in pattern:continue
+            for lo,hi in observed_cap_rows(pattern):
+                pending=[(lo,hi)]
+                for a,b in result:
+                    pending=[piece for c,d in pending
+                             for piece in ((c,min(d,a)),(max(c,b),d))if piece[0]<piece[1]]
+                result.extend(pending)
+    return result
