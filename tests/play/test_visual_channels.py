@@ -78,6 +78,33 @@ class VisualChannelTest(unittest.TestCase):
             self.assertEqual(len(after['popup']['judgment_events']), 1)
             self.assertEqual(after['popup']['judgment_events'][0]['source_pts_seconds'], [42+59/60, 43.])
 
+    def test_counter_baseline_does_not_retain_unrelated_native_image_payloads(self):
+        import weakref
+        from piu_timeline.play.channels import read_frames
+        class ImagePayload:
+            pass
+        with tempfile.TemporaryDirectory()as temporary:
+            directory=Path(temporary);data,frames=pixel_play(directory)
+            (directory/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n'for f in frames))
+            (directory/'frames.base.jsonl').touch()
+            live=weakref.WeakSet()
+            def source(path):
+                if path.name!='frames.base.jsonl':
+                    yield from read_frames(path);return
+                for i,frame in enumerate(frames):
+                    # At most the last yielded raw frame may still be alive.
+                    # Collecting full image-bearing baseline records fails here.
+                    self.assertLessEqual(len(live),1)
+                    payload=ImagePayload();live.add(payload)
+                    yield {**frame,'combo':100+i,'combo_confidence':.97,'image_payload':payload}
+            with patch('piu_timeline.play.channels.read_frames',side_effect=source):
+                channels=collect(data,directory,frames)
+            self.assertEqual(len(live),0)
+            values=channels['popup']['observations']
+            self.assertEqual([v[7]for v in values],list(range(100,100+len(frames))))
+            self.assertTrue(all(v[8]==.97 and v[0]is None for v in values))
+            self.assertEqual(channels['timeline']['frames'],[[f['playback_seconds'],f['source_pts_seconds']]for f in frames])
+
     def test_measurement_consumers_fail_when_acquisition_is_missing_without_decoding(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary); data, frames = pixel_play(directory)

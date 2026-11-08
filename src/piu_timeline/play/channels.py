@@ -54,7 +54,8 @@ def collect(data, directory, frames):
             words.append(word)
             word_counts[word.get('label') or ('blank' if word.get('blank') else 'unknown')] += 1
     baseline_path = directory/'frames.base.jsonl'
-    baseline = list(read_frames(baseline_path)) if baseline_path.is_file() else native
+    baseline = [{key:frame.get(key)for key in ('source_pts_seconds','playback_seconds','combo','combo_confidence')}
+                for frame in read_frames(baseline_path)]if baseline_path.is_file()else native
     if len(baseline) != len(native) or any(
             any(abs(a[k]-b[k]) > 1e-6 for k in ('source_pts_seconds', 'playback_seconds'))
             for a,b in zip(native, baseline, strict=True)):
