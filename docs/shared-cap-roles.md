@@ -31,8 +31,11 @@ family, it aligns role context to the measured cap's native center. Each context
 keeps its own reference, sampling phase, canvas bounds and errors. Its anchor
 never replaces the cap's coordinate or supplies chart timing. A classification
 requires a positive connector on the declared side, and all independently
-required role features. The original cap comparison and raw source PTS remain
-available to coordinate and track consumers.
+required role features. The original cap comparison, acquisition method and raw source PTS remain
+available to coordinate and track consumers, including when a grouped alternative
+provides the successful appearance. Replay validates each native frame before
+writing it; invalid detector evidence cannot consume the rest of the recording
+or replace the published native trace.
 
 Connector pixels already positively measured as part of this cap are excluded
 from a second, potentially incompatible animation comparison. At least half of

@@ -12,6 +12,7 @@ from piu_timeline.play.skins.bank import load_bank, ROLES
 from piu_timeline.play.skins.detector import FORMAT, SkinDetector
 from piu_timeline.play.skins.held import FORMAT as HELD_FORMAT, BodyAtReceptor
 from piu_timeline.play.skins.pipeline import classified_frames
+from piu_timeline.play.observations.cache import validate_native_frame
 
 
 def detector_contract(path):
@@ -143,6 +144,7 @@ def refresh(data, output, path):
             native.update(notes=[o for o in observations if o['role'] != 'hold_body'],
                           skin_observations=observations,
                           possible_hold_or_dense_stack=at_receptor(observations))
+            validate_native_frame(native,len(data['layout']['lanes']))
             stream.write(json.dumps(native) + '\n')
             count += 1
             if count % 600 == 0:

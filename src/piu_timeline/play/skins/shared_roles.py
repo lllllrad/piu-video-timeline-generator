@@ -7,7 +7,7 @@ from piu_timeline.play.skins.spatial import VISIBLE_FORMAT,visible_region
 from piu_timeline.play.skins.overlap import positive_pixels,runs
 
 FORMAT={'schema':1,'method':'declared_cap_family_with_independent_context',
-        'maximum_center_rounding_pixels':.5,'context':'all_spatial_cells',
+        'maximum_center_rounding_pixels':.5,'context':'all_spatial_cells','source_metadata':'measured_cap_method',
         'foreground':'other_measured_cap_support','context_cap_overlap':'exclude_measured_own_cap',
         'minimum_independent_connection_fraction':.5,'body_coverage':'all_remaining_connection_pixels','connection_visibility':VISIBLE_FORMAT}
 FIELDS=('template','x','y','bounds_pixels','sampling_phase_pixels','reference_scale_y',
@@ -126,7 +126,7 @@ def candidates(detector,image,measured):
         for cap in [root,*root.get('alternatives',[])]:
             for family in families:
                 if cap['template']not in family['appearance_templates']:continue
-                cap={**cap,'lane':root['lane'],'skin':root['skin']}
+                cap={**cap,'lane':root['lane'],'skin':root['skin'],'method':root['method']}
                 for template in detector.shared_contexts[family['id']]:
                     identity=key(cap),tuple(cap['bounds_pixels']),key(template)
                     if identity in seen:continue

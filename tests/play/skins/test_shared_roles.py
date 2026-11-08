@@ -46,6 +46,23 @@ class SharedRoleTest(unittest.TestCase):
             self.assertEqual(image_spans(cap,body_rows),[(102,115)])
             self.assertEqual(image_spans(cap,cap_rows),[(80,100)])
 
+    def test_role_from_an_alternative_cap_retains_native_evidence_metadata(self):
+        from piu_timeline.play.observations.cache import validate_native_frame
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);_,image,document=self.fixture(root)
+            alias=deepcopy(next(t for t in document['templates']if t['id']=='appearance'))
+            alias['id']='alternate-appearance';document['templates'].append(alias)
+            document['shared_cap_families'][0]['appearance_templates']=['alternate-appearance']
+            (root/'bank.json').write_text(json.dumps(document))
+            layout={'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]}
+            detector=SkinDetector(load_bank(root/'bank.json'),layout,200,300)
+            observations=detector.detect(image);caps=[r for r in observations if r['role']!='hold_body']
+            self.assertEqual(len(caps),1);self.assertEqual(caps[0]['role'],'hold_start')
+            self.assertEqual(caps[0]['template'],'alternate-appearance')
+            self.assertEqual(caps[0]['method'],'skin_image')
+            validate_native_frame({'source_pts_seconds':31.25,'playback_seconds':1.25,
+                'combo':None,'notes':caps,'skin_observations':observations},5)
+
     def test_missing_connection_cannot_be_replaced_with_a_known_cap(self):
         with tempfile.TemporaryDirectory()as temporary:
             detector,image,_=self.fixture(Path(temporary))

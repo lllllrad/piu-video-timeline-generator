@@ -42,6 +42,32 @@ class SkinReplayTest(unittest.TestCase):
         environment=patch.dict('os.environ',{'PIU_SKIN_JOBS':'1'})
         environment.start();self.addCleanup(environment.stop)
 
+    def test_invalid_detector_record_fails_before_consuming_the_next_frame(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            root=Path(temporary);bank=root/'bank';bank.mkdir();examples(bank)
+            video=root/'source.mkv';video.write_bytes(b'original recording')
+            frames=[{'source_pts_seconds':31.+i/60,'playback_seconds':1.+i/60,
+                     'notes':[],'combo':None}for i in range(2)]
+            trace=''.join(json.dumps(f)+'\n'for f in frames);(root/'frames.jsonl').write_text(trace)
+            data={'media':{'path':str(video),'size_bytes':video.stat().st_size,'mtime_ns':video.stat().st_mtime_ns},
+                'analysis_width':200,'analysis_height':300,'game_roi':[0,0,200,300],
+                'start_seconds':1.,'end_seconds':1.04,'frame_count':2,
+                'layout':{'receptor_y':.05,'lanes':[{'x':.1+i*.1}for i in range(5)]}}
+            consumed=[]
+            def malformed():
+                for i,f in enumerate(frames):
+                    consumed.append(i)
+                    # A localized candidate with no acquisition method cannot be published.
+                    yield f['source_pts_seconds'],f['playback_seconds'],None,[{
+                        'lane':0,'x':.1,'y':.5,'role':'unknown','template':'tap',
+                        'bounds_pixels':[10,130,30,170]}]
+            with patch('piu_timeline.play.skins.replay.decode_frames',return_value=iter(())),\
+                 patch('piu_timeline.play.skins.replay.classified_frames',return_value=malformed()):
+                with self.assertRaisesRegex(ValueError,'image-template evidence'):
+                    refresh(data,root,bank/'bank.json')
+            self.assertEqual(consumed,[0]);self.assertEqual((root/'frames.jsonl').read_text(),trace)
+            self.assertEqual(video.read_bytes(),b'original recording')
+
     def test_scan_keeps_detector_geometry_and_rejects_an_empty_native_timeline(self):
         import piu_timeline.play.skins.__main__ as cli
         with tempfile.TemporaryDirectory()as temporary:
