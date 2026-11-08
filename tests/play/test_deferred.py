@@ -2,16 +2,16 @@ from copy import deepcopy
 from types import SimpleNamespace
 import unittest
 
-from piu_timeline.play.analysis import resolve_timing
+from piu_timeline.play.associations import associate_counters
 from piu_timeline.play.holds.analysis import presentation
 
 
 def evidence(delta=1):
     notes=[{'status':'estimated','lane':0,'target_seconds':9,'prediction_uncertainty_seconds':.01},
            {'status':'estimated','lane':1,'target_seconds':10,'prediction_uncertainty_seconds':.01}]
-    tracker=SimpleNamespace(finish=lambda:notes,unsupported_intervals=[{'start_seconds':9,'end_seconds':11}])
+    data={'notes':notes,'unsupported_intervals':[{'start_seconds':9,'end_seconds':11}]}
     combo=SimpleNamespace(observations=[],events=[{'status':'candidate','delta':delta,'lower_seconds':9.99,'upper_seconds':10.01}])
-    data=resolve_timing(tracker,combo,0)
+    data=associate_counters(data,combo,0)
     data['hold_analysis']={'holds':[{'id':0,'lane':0,'head_note':0,'covered_notes':[0],
                            'start_range':[9,9.02],'end_range':[11,11.02],'start_censored':False,
                            'end_censored':False,'input':{'segments':[]}}],

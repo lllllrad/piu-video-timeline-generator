@@ -57,4 +57,10 @@ class FrameCenters:
             center={'yPixels':measured['native_y_pixels'],
                     'uncertaintyPixels':measured['native_cap_coordinate_uncertainty_pixels'],
                     'basis':{'kind':'native_cap_center'}}
-        return {'anchor':anchor,'anchors':anchors,'center':center}
+        measurement={'native_y_pixels':raw,'detected_y_pixels':raw,'image_anchor':[image['x'],image['y']],
+                     'template':name,'cap_error':image['region_errors']['cap'],
+                     'cap_reference_sha256':self.references[name],'classification_status':image['classification_status'],
+                     **({'sampling_origin_pixels':image['sampling_origin_pixels']}if 'sampling_origin_pixels'in image else{}),
+                     **measured,'trace':'frames.jsonl'}
+        if conflict:measurement.update(native_cap_registration_status='conflicting',registration_conflict=conflict)
+        return {'anchor':anchor,'anchors':anchors,'center':center,'measurement':measurement}

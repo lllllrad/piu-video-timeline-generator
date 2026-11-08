@@ -23,12 +23,14 @@ const native=String.raw`
 import json,tempfile
 from pathlib import Path
 from copy import deepcopy
+from unittest.mock import patch
+from piu_timeline import derived
 from tests.play.skins.test_anchor_registration import fixture,register,chord_trace
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.replay import detector_metadata
 from piu_timeline.play.skins.reuse import reusable_groups
 from piu_timeline.play.skins.coordinates import measure
-from piu_timeline.play.head_registration import apply
+from piu_timeline.play.head_registration import measure_coordinates as apply
 from piu_timeline.play.beats.chords import prepare
 with tempfile.TemporaryDirectory()as tmp:
  root=Path(tmp);rgb,data,manifest=fixture(root)
@@ -51,7 +53,14 @@ with tempfile.TemporaryDirectory()as tmp:
  (root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n'for f in frames))
  registration=measure(trace,frames)
  assert registration['notes'][0]['observations'][0]['native_y_pixels']==trace['notes'][0]['points'][0][1]+1
- first=apply(trace,root);second=apply(first,root)
+ operations=[];original_call=derived.call
+ def coordinate_only(operation,*args,**kwargs):
+  operations.append(operation)
+  if operation.startswith(('clocks.','nativeClock.','physicalTiming.','stageAssociations.'))or operation=='tracks.fitTrack':raise AssertionError('Coordinates requested timing/input inference')
+  return original_call(operation,*args,**kwargs)
+ with patch.object(derived,'call',side_effect=coordinate_only):first=apply(trace,root)
+ assert operations.count('skinCenters.projectMany')==1
+ second=apply(first,root)
  assert frames==original and trace==raw
  for old,new,again in zip(raw['notes'],first['notes'],second['notes']):
   assert new.get('tracking_warnings',[])==again.get('tracking_warnings',[])==old.get('tracking_warnings',[])
@@ -109,7 +118,7 @@ with tempfile.TemporaryDirectory()as tmp:
  else:raise AssertionError('changed center reused a stale certificate')
  print(json.dumps({'points':len(first['notes'][0]['points']),'source_pts':first['head_registration']['notes'][0]['observations'][0]['source_pts_seconds']}))
 `;
-test('source-certified centers refit timing without moving native image evidence or applying twice',()=>{
+test('source-certified centers project coordinates without moving native image evidence or applying twice',()=>{
  const result=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',native],{encoding:'utf8'}));
  assert.equal(result.points,9);assert.equal(result.source_pts,50.6);
 });

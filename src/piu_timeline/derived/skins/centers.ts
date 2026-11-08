@@ -16,3 +16,8 @@ export function project(raw: number[][], record: RecordData, mode:'all_frames'|'
     return [time, y + offset];
   });
 }
+
+/** One transport exchange for a complete coordinate stage. */
+export function projectMany(requests:[number[][],RecordData|null,'all_frames'|'measured_frames'][]):number[][][]{
+ return requests.map(([raw,record,mode])=>record?project(raw,record,mode):structuredClone(raw));
+}

@@ -12,10 +12,10 @@ import cv2
 import numpy as np
 from piu_timeline.derived import CONTRACTS
 
-from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, stage_saved_observations, validate_native_frame
+from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT, observation_settings_match, stage_saved_observations
 from piu_timeline.vision.ocr import ocr_images
 from piu_timeline.play.frames import decode_frames, crop_region, TIME_EPSILON
-from piu_timeline.play.tracking import NoteTracker, DigitReader, ComboTracker, associate
+from piu_timeline.play.tracking import DigitReader, ComboTracker
 from piu_timeline.metadata.recognition import capture_game
 from piu_timeline.workflow import LOCAL_DATA, source_id
 from piu_timeline.metadata.results import play_reference as result_reference
@@ -34,27 +34,8 @@ from piu_timeline.play.counter_pixels import READER_FORMAT
 from piu_timeline.play.beats.timing import current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'counter_revision':6,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'native_clock':CONTRACTS['native_clock'],'object_roles':OBJECT_FORMAT,'fragment_identity':FRAGMENT_FORMAT,'frame_tracking':CONTRACTS['frame_tracking']}
+TIMING_FORMAT = {'schema':1,'execution_stages':2,'counter_revision':6,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'native_clock':CONTRACTS['native_clock'],'object_roles':OBJECT_FORMAT,'fragment_identity':FRAGMENT_FORMAT,'frame_tracking':CONTRACTS['frame_tracking']}
 FRAME_OBSERVATION_VERSION = 4
-
-
-def resolve_timing(tracker, combo, display_delay_ms):
-    notes = tracker.finish()
-    from piu_timeline.play.counter_refinement import refine_events, refinement_constraints
-    original = combo.events
-    combo.events = refine_events(original,combo.observations)
-    constraints = None
-    if len(combo.events) != len(original):
-        baseline = associate(notes,[dict(e) for e in original],display_delay=display_delay_ms/1000)
-        constraints = refinement_constraints(notes,original,baseline,combo.events)
-    from piu_timeline.derived import call
-    request={'schema':1,'notes':[{key:note[key] for key in ('lane','status','target_seconds','prediction_uncertainty_seconds','reason') if key in note} for note in notes],'events':combo.events,'display_delay_seconds':display_delay_ms/1000,
-             'unsupported_intervals':tracker.unsupported_intervals,'constraints':constraints}
-    associations=call('stageAssociations.counters',request)
-    return {'timing_format':TIMING_FORMAT,'notes':notes,
-            **({'scroll_motion':tracker.motion.evidence()}if hasattr(tracker,'motion')else{}),
-            'timing_reconstruction':getattr(tracker,'timing_reconstruction',{}),
-            'unsupported_intervals':tracker.unsupported_intervals,**associations['data']}
 
 
 def refresh_counter_observations(cached, output, replace_font=False):
@@ -119,7 +100,10 @@ def refresh_counter_observations(cached, output, replace_font=False):
             target.write(json.dumps(frame)+'\n')
             known += value is not None;count += 1
     updated.replace(trace)
-    return {'combo_readable_fraction':known/count,'refreshed_counter_only':True}
+    from piu_timeline.play.observations.artifacts import save_input
+    save_input(output/'counter-events.json',{'schema':1,'events':combo.events,'observations':combo.observations})
+    return {'combo_readable_fraction':known/count,'refreshed_counter_only':True,
+            'combo_events':combo.events,'counter_observations':combo.observations}
 
 
 def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
@@ -140,25 +124,13 @@ def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
         print('Refreshing counter crops; preserving saved note observations, no OCR.',flush=True)
         refreshed = refresh_counter_observations(cached,output,replace_font=replaced_font or reader_changed)
     from piu_timeline.play.skins.bank import load_bank
-    from piu_timeline.play.observations.cache import tracking_notes
-    tracker = NoteTracker(cached['layout'], cached['analysis_width'], cached['analysis_height'],skin_bank=load_bank(note_skin))
-    combo, count, last = ComboTracker(), 0, None
-    with (output / 'frames.jsonl').open()as stream:
-        for line in stream:
-            frame = json.loads(line)
-            validate_native_frame(frame,len(cached['layout']['lanes']))
-            seconds = frame['playback_seconds']
-            if last is not None and seconds <= last:
-                raise ValueError('Saved observation timestamps are not increasing')
-            last = seconds; count += 1
-            tracker.hold_candidate = frame.get('possible_hold_or_dense_stack', False)
-            tracker.update(seconds, tracking_notes(frame), frame['source_pts_seconds']); combo.update(seconds,frame['combo'],frame.get('combo_confidence'),
-                              frame.get('combo_read_mode'),frame['source_pts_seconds'])
-    if count != cached['frame_count']:
-        raise ValueError('Saved native-frame observations are incomplete')
-    cached={k:v for k,v in cached.items()if k not in ('conflicted_matches','association_view_format')}
-    result = {**cached, **refreshed, **resolve_timing(tracker, combo, display_delay_ms),
-              'play_analysis_version': VERSION, 'frame_observation_version': FRAME_OBSERVATION_VERSION,
+    from piu_timeline.play.tracking import replay
+    from piu_timeline.play.stages import execute
+    tracked=execute(output,'tracking',lambda:replay(cached,output,load_bank(note_skin)),('tracking.json',))
+    from piu_timeline.play.stages import observation_context
+    cached=observation_context(cached)
+    result = {**cached, **refreshed, **tracked,
+              'play_analysis_version': VERSION,'timing_format':TIMING_FORMAT, 'frame_observation_version': FRAME_OBSERVATION_VERSION,
               'native_frame_format':NATIVE_FRAME_FORMAT,
               'song':segment.get('song'),'chart':segment.get('chart'),
               'chart_identity':segment.get('chart_identity'),
@@ -206,7 +178,10 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     print('Learning combo digit templates (at most 32 small OCR images)...', flush=True)
     (output / 'evidence').mkdir(exist_ok=True)
     digits, bootstrap = bootstrap_digits(record, roi, start, end, layout, output / 'evidence', width=width)
-    combo, tracker, times = ComboTracker(), None, []
+    combo,times=ComboTracker(),[]
+    from piu_timeline.play.skins.held import BodyAtReceptor
+    from piu_timeline.play.skins.detector import SkinDetector
+    body_at_receptor=BodyAtReceptor(SkinDetector(skin_bank,layout,width,round(width*roi[3]/roi[2])))
     from piu_timeline.play.skins.replay import detector_metadata
     from piu_timeline.play.skins.pipeline import classified_frames
     observed, known, previous_mask, previous_read = 0, 0, None, (None, 0.0)
@@ -217,12 +192,8 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     with (output / 'frames.jsonl').open('w') as trace:
         decoded=decode_frames(record,start,end,roi,width)
         for pts, playback, image, skin_observations in classified_frames(decoded,skin_bank,layout,width,round(width*roi[3]/roi[2])):
-            if tracker is None:
-                tracker = NoteTracker(layout, image.shape[1], image.shape[0],skin_bank=skin_bank)
-            tracker.skin_observations=skin_observations
-            tracker.hold_candidate=tracker.body_at_receptor(skin_observations)
+            possible_hold=body_at_receptor(skin_observations)
             notes=[o for o in skin_observations if o['role']!='hold_body']
-            tracker.update(playback, notes, pts)
             crop = crop_region(image, layout['combo_roi'])
             counter_pixels.append(pts,playback,crop)
             # Full-resolution examples are resized to the decoded crop before
@@ -239,8 +210,8 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                 last_adapted = value
             times.append(playback); observed += 1; known += value is not None
             trace.write(json.dumps({'source_pts_seconds': pts, 'playback_seconds': playback,
-                                    'notes': notes, 'skin_observations':tracker.skin_observations,
-                                    'possible_hold_or_dense_stack': tracker.hold_candidate, 'combo': value, 'combo_confidence': confidence, 'combo_read_mode': digits.last_mode}) + '\n')
+                                    'notes': notes, 'skin_observations':skin_observations,
+                                    'possible_hold_or_dense_stack':possible_hold, 'combo': value, 'combo_confidence': confidence, 'combo_read_mode': digits.last_mode}) + '\n')
             if observed % 300 == 0:
                 print(f'  {observed} native frames, {playback-start:.1f}/{end-start:.1f}s, combo readable {known/observed:.0%}', flush=True)
     if not times:
@@ -276,7 +247,6 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             'display_delay_correction_ms': display_delay_ms,
             'frame_observation_version': FRAME_OBSERVATION_VERSION,
             'native_frame_format':NATIVE_FRAME_FORMAT,
-            **resolve_timing(tracker, combo, display_delay_ms),
             'result_reference': result_reference(segment, player),
             'limitations': ['Combo display updates are a proxy, not measured physical switch input.',
                             'Display/input latency is unknown unless externally calibrated.',
@@ -297,7 +267,9 @@ def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_sk
     previous_refresh={k:cached.get(k)for k in refresh_fields}
     if coordinates is not None:
         print('Reconstructing beat rows from saved coordinates; no frame replay, decoding or OCR.',flush=True)
-        cached=reassociate_beats(apply_beats(coordinates,final),display_delay_ms)
+        from piu_timeline.play.stages import physical_timing
+        coordinates=physical_timing(coordinates,final)
+        cached=reassociate_beats(musical_stages(coordinates,final),display_delay_ms,final)
         cached=augment_judgments(cached,final)
     if not judgments_current and coordinates is None:
         cached = augment_judgments(cached,final)
@@ -320,40 +292,42 @@ def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_sk
     return final / 'report.html'
 
 
+def musical_stages(result,directory):
+    """Schedule native validation, external reference preparation and musical inference."""
+    from piu_timeline.play.stages import execute
+    from piu_timeline.play.beats.timing import validate_physical,prepare_input
+    result=execute(directory,'native-interval-validation',lambda:validate_physical(result,directory),('native-timing.json',))
+    result=execute(directory,'musical-reference',lambda:prepare_input(result,directory),('beat-input.json',))
+    return execute(directory,'musical-timing',lambda:apply_beats(result,directory),('beat-result.json',))
+
+
 def finish_play(result, pending, final, segment_number, display_delay_ms, source_media, *, registered_coordinates=False):
     """Run derived stages, prepare/render the inspector, then atomically publish."""
+    from piu_timeline.play.stages import execute
     result['segment_number']=segment_number
     if not registered_coordinates:
-        result=interpret_objects(result,pending,display_delay_ms)
-        from piu_timeline.play.head_registration import apply as register_heads
-        result=register_heads(result,pending,display_delay_ms)
+        result=execute(pending,'object-interpretation',lambda:interpret_objects(result,pending,display_delay_ms))
+        from piu_timeline.play.head_registration import measure_coordinates
+        result=execute(pending,'coordinate-measurement',lambda:measure_coordinates(result,pending),('head-registration.json',))
     from piu_timeline.play.stages import save_coordinates
-    result=save_coordinates(result,pending)
-    result=apply_beats(result,pending)
-    result=reassociate_beats(result,display_delay_ms)
-    result = augment_judgments(result,pending)
+    result=execute(pending,'coordinate-artifact',lambda:save_coordinates(result,pending),('coordinates.json',))
+    from piu_timeline.play.stages import physical_timing
+    result=execute(pending,'physical-timing',lambda:physical_timing(result,pending),('physical-timing.json',))
+    result=musical_stages(result,pending)
+    result=execute(pending,'counter-association',lambda:reassociate_beats(result,display_delay_ms,pending),('counter-associations.json',))
+    result=execute(pending,'judgment-association',lambda:augment_judgments(result,pending))
     from piu_timeline.play.holds.analysis import augment_holds
-    result = augment_holds(result,pending)
+    result=execute(pending,'hold-evidence',lambda:augment_holds(result,pending))
     stat = Path(source_media['path']).stat()
     if (stat.st_size,stat.st_mtime_ns) != (result['media']['size_bytes'],result['media']['mtime_ns']):
         raise ValueError('Source changed during play analysis')
     (pending / 'analysis.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     from piu_timeline.play.presentation import prepare_report,refresh_registration
     from piu_timeline.play.report import write_report
-    prepared=prepare_report(result,pending/'report.html',final)
-    write_report(prepared,pending/'report.html',final)
-    from piu_timeline.storage import relocate_evidence
-    relocate_evidence(pending, final)
-    backup = final.with_name(f'{final.name}.previous-{uuid.uuid4().hex[:8]}')
-    if final.exists():
-        final.rename(backup)
-    try:
-        pending.rename(final)
-    except OSError:
-        if backup.exists() and not final.exists():
-            backup.rename(final)
-        raise
-    if backup.exists():relocate_evidence(backup,backup,source=final)
+    prepared=execute(pending,'inspection',lambda:prepare_report(result,pending/'report.html',final),('report-data.json',))
+    execute(pending,'render',lambda:write_report(prepared,pending/'report.html',final),('report.html',))
+    from piu_timeline.play.stages import publish
+    backup=publish(pending,final)
     from piu_timeline.storage import prune_history
     prune_history(final,backup,source_media)
     from piu_timeline.charts.data import auto_register
@@ -433,7 +407,12 @@ def run(source, segment_number=1, force=False, **options):
         if can_refit:
             result = refit_saved(donor, pending, segments[segment_number-1], options.get('display_delay_ms',0), note_skin=note_skin)
         else:
-            result = analyze_play(document, segments[segment_number-1], pending, **options)
+            from piu_timeline.play.stages import execute
+            from piu_timeline.play.tracking import replay
+            from piu_timeline.play.skins.bank import load_bank
+            result=execute(pending,'native-observations',lambda:analyze_play(document,segments[segment_number-1],pending,**options),('frames.jsonl',))
+            tracked=execute(pending,'tracking',lambda:replay(result,pending,load_bank(note_skin)),('tracking.json',))
+            result={**result,**tracked,'timing_format':TIMING_FORMAT}
         return finish_play(result, pending, final, segment_number,
                            options.get('display_delay_ms',0), document['media'])
 

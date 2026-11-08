@@ -99,7 +99,7 @@ class ObjectRoleTest(unittest.TestCase):
                          [f['source_pts_seconds']for f in frames[4:]])
         retained=[point for note in result['notes']for point in note['points']]
         self.assertEqual(retained,[[f['playback_seconds'],f['notes'][0]['y']*200]for f in frames[:4]])
-        self.assertEqual(result['matches'],[])
+        self.assertNotIn('matches',result)
 
     def test_boundary_candidates_stay_detected_and_body_roles_preserve_source_components(self):
         data=geometry();data['object_interpretation']={'effects':[effect()]}

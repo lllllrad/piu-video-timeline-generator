@@ -1,4 +1,5 @@
 import {input as inspectionInput,prepare as inspect,materialize as inspectionModel} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
+import {capture as capturePhysical} from '../../src/piu_timeline/derived/stages/physical_timing.ts';
 import {capture as captureCoordinates} from '../../src/piu_timeline/derived/stages/coordinates.ts';
 import {resolve as resolveNativeTiming} from '../../src/piu_timeline/derived/stages/native_timing.ts';
 import {input as beatInput,reconstruct as reconstructBeat,materialize as materializeBeat} from '../../src/piu_timeline/derived/beats/stage.ts';
@@ -193,7 +194,7 @@ export function beatView(source:BeatViewInput):RecordData{
 }
 
 export function beatRequest(source:BeatViewInput){
- const coordinates=captureCoordinates(source.data),native=resolveNativeTiming(coordinates);
+ const coordinates=capturePhysical(captureCoordinates(source.data),source.data),native=resolveNativeTiming(coordinates);
  return beatInput(coordinates,native,source.reference as BeatReference,source.timing_text,source.preparation);
 }
 

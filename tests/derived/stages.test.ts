@@ -47,7 +47,7 @@ test('beat reconstruction is pure, retains native positions and never returns ac
   assert.deepEqual(source, original);
   assert.deepEqual(result.notes.map(n => n.target_seconds), [10, 10.125, 10.125, 10.25]);
   assert.deepEqual(result.notes.map(n => n.points), source.data.notes.map(n => n.points));
-  assert.deepEqual(Object.keys(result).sort(), ['beat_timing', 'notes', 'timing_reconstruction']);
+  assert.deepEqual(Object.keys(result).sort(), ['beat_timing', 'frame_timeline', 'notes', 'timing_reconstruction']);
   assert.equal(result.beat_timing.status, 'restored');
 });
 

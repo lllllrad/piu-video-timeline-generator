@@ -12,8 +12,7 @@ and unresolved-evidence diagnostics. Original visual observations are inputs to 
 
 Python adapters connect acquisition objects and callers to this implementation.
 There is one implementation of each migrated fit and consumer. One Node worker
-is reused per Python process. Registration and clock
-fitting use batches; the beat stage runs the whole phase search and validation
+is reused per Python process. Coordinate projection and physical clock fitting use batches; the beat stage runs the whole phase search and validation
 inside TypeScript. Transport errors fail explicitly. There is no Python fallback.
 The callback transport exists for callers supplying a phase-scoring function;
 the production beat stage supplies its spatial validator directly in TypeScript.
@@ -63,22 +62,25 @@ The independently measured centers guide association and are projected into the
 later coordinate fit through their source-bound records. Counter values, judgment
 words, switch effects and the musical grid are absent from frame assignment.
 
-`coordinates.json` stores a schema-2 source-bound snapshot containing two schema-1
+`coordinates.json` stores a schema-3 source-bound snapshot containing two schema-1
 artifacts: `track-observations` (original detection trajectories and geometry) and
-`coordinates` (registered trajectories, clocks and physical timing attempts).
+`coordinates` (registered trajectories and coordinate evidence only).
+`physical-timing.json` separately owns shared displacement, clocks and physical
+crossing attempts. See [execution contracts](analysis-stage-contracts.md).
 It excludes popup events, matches and coverage. Its fingerprint binds it to source
 identity, geometry, detector and upstream timing contracts.
 
 `derived/stages/contracts.ts` declares these immutable artifacts and owned fields.
-The acquisition adapter in `stages/coordinates.ts` constructs them. Numerical
+The persistence adapter in `stages/coordinates.ts` constructs them. Numerical
 kernels use private mutable work arrays; public results contain indexed updates
 restricted to owned fields. Changing an observation ID, lane, trajectory or
 another stage's fields fails explicitly. Composition constructs fresh read models
 without modifying producer artifacts.
 
 Bound results contain an `input_fingerprint` in addition to their stage and data.
-Coordinate results bind their observation artifact; physical timing results bind
-the narrow pair of observation and coordinate artifacts. Beat results bind the
+Coordinate results bind their observation artifact; physical crossing results bind
+the observation/coordinate pair. Native interval validation additionally binds
+the physical crossing result. Beat results bind the
 complete beat request, including reference timing and preparation. Inspection and
 interpretation results bind the complete prepared presentation request. Composition
 checks these bindings and rejects results from another input, even when note IDs
@@ -90,8 +92,9 @@ directory. `derived/fingerprint.ts` replaces that exact string prefix with
 `@segment/` while hashing, so pending-directory promotion preserves input identity.
 Other paths and input values remain part of the fingerprint.
 
-`native-timing.json` records physical interval validation before musical fitting.
-`beat-input.json` has schema 1 with `observations`, `coordinates`, `native_timing`,
+`native-timing.json` records physical interval validation after source-only
+physical fitting and before musical fitting.
+`beat-input.json` has schema 1 with `observations`, `coordinates`, `physical_timing`, `native_timing`,
 `reference`, `timing_text` and optional `preparation`. The reference contains the
 verified song origin and uncertainty or an explicit unavailable reason. The stage
 does not fetch timing files or prepare audio alignment. `beat-result.json` is a
@@ -194,7 +197,9 @@ just derive beats .local/data/SOURCE/play/segment-001/beat-input.json .local/tmp
 
 The same command supports `native-gaps`, `coordinates`, `clocks`, `speed` and `ucs`:
 
-* `native-gaps`: schema 1 with `observations` and `coordinates` artifacts. A
+* `physical-timing`: the `observations` and `coordinates` artifacts from the
+  coordinate snapshot. Output adds the separately bound `physical_timing` artifact.
+* `native-gaps`: schema 1 with `observations`, `coordinates` and `physical_timing` artifacts. A
   `beat-input.json` supplies these fields too; musical reference fields are unused.
   Output is a `native-timing` artifact before musical-row fitting.
 * `coordinates`: `tracks`, `timeline`, `height`, `spacing`, `receptor`, `bottom`.

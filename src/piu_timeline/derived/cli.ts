@@ -17,9 +17,11 @@ import {timingRanges} from './ranges.ts';
 import {continuity} from './visibility.ts';
 import {interpret as effects} from './effects.ts';
 import {sustained as holdState} from './hold_state.ts';
+import {reconstruct as physicalTiming} from './stages/physical_timing.ts';
 import {resolve as nativeGaps} from './stages/native_timing.ts';
 
 export function derive(stage: string, input): unknown {
+  if(stage==='physical-timing')return physicalTiming(input);
   if(stage==='native-gaps'){
     if(input?.schema!==1)throw new Error('Native timing input requires schema 1');
     return nativeGaps(input);

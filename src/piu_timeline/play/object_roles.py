@@ -138,14 +138,14 @@ def apply(data,directory,display_delay_ms=0):
     (directory/'object-interpretation.json').write_text(json.dumps(artifact)+'\n')
     prepared={**prepared,'object_interpretation':artifact}
     from piu_timeline.play.tracking import NoteTracker,ComboTracker
-    from piu_timeline.play.analysis import resolve_timing
+    from piu_timeline.play.tracking import collect_tracks
     tracker=NoteTracker(data['layout'],data['analysis_width'],data['analysis_height']);combo=ComboTracker()
     for frame in filter_frames(prepared,frames):
         time=frame['playback_seconds'];pts=frame['source_pts_seconds']
         tracker.hold_candidate=frame.get('possible_hold_or_dense_stack',False)
         tracker.update(time,frame['notes'],pts)
         combo.update(time,frame['combo'],frame.get('combo_confidence'),frame.get('combo_read_mode'),pts)
-    return {**prepared,**resolve_timing(tracker,combo,display_delay_ms)}
+    return {**prepared,**collect_tracks(tracker,combo,directory,prepared)}
 
 
 def verify(data):

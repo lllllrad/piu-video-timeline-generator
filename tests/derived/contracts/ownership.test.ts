@@ -1,6 +1,7 @@
 /** Public stage contracts enforce ownership independently of numerical fixtures. */
 import test from 'node:test';import assert from 'node:assert/strict';
-import {capture,materialize as coordinateView} from '../../../src/piu_timeline/derived/stages/coordinates.ts';
+import {capture as capturePhysical} from '../../../src/piu_timeline/derived/stages/physical_timing.ts';
+import {capture as captureCoordinates,materialize as coordinateView} from '../../../src/piu_timeline/derived/stages/coordinates.ts';
 import {resolve as nativeTiming} from '../../../src/piu_timeline/derived/stages/native_timing.ts';
 import {artifact,boundArtifact} from '../../../src/piu_timeline/derived/stages/contracts.ts';
 import {changes,apply} from '../../../src/piu_timeline/derived/stages/notes.ts';
@@ -12,9 +13,10 @@ import {materialize,result,applyResult} from '../../../src/piu_timeline/derived/
 import {domain} from '../beats/fixtures.ts';
 import {processing} from '../../../src/piu_timeline/derived/pipeline/inputs.ts';
 import {derive} from '../../../src/piu_timeline/derived/cli.ts';
+const capture=(data,root?:string)=>capturePhysical(captureCoordinates(data,root),data);
 test('coordinate result contains no HUD associations and owns no raw detection edits',()=>{
  const data={...domain(),combo_events:[{delta:1}],matches:[{note:0}],coverage:{timed:1}},before=structuredClone(data),source=capture(data);
- assert.deepEqual(Object.keys(source.coordinates.data).sort(),['head_registration','notes','scroll_motion']);assert.ok(!Object.hasOwn(source.observations.data,'matches'));
+ assert.deepEqual(Object.keys(source.coordinates.data).sort(),['head_registration','notes']);assert.ok(!Object.hasOwn(source.observations.data,'matches'));
  assert.ok(Object.isFrozen(source.observations.data.notes[0].detection_points));assert.throws(()=>{(source.observations.data.notes[0] as {lane:number}).lane=9;},TypeError);
  const view=coordinateView(source);view.notes[0].points[0][1]++;assert.deepEqual(data,before);assert.notDeepEqual(view.notes[0].points,source.coordinates.data.notes[0].values.points);
  assert.throws(()=>coordinateView({...source,coordinates:boundArtifact('coordinates',source.observations,{...source.coordinates.data,matches:[]})}),/Foreign/);

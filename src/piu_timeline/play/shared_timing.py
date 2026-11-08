@@ -1,5 +1,4 @@
 """Reconstruct a shared displacement from registered native trajectory identities."""
-from collections import defaultdict
 
 import numpy as np
 from piu_timeline.derived import CONTRACTS, call
@@ -29,72 +28,19 @@ def registered_motion(tracks, timeline, height, spacing, receptor, bottom):
 
 
 def restore(notes, tracks, timeline, layout, width, height):
-    """Retain bounded native intervals with explicit unresolved-clock diagnostics."""
-    spacing=float(np.median(np.diff([lane['x']*width for lane in layout['lanes']])))
-    receptor=layout['receptor_y']*height
-    motion=registered_motion(tracks,timeline,height,spacing,receptor,layout.get('note_y_max',.95)*height)
-    motion.strict_clock=True
-    shared_frames=defaultdict(dict)
-    for i,track in enumerate(tracks):
-        for t,y in track.points:shared_frames[t][i]=y
-    warnings=list(motion.coordinate_conflicts)
-    fitted_tracks=motion.fit_many(tracks,receptor,layout)
-    pending=[i for i,fitted in enumerate(fitted_tracks) if fitted is None]
-    native=call('nativeClock.fitMany',motion._state(),[
-        {'note_index':i,'points':tracks[i].points,
-         'coordinate_basis':getattr(tracks[i],'coordinate_basis',None),
-         'registration_uncertainty_pixels':getattr(tracks[i],'registration_uncertainty_pixels',0)}for i in pending],
-        receptor,layout)
-    bounded=dict(zip(pending,native,strict=True))
-    for index,(note,track) in enumerate(zip(notes,tracks,strict=True)):
-        fitted=fitted_tracks[index] or bounded.get(index)
-        # A short source-qualified cap can use its bounded shared-phase proof.
-        if (len(track.points)<4 or track.points[-1][0]-track.points[0][0]<.065)and not (fitted or {}).get('native_motion_support'):
-            continue
-        peer_counts=defaultdict(int)
-        for t,y in track.points:
-            for peer,py in shared_frames[t].items():
-                if peer!=index and (tracks[peer].lane!=track.lane or abs(py-y)>.65*spacing):
-                    peer_counts[peer]+=1
-        isolated = not any(count>=4 for count in peer_counts.values())
-        if isolated and fitted is None and getattr(track,'coordinate_basis',None)!='native_cap_center':
-            from piu_timeline.play.tracking import fit_track
-            direct=fit_track(track,receptor,spacing)
-            if direct['status']=='estimated':
-                fitted={**direct,'fit_method':'isolated_native_track'}
-        previous={k:note.get(k) for k in ('target_seconds','prediction_uncertainty_seconds','fit_method',
-                                         'native_clock_warning','crossing_method')}
-        # Preliminary online fits do not own the final registered clock state.
-        for key in ('native_clock_warning','crossing_method','native_interval_model','native_motion_support','motion_clock_validation'):
-            if not fitted or key not in fitted:note.pop(key,None)
-        if fitted is None:
-            visible=[motion.at_time[t] for t,y in track.points if receptor+.85*spacing<y<layout.get('note_y_max',.95)*height-.55*spacing]
-            failure=motion.coordinate_failures.get(visible[-1]['chunk']) if visible else None
-            failure=failure or 'insufficient_or_inconsistent_shared_motion'
-            note.update(status='excluded',reason='shared_timing_reconstruction_failed',target_seconds=None,
-                        timing_reconstruction={'status':'failed','reason':failure,
-                                               'unaccepted_previous_estimate':previous})
-            warnings.append({'note':index,'lane':track.lane,'reason':'shared_timing_reconstruction_failed',
-                             'check':'timing_reconstruction','visible_start_seconds':track.points[0][0],
-                             'visible_end_seconds':track.points[-1][0],'observed_points':len(track.points),
-                             'failure_detail':failure})
-        else:
-            if fitted.get('native_interval_model'):
-                for key in ('motion_target_phase','clock_target_phase','motion_chunk','motion_support_points','coordinate_bridge'):
-                    note.pop(key,None)
-            note.update(**fitted,timing_reconstruction={'status':'restored','format':FORMAT})
-            if fitted.get('native_clock_warning'):
-                warnings.append({'note':index,'lane':track.lane,'check':'timing_reconstruction',
-                                 **fitted['native_clock_warning'],
-                                 'visible_start_seconds':fitted['crossing_capture_range'][0],
-                                 'visible_end_seconds':fitted['crossing_capture_range'][1],
-                                 'crossing_source_pts_seconds':fitted['crossing_source_pts_seconds']})
-    from piu_timeline.play.spacing_checks import spacing_failures
-    conflicts=spacing_failures(notes,spacing,motion)
-    warnings.extend(conflicts)
-    for record in conflicts:
-        note=notes[record['note']]
-        rejected={k:note.get(k) for k in ('target_seconds','prediction_uncertainty_seconds','fit_method')}
-        note.update(status='excluded',reason=record['reason'],target_seconds=None,
-                    timing_reconstruction={'status':'failed','reason':record['reason'],'unaccepted_previous_estimate':rejected})
-    return motion,{'format':FORMAT,**call('timingSummary.summarize',notes,warnings)}
+    """Native-object adapter; all physical calculations run in one TypeScript call."""
+    result=call('physicalTiming.solve',{'notes':notes,'frame_timeline':timeline,'layout':layout,
+                                     'analysis_width':width,'analysis_height':height},
+        [{'note_index':i,'lane':t.lane,'points':t.points,
+          'coordinate_basis':getattr(t,'coordinate_basis',None),
+          'registration_uncertainty_pixels':getattr(t,'registration_uncertainty_pixels',0)}for i,t in enumerate(tracks)])
+    notes[:]=result['notes']
+    from piu_timeline.play.registered_coordinates import apply_result
+    spacing=float(np.median(np.diff([l['x']*width for l in layout['lanes']])))
+    motion=ScrollMotion(height,spacing);motion.evidence_format=FORMAT
+    motion.samples=result['motion_state']['samples']
+    motion.at_time={s['time']:s for s in motion.samples}
+    motion.registered_positions={float(t):{int(i):v for i,v in points.items()}
+                                 for t,points in result['motion_state']['registered_positions'].items()}
+    apply_result(motion,tracks,result['motion_state'])
+    return motion,result['timing_reconstruction']

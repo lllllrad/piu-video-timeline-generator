@@ -1,7 +1,8 @@
 /** Detached results must retain the exact source they were calculated from. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {capture, materialize as coordinates} from '../../../src/piu_timeline/derived/stages/coordinates.ts';
+import {capture as capturePhysical} from '../../../src/piu_timeline/derived/stages/physical_timing.ts';
+import {capture as captureCoordinates, materialize as coordinates} from '../../../src/piu_timeline/derived/stages/coordinates.ts';
 import {resolve, materialize as nativeTiming} from '../../../src/piu_timeline/derived/stages/native_timing.ts';
 import {input, reconstruct, materialize as beats} from '../../../src/piu_timeline/derived/beats/stage.ts';
 import {artifact, boundArtifact} from '../../../src/piu_timeline/derived/stages/contracts.ts';
@@ -12,6 +13,7 @@ import {processing} from '../../../src/piu_timeline/derived/pipeline/inputs.ts';
 import {parseData, stringifyData} from '../../../src/piu_timeline/derived/json.ts';
 import {domain} from '../beats/fixtures.ts';
 
+const capture=(data,root?:string)=>capturePhysical(captureCoordinates(data,root),data);
 const timing = ':Format=1\n:Mode=Single\n:BPM=120\n:Beat=4\n:Split=4\n' + '.....\n'.repeat(32);
 function beatRequest(data = domain(), root?: string) {
   const source = capture(data, root);

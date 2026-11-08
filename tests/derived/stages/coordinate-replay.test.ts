@@ -23,6 +23,7 @@ with tempfile.TemporaryDirectory()as tmp:
        'frame_count':len(scene['scroll_motion']['samples']),'combo_events':[],'unsupported_intervals':[],
        'native_frame_format':NATIVE_FRAME_FORMAT,'play_analysis_version':analysis.VERSION,
        'timing_format':copy.deepcopy(analysis.TIMING_FORMAT),'segment_number':1,'participant_slots':[]}
+ base['frame_timeline']=[{'time':s['time'],'source_pts':s['source_pts']}for s in scene['scroll_motion']['samples']]
  base['timing_format']['native_clock'].pop('detector_gaps')
  (final/'frames.jsonl').write_text('raw frames must not be parsed for a clock-only change')
  results=[]
@@ -42,7 +43,7 @@ with tempfile.TemporaryDirectory()as tmp:
         patch.object(analysis,'finish_play',side_effect=finish),
         patch.object(analysis,'refit_saved',side_effect=RuntimeError('raw replay requested')),
         patch.object(analysis,'analyze_play',side_effect=AssertionError('source decoding forbidden')),
-        patch('piu_timeline.play.head_registration.apply',side_effect=AssertionError('remeasurement forbidden'))):
+        patch('piu_timeline.play.head_registration.measure_coordinates',side_effect=AssertionError('remeasurement forbidden'))):
    try:outcome=analysis.run('example')
    except RuntimeError as error:outcome=str(error)
   if stale:results.append(outcome=='raw replay requested'and not captured)
@@ -50,7 +51,7 @@ with tempfile.TemporaryDirectory()as tmp:
    value,options=captured[0]
    results.append(outcome=='published'and options.get('registered_coordinates')is True and value['timing_format']==analysis.TIMING_FORMAT
     and [n['points']for n in value['notes']]==[n['points']for n in scene['notes']]
-    and [s['source_pts']for s in value['scroll_motion']['samples']]==[s['source_pts']for s in scene['scroll_motion']['samples']])
+    and [s['source_pts']for s in value['frame_timeline']]==[s['source_pts']for s in scene['scroll_motion']['samples']])
  print(json.dumps({'clock_only':results[0],'other_producer_requires_replay':results[1],'media_preserved':video.read_bytes()==b'original'}))
 `;
 test('a native-clock-only change refits bound coordinates; changed observation producers require frame replay',()=>{

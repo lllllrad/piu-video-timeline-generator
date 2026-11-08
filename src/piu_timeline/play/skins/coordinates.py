@@ -144,6 +144,10 @@ def measure(data,frames):
                                    **registration,
                                    'trace':'frames.jsonl'})
     if expected:raise ValueError('Image coordinate trajectory has no original source frame')
+    return assemble(data,samples,conflicts)
+
+
+def assemble(data,samples,conflicts):
     records=[{'note':i,'lane':note['lane'],'status':'measured','coordinate_method':FORMAT['method'],
               'observations':samples[i]}for i,note in enumerate(data['notes'])]
     warnings=[{'note':i,'lane':data['notes'][i]['lane'],'reason':'conflicting_registered_image_anchors',
@@ -165,3 +169,24 @@ def measure(data,frames):
     return {'format':FORMAT,'status':'failed'if warnings else'native_image_anchors','notes':records,'warnings':warnings,
             'absolute_registration':'reviewed'if data['skin_detector'].get('registration_reviewed')else'unverified',
             'skin_contract':data['skin_detector']['contract'],'trace':'frames.jsonl'}
+
+
+def from_tracks(data):
+    """Reuse pre-assignment native measurements; do not reopen or remeasure frames."""
+    if data.get('coordinate_measurement_contract')!=data['skin_detector']['contract']:
+        raise ValueError('Tracked coordinate measurements have a different detector contract')
+    timeline={s['time']:s['source_pts']for s in data['frame_timeline']}
+    samples=[];conflicts=defaultdict(list)
+    for index,note in enumerate(data['notes']):
+        observed=note['coordinate_measurements'];raw=detection_points(note)
+        if len(raw)!=len(observed):raise ValueError('Tracked coordinate measurements are incomplete')
+        records=[]
+        for (time,y),sample in zip(raw,observed,strict=True):
+            if (sample['time']!=time or abs(sample['detected_y_pixels']-y)>1e-8
+                    or timeline.get(time)!=sample['source_pts_seconds']):
+                raise ValueError('Tracked coordinate measurement differs from its source observation')
+            if sample.get('registration_conflict'):
+                conflicts[index].append({'time':time,'source_pts_seconds':sample['source_pts_seconds'],**sample['registration_conflict']})
+            records.append({k:v for k,v in sample.items()if k!='registration_conflict'})
+        samples.append(records)
+    return assemble(data,samples,conflicts)

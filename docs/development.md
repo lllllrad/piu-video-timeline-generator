@@ -28,7 +28,7 @@ Codex-only environment generation and optional mise installation are documented 
 
 ## Architecture
 
-See [the current play data flow](play-data-flow.md) for stage ownership, stored
+See [the current play data flow](play-data-flow.md) and [execution contracts](analysis-stage-contracts.md) for stage ownership, stored
 artifacts, [independent capture](independent-observations.md), stage reuse and validation limits.
 
 Use the [coordinate model](coordinate-model.md) when selecting raw image positions,
@@ -76,11 +76,6 @@ explicitly. `derived/stages/` declares observation, coordinate, physical timing 
 association contracts. `derived/pipeline/composition.ts` assembles inspection
 views. See [derived analysis](derived-analysis.md) for wire schemas.
 These resources are included in built Python wheels.
-
-`play/channels.py` exposes the four retained visual evidence channels and match
-provenance; `play/processing/` observes head persistence and disappearance at
-receptors independently of HUD values. See [visual channels](visual-channels.md)
-for artifacts, count units, uncertainty and association rules.
 
 `play/object_roles.py` interprets explicitly configured decorative artwork before
 track and motion reconstruction. Its frame-level roles retain raw detection
@@ -145,9 +140,13 @@ alternatives using refresh ownership, processed-row order and per-lane receptor 
 - `play/motion.py` retains online tracking state; TypeScript `derived/clocks.ts` fits shared subframe clocks, and `derived/tracks.ts` registers saved peer-note displacement. It preserves the original frame timeline and capture uncertainty, with local fitting as a fallback when independent motion support is unavailable.
 - `charts/official.py` downloads and validates the official song catalogue and blank timing archives. `charts/ucs.py` adapts Python document values to exact TypeScript section timing; `charts/audio.py` aligns reference music without retiming; `charts/data.py` registers editable, unreviewed chart drafts in a separate repository without replacing existing files. See [chart data](chart-data.md).
 - `charts/policy.py` validates human-authored song regions, maps them through a recording-specific alignment, applies report processing methods, and scopes automatic-check exceptions without changing native evidence or result quotas. Invalid policies remain visible rather than silently taking effect.
-- `play/tracking.py` tracks image-bank note observations, bridges bounded UI occlusions, distinguishes repeated render frames from nonlinear motion, learns combo digit templates and aligns judged rows with confirmed combo updates. A chord occupies one judged row. Compatible native observations can be refitted without frame decoding or OCR; font examples are reusable across plays from unchanged source media. It does not equate display refresh with physical switch input.
+- `play/tracking.py` tracks image-bank note observations, retains original anchors and bridges
+  qualified UI occlusions without fitting target clocks. It also contains the native combo
+  reader/tracker; `play/associations.py` connects completed timing to counter events. A chord
+  occupies one judged row. Compatible native observations can be refitted without frame decoding or
+  OCR; font examples are reusable across plays from unchanged source media. It does not equate
+  display refresh with physical switch input.
 - `formats/` contains Node.js TypeScript presentation programs. `formats/lib/timeline.ts` separates song labels, player names and recording-aware segment labels; both bundled formats share the same automatic name-visibility policy. See [custom formats](formats.md).
-- `tools/timeline.py`, `tools/evaluate.py` and `tools/relabel.py` are internal review and diagnostic tools.
 
 Analysis is authoritative and presentation is disposable. A format reads `analysis.json`; it does not trigger recognition or mutate evidence.
 Analyzer changes that affect saved results increment `ANALYSIS_VERSION`. `just auto` rebuilds an

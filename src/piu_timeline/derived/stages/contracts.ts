@@ -7,22 +7,27 @@ export type Evidence = Readonly<Record<string,unknown>>;
 export type Point = readonly [number,number];
 export interface ObservedNote {note:number;lane:number;detection_points:readonly Point[];attributes:Evidence;separate_detection_trajectory:boolean}
 export interface Geometry {analysis_width?:number;analysis_height?:number;layout?:Evidence;start_seconds?:number;end_seconds?:number}
-export interface TrackObservations {notes:readonly ObservedNote[];geometry:Geometry}
+export interface TrackObservations {notes:readonly ObservedNote[];geometry:Geometry;timeline:readonly {time:number;source_pts:number}[]}
 export type ObservationArtifact=Artifact<'track-observations',TrackObservations>;
-export const coordinateFields=['points','status','reason','target_seconds','prediction_uncertainty_seconds','velocity_pixels_per_second',
+export const physicalFields=['coordinate_bridge','crossing_method','duplicate_of','status','reason','target_seconds','prediction_uncertainty_seconds','velocity_pixels_per_second',
  'native_interval_model','native_motion_support','residual_pixels','speed_change_fraction','fit_method','motion_clock','motion_clock_validation','motion_target_phase','clock_target_phase','motion_chunk','motion_support_points',
- 'observed_phase_slope','head_registration','timing_reconstruction','native_clock_warning','rejected_chunk_clock','stationary_phase_interval',
+ 'observed_phase_slope','timing_reconstruction','native_clock_warning','rejected_chunk_clock','stationary_phase_interval',
  'crossing_source_pts_seconds','crossing_frame_seconds','crossing_capture_range','validated_later_observations','later_observation_maximum_error_pixels',
  'later_observation_tolerance_pixels','extrapolation_seconds','motion_support_end_seconds'] as const;
+export const coordinateFields=['points','head_registration'] as const;
 export type CoordinateValues=Partial<Record<typeof coordinateFields[number],unknown>>;
 export interface CoordinateNote {note:number;values:CoordinateValues}
-export interface CoordinateResult {notes:readonly CoordinateNote[];scroll_motion?:Evidence;head_registration?:Evidence;timing_reconstruction?:Evidence}
+export interface CoordinateResult {notes:readonly CoordinateNote[];head_registration?:Evidence}
 export type CoordinateArtifact=BoundArtifact<'coordinates',CoordinateResult>;
 export const beatFields=['status','reason','target_seconds','prediction_uncertainty_seconds','video_target_range','beat_reconstruction',
  'timing_reconstruction','fit_method','native_clock_warning'] as const;
 export type BeatValues=Partial<Record<typeof beatFields[number],unknown>>;
 export interface ResultNote {note:number;values:Readonly<Record<string,unknown>>;removed:readonly string[]}
-export const nativeTimingFields=coordinateFields.filter(k=>!['points','head_registration'].includes(k));
+export const nativeTimingFields=['status','reason','target_seconds','prediction_uncertainty_seconds',
+ 'fit_method','native_clock_warning','crossing_method','timing_reconstruction'] as const;
+export interface PhysicalTimingResult {notes:readonly {note:number;values:Partial<Record<typeof physicalFields[number],unknown>>}[];scroll_motion?:Evidence;timing_reconstruction?:Evidence}
+export type PhysicalTimingArtifact=BoundArtifact<'physical-timing',PhysicalTimingResult>;
+export interface TimingSource extends CoordinateSource {physical_timing:PhysicalTimingArtifact}
 export interface NativeTimingResult {notes:readonly ResultNote[];timing_reconstruction?:Evidence}
 export type NativeTimingArtifact=BoundArtifact<'native-timing',NativeTimingResult>;
 export interface BeatResult {notes:readonly ResultNote[];beat_timing:Evidence;native_recovery?:Evidence}
@@ -33,7 +38,7 @@ export interface BeatReference {
  alignment_method?:string|null;
  constant_tempo_bpm?:string|number|null;timing?:string;sha256?:string;ucs_index?:string;metadata_path?:string;
 }
-export interface BeatRequest extends CoordinateSource {schema:1;native_timing:NativeTimingArtifact;reference:BeatReference;timing_text:string|null;preparation?:Evidence|null}
+export interface BeatRequest extends TimingSource {schema:1;native_timing:NativeTimingArtifact;reference:BeatReference;timing_text:string|null;preparation?:Evidence|null}
 
 function freeze<T>(value:T):Immutable<T>{
  if(value&&typeof value==='object'&&!Object.isFrozen(value)){

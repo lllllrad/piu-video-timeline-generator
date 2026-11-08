@@ -67,7 +67,7 @@ class CoordinateStageTest(unittest.TestCase):
             saved['notes'][0]['target_seconds']=99
             saved['beat_timing']={'contract':{'format':'different beat rules'}}
             resumed=load_coordinates(saved,final)
-            self.assertEqual(resumed['notes'][0]['target_seconds'],2)
+            self.assertNotIn('target_seconds',resumed['notes'][0])
             self.assertEqual(resumed['media'],original['media'])
             self.assertEqual(resumed['head_registration']['evidence'],str(final/'evidence/proof.npz'))
             self.assertEqual(saved['notes'][0]['target_seconds'],99)

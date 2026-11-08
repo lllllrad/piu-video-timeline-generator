@@ -83,36 +83,41 @@ def spacing_supported_notes(notes,groups,fits,spacing,motion,coordinate_support=
     return tuple(call('validation.spacingSupportedNotes',notes,groups,fits,spacing,motion,coordinate_support or None,chords))
 
 
-def apply(data,directory):
+def validate_physical(data,directory):
+    """Validate native intervals without preparing or consulting a song reference."""
+    native=call('nativeTiming.resolve',data['_timing_source'])
+    from piu_timeline.play.observations.artifacts import save_input
+    save_input(Path(directory)/'native-timing.json',native)
+    return {**data,'_native_timing':native}
+
+
+def prepare_input(data,directory):
+    """Explicit reference I/O producer, separate from numerical beat inference."""
     preparation=prepare_reference(data,directory)
     ref=reference(data,directory)
     timing=Path(ref['timing']).read_bytes().decode('utf-8')if ref['status']=='available'else None
-    source=data.get('_coordinate_source')or call('stageCoordinates.capture',data,str(Path(directory).resolve())+'/')
-    native=call('nativeTiming.resolve',source)
-    request=call('beats.input',source,native,ref,timing,preparation)
-    output=call('beats.reconstruct',request)
+    request=call('beats.input',data['_timing_source'],data['_native_timing'],ref,timing,preparation)
+    from piu_timeline.play.observations.artifacts import save_input
+    save_input(Path(directory)/'beat-input.json',request)
+    return {**data,'_beat_request':request}
+
+
+def apply(data,directory):
+    """Calculate musical placement from a completed prepared request only."""
+    request=data['_beat_request']
+    output=call('beats.saved',request,str(Path(directory).resolve()))
     composed=call('beats.materialize',request,output)
     from piu_timeline.play.observations.artifacts import save_input
-    save_input(Path(directory)/'native-timing.json',native)
     save_input(Path(directory)/'beat-result.json',output)
-    pending=Path(directory)/'beat-input.build.json'
-    pending.write_text(json.dumps(request,ensure_ascii=False,allow_nan=False)+'\n')
-    pending.replace(Path(directory)/'beat-input.json')
-    source_data={k:v for k,v in data.items()if k!='_coordinate_source'}
+    source_data={k:v for k,v in data.items()if k not in ('_coordinate_source','_timing_source','_native_timing','_beat_request')}
     return {**source_data,**composed}
 
 
-def reassociate(data, display_delay_ms):
-    """Changed chart times must be associated before reading judgment words."""
-    if (data['beat_timing']['status'] not in ('restored','failed')
-            and not data.get('timing_reconstruction',{}).get('native_gap_validation',{}).get('restored_notes')):
-        return data
+def reassociate(data, display_delay_ms, directory=None):
+    """Associate once the final timing view is available, including native-only results."""
     from types import SimpleNamespace
-    from piu_timeline.play.analysis import resolve_timing
+    from piu_timeline.play.associations import associate_counters
     from piu_timeline.play.frames import TIME_EPSILON
     events=[{**e,'status':'candidate' if 1<=e['delta']<=10 and e['upper_seconds']-e['lower_seconds']<=.1+TIME_EPSILON else 'excluded'}
             for e in data['combo_events']]
-    tracker=SimpleNamespace(finish=lambda:data['notes'],unsupported_intervals=data['unsupported_intervals'])
-    updated=resolve_timing(tracker,SimpleNamespace(events=events,observations=[]),display_delay_ms)
-    updated['timing_reconstruction']=data['timing_reconstruction']
-    return {**data,**updated}
+    return associate_counters(data,SimpleNamespace(events=events,observations=data.get('counter_observations',[])),display_delay_ms,directory)

@@ -1,6 +1,5 @@
 """Visual note trajectories and frame-bracketed combo events, without per-frame OCR."""
 from dataclasses import dataclass, field
-import math
 
 import cv2
 import numpy as np
@@ -16,6 +15,7 @@ class Track:
     tracking_observations: list = field(default_factory=list)
     tracking_warnings: list = field(default_factory=list)
     tracking_connections: list = field(default_factory=list)
+    coordinate_points: list = field(default_factory=list)
 
 
 class NoteTracker:
@@ -24,8 +24,8 @@ class NoteTracker:
         self.spacing = float(np.median(np.diff([lane['x'] * width for lane in layout['lanes']])))
         self.active, self.finished = [], []
         self.hold_candidate, self.unsupported_intervals = False, []
-        from piu_timeline.play.motion import ScrollMotion
-        self.motion = ScrollMotion(height, self.spacing)
+        self.timeline=[]
+        self.source_pts={}
         self.skin_detector = None
         self.frame_centers = None
         self.frame_steps = []
@@ -67,9 +67,12 @@ class NoteTracker:
         from piu_timeline.derived import call,CONTRACTS
         observations=self.observations(seconds,detections)
         if source_pts is not None:
-            for observation in observations:observation['sourcePtsSeconds']=source_pts
-        centers=[{**image,'y':point['center']['yPixels']/self.height}for image,point in zip(detections,observations,strict=True)if point['center']]
-        self.motion.update(seconds,centers,source_pts)
+            for observation in observations:
+                observation['sourcePtsSeconds']=source_pts
+                if 'measurement'in observation:observation['measurement'].update(time=seconds,source_pts_seconds=source_pts)
+        tracking_view=[{k:v for k,v in o.items()if k!='measurement'}for o in observations]
+        self.timeline.append({'time':seconds,'source_pts':source_pts})
+        self.source_pts[seconds]=source_pts
         if self.hold_candidate:
             if self.unsupported_intervals and seconds - self.unsupported_intervals[-1]['end_seconds'] < .1:
                 self.unsupported_intervals[-1]['end_seconds'] = seconds
@@ -78,13 +81,14 @@ class NoteTracker:
                                                    'reason': 'possible_hold_or_dense_stack'})
         assignment=call('frameTracking.assign',
             [{'lane':t.lane,'observations':t.tracking_observations,'maximumGapSeconds':self.gap_limit(t)}for t in self.active],
-            [{'lane':n['lane'],'observation':o}for n,o in zip(detections,observations,strict=True)],seconds,self.spacing,[],self.frame_steps)
+            [{'lane':n['lane'],'observation':o}for n,o in zip(detections,tracking_view,strict=True)],seconds,self.spacing,[],self.frame_steps)
         self.frame_steps=[s for s in self.frame_steps if seconds-s['toSeconds']<=.35]
         if assignment['step']:self.frame_steps.append(assignment['step'])
         used_tracks, used_notes = set(), set()
         for i,j in assignment['matches']:
             self.active[i].points.append((seconds, detections[j]['y'] * self.height))
-            self.active[i].tracking_observations.append(observations[j])
+            self.active[i].tracking_observations.append(tracking_view[j])
+            self.active[i].coordinate_points.append(observations[j])
             history=self.active[i].tracking_observations
             self.active[i].tracking_observations=[o for k,o in enumerate(history)
                 if seconds-o['time']<=CONTRACTS['frame_tracking']['identity_history_seconds']+1e-6
@@ -93,9 +97,9 @@ class NoteTracker:
                 if proof['track']==i:self.active[i].tracking_connections.append({**proof,'source_pts_seconds':source_pts})
             self.active[i].missed = 0
             for warning in assignment['cadenceWarnings']:
-                before=self.motion.at_time.get(warning['visible_start_seconds'],{})
+                before=self.source_pts.get(warning['visible_start_seconds'])
                 self.active[i].tracking_warnings.append({**warning,'observed_points':len(assignment['matches']),
-                    'source_pts_seconds':[before.get('source_pts'),source_pts]})
+                    'source_pts_seconds':[before,source_pts]})
             used_tracks.add(i); used_notes.add(j)
         for i, track in enumerate(self.active):
             if i not in used_tracks:
@@ -116,49 +120,53 @@ class NoteTracker:
         for j, note in enumerate(detections):
             if j not in used_notes:
                 self.active.append(Track(note['lane'],[(seconds,note['y']*self.height)],
-                    tracking_observations=[observations[j]],
+                    tracking_observations=[tracking_view[j]],coordinate_points=[observations[j]],
                     tracking_warnings=[warning]if j in assignment['ambiguousDetections']else[]))
 
     def finish(self):
-        from piu_timeline.play.fragments import stitch_tracks, same_native_head
-        notes = []
-        tracks = []
+        """Finalize visual identities; no crossing clocks or input associations."""
+        from piu_timeline.play.fragments import stitch_tracks
         from piu_timeline.play.shared_timing import registered_motion
+        import json
         source_tracks=self.finished+self.active
-        registered=registered_motion(source_tracks,self.motion.samples,self.height,self.spacing,
-                                     self.layout['receptor_y']*self.height,self.layout.get('note_y_max',.95)*self.height)
-        for track, fragments in stitch_tracks(source_tracks, self.layout['receptor_y'] * self.height, self.spacing,
-                                              motion=registered, layout=self.layout):
-            note = fit_track(track, self.layout['receptor_y'] * self.height, self.spacing, motion=self.motion, layout=self.layout)
-            warnings=[w for i in fragments for w in source_tracks[i].tracking_warnings]
-            if warnings:note['tracking_warnings']=warnings
-            connections=[p for i in fragments for p in source_tracks[i].tracking_connections]
-            if connections:note['tracking_connections']=connections
-            if len(fragments) > 1:
-                note['tracking_method'] = 'corroborated_fragments'
-                if note.get('fit_method') not in ('shared_scroll_clock', 'shared_scroll_interpolation'):
-                    note['fit_method'] = 'corroborated_fragments'
-                note['source_track_fragments'] = fragments
-                if getattr(track,'fragment_connections',None):note['fragment_connections']=track.fragment_connections
-            notes.append(note)
-            tracks.append(track)
-        from piu_timeline.play.shared_timing import restore
-        self.motion,self.timing_reconstruction = restore(notes,tracks,self.motion.samples,self.layout,self.width,self.height)
-        # Multiple image comparisons can describe one cap. Merge only when
-        # co-observed positions establish the same head, preserving nearby notes.
-        kept = []
-        for index in sorted(range(len(notes)), key=lambda i: (notes[i].get('prediction_uncertainty_seconds', math.inf),
-                                                              -len(notes[i]['points']))):
-            note = notes[index]
-            if note['status'] != 'estimated':
-                continue
-            duplicate = next((j for j in kept if notes[j]['lane'] == note['lane']
-                              and abs(notes[j]['target_seconds'] - note['target_seconds']) < .035
-                              and same_native_head(note,notes[j])), None)
-            if duplicate is not None:
-                note.update(status='excluded', reason='duplicate_head_component', duplicate_of=duplicate)
+        qualified=[];groups={};unqualified=[]
+        for i,track in enumerate(source_tracks):
+            records=track.coordinate_points
+            if not records or len(records)!=len(track.points):
+                unqualified.append(i);continue
+            if all(r['center']for r in records):
+                positions=[r['center']for r in records]
+            elif all(r['anchor']['basis']==records[0]['anchor']['basis']for r in records):
+                positions=[r['anchor']for r in records]
             else:
-                kept.append(index)
+                unqualified.append(i);continue
+            basis=json.dumps(positions[0]['basis'],sort_keys=True)
+            projected=Track(track.lane,[(r['time'],p['yPixels'])for r,p in zip(records,positions,strict=True)])
+            projected.coordinate_basis=positions[0]['basis']['kind']
+            projected.registration_uncertainty_pixels=max(p['uncertaintyPixels']for p in positions)
+            groups.setdefault(basis,[]).append((i,len(qualified)));qualified.append(projected)
+        relative=registered_motion(qualified,self.timeline,self.height,self.spacing,
+                                   self.layout['receptor_y']*self.height,self.layout.get('note_y_max',.95)*self.height)
+        identities=[([i],None)for i in unqualified]
+        for group in groups.values():
+            for track,fragments in stitch_tracks([qualified[j]for _,j in group],self.layout['receptor_y']*self.height,
+                                                  self.spacing,motion=relative,layout=self.layout):
+                identities.append(([group[j][0]for j in fragments],getattr(track,'fragment_connections',None)))
+        identities.sort(key=lambda pair:min(pair[0]))
+        notes=[]
+        for fragments,proof in identities:
+            raw=sorted([p for i in fragments for p in source_tracks[i].points])
+            note={'lane':source_tracks[fragments[0]].lane,'points':[list(p)for p in raw]}
+            measurements=[r['measurement']for i in fragments for r in source_tracks[i].coordinate_points if 'measurement'in r]
+            if len(measurements)==len(raw):note['coordinate_measurements']=sorted(measurements,key=lambda r:r['time'])
+            warnings=[w for i in fragments for w in source_tracks[i].tracking_warnings]
+            connections=[p for i in fragments for p in source_tracks[i].tracking_connections]
+            if warnings:note['tracking_warnings']=warnings
+            if connections:note['tracking_connections']=connections
+            if len(fragments)>1:
+                note.update(tracking_method='corroborated_fragments',source_track_fragments=fragments)
+                if proof:note['fragment_connections']=proof
+            notes.append(note)
         return notes
 
 
@@ -345,3 +353,47 @@ def associate(notes,combo_events,window=.045,display_delay=0.0,event_note_constr
     fields=('lane','status','target_seconds')
     return call('association.associate',[{k:n[k]for k in fields if k in n}for n in notes],
                 combo_events,window,display_delay,event_note_constraints,mutated=(1,))
+
+
+def collect_tracks(tracker,combo,directory,source):
+    """Persist visual identities and independent counter events, without timing fits."""
+    from pathlib import Path
+    result={'notes':tracker.finish(),'frame_timeline':[
+        {'time':s['time'],'source_pts':s['source_pts']}for s in tracker.timeline],
+        'unsupported_intervals':tracker.unsupported_intervals,'combo_events':combo.events,'counter_observations':combo.observations,'tracking_complete':True,'coordinate_measurement_contract':source.get('skin_detector',{}).get('contract')}
+    from piu_timeline.play.observations.artifacts import save_input
+    from piu_timeline.play.stages import fingerprint
+    from piu_timeline.derived import CONTRACTS
+    identity={'source':{k:source.get(k)for k in ('media','game_roi','start_seconds','end_seconds')},
+              'geometry':{'width':tracker.width,'height':tracker.height,'layout':tracker.layout},
+              'detector_contract':source.get('skin_detector',{}).get('contract'),
+              'frame_observations_sha256':source.get('frame_observations_sha256'),
+              'object_roles':source.get('object_interpretation',{}).get('contract'),
+              'tracking_contract':CONTRACTS['frame_tracking'],'fragment_contract':CONTRACTS['fragments']}
+    save_input(Path(directory)/'counter-events.json',{'schema':1,'events':combo.events,'observations':combo.observations})
+    save_input(Path(directory)/'tracking.json',{'schema':1,'stage':'visual-tracks','input_fingerprint':fingerprint(identity),'input':identity,
+               'notes':result['notes'],'timeline':result['frame_timeline']})
+    return result
+
+
+
+def replay(data,directory,bank,tracker=None):
+    """Assign identities from saved frames without image acquisition or target fitting."""
+    import json
+    from piu_timeline.play.observations.cache import tracking_notes,validate_native_frame
+    tracker=tracker or NoteTracker(data['layout'],data['analysis_width'],data['analysis_height'],skin_bank=bank)
+    from hashlib import sha256
+    digest=sha256()
+    combo=ComboTracker();count=0;last=None
+    with (directory/'frames.jsonl').open('rb')as stream:
+        for line in stream:
+            digest.update(line)
+            frame=json.loads(line);validate_native_frame(frame,len(data['layout']['lanes']))
+            seconds=frame['playback_seconds']
+            if last is not None and seconds<=last:raise ValueError('Saved observation timestamps are not increasing')
+            last=seconds;count+=1
+            tracker.hold_candidate=frame.get('possible_hold_or_dense_stack',False)
+            tracker.update(seconds,tracking_notes(frame),frame['source_pts_seconds'])
+            combo.update(seconds,frame['combo'],frame.get('combo_confidence'),frame.get('combo_read_mode'),frame['source_pts_seconds'])
+    if count!=data['frame_count']:raise ValueError('Saved native-frame observations are incomplete')
+    return collect_tracks(tracker,combo,directory,{**data,'frame_observations_sha256':digest.hexdigest()})

@@ -11,7 +11,7 @@ establish it.
 | --- | --- | --- |
 | Layout lanes, receptor and native detection `x`/`y` | Fraction of the analyzed game crop; top left, y downward | Native screen/detector adapters multiply by analysis width/height |
 | Original track positions | Analysis-image pixels; game-crop top left, y downward; recording seconds | Detection adapters retain the image-template anchor |
-| Projected cap centers | The same analysis-image pixel frame; independently measured cap-center anchor | `play/head_registration.py` and `derived/skins/centers.ts` apply registered projections |
+| Projected cap centers | The same analysis-image pixel frame; independently measured cap-center anchor | `play/head_registration.py` and `derived/skins/centers.ts` apply batched registered projections without timing fits |
 | Reference image anchors and center uncertainty | Original reference-image pixels | `play/skins/coordinates.py` uses the actual vertical reference scale and sampling origin |
 | Scroll phase and fitted head offset | Analysis pixels in a motion chunk; `head_offset = image_y + phase` | `derived/registration.ts`; offsets from different chunks have no common origin |
 | Native frame PTS | Original media stream time | Acquisition retains it beside recording time; consumers check the saved timeline |

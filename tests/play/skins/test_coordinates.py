@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from piu_timeline.play.beats.coordinates import prepare
 from piu_timeline.play.spacing_checks import spacing_failures
-from piu_timeline.play.head_registration import apply
+from piu_timeline.play.head_registration import measure_coordinates as apply
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.coordinates import measure,cap_reference
 from tests.play.skins.coordinate_fixtures import clock_fixture

@@ -21,8 +21,9 @@ flowchart TD
     media --> observations[Native frame observations and pixel features]
     metadata --> observations
     observations --> objects[Object interpretation and note tracks]
-    objects --> coordinates[Registered coordinates and motion clocks]
-    coordinates --> native[Physical timing validation]
+    objects --> coordinates[Registered coordinates]
+    coordinates --> physical[Source-only movement and crossing clocks]
+    physical --> native[Physical interval validation]
     native --> beats[Beat-row reconstruction]
     timing[Official UCS timing and audio alignment] --> beats
     observations --> evidence[Popup, receptor and processing evidence]
@@ -64,8 +65,9 @@ anchor conventions, typed views and consumer permissions.
 | --- | --- | --- |
 | Metadata | `metadata/`, `vision/`, `workflow.py` | Song/chart/player identity, segment bounds, stage-result OCR |
 | Pixel and frame acquisition | `play/observations/`, `play/frames.py`, `play/skins/`, `play/holds/features.py`, `play/judgments.py` | `frames.base.jsonl`, `frames.jsonl`, `judgments.jsonl`, `hold-frames.jsonl`, feature masks and manifests |
-| Object/track/coordinate interpretation | `play/object_roles.py`, `play/tracking.py`, `play/head_registration.py`; TypeScript `derived/registration.ts`, `derived/tracks.ts`, `derived/clocks.ts` | Original detections, interpreted tracks, native registration, shared displacement and target-clock evidence |
-| Physical timing | `derived/stages/native_timing.ts`, `derived/native_gaps.ts` | `native-timing.json`: physical interval validation and owned timing updates |
+| Object/track/coordinate interpretation | `play/object_roles.py`, `play/tracking.py`, `play/head_registration.py`; TypeScript `derived/registration.ts`, `derived/tracks.ts`, `derived/clocks.ts` | Original detections, `tracking.json`, interpreted tracks and native coordinate registration |
+| Physical crossing | `derived/stages/physical_timing.ts` | `physical-timing.json`: displacement, clocks, crossing ranges and failures |
+| Physical interval validation | `derived/stages/native_timing.ts`, `derived/native_gaps.ts` | `native-timing.json`: physical interval validation and owned timing updates |
 | Musical timing | `derived/beats/` (TypeScript), `play/beats/timing.py` (reference preparation) | `beat-result.json`: unique/ambiguous/failed rows, independent-reference proofs and recovery |
 | Counter/judgment associations | `derived/stages/associations.ts`; Python `play/judgments.py` acquisition adapter | Counter interpretation, matches and coverage; `judgment-associations.json` |
 | Evidence interpretation | Python `play/holds/`, `play/processing/`, `play/channels.py`; TypeScript `derived/labels.ts`, `derived/recovery.ts`, `derived/hold_projection.ts`, `derived/hold_presentation.ts` | Independent native states, popup links, sustained holds, lane effects and unresolved associations |
@@ -107,7 +109,8 @@ segment lock:
 | Fresh acquisition | `analyze_play` reads the recording and retains frame/pixel observations in a pending directory. |
 
 The refit and acquisition paths then call `finish_play`: object interpretation,
-head registration and coordinate capture, physical/beat timing, reassociation,
+head registration and coordinate capture, source-only physical timing, interval
+validation and musical timing, counter association,
 judgment/hold evidence, inspector preparation, pure rendering and atomic directory
 promotion. The saved refresh path updates its compatible artifacts directly.
 Both paths register chart data separately after the inspector is available.
@@ -119,12 +122,13 @@ into `derived/pipeline/presentation.ts` for inspection calculation and
 invokes `play/report.py:write_report`. UCS uses `charts/data.py:draft` and
 `play/holds/analysis.py:chart_projection`, followed by `derived/charts/draft.ts`.
 
-* `coordinates.json` preserves registered pre-beat output with source, geometry,
+* `coordinates.json` preserves registered coordinate output without clock fits with source, geometry,
   producer identity and a content fingerprint. Musical timing has its own
   contract; a beat-only change resumes this boundary without frame replay.
 * `coordinates.json` separates original observations and coordinate results,
-  excluding HUD associations. `native-timing.json` stores physical validation.
-  `beat-input.json` supplies these artifacts and reference text; `beat-result.json`
+  excluding clocks and HUD associations. `physical-timing.json` stores crossing
+  inference; `native-timing.json` stores subsequent physical validation.
+  `beat-input.json` supplies all three artifacts and reference text; `beat-result.json`
   stores musical decisions. Explicit composition builds a downstream reader view.
 * Native geometry, note processing and type observations have separate cached
   outputs under `native-stages/`. Hold geometry does not depend on HUD refreshes.
@@ -163,8 +167,9 @@ make downstream rule changes require a native refit or original-video decoding.
 Changed acquisition requirements can require the original recording; retained
 feature masks cannot supply pixels they never captured.
 
-See [derived analysis](derived-analysis.md) for stage contracts and standalone
-replay commands.
+See [execution contracts](analysis-stage-contracts.md) for exact producer
+responsibilities, actual stage status, feasibility and failure boundaries, and
+[derived analysis](derived-analysis.md) for standalone replay commands.
 
 ## Validation and geometry scope
 

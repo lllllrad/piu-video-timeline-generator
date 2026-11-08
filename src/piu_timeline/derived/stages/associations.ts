@@ -1,7 +1,7 @@
 /** Input associations consume timing and visual evidence; they never return coordinate edits. */
 import {associate} from '../association.ts';
 import {mergeJudgments} from '../labels.ts';
-import {artifact,requireArtifact,type Artifact,type Evidence,type Immutable} from './contracts.ts';
+import {artifact,boundArtifact,requireArtifact,type Artifact,type Evidence,type Immutable} from './contracts.ts';
 import type {RecordData} from '../types.ts';
 export interface TimingNote {lane:number;status:string;target_seconds:number|null;prediction_uncertainty_seconds?:number;reason?:string|null}
 export interface CounterRequest {
@@ -22,7 +22,7 @@ export function counters(input:CounterRequest):CounterArtifact{
   }else matches.push(match);
  }
  const excluded:Record<string,number>={};for(const n of input.notes as readonly (TimingNote&{reason?:string})[])if(n.status==='excluded')excluded[String(n.reason??null)]=(excluded[String(n.reason??null)]??0)+1;
- return artifact('counter-associations',{combo_events:events,matches,deferred_matches:deferred,excluded_notes:excluded,
+ return boundArtifact('counter-associations',input,{combo_events:events,matches,deferred_matches:deferred,excluded_notes:excluded,
   coverage:{visible_note_heads:notes.filter(n=>n.status==='estimated').length,timed_note_heads:matches.length,
    matched_combo_updates:new Set(matches.map(m=>m.combo_event)).size,observed_combo_updates:events.filter(e=>e.delta>0).length}});
 }
@@ -45,5 +45,5 @@ export function judgments(request:JudgmentRequest):JudgmentArtifact{
  if(Object.keys(request.source.data).some(k=>!judgmentInputs.includes(k))||request.source.data.notes.some(n=>Object.keys(n).some(k=>!timingFields.includes(k))))throw new Error('Foreign fields in judgment input');
  const data=structuredClone(request.source.data) as RecordData;
  const result=mergeJudgments(data,structuredClone(request.events) as RecordData[],structuredClone(request.observations) as RecordData[]);
- return artifact('judgment-associations',Object.fromEntries(judgmentFields.filter(k=>Object.hasOwn(result,k)).map(k=>[k,result[k]])));
+ return boundArtifact('judgment-associations',request,Object.fromEntries(judgmentFields.filter(k=>Object.hasOwn(result,k)).map(k=>[k,result[k]])));
 }

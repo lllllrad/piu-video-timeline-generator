@@ -30,6 +30,23 @@ def tap_bank(root):
     return str(path)
 
 
+def track_analysis(data,directory):
+    from piu_timeline.play.tracking import replay
+    from piu_timeline.play.skins.bank import load_bank
+    from piu_timeline.play.analysis import TIMING_FORMAT
+    tracked=replay(data,directory,load_bank(data['skin_detector']['bank_path']))
+    return {**data,**tracked,'timing_format':TIMING_FORMAT}
+
+
+def physical_analysis(data,directory):
+    from piu_timeline.play.head_registration import measure_coordinates
+    from piu_timeline.play.stages import save_coordinates,physical_timing
+    from piu_timeline.play.beats.timing import reassociate
+    with patch('piu_timeline.play.skins.coordinates.measure',side_effect=AssertionError('Repeated frame-coordinate measurement')):
+        projected=measure_coordinates(data,directory)
+    return reassociate(physical_timing(save_coordinates(projected,directory),directory),0,directory)
+
+
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg unavailable')
 class PlayIntegrationTest(unittest.TestCase):
     def setUp(self):
@@ -113,6 +130,11 @@ class PlayIntegrationTest(unittest.TestCase):
             with patch('piu_timeline.play.analysis.bootstrap_digits',return_value=(DigitReader(),{'ocr_images':0,'missing_digits':list('0123456789')})):
                 data=analyze_play({'media':record,'game_roi':[0,0,320,180]},
                                   {'start_seconds':0,'end_seconds':2},root/'out',layout=layout,width=320,note_skin=tap_bank(root))
+            self.assertNotIn('notes',data)
+            data=track_analysis(data,root/'out')
+            self.assertNotIn('matches',data)
+            self.assertTrue(all('target_seconds'not in n for n in data['notes']))
+            data=physical_analysis(data,root/'out')
             self.assertEqual(data['matches'],[])
             with patch('piu_timeline.play.judgments.learn_models',return_value=models), \
                     patch('piu_timeline.play.judgments.ocr_images',side_effect=AssertionError('no per-frame OCR')):
@@ -152,6 +174,10 @@ class PlayIntegrationTest(unittest.TestCase):
                 data=analyze_play({'media':record,'game_roi':[0,0,320,180]},
                                   {'start_seconds':0,'end_seconds':2,'chart':'S1'},root/'out',layout=layout,width=320,note_skin=tap_bank(root))
             self.assertEqual(data['frame_count'],60)
+            self.assertNotIn('notes',data)
+            data=track_analysis(data,root/'out')
+            self.assertNotIn('matches',data)
+            data=physical_analysis(data,root/'out')
             self.assertGreater(len(data['matches']),0, (data['combo_readable_fraction'],data['combo_events'],[(n['status'],n.get('reason'),n.get('target_seconds'),n['points']) for n in data['notes']]))
             match=data['matches'][0]
             self.assertAlmostEqual(match['target_seconds'],.8,delta=.03)

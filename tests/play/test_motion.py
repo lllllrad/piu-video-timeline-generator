@@ -25,6 +25,13 @@ def observations(i):
     return time, phase, peers
 
 
+def physical(tracker):
+    from piu_timeline.play.shared_timing import restore
+    notes=tracker.finish()
+    restore(notes,[Track(n['lane'],n['points'])for n in notes],tracker.timeline,tracker.layout,400,400)
+    return notes
+
+
 class SharedMotionTest(unittest.TestCase):
     def test_equal_pixel_spacing_uses_one_subframe_clock_despite_repeated_renders(self):
         motion = ScrollMotion(HEIGHT, SPACING)
@@ -59,7 +66,7 @@ class SharedMotionTest(unittest.TestCase):
             if 63 < y < 380 and not .7 <= time <= .95:
                 peers.append({'lane':3,'x':LAYOUT['lanes'][3]['x'],'y':y/400})
             tracker.update(time,peers,time+100)
-        notes = [note for note in tracker.finish() if note['lane']==3 and note['status']=='estimated']
+        notes = [note for note in physical(tracker) if note['lane']==3 and note['status']=='estimated']
         self.assertEqual(len(notes),1)
         self.assertTrue(any(b[0]-a[0]>.2 for a,b in zip(notes[0]['points'],notes[0]['points'][1:])))
         self.assertAlmostEqual(notes[0]['target_seconds'],1.2,delta=.015)
@@ -89,6 +96,6 @@ class SharedMotionTest(unittest.TestCase):
                 y=40+target*240-phase
                 if 80<y<320:peers.append({'lane':3,'x':LAYOUT['lanes'][3]['x'],'y':y/400})
             tracker.update(time,peers,time+100)
-        notes=[n for n in tracker.finish() if n['lane']==3 and n['status']=='estimated']
+        notes=[n for n in physical(tracker) if n['lane']==3 and n['status']=='estimated']
         self.assertEqual(len(notes),2)
         self.assertAlmostEqual(abs(notes[0]['target_seconds']-notes[1]['target_seconds']),.03,delta=.001)
