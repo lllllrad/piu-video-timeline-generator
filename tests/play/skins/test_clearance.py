@@ -44,6 +44,21 @@ def scenario():
 
 
 class NativeClearanceTest(unittest.TestCase):
+    def test_an_arbitrary_blank_row_in_a_reference_margin_does_not_refute_a_hold_neck(self):
+        data,frames,samples,bank,profile=scenario()
+        for i,sample in enumerate(samples):
+            sample[2]['relaxed_blue'][139-5*i:142-5*i,59:71]=True
+            sample[2]['relaxed_blue'][157-5*i:160-5*i,59:71]=True
+        result=derive(data,frames,samples,bank,profile)
+        self.assertEqual(result['notes'],{})
+
+    def test_acquired_black_pixels_outside_the_note_field_cannot_prove_separation(self):
+        data,frames,samples,bank,profile=scenario()
+        for top,bottom in [(0.7,.95),(.05,.6)]:
+            with self.subTest(top=top,bottom=bottom):
+                data['layout'].update(receptor_y=top,note_y_max=bottom)
+                self.assertEqual(derive(data,frames,samples,bank,profile)['notes'],{})
+
     def test_moving_cap_identity_and_a_clear_role_frame_have_independent_requirements(self):
         data,frames,samples,bank,profile=scenario()
         for sample in samples[:3]:sample[2]['white'][:]=True
@@ -161,7 +176,7 @@ class NativeClearanceTest(unittest.TestCase):
                     y=frame['skin_observations'][0]['bounds_pixels'][1]
                     if case.endswith('connection'):
                         yy=y+1 if case=='upper_connection'else y+19
-                        sample[2]['relaxed_blue'][max(0,yy),65]=True
+                        sample[2]['relaxed_blue'][max(0,yy-3):yy+4,65]=True
                     if case=='flash':sample[2]['white'][:]=True
                 self.assertEqual(derive(data,frames,samples,bank,profile)['notes'],{})
 
@@ -185,7 +200,7 @@ class NativeClearanceTest(unittest.TestCase):
         result=derive(data,frames,samples,bank,profile)
         self.assertIn('0',result['notes'])
         # A body pixel outside the narrow reference gap is still observed.
-        for i,sample in enumerate(samples):sample[2]['relaxed_blue'][140-5*i,61]=True
+        for i,sample in enumerate(samples):sample[2]['relaxed_blue'][139-5*i:144-5*i,61]=True
         self.assertEqual(derive(data,frames,samples,bank,profile)['notes'],{})
 
     def test_off_center_body_footprints_are_validated_and_cannot_hide_outside_a_center_probe(self):
@@ -199,7 +214,7 @@ class NativeClearanceTest(unittest.TestCase):
         result=derive(data,frames,samples,bank,profile)
         self.assertIn('0',result['notes'])
         # These body shoulders are far outside the old central probe.
-        for i,sample in enumerate(samples):sample[2]['relaxed_blue'][140-5*i,46]=True
+        for i,sample in enumerate(samples):sample[2]['relaxed_blue'][139-5*i:144-5*i,46]=True
         self.assertEqual(derive(data,frames,samples,bank,profile)['notes'],{})
 
     def test_profile_must_explain_body_colors_and_native_pts_must_agree(self):

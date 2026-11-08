@@ -10,7 +10,7 @@ FORMAT = {'schema': 1, 'revision': 5, 'evidence': 'native_image_trace_references
 def producer_contract():
     from piu_timeline.play.observations.artifacts import producer
     return producer('play/skins/observations.py','play/skins/coverage.py','play/skins/sampling.py',
-                    'play/skins/detector.py','play/skins/matching.py','play/skins/spatial.py','play/skins/overlap.py','play/skins/visible_search.py','play/skins/support.py','play/skins/bank.py','play/skins/shared_roles.py','play/skins/classification.py','play/screen_regions.py')
+                    'play/skins/detector.py','play/skins/matching.py','play/skins/spatial.py','play/skins/overlap.py','play/skins/visible_search.py','play/skins/support.py','play/skins/bank.py','play/skins/shared_roles.py','play/skins/classification.py','play/skins/connection_visibility.py','play/screen_regions.py')
 
 
 def clearance_occlusions(image,references,layout,width,height):
@@ -58,7 +58,7 @@ def observe(data, native):
                     observations[-1].update(reason='skin_tap_clearance_occluded',classification_status='cap_only',
                                             comparison_classification_status=proof.get('classification_status','full_pattern'),
                                             occluded_clearance_regions=obscured)
-                observations[-1].update({k:proof[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','shared_role','role_evidence','unavailable_regions','visible_cap_runs','visible_connection_runs','occlusion_evidence')if k in proof})
+                observations[-1].update({k:proof[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','shared_role','role_evidence','connector_ownership','cap_context_qualified','unavailable_regions','visible_cap_runs','visible_connection_runs','occlusion_evidence')if k in proof})
         for proof in data.get('skin_role_evidence',{}).get('notes',{}).get(str(index),[]):
             observations.append({**proof,'image_anchor':[proof['image_anchor'][0]/data['analysis_width'],
                                                         proof['image_anchor'][1]/height]})

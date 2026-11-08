@@ -9,7 +9,8 @@ from piu_timeline.play.skins.overlap import positive_pixels,runs
 FORMAT={'schema':1,'method':'declared_cap_family_with_independent_context',
         'maximum_center_rounding_pixels':.5,'context':'all_spatial_cells','source_metadata':'measured_cap_method',
         'foreground':'other_measured_cap_support','context_cap_overlap':'exclude_measured_own_cap',
-        'minimum_independent_connection_fraction':.5,'body_coverage':'all_remaining_connection_pixels','connection_visibility':VISIBLE_FORMAT}
+        'minimum_independent_connection_fraction':.5,'body_coverage':'all_remaining_connection_pixels','connection_visibility':VISIBLE_FORMAT,
+        'cap_foreground':'absolute_source_kernel_mass','maximum_cap_sampling_weight':.5}
 FIELDS=('template','x','y','bounds_pixels','sampling_phase_pixels','reference_scale_y',
         'sampling_kernel','sampling_origin_pixels')
 
@@ -65,7 +66,7 @@ def contexts(detector,image,cap,template,obstructions,bodies):
     if (max(abs(desired-[left,top]))>FORMAT['maximum_center_rounding_pixels']+1e-6
             or not 0<=left<left+w<=detector.width or not 0<=top<top+h<=detector.height):return None
     own=np.zeros((detector.height,detector.width),bool)
-    a,b,c,d=cap['bounds_pixels'];own[b:d,a:c]=cap_support(donor,cap)
+    a,b,c,d=cap['bounds_pixels'];own[b:d,a:c]=donor['cap_foreground_fraction']>.5+1e-7
     required={'connection',*template.get('cap_features',[])};errors={};support=np.zeros((h,w),bool);body_proof=None
     for region in template['regions']:
         if region['name']not in required:continue
@@ -117,11 +118,12 @@ def candidates(detector,image,measured):
         bodies[family['id']]=support,proof
     for root in roots:
         if root['role']=='hold_body':continue
-        obstructions=np.zeros((detector.height,detector.width),bool)
+        cap_weight=np.zeros((detector.height,detector.width),dtype='float32')
         for other in roots:
             if other['role']=='hold_body'or other is root:continue
             a,b,c,d=other['bounds_pixels']
-            obstructions[b:d,a:c]|=positive_pixels(image,detector.by_sampling[key(other)],other)
+            cap_weight[b:d,a:c]+=detector.by_sampling[key(other)]['cap_foreground_fraction']
+        obstructions=cap_weight>.5+1e-7
         seen=set()
         for cap in [root,*root.get('alternatives',[])]:
             for family in families:

@@ -52,9 +52,21 @@ def image_spans(image,references,*,cap_only=False,full_only=False):
     if image.get('role')in('hold_start','hold_body','hold_end'):
         patterns.extend(p for p in image.get('alternatives',[])
                         if p['role']==image['role'] and p.get('classification_status')=='full_pattern')
-    if cap_only and 'visible_cap_runs'in image:
-        rows=sorted({image['bounds_pixels'][1]+row for row,_,_ in image['visible_cap_runs']})
-        return [(row,row+1)for row in rows]
+    if cap_only and any('visible_cap_runs'in p for p in patterns):
+        spans=[]
+        for pattern in patterns:
+            if 'visible_cap_runs'not in pattern:
+                origin=pattern.get('sampling_origin_pixels',[0,0])[1]
+                spans.extend((pattern['bounds_pixels'][1]+a-origin,pattern['bounds_pixels'][1]+b-origin)
+                             for a,b in references[key(pattern)])
+                continue
+            rows=sorted({pattern['bounds_pixels'][1]+row for row,_,_ in pattern['visible_cap_runs']})
+            observed=[]
+            for row in rows:
+                if observed and observed[-1][1]==row:observed[-1][1]=row+1
+                else:observed.append([row,row+1])
+            spans.extend(map(tuple,observed))
+        return spans
     combined=[]
     for pattern in patterns:
         shared=pattern.get('shared_role')

@@ -10,10 +10,12 @@ from piu_timeline.play.skins.canvas import comparison_canvas
 from piu_timeline.play.skins.matching import RegionSearch,prepare_regions
 from piu_timeline.play.skins.spatial import FORMAT as SPATIAL_FORMAT
 from piu_timeline.play.skins.overlap import FORMAT as OVERLAP_FORMAT,recover
+from piu_timeline.play.skins.overlap import runs
 from piu_timeline.play.skins.shared_roles import FORMAT as SHARED_ROLE_FORMAT,candidates as shared_roles
 from piu_timeline.play.skins.classification import FORMAT as CLASSIFICATION_FORMAT,QUALIFIED,identify
+from piu_timeline.play.skins.connection_visibility import FORMAT as CONNECTION_FORMAT,qualify as qualify_connections
 
-FORMAT = {'schema': 1, 'revision': 10,'classification':CLASSIFICATION_FORMAT, 'shared_roles':SHARED_ROLE_FORMAT, 'method': 'lane_masked_rgb_regions','spatial_support':SPATIAL_FORMAT,'overlap':OVERLAP_FORMAT,'sampling':SAMPLING_FORMAT,
+FORMAT = {'schema': 1, 'revision': 11,'connector_ownership':CONNECTION_FORMAT,'classification':CLASSIFICATION_FORMAT, 'shared_roles':SHARED_ROLE_FORMAT, 'method': 'lane_masked_rgb_regions','spatial_support':SPATIAL_FORMAT,'overlap':OVERLAP_FORMAT,'sampling':SAMPLING_FORMAT,
           'scale_basis':'declared_uniform_game_frame_or_lane_spacing',
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor',
           'body_candidates': {'schema':1,'selection':'qualified_rows_horizontal_minima'}}
@@ -92,11 +94,16 @@ class SkinDetector:
                     hidden=occluded_support(self.layout,template['support'],bounds[0],bounds[1],self.width,self.height)
                     cap_only='cap'in errors and (not np.isfinite(scores[row,col]) or scores[row,col]>1
                                 or template['role']=='tap' and not template['tap_clearance'])
+                    context_qualified=('cap_context'in errors and errors['cap_context'][row,col]
+                        <=next(r.get('maximum_error',.015)for r in template['regions']if r['name']=='cap'))
                     candidates.append({'lane': lane, 'x': x / self.width, 'y': y / self.height,
                                        'role': 'unknown'if cap_only else template['role'], 'template': template['id'],
                                        'template_role':template['role'], 'hud_region_overlap':hidden,
                                        **({k:template[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels')if k in template}),
                                        'classification_status':'cap_only'if cap_only else'full_pattern',
+                                       **({'cap_context_qualified':bool(context_qualified),
+                                           'visible_cap_runs':runs(template['cap_support']if context_qualified else template['cap_core_support'])}
+                                          if 'cap'in errors else{}),
                                        **({'reason':'skin_tap_clearance_unresolved'if template['role']=='tap'
                                            else'skin_image_connection_unresolved'}if cap_only else{}),
                                        'quality': float(1 - (proposal_scores[row,col]if cap_only else scores[row, col])),
@@ -106,7 +113,7 @@ class SkinDetector:
                                        'bounds_pixels': bounds, 'method': 'skin_image', 'skin': self.bank['skin']})
         candidates.extend(recover(self,image,candidates))
         candidates.extend(shared_roles(self,image,candidates))
-        return candidates
+        return qualify_connections(self,image,candidates)
 
     def resolve(self, candidates):
         candidates=[identify(self.by_sampling[key(c)],c)for c in candidates]
@@ -120,7 +127,7 @@ class SkinDetector:
                 continue
             current = peers[0]
             fields=('role','template_role','classification_status','template','quality','region_errors',
-                    'x','y','bounds_pixels','shared_role','role_evidence','visible_cap_runs','visible_connection_runs','occlusion_evidence','sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')
+                    'x','y','bounds_pixels','shared_role','role_evidence','connector_ownership','cap_context_qualified','visible_cap_runs','visible_connection_runs','occlusion_evidence','sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')
             proof = {k: candidate[k] for k in fields if k in candidate}
             current['alternatives'].append(proof)
             full={r['template_role']for r in (current,candidate)if r['classification_status']in QUALIFIED}

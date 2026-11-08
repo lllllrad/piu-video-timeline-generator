@@ -46,9 +46,18 @@ def bank_at(root,glyphs,colors,background):
                 if i==1:lo=0
                 rgb=image[lo:hi];name=f'{kind}-{arrangement}-{i}'
                 cv2.imwrite(str(root/(name+'.png')),np.dstack([rgb[:,:,::-1],np.full(rgb.shape[:2],255,dtype='uint8')]))
+                converted=[{'name':n,'box':[a,b-lo,c,d-lo],'maximum_error':.002}for n,(a,b,c,d)in regions]
+                # The cut corners are background or stem, not opaque cap art.
+                # Comparing them as cap pixels would falsely hide a neighbor's
+                # exposed connector when building foreground ownership.
+                opaque=np.zeros((20,20),bool)
+                rr,cc=np.indices(opaque.shape)
+                opaque=(rr+cc>=5)&(rr+19-cc>=5)&(19-rr+cc>=5)&(38-rr-cc>=5)
+                converted[0]['comparison_boxes']=[[4+int(np.flatnonzero(row)[0]),y-10+index-lo,
+                    5+int(np.flatnonzero(row)[-1]),y-9+index-lo]for index,row in enumerate(opaque)]
                 entries.append({'id':name,'role':role,'lane_kind':kind,'image':name+'.png',
                     'anchor_pixels':[14,y-lo],'sampling_context':[[0,0,28,len(rgb)]],
-                    'regions':[{'name':n,'box':[a,b-lo,c,d-lo],'maximum_error':.002}for n,(a,b,c,d)in regions]})
+                    'regions':converted})
         for rows in (2,12):
             # Context above/below the measured tile is actual continued stem.
             image=np.full((rows+8,16,3),colors[kind],dtype='uint8');name=f'{kind}-body-{rows}'

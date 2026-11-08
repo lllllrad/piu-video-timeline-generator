@@ -9,12 +9,14 @@ from piu_timeline.play.pixel_cache import FORMAT as PIXEL_FORMAT, measurements
 from piu_timeline.play.screen_regions import occluders_at_bounds
 from piu_timeline.play.skins.detector import SkinDetector
 from piu_timeline.play.skins.sampling import key,reference_scale
+from piu_timeline.play.skins.attachment_gaps import AttachmentGaps,FORMAT as ATTACHMENTS
 
-FORMAT={'schema':1,'revision':8,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
+FORMAT={'schema':1,'revision':9,'model':'phoenix_chromatic_gap','pixels':PIXEL_FORMAT,
         'minimum_frames':4,
         'minimum_motion_spacing':.5,'maximum_anchor_delta_spacing':.1,
         'body_geometry':'declared_components_all_rows','minimum_clearance_halfwidth_spacing':.2,
-        'maximum_white_fraction':.05}
+        'maximum_white_fraction':.05,'separation':'full_blank_band_or_declared_attachment_rows',
+        'attachment_model':ATTACHMENTS}
 COLORS=('blue','red','yellow','red','blue')
 
 
@@ -78,12 +80,15 @@ def clear_regions(data,pattern,template,planes,body_footprints=None):
         bounds[2]=max(bounds[2],int(np.ceil(center+max(half,hi))))
         x0,y0,x1,y1=bounds
         if not 0<=x0<x1<=width or not 0<=y0<y1<=height:return None
+        if (y0<data['layout']['receptor_y']*height
+                or y1>data['layout'].get('note_y_max',.95)*height):return None
         if occluders_at_bounds(data['layout'],bounds,width,height):return None
         color=planes['relaxed_'+data['layout']['lanes'][pattern['lane']]['color']][y0:y1,x0:x1]
-        white=float(planes['white'][y0:y1,x0:x1].mean())
-        if color.any()or white>=FORMAT['maximum_white_fraction']:return None
-        result.append({'region':region['name'],'bounds_pixels':bounds,'white_fraction':white,
-                       'relaxed_foreground_pixels':0})
+        white=planes['white'][y0:y1,x0:x1].mean(axis=1)
+        if color.any()or (white>=FORMAT['maximum_white_fraction']).any():return None
+        result.append({'region':region['name'],'bounds_pixels':bounds,'white_fraction':float(white.max()),
+                       'relaxed_foreground_pixels':0,
+                       'separating_rows_pixels':list(range(y0,y1))})
     return result
 
 
@@ -107,6 +112,7 @@ def derive(data,native,samples,bank,profile):
         raise ValueError('Clearance bank differs from acquired cap images')
     width,height=data['analysis_width'],data['analysis_height']
     detector=SkinDetector(bank,data['layout'],width,height);templates={key(t):t for t in detector.templates}
+    attachment_gaps=AttachmentGaps(data,bank)
     owners=defaultdict(list);proofs=defaultdict(list);held=defaultdict(list);movement=defaultdict(list)
     for i,note in enumerate(data['notes']):
         for time,y in detection_points(note):
@@ -130,12 +136,15 @@ def derive(data,native,samples,bank,profile):
                 'template':pattern['template'],'skin':bank['skin'],'region_errors':pattern['region_errors'],
                 'bounds_pixels':pattern['bounds_pixels'],'image_anchor':[pattern['x']*width,image['y']*height],
                 'classification_status':'cap_with_body_comparisons',**connection})
+        foreground,cap_masks=attachment_gaps.foreground(frame,templates)
         for image in frame.get('skin_observations',[]):
             if image['role']=='hold_body':continue
             indices=owners[time,image['lane'],round(image['y']*height,5)]
             if len(indices)!=1:continue
             movement[indices[0]].append({'playback_seconds':time,'source_pts_seconds':pts,
                                        'image_anchor':[image['x']*width,image['y']*height]})
+            obstacles=foreground>cap_masks[id(image)]
+            checked=set()
             for pattern in [image,*image.get('alternatives',[])]:
                 template=templates[key(pattern)]
                 if (pattern.get('template_role',pattern['role'])!='tap'
@@ -143,6 +152,14 @@ def derive(data,native,samples,bank,profile):
                         or pattern['template']not in bank['anchor_registrations']):continue
                 if max(abs(pattern['x']-image['x'])*width,abs(pattern['y']-image['y'])*height)>FORMAT['maximum_anchor_delta_spacing']*detector.spacing:continue
                 regions=clear_regions(data,{**pattern,'lane':image['lane']},template,planes,validation['body_x_offsets_pixels'])
+                if regions is None:
+                    source=attachment_gaps.templates[pattern['template']]
+                    center=source.get('native_center_pixels',source['anchor_pixels'])
+                    identity=(round(pattern['x']*width+(center[0]-source['anchor_pixels'][0])*template['reference_scale_y'],5),
+                              round(pattern['y']*height+(center[1]-source['anchor_pixels'][1])*template['reference_scale_y'],5))
+                    if identity in checked:continue
+                    checked.add(identity)
+                    regions=attachment_gaps.measure({**pattern,'lane':image['lane']},planes,obstacles)
                 if regions is None:continue
                 proofs[indices[0]].append({'kind':'tap','role':'tap','reason':'image_cap_with_native_clearance',
                     'source_note':indices[0],'playback_seconds':time,'source_pts_seconds':pts,

@@ -67,6 +67,7 @@ regions. A start's connection lies below its anchor; an end's lies above it.
 An explicit distinct-cap declaration can identify an endpoint independently of its connector (see [role evidence](shared-cap-roles.md)). Connection and
 body masks also check every nonempty cell of a 3 by 3 partition, including
 disconnected shoulders and corners. Empty cells supply no evidence.
+Neighboring caps cannot supply an [independent connector](note-skin-overlap.md#connector-ownership).
 For a short hold, the opposite cap can overlap a long connection window.
 Additional references can compare the nearest visible body rows instead, using
 the same independent cap and connection limits. A failed longer window is not
@@ -106,19 +107,19 @@ inside a potential occluder remain distinct from clear unexplained losses.
 Transparent padding cannot contribute to a comparison. Declared surrounding
 source pixels may supply interpolation context; output outside comparison
 regions supplies no cap/body coverage or foreground-overlap evidence.
+Keep cap localization separate from [boundary comparisons](note-skin-overlap.md#mixed-cap-boundaries).
 The lower search limit applies to note anchors. Surrounding image context can
 extend beyond that limit while remaining inside the original game image; it is
 subject to the same positive region comparisons. Potential HUD overlap alone
 cannot reject those matched pixels. A fully visible template must not be
 rejected just because its canvas extends below the anchor limit.
-Local image minima supply cap positions. Body tiles retain every vertically
-qualified origin, using horizontal minima to localize the lane pattern. A better
+Local image minima supply cap positions. Body tiles retain vertically qualified origins using horizontal minima. A better
 match on an adjacent row does not erase positively compared body pixels. Nearby
 matches from the same role are grouped, retaining their individual comparison
 coordinates and errors as alternatives; coverage uses their supported regions.
 The body-candidate contract is independent of cap localization, so a body-only
 rule change can reuse unchanged native cap observations after reference validation. A complete end pattern has additional connection evidence
-that a cap-only candidate lacks; retain the end and both image comparisons.
+that a cap-only candidate lacks; retain both image comparisons.
 Contradictory complete tap/hold patterns remain a type conflict, including both
 source-frame interpretations. Unknown frames do not erase a positively observed
 tail role, while an actual tap or competing start observation prevents automatic

@@ -22,6 +22,9 @@ ctx={'id':'cap','mask':np.ones((20,20),dtype=bool),'rgb':np.full((20,20,3),100,d
 def choose(r):return next(m for m in models(r,1.5)if m.get('sampling_kernel')=='bicubic'and m['sampling_phase_pixels']==[0,0])
 full=choose(ctx);tight={**ctx,'mask':np.zeros((20,20),dtype=bool)};tight['mask'][4:16,4:16]=True
 limited=choose(tight)
+cx,cpad=bicubic_weights(20,1.5,0);cap_source=np.zeros((20,20));cap_source[4:16,4:16]=1
+absolute=np.abs(cx);cap_mass=absolute@np.pad(cap_source,cpad)@absolute.T
+cap_mass/=absolute.sum(axis=1)[:,None]*absolute.sum(axis=1)[None,:]
 with tempfile.TemporaryDirectory()as tmp:
  root=Path(tmp);pixels=np.random.default_rng(9).integers(0,255,(240,320,3),dtype='uint8')
  image=root/'source.png';cv2.imwrite(str(image),pixels[:,:,::-1]);before=image.read_bytes()
@@ -45,6 +48,8 @@ with tempfile.TemporaryDirectory()as tmp:
  print(json.dumps({'coefficients':wx[4,pad+1:pad+5].tolist(),'weighted_unknown':float(weighted[4,4]),
   'unknown_compared':bool(model['support'][4,4]),'known_context_compared':bool(full['support'][6,6]),
   'missing_context_compared':bool(limited['support'][6,6]),'context_is_geometry':bool(full['support'][:6].any()),
+  'primary_mixed_edge':bool(full['cap_core_support'][6,6]),'primary_interior':bool(full['cap_core_support'][15,15]),
+  'cap_weight':float(full['cap_foreground_fraction'][6,6]),'expected_cap_weight':float(cap_mass[6,6]),
   'builder_rows':rows,'context_written':context_written,'exact_rgb':exact_rgb,'source_preserved':source_preserved,'invalid_context_rejected':invalid,'invalid_bank_context_rejected':invalid_bank},allow_nan=False))
 `;
 const observed=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{encoding:'utf8'}));
@@ -56,6 +61,13 @@ test('negative kernel coefficients cannot turn an unknown source pixel into supp
 });
 test('known interpolation context supports a comparison without becoming note geometry',()=>{
  assert.equal(observed.known_context_compared,true);assert.equal(observed.missing_context_compared,false);assert.equal(observed.context_is_geometry,false);
+});
+test('localization and cap ownership distinguish mixed boundaries from cap interiors',()=>{
+ assert.equal(observed.primary_mixed_edge,false);
+ assert.equal(observed.primary_interior,true);
+ assert.ok(observed.cap_weight>0&&observed.cap_weight<1);
+ assert.ok(Math.abs(observed.cap_weight-observed.expected_cap_weight)<1e-12,
+  'negative filter coefficients cannot cancel foreground out of ownership');
 });
 test('reference extraction retains declared source context while coverage stays within comparison regions',()=>{
  assert.equal(observed.context_written,true);assert.equal(observed.exact_rgb,true);assert.equal(observed.source_preserved,true);

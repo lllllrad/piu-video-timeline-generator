@@ -11,6 +11,7 @@ def identify(template,record):
     if (template.get('cap_role_identification')!='distinct_full_cap'
             or record.get('classification_status')!='cap_only' or record.get('occlusion_evidence')):
         return record
+    if record.get('cap_context_qualified')is False:return record
     required={'cap',*template.get('cap_features',[])}
     for region in template['regions']:
         if region['name']not in required:continue

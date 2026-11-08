@@ -72,6 +72,8 @@ def bank_at(root,clearance_rows=4,connection_rows=6,margin=4,cap_only=False,glyp
                 # interpolation; its edge can include a stem or background.
                 region=t['regions'][0];a,b,c,d=region['box']
                 t['regions']=[{**region,'box':[a+4,b+4,c-4,d-4]}]
+                t['regions'].append({'name':'glyph_signature','box':[8,b+4,12,d-4],'maximum_error':.001})
+                t['cap_features']=['glyph_signature']
     path.write_text(json.dumps({'schema':1,'skin':'generated-colored-caps','spacing_pixels':20,'templates':entries}))
     return load_bank(path)
 
@@ -138,8 +140,11 @@ def acquire(spec,root,bank):
             'judgment_roi':[0,0,0,0],'combo_roi':[0,0,0,0],
             'lanes':[{'x':(40+i*20)/base_width,'color':('blue','red','yellow','red','blue')[i%5]}for i in range(lanes)]}
     tracker=NoteTracker(layout,width,height,skin_bank=bank);native=[]
+    duration=spec.get('duration_seconds',.2)
+    if type(duration)not in(int,float)or not np.isfinite(duration)or not .2<=duration<=2:
+        raise ValueError('Scene duration must be between .2 and 2 seconds')
     images=[render(spec['objects'],i/fps,base_width,base_height,i+spec['seed'],spec.get('mode'),i,
-                   spec.get('skin_profile'),(i//2)%appearances,speed*20)for i in range(round(.2*fps)+1)]
+                   spec.get('skin_profile'),(i//2)%appearances,speed*20)for i in range(round(duration*fps)+1)]
     if spec.get('capture')=='encoded':
         from tests.play.skins.capture import encoded
         captures,expected_pts,preserved=encoded(images,fps,root,width)
@@ -151,8 +156,14 @@ def acquire(spec,root,bank):
         native.append({'playback_seconds':time,'source_pts_seconds':pts,'skin_observations':tracker.skin_observations})
     # Raw acquired tracks, not scene-supplied endpoints or fitted truth.
     notes=[{'lane':t.lane,'points':t.points,'tracking_warnings':t.tracking_warnings}for t in tracker.finished+tracker.active]
-    data={'analysis_width':width,'analysis_height':height,'layout':layout,'notes':notes,
-          'start_seconds':0,'end_seconds':.2,'skin_detector':{'bank_path':str(root/'bank.json'),'contract':{'bank':bank['contract']}}}
+    data={'analysis_width':width,'analysis_height':height,'layout':layout,'notes':notes,'game_roi':[0,0,width,height],
+          'start_seconds':0,'end_seconds':duration,'skin_detector':{'bank_path':str(root/'bank.json'),'contract':{'bank':bank['contract']}}}
+    if spec.get('role_clearance'):
+        from piu_timeline.play.pixel_cache import FORMAT as PIXELS,measurements
+        from piu_timeline.play.skins.clearance import derive,FORMAT as CLEARANCE
+        samples=[(pts,time,measurements(cv2.resize(image,(PIXELS['width'],round(height*PIXELS['width']/width)),
+                   interpolation=cv2.INTER_AREA)),[])for pts,time,image in captures]
+        data['skin_role_evidence']=derive(data,native,samples,bank,{'model':CLEARANCE['model'],'skin':bank['skin']})
     warnings=[];connections=measure_connections(data,native,warnings)
     roles=observe(data,native)
     coordinates=measure(data,native)

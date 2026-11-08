@@ -68,10 +68,14 @@ For each existing image observation, the model requires:
 - A positive cap match is usable inside a documented HUD footprint. Both
   clearance boxes must remain outside potential HUD coverage and lie entirely
   within actual acquired pixels; padding is not background.
-- No relaxed lane-color pixel in either clearance box, and less than 5% white
-  coverage. A saturated effect, colored connection or known overlay leaves the
-  role unresolved. Black acquired pixels can establish a gap for this explicitly
-  validated bright-body model.
+- No relaxed lane-color pixels in either complete clearance box, and less than
+  5% white coverage on every row. An arbitrary blank row in a margin is
+  insufficient: a real cap can have a narrow blank neck before its connector.
+  A saturated effect, colored connection or known overlay leaves the role
+  unresolved. Black acquired pixels can establish a gap for this explicitly
+  validated bright-body model. Both boxes must remain within the scrolling
+  field, between the receptor row and the declared note-field bottom. Black
+  video pixels beyond that field are not absence evidence.
 - A moving object established by positive cap matches at four distinct original
   PTS and cap positions, with half a lane spacing of travel. At least one frame
   must satisfy both clearance tests. The movement observations and role
@@ -82,6 +86,24 @@ For each existing image observation, the model requires:
   distinct positions prevent repeated render frames from adding support at any FPS.
   Repeated capture frames and stationary receptor artwork cannot supply this
   moving-cap proof.
+
+When nearby caps occupy part of those bands, an alternative checks the bank's
+positive attachment geometry. Every registered start and end reference must be
+refuted by an unobscured blank row inside its actual bright connector. The row
+must lie inside that connector under every allowed registration shift; blank
+neck pixels outside the connector cannot qualify. Source RGB verifies which
+connector rows contain lane color. Missing registrations or reference support
+leave the alternative unresolved. Other measured caps obscure only their
+compared cap pixels, not transparent padding or negative-margin rectangles.
+
+Independent native centers contribute two source pixels of relative error plus
+half a native-mask pixel for rasterization. Byte-identical masked source caps
+instead establish a direct relative image offset; their evidence retains the
+observation's half-analysis-pixel localization bound and the same raster bound.
+Each rejected attachment records its template, actual blank row, registration
+basis and error. Neither a failed RGB match nor another cap's hidden pixels
+prove absence. This alternative keeps the existing color/white thresholds and
+moving-identity requirements, and supplies no endpoint connection or clock.
 
 Image margins are mapped to masks using actual horizontal and vertical scales,
 rounding outward to retain every potentially relevant pixel. The source image

@@ -21,7 +21,9 @@ from piu_timeline.tools.replay import child_environment
 def exhaustive(searcher,template,bounds):
  left,top,right,bottom=bounds;h,w=template['mask'].shape
  search=searcher.image[top:bottom,left:right];scores=None;errors={}
- for region in template['regions']:
+ regions=[(r['name'],template.get('cap_core_region',r)if r['name']=='cap'else r)for r in template['regions']]
+ regions += [('cap_context',r)for r in template['regions']if r['name']=='cap']
+ for name,region in regions:
   a,b,c,d=region['box'];mask=region['mask'];parts=[]
   # Independent exhaustive spatial oracle: all connector/body cells run, even
   # where a cap comparison has already ruled out the entire template.
@@ -33,8 +35,8 @@ def exhaustive(searcher,template,bounds):
    area=search[b+y:search.shape[0]-h+b+v,a+x:search.shape[1]-w+a+z]
    value=cv2.matchTemplate(area,template['rgb'][b+y:b+v,a+x:a+z],cv2.TM_SQDIFF,mask=support)/(3*int(support.sum()))
    parts.append(np.maximum(value,0))
-  errors[region['name']]=np.maximum.reduce(parts)if parts else np.full((search.shape[0]-h+1,search.shape[1]-w+1),np.inf,dtype='float32')
-  normalized=errors[region['name']]/region.get('maximum_error',.015)
+  errors[name]=np.maximum.reduce(parts)if parts else np.full((search.shape[0]-h+1,search.shape[1]-w+1),np.inf,dtype='float32')
+  normalized=errors[name]/region.get('maximum_error',.015)
   scores=normalized if scores is None else np.maximum(scores,normalized)
  proposal=scores
  if 'cap'in errors:

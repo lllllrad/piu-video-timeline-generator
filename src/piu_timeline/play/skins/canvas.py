@@ -10,6 +10,11 @@ def comparison_canvas(model):
             'anchor':[model['anchor'][0]-left,model['anchor'][1]-top]}
     for name in ('rgb','mask','support','cap_support'):
         result[name]=model[name][top:bottom,left:right]
+    result['cap_core_support']=model['cap_core_support'][top:bottom,left:right]
+    result['cap_foreground_fraction']=model['cap_foreground_fraction'][top:bottom,left:right]
+    core=model.get('cap_core_region')
+    if core is not None:
+        a,b,c,d=core['box'];result['cap_core_region']={**core,'box':[a-left,b-top,c-left,d-top]}
     result['regions']=[]
     for region in model['regions']:
         if region['mask'].any():

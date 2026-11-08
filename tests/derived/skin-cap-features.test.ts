@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory()as tmp:
 `;
 const observed=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{encoding:'utf8'}));
 for(const r of observed.results)test(`terminal shape is independently required at source scale ${r.scale}`,()=>{
-  assert.ok(r.plain_stem.some(c=>c.role==='hold_end'),'body-dominated average can match a stem');
+  assert.ok(r.plain_stem.length>0,'a body-dominated average can still propose a false cap');
   assert.ok(r.partial_stem.some(c=>c.role==='unknown'),'an optional terminal check leaves false cap candidates');
   assert.deepEqual(r.required_stem,[],'absent terminal shape cannot create any cap identity');
   assert.equal(r.required_end.length,1);

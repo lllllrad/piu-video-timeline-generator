@@ -1,13 +1,15 @@
 """Recover obscured caps only behind positively measured neighboring artwork."""
 import cv2
 import numpy as np
+import math
 
 from piu_timeline.play.skins.sampling import key
 from piu_timeline.play.skins.visible_search import VisibleSearch
 from piu_timeline.play.skins.spatial import VISIBLE_FORMAT,visible_region
 
 FORMAT={'schema':1,'method':'visible_cap_with_measured_foreground','proposal':'visible_mask_ssd_correlations',
-        'required_cap_features':'fully_visible','foreground_basis':'visible_matching_cap_pixels',
+        'required_cap_features':'fully_visible','foreground_basis':'matched_cap_with_sampling_influence',
+        'sampling_influence':'area_fractional_pixel_or_bicubic_stencil',
         'minimum_visible_fraction':.25,'minimum_visible_width_fraction':.5,
         'minimum_visible_height_fraction':.2,'connection_visibility':VISIBLE_FORMAT}
 
@@ -63,6 +65,26 @@ def runs(mask):
     return result
 
 
+def foreground(detector,image,root):
+    """Separate measured cap pixels from their bounded filter influence.
+
+    A mixed edge pixel need not match either isolated sprite. Its possible
+    foreground contribution excludes it from background-cap comparisons; it
+    never becomes positive evidence for the cap being recovered.
+    """
+    template=detector.by_sampling[key(root)]
+    scale=template['reference_scale_y']
+    if template.get('sampling_kernel','area')=='bicubic':radius=math.ceil(2*max(1,scale))
+    else:radius=0 if abs(scale-round(scale))<1e-9 else math.ceil(scale)
+    positive=positive_pixels(image,template,root)
+    a,b,c,d=root['bounds_pixels']
+    x,y,z,v=max(0,a-radius),max(0,b-radius),min(detector.width,c+radius),min(detector.height,d+radius)
+    expanded=np.zeros((v-y,z-x),dtype='uint8');expanded[b-y:d-y,a-x:c-x]=positive
+    if radius:expanded=cv2.dilate(expanded,np.ones((2*radius+1,2*radius+1),dtype='uint8'))
+    source={**root,'foreground_bounds_pixels':[x,y,z,v],'sampling_influence_pixels':radius}
+    return source,expanded.astype(bool)
+
+
 def recovery_record(detector,image,template,lane,left,top,known,owners):
     measured=visible_support(image,template,known,left,top)
     if measured is None:return None
@@ -96,9 +118,9 @@ def recovery_record(detector,image,template,lane,left,top,known,owners):
         a,b,c,d=region['box']
         obstructed[b:d,a:c]|=region['mask'].astype(bool)&known[top+b:top+d,left+a:left+c]
     for record,mask in owners:
-        a,b,c,d=record['bounds_pixels'];x,y,z,v=max(left,a),max(top,b),min(left+w,c),min(top+h,d)
+        a,b,c,d=record.get('foreground_bounds_pixels',record['bounds_pixels']);x,y,z,v=max(left,a),max(top,b),min(left+w,c),min(top+h,d)
         if x<z and y<v and(obstructed[y-top:v-top,x-left:z-left]&mask[y-b:v-b,x-a:z-a]).any():
-            sources.append({k:record[k]for k in('lane','template','bounds_pixels','x','y','sampling_phase_pixels','sampling_kernel','sampling_origin_pixels')if k in record})
+            sources.append({k:record[k]for k in('lane','template','bounds_pixels','x','y','sampling_phase_pixels','sampling_kernel','sampling_origin_pixels','foreground_bounds_pixels','sampling_influence_pixels')if k in record})
     cap=next(r for r in template['regions']if r['name']=='cap')
     from piu_timeline.play.skins.detector import occluded_support
     hidden_hud=occluded_support(detector.layout,visible,left,top,detector.width,detector.height)
@@ -125,8 +147,8 @@ def recover(detector,image,seeds):
     if not roots:return []
     known=np.zeros((detector.height,detector.width),dtype=bool);owners=[]
     for root in roots:
-        template=detector.by_sampling[key(root)];mask=positive_pixels(image,template,root)
-        a,b,c,d=root['bounds_pixels'];known[b:d,a:c]|=mask;owners.append((root,mask))
+        source,mask=foreground(detector,image,root)
+        a,b,c,d=source['foreground_bounds_pixels'];known[b:d,a:c]|=mask;owners.append((source,mask))
     recovered=[]
     while True:
         accepted=[];searcher=VisibleSearch(image,known)
@@ -150,7 +172,7 @@ def recover(detector,image,seeds):
         recovered.extend(accepted)
         additions=detector.resolve(accepted)
         for record in additions:
-            template=detector.by_sampling[key(record)];mask=positive_pixels(image,template,record)
-            a,b,c,d=record['bounds_pixels'];known[b:d,a:c]|=mask;owners.append((record,mask))
+            source,mask=foreground(detector,image,record)
+            a,b,c,d=source['foreground_bounds_pixels'];known[b:d,a:c]|=mask;owners.append((source,mask))
         roots.extend(additions)
     return recovered

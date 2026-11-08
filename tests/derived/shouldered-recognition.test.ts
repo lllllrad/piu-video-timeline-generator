@@ -59,8 +59,7 @@ for(const scene of scenes.filter(s=>!s.mode))test(`cut-corner caps retain near-t
 
 for(const scene of scenes.filter(s=>s.mode))test(`near-touching caps cannot prove a hold without their connector: ${scene.id}`,()=>{
  const r=results.find(r=>r.id===scene.id)!;
- if(scene.scale===1)assert.equal(r.notes.length,2);
- else{assert.ok(r.notes.length>2);assert.ok(r.notes.some(n=>n.tracking_warnings.length>0));}
+ assert.equal(r.notes.length,2,'connector corruption cannot erase the independent cap interiors');
  for(const [i,f]of r.frames.entries()){
   assert.ok(f.caps.length<=2,'an obscured connection cannot create another cap');
   for(const c of f.caps){
@@ -68,10 +67,7 @@ for(const scene of scenes.filter(s=>s.mode))test(`near-touching caps cannot prov
    assert.ok([80,102].some(y=>Math.abs(c.y*300*scene.scale-Math.round(y-80*i/scene.fps)*scene.scale)<1e-6));
   }
  }
- // At half size the white gap enters the cap's interpolation stencil; those
- // frames do not contain the unchanged positive cap used by the clear oracle.
- if(scene.scale===1)assert.ok(r.frames.every(f=>f.caps.length===2));
- else assert.ok(r.warnings.some(w=>w.failure_detail==='skin_body_images_without_complete_endpoint_ownership'));
+ assert.ok(r.frames.every(f=>f.caps.length===2));
  assert.ok(r.roles.every(n=>n.status==='unknown'),'shape proximity cannot supply a tap or hold role');
  assert.deepEqual(r.connections,[]);
 });

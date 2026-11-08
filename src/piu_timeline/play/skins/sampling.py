@@ -6,7 +6,9 @@ import math
 import numpy as np
 from piu_timeline.play.skins.kernels import bicubic_weights,KERNELS
 
-FORMAT={'schema':1,'revision':3,'method':'supported_source_grid','phase_grid':4,'exact_denominator_limit':8,
+FORMAT={'schema':1,'revision':4,'method':'supported_source_grid','phase_grid':4,'exact_denominator_limit':8,
+        'cap_proposal_stencil':'positive_cap_source_pixels_only','cap_boundary':'independent_context_comparison',
+        'cap_foreground_fraction':'normalized_absolute_source_kernel_mass',
         'comparison_canvas':{'schema':1,'method':'compared_pixel_extent','origin':'resampled_reference_pixels'},
         'kernels':KERNELS}
 
@@ -51,6 +53,10 @@ def models(original,scale):
 
 def kernel_models(original,scale,kernel):
     h,w=original['mask'].shape
+    cap_source=np.zeros((h,w),dtype=bool)
+    for region in original['regions']:
+        if region['name']not in {'cap',*original.get('cap_features',[])}:continue
+        for a,b,c,d in region.get('comparison_boxes',[region['box']]):cap_source[b:d,a:c]|=original['mask'][b:d,a:c].astype(bool)
     options=phases(scale)
     for px,py in product(options,repeat=2):
         if kernel=='area':wx,wy,xpad,ypad=weights(w,scale,px),weights(h,scale,py),0,0
@@ -65,6 +71,11 @@ def kernel_models(original,scale,kernel):
             # Negative coefficients cannot cancel unknown source pixels into
             # apparent support. Every nonzero kernel tap must be declared.
             known=(np.abs(wy)>1e-8).astype(float)@(1-source)@(np.abs(wx)>1e-8).astype(float).T==0
+        cap_pixels=np.pad(cap_source.astype(float),((ypad,ypad),(xpad,xpad)))
+        abs_x,abs_y=np.abs(wx),np.abs(wy)
+        cap_fraction=(abs_y@cap_pixels@abs_x.T)/(abs_y.sum(axis=1)[:,None]*abs_x.sum(axis=1)[None,:])
+        if kernel=='area':cap_known=wy@cap_pixels@wx.T>=1-1e-8
+        else:cap_known=(np.abs(wy)>1e-8).astype(float)@(1-cap_pixels)@(np.abs(wx)>1e-8).astype(float).T==0
         cx=(np.arange(rgb.shape[1])+.5-px)/scale;cy=(np.arange(rgb.shape[0])+.5-py)/scale
         for region in original['regions']:
             a,b,c,d=region['box']
@@ -86,6 +97,14 @@ def kernel_models(original,scale,kernel):
             if region['name']in {'cap',*original.get('cap_features',[])}:cap_support|=valid
         if not (cap_support.any()if any(r['name']=='cap'for r in original['regions'])else support.any()):continue
         phase={}if len(options)==1 else {'sampling_phase_pixels':[px,py]}
+        core=cap_support&cap_known
+        core_rows,core_cols=np.nonzero(core)
+        core_region=None
+        if len(core_rows):
+            a,b,c,d=int(core_cols.min()),int(core_rows.min()),int(core_cols.max())+1,int(core_rows.max())+1
+            cap=next(r for r in original['regions']if r['name']=='cap')
+            core_region={**cap,'box':[a,b,c,d],'mask':core[b:d,a:c].astype('uint8')}
         yield {**original,**phase,**({'sampling_kernel':kernel}if kernel!='area'else{}),'rgb':rgb,'mask':support.astype('uint8'),
                'anchor':[px+scale*original['anchor_pixels'][0],py+scale*original['anchor_pixels'][1]],
-               'reference_scale_y':scale,'regions':regions,'support':support,'cap_support':cap_support}
+               'reference_scale_y':scale,'regions':regions,'support':support,'cap_support':cap_support,
+               'cap_core_support':core,'cap_core_region':core_region,'cap_foreground_fraction':cap_fraction}

@@ -12,6 +12,9 @@ def prepare_regions(template):
         region['_cells']=list(cells(region))if region['name']in('connection','body')else[]
         for cell in region['_cells']:prepare_region(template,cell)
         prepare_region(template,region)
+    if template.get('cap_core_region')is not None:
+        template['cap_core_region']['_cells']=[]
+        prepare_region(template,template['cap_core_region'])
 
 
 def prepare_region(template,region):
@@ -59,11 +62,17 @@ class RegionSearch:
         primary=sorted((r for r in regions if r['name']in required),key=lambda r:r['name']!='cap')
         errors={};proposal=None
         for region in primary:
-            error=self.region_error(template,region,bounds);errors[region['name']]=error
+            measured=template.get('cap_core_region',region)if region['name']=='cap'else region
+            if measured is None:return None
+            error=self.region_error(template,measured,bounds);errors[region['name']]=error
             normalized=error/region.get('maximum_error',.015)
             proposal=normalized if proposal is None else np.maximum(proposal,normalized)
             if not (np.isfinite(proposal)&(proposal<=1)).any():return None
         scores=proposal
+        if has_cap:
+            cap=next(r for r in regions if r['name']=='cap')
+            error=self.region_error(template,cap,bounds);errors['cap_context']=error
+            scores=np.maximum(scores,error/cap.get('maximum_error',.015))
         for region in regions:
             if region['name']in required:continue
             error=self.region_error(template,region,bounds);errors[region['name']]=error

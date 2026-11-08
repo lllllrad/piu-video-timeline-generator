@@ -107,6 +107,16 @@ Independent in-memory RGB scenes run in up to four processes with fixed seeds
 and ordered results. Encoded scenes run serially to bound FFmpeg thread pools;
 parallel execution does not change their native frame order or expected results.
 
+`tests/derived/skins/dense-clearance.test.ts` checks narrow gaps between repeated
+taps and repeated holds with overlapping adjacent caps, at four image scales
+and slow motion. It asserts cap identities, tap/hold roles, independent blank-row
+provenance, and each hold's own endpoint pair. Native endpoint-coordinate bounds
+must contain the independently rendered positions; raw reference anchors need
+not equal an engine center. The half-scale cases exercise mixed cap edges and
+neighboring cap interiors that resemble connectors. Passing these generated
+cases does not establish coverage of a recording's skin animation or hidden
+endpoint geometry.
+
 `tests/derived/animated-skin.test.ts` adds four generated cap appearances with
 changing internal artwork and brightness, independently of the body's geometry.
 Flat and cut-corner scenes cover taps and both hold endpoints at 0.5/1/1.5 scales.

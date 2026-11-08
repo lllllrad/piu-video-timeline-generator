@@ -85,12 +85,7 @@ for(const scene of uncertain)test(`native RGB keeps insufficient/contradictory g
   assert.deepEqual(r.notes,[],'a body cannot create endpoint tracks');
   assert.ok(r.warnings.some(w=>w.failure_detail==='skin_body_images_without_complete_endpoint_ownership'));
  }else{
-  if(scene.mode==='opaque_connection'&&scene.scale===.5){
-   assert.ok(r.notes.length>2,'missing cap pixels remain separate without independent gap proof');
-   assert.ok(r.notes.some(n=>n.tracking_warnings.length>0));
-   for(const n of r.notes)for(const [time,y]of n.points)
-    assert.ok([80,160].some(origin=>Math.abs(y-Math.round(origin-80*time)*scene.scale)<1e-6));
-  }else assert.equal(r.notes.length,2,'retain both observed cap identities');
+  assert.equal(r.notes.length,2,'an opaque connector does not erase either independently visible cap');
   const status=scene.mode==='opaque_connection'?'unknown':'conflict';
   assert.ok(r.roles.every(n=>n.status===status));
   if(status==='conflict'){
