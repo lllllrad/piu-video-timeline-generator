@@ -7,6 +7,14 @@ from piu_timeline.play.skins.coverage import image_spans
 from piu_timeline.play.skins.occlusion import coverage,lane_regions
 
 
+def merge_intervals(spans):
+    result=[]
+    for lo,hi in sorted(spans):
+        if result and lo<=result[-1][1]:result[-1][1]=max(hi,result[-1][1])
+        else:result.append([lo,hi])
+    return result
+
+
 def measured_steps(data,native):
     layout=data['layout'];spacing=(layout['lanes'][1]['x']-layout['lanes'][0]['x'])*data['analysis_width']
     notes=[{'motion_trajectory':fit_trajectory(n),**({'duplicate_of':n['duplicate_of']}if 'duplicate_of'in n else{})}for n in data['notes']]
@@ -58,7 +66,9 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
                 tags=[(i,role)for i,y,role in known[time,lane]if a<=y<=b]
                 index=len(nodes);parents.append(index)
                 nodes.append({'time':time,'source_pts':frame['source_pts_seconds'],'lane':lane,
-                              'covered_bounds_pixels':[a,b],'body_template_support':body,'tags':tags,'image_node':index,'connected_to':[]})
+                              'covered_bounds_pixels':[a,b],'body_template_support':body,
+                              'body_intervals_pixels':merge_intervals((max(a,x),min(b,y))for x,y,is_body in spans
+                                                                     if is_body and max(a,x)<min(b,y)),'tags':tags,'image_node':index,'connected_to':[]})
                 current.append(index)
         for lane in lanes:
             adjacent=[i for i in current if nodes[i]['lane']==lane]
@@ -80,6 +90,24 @@ def temporal_pairs(data,native,roles,references,cap_references,*,length_checks=N
                     if first['lane']==last['lane']and max(x-delta,lo)<=min(y-delta,hi)+1:
                         parents[root(b)]=root(a);last['connected_to'].append(a)
                         last['motion_link']={k:v for k,v in measured.items()if k!='time'}
+        elif before is not None and 0<time-before<=.05+1e-6 and 0<frame['source_pts_seconds']-previous_pts<=.05+1e-6:
+            # A continuously visible body is an observed state, not a velocity.
+            # Cap-only rows cannot supply this edge or invent a displacement.
+            for b in current:
+                last=nodes[b]
+                for a in previous:
+                    first=nodes[a]
+                    if first['lane']!=last['lane']:continue
+                    overlap=[[max(x,u),min(y,v)]for x,y in first['body_intervals_pixels']
+                             for u,v in last['body_intervals_pixels']if max(x,u)<min(y,v)]
+                    merged=merge_intervals(overlap)
+                    if not any(y-x>=.5*spacing for x,y in merged):continue
+                    parents[root(b)]=root(a);last['connected_to'].append(a)
+                    last.setdefault('body_continuity_links',[]).append({'image_node':a,
+                        'method':'consecutive_positive_body_overlap','observed_intervals_pixels':merged,
+                        'source_pts_range':[previous_pts,frame['source_pts_seconds']],
+                        'playback_range':[before,time]})
+        previous_pts=frame['source_pts_seconds']
         previous=current;before=time
     components=defaultdict(list)
     for i,node in enumerate(nodes):components[root(i)].append(node)

@@ -87,3 +87,21 @@ appearances, hidden identifying tail features, or an entirely covered connector
 cell. Nearby frames must provide the missing positive evidence; a fixed overlap
 that persists across frames needs a separately validated short-hold pattern.
 Neither an expected hold duration nor a nearby terminal-like line establishes it.
+
+## Body-only temporal continuity
+
+A long hold's start can leave the visible field before its tail enters it.
+Uniform body pixels do not supply a vertical displacement measurement. A missing
+cap-motion sample therefore cannot, by itself, refute the continuously observed
+body or turn its two recognized endpoints into separate notes.
+
+When measured displacement is unavailable, consecutive native frames can link
+positive body intervals in the same lane if their actual overlap includes at
+least half a lane spacing. Both playback and original PTS gaps must be at most
+50 ms. Only compared body/connector rows count; a cap silhouette, presumed speed,
+HUD rectangle or interpolated interval cannot supply this edge. The proof records
+its observed overlap and source timestamps as `body_continuity_links`, without
+creating a `motion_link` or any timing clock. Missing images and capture gaps
+break this support. Competing endpoint identities and intervening taps retain
+their existing conflict rules. Missing motion/coverage remains separately
+reviewable even when the body identity can be connected.

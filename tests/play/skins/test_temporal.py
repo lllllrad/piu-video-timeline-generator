@@ -85,15 +85,40 @@ class TemporalHoldTest(unittest.TestCase):
     def test_missing_images_or_motion_and_competing_identity_do_not_bridge_silently(self):
         with tempfile.TemporaryDirectory()as temporary:
             original,source,receptors=fixture(Path(temporary))
-            for case in ('missing_image','missing_motion','second_head'):
+            for case in ('missing_image','capture_gap','second_head','second_head_without_motion'):
                 data,native=deepcopy(original),deepcopy(source)
                 if case=='missing_image':native[60]['skin_observations']=[]
-                elif case=='missing_motion':data['scroll_motion']['samples'][60]['support']=0
-                else:data['notes'].append(deepcopy(data['notes'][0]))
+                elif case=='capture_gap':native[60:62]=[]
+                else:
+                    data['notes'].append(deepcopy(data['notes'][0]))
+                    if case=='second_head_without_motion':data['scroll_motion']['samples']=[]
                 warnings=[]
                 with self.subTest(case=case):
                     self.assertEqual(reconstruct_images(data,receptors,native,warnings),[])
                     self.assertTrue(warnings)
+
+    def test_body_only_interval_does_not_require_a_visible_cap_velocity(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            data,native,receptors=fixture(Path(temporary))
+            data['scroll_motion']['samples']=[]
+            warnings=[];holds=reconstruct_images(data,receptors,native,warnings)
+            self.assertEqual(len(holds),1)
+            self.assertEqual((holds[0]['head_note'],holds[0]['tail_note']),(0,1))
+            links=[link for p in holds[0]['image_connection_evidence']for link in p.get('body_continuity_links',[])]
+            self.assertTrue(links)
+            self.assertTrue(all(link['method']=='consecutive_positive_body_overlap'for link in links))
+            self.assertTrue(all(link['source_pts_range'][1]-link['source_pts_range'][0]<=.05+1e-6 for link in links))
+            # This proof establishes a body interval; it never invents a motion link.
+            for point in holds[0]['image_connection_evidence']:
+                if point.get('body_continuity_links'):self.assertNotIn('motion_link',point)
+
+    def test_necks_without_sufficient_body_overlap_cannot_replace_missing_motion(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            data,native,receptors=fixture(Path(temporary));data['scroll_motion']['samples']=[]
+            for frame in native:
+                frame['skin_observations']=[o for o in frame['skin_observations']if o['role']!='hold_body']
+            warnings=[];self.assertEqual(reconstruct_images(data,receptors,native,warnings),[])
+            self.assertTrue(warnings)
 
     def test_clear_lost_body_rows_warn_while_documented_hud_can_explain_them(self):
         with tempfile.TemporaryDirectory()as temporary:

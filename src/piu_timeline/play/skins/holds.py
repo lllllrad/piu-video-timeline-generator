@@ -6,7 +6,7 @@ from piu_timeline.play.skins.observations import observe
 from piu_timeline.play.skins.occlusion import coverage,lane_regions,supported,SUPPORT
 
 
-FORMAT = {'schema': 1, 'revision': 22, 'method': 'independent_image_hold_proof',
+FORMAT = {'schema': 1, 'revision': 23,'body_continuity':{'method':'consecutive_positive_body_overlap','minimum_overlap_spacing':.5,'maximum_capture_gap_seconds':.05}, 'method': 'independent_image_hold_proof',
           'interior_caps':'separate_observed_objects',
           'motion_peers':'explicit_fit_trajectory_displacement',
           'cap_coverage':'all_qualified_cap_comparisons',
