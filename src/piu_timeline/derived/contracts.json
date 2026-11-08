@@ -133,6 +133,7 @@
     "schema": 1,
     "revision": 5,
     "long_approach": "continuous_independent_peer_motion_through_crossing",
+    "peer_step": "multiple_lanes_or_source_certified_distinct_peer_interval",
     "distant_cap": "observed_peer_travel_required_beyond_local_spatial_limit",
     "near_receptor": "qualified_observed_centers_wholly_below_row_when_clearance_removes_trajectory",
     "selection": "precision_then_native_support",

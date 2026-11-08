@@ -59,3 +59,29 @@ test('a hidden cap uses observed acceleration after disappearance instead of ext
  assert.ok(Math.abs(result.target_seconds-s.truth)>.8);
  assert.ok(result.motion_clock_validation.supported_approach.phase_range_pixels[1]>=result.motion_target_phase);
 });
+
+for(const count of[1,2])test(`source-certified distinct peer positions qualify a one-lane continuation: peers=${count}`,()=>{
+ const s=scene(),last=s.track.points.at(-1)[0];
+ s.state.samples.forEach(p=>{if(p.time>last){p.lanes=1;p.support=count;
+  p.displacement_basis=count===1?'measured_cap_displacement':'independent_registered_peers';
+  p.native_displacement_interval={range_pixels:[0,4],notes:count===1?[1]:[1,2]};}});
+ const result=fit(s.state,s.track,s.receptor,s.layout);
+ assert.equal(result?.status,'estimated');assert.ok(Math.abs(result.target_seconds-s.truth)<1e-8);
+ assert.ok(result.motion_clock_validation.supported_approach.certified_peer_steps.length>0);
+ assert.ok(result.motion_clock_validation.supported_approach.certified_peer_steps.every(p=>p.native_displacement_interval.notes.every(i=>i!==0)));
+});
+for(const mode of['target-only','missing-certificate','duplicate-identities','negative-identity','reversed-range','invalid-range','unmeasured-continuation'])
+test(`a narrow-lane continuation requires a valid independent native interval: ${mode}`,()=>{
+ const s=scene(),last=s.track.points.at(-1)[0];
+ s.state.samples.forEach(p=>{if(p.time>last){p.lanes=1;p.support=1;p.displacement_basis='measured_cap_displacement';
+  p.native_displacement_interval={range_pixels:[0,4],notes:[1]};
+  if(mode==='target-only')p.native_displacement_interval.notes=[0];
+  if(mode==='missing-certificate')delete p.native_displacement_interval;
+  if(mode==='duplicate-identities'){p.support=2;p.displacement_basis='independent_registered_peers';p.native_displacement_interval.notes=[1,1];}
+  if(mode==='negative-identity')p.native_displacement_interval.notes=[-1];
+  if(mode==='reversed-range')p.native_displacement_interval.range_pixels=[4,0];
+  if(mode==='invalid-range')p.native_displacement_interval.range_pixels=[0,NaN];
+  if(mode==='unmeasured-continuation')p.displacement_basis='registered_identity_continuation';
+ }});
+ assert.equal(fit(s.state,s.track,s.receptor,s.layout),null);
+});

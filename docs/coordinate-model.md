@@ -214,18 +214,22 @@ Slow travel can therefore leave more than 250 ms between the final cap used for
 fitting and the receptor crossing. A longer duration does not by itself imply
 extrapolation: independent registered peers can measure that displacement through
 the crossing. Accept such a crossing only with continuous original playback and
-source PTS, nondecreasing shared phase, and independent multi-lane displacement
-support on every intervening captured step in the same registered chunk. Retain
+source PTS, nondecreasing shared phase, and independent displacement
+support on every intervening captured step in the same registered chunk. Multiple
+registered lanes qualify directly. A single lane requires an explicit native
+displacement interval and a certified peer identity different from the target;
+the target's own trajectory cannot supply that missing independent continuation. Retain
 those source timestamps as `motion_clock_validation.supported_approach`.
-Missing frames, unsupported steps and one-lane observations do not qualify this
-extension. The same complete proof is required when a cap disappears beyond the
+Missing frames, unsupported steps and uncertified one-lane observations do not
+qualify this extension. The same complete proof is required when a cap disappears beyond the
 local spatial horizon: distant partial trajectories cannot extrapolate to a target
 from their own speed alone. The existing local time limits still bound unsupported extrapolation;
 position-error and crossing-uncertainty limits are unchanged.
 
-When the ordinary full-cap clearance leaves fewer than two registered positions,
+When the ordinary full-cap clearance leaves fewer than two registered positions
+or insufficient measured displacement to distinguish movement from coordinate error,
 a certified native center can retain observations whose complete coordinate-error
-interval remains below the receptor. These observations must still pass shared
+interval remains below the receptor and above the recorded field boundary. These observations must still pass shared
 motion, measured displacement, source timestamp and crossing checks. A stationary
 receptor remnant or an unregistered image anchor cannot use this path. Existing
 intact approach trajectories continue to use the ordinary clearance band.

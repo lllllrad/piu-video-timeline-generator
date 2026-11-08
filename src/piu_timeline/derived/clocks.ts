@@ -33,8 +33,19 @@ export function clock(samples: RecordData[], spacing: number): ClockParameters |
   return {origin: samples[0].time, velocity, intercept, residual, window: [samples[0].time, samples.at(-1).time]};
 }
 
+function independentPeer(step:RecordData,note:number):boolean{
+  if(step.displacement_basis==='independent_registered_peers'&&step.support>=2&&step.lanes>=2)return true;
+  const proof=step.native_displacement_interval;
+  if(!Number.isInteger(note)||!proof||!Array.isArray(proof.notes)||!proof.notes.length||
+     new Set(proof.notes).size!==proof.notes.length||!proof.notes.every(i=>Number.isInteger(i)&&i>=0)||
+     !proof.notes.some(i=>i!==note)||!Array.isArray(proof.range_pixels)||proof.range_pixels.length!==2||
+     !proof.range_pixels.every(Number.isFinite)||proof.range_pixels[0]<0||proof.range_pixels[0]>proof.range_pixels[1])return false;
+  return step.displacement_basis==='measured_cap_displacement'&&step.support===1&&proof.notes.length===1||
+    step.displacement_basis==='independent_registered_peers'&&step.support>=2&&proof.notes.length>=2;
+}
+
 /** Long approaches need captured peer motion through the crossing, not extrapolated time. */
-function supportedApproach(chunk:RecordData[],sample:RecordData,phase:number):RecordData|null{
+function supportedApproach(chunk:RecordData[],sample:RecordData,phase:number,note:number):RecordData|null{
   const first=chunk.findIndex(s=>s.time===sample.time),last=lowerBound(chunk.map(s=>s.phase),phase);
   if(first<0||last<=first||last>=chunk.length||sample.phase>=phase)return null;
   const frames=chunk.slice(first,last+1);
@@ -43,13 +54,14 @@ function supportedApproach(chunk:RecordData[],sample:RecordData,phase:number):Re
     const before=frames[i-1],after=frames[i];
     if(!(0<after.time-before.time&&after.time-before.time<=.05+1e-6&&
          0<after.source_pts-before.source_pts&&after.source_pts-before.source_pts<=.05+1e-6)||
-       after.phase<before.phase||after.displacement_basis!=='independent_registered_peers'||
-       after.support<2||!(after.lanes>=2))return null;
+       after.phase<before.phase||!independentPeer(after,note))return null;
   }
   return {method:'continuous_independent_peer_motion',
     playback_range_seconds:[frames[0].time,frames.at(-1).time],
     source_pts_seconds:frames.map(s=>s.source_pts),
-    phase_range_pixels:[frames[0].phase,frames.at(-1).phase],target_phase_pixels:phase};
+    phase_range_pixels:[frames[0].phase,frames.at(-1).phase],target_phase_pixels:phase,
+    certified_peer_steps:frames.slice(1).filter(s=>s.lanes<2).map(s=>({source_pts_seconds:s.source_pts,
+      playback_seconds:s.time,displacement_basis:s.displacement_basis,native_displacement_interval:s.native_displacement_interval}))};
 }
 
 export class MotionClock {
@@ -187,7 +199,7 @@ export class MotionClock {
     const r = this.crossing(visible.at(-1)[2], target, error);
     if(!r||r.target_seconds<visible.at(-1)[0])return null;
     if(distant||r.target_seconds-visible.at(-1)[0]>(hud?.65:.25)){
-      const proof=supportedApproach(this.chunks.get(chunk),visible.at(-1)[2],target);
+      const proof=supportedApproach(this.chunks.get(chunk),visible.at(-1)[2],target,track.note_index);
       if(!proof)return null;
       r.motion_clock_validation={...r.motion_clock_validation,supported_approach:proof};
     }
