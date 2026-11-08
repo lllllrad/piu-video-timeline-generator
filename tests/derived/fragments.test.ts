@@ -118,3 +118,34 @@ test('restoring one physical head removes a false same-lane chord conflict',()=>
  assert.ok(matches.every(m=>m.combo_event===0&&m.row_note_count===3));
  assert.equal(tracks.reduce((n,t)=>n+t.points.length,0),source.reduce((n,t)=>n+t.points.length,0));
 });
+
+function slowHud(spacing:number,fps:number){
+ const d=nativeScene([[3.2,0]],spacing,fps,5,{end:3.4,speedSpacingPerSecond:2.5});
+ const height=d.analysis_height,all=d.notes[0].points;
+ return {tracks:[{lane:0,points:all.filter(([,y])=>y>=.64*height)},
+  {lane:0,points:all.filter(([,y])=>y<=.34*height)}],spacing,
+  receptor:d.layout.receptor_y*height,layout:{...d.layout,combo_roi:[.05,.52,.4,.075]},
+  motion:{...d.scroll_motion,height,spacing,evidence_format:{method:contracts.shared_motion.method}}};
+}
+for(const spacing of[20,40,80])for(const fps of[30,60,120])
+test(`a slow HUD crossing retains one registered identity beyond a local timeout: spacing=${spacing}, fps=${fps}`,()=>{
+ const s=slowHud(spacing,fps),before=structuredClone(s);
+ assert.ok(s.tracks[1].points[0][0]-s.tracks[0].points.at(-1)[0]>.65);
+ const [tracks,origins]=stitch(s.tracks,s.receptor,spacing,s.motion,s.layout);
+ assert.deepEqual(origins,[[0,1]]);
+ assert.deepEqual(tracks[0].points,[...s.tracks[0].points,...s.tracks[1].points]);
+ const proof=tracks[0].fragment_connections[0];
+ assert.equal(proof.method,'joint_registered_native_bands');
+ for(const records of[proof.references,proof.reappearances])for(const p of records)assert.equal(p.source_pts_seconds,80+p.time);
+ assert.deepEqual(s,before);
+});
+for(const mode of['other-head','competing','other-chunk','failed-chunk','unregistered'])
+test(`a long gap requires unique support in the same registered chunk: ${mode}`,()=>{
+ const s=slowHud(40,60);
+ if(mode==='other-head')s.tracks[1].points=s.tracks[1].points.map(([t,y])=>[t,y+40]);
+ if(mode==='competing')s.tracks.push(structuredClone(s.tracks[1]));
+ if(mode==='other-chunk'){const begin=s.tracks[1].points[0][0];s.motion.samples.forEach(p=>{if(p.time>=begin)p.chunk=1;});}
+ if(mode==='failed-chunk')s.motion.coordinate_failures={0:'unreliable_peer_motion'};
+ if(mode==='unregistered')delete s.motion.evidence_format;
+ assert.equal(stitch(s.tracks,s.receptor,s.spacing,s.motion,s.layout)[0].length,s.tracks.length);
+});

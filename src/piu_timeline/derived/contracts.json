@@ -17,7 +17,9 @@
   },
   "fragments": {
     "schema": 1,
-    "revision": 2,
+    "revision": 3,
+    "registered_gap": "shared_supported_chunk_without_local_timeout",
+    "registered_identity": "independent_of_receptor_target_reconstruction",
     "registered_anchor": "intersection_of_all_native_reference_bands",
     "reference_scope": "shared_supported_motion_chunk",
     "minimum_references": 4,

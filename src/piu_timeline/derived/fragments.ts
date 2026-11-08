@@ -96,9 +96,12 @@ export function stitch(source: RecordData[], receptor: number, spacing: number, 
       const [velocity,intercept]=linear(times,points.map(p=>p[1])),residual=rms(points.map((p,i)=>p[1]-velocity*times[i]-intercept));
       if(velocity>=-spacing||residual>.1*spacing)continue;
       const registered=anchor(points,at,spacing,motion);if(registered.status==='conflicting')continue;
-      const first=upperBound(starts,track.points.at(-1)[0]),last=upperBound(starts,track.points.at(-1)[0]+.35);
+      // A registered common origin proves identity across the supported chunk.
+      // The local extrapolation timeout must not discard a later HUD reappearance.
+      const registeredEnd=registered.status==='fitted'?motion.samples.at(-1)?.time:null;
+      const first=upperBound(starts,track.points.at(-1)[0]),last=upperBound(starts,registeredEnd??track.points.at(-1)[0]+.35);
       for(const successor of ordered.slice(first,last)){
-        const other=tracks[successor];if(other.points.length<2||other.points[0][0]-origin>.65)continue;
+        const other=tracks[successor];if(other.points.length<2||registered.status!=='fitted'&&other.points[0][0]-origin>.65)continue;
         const prediction=time=>{
           const a=at.get(origin),b=at.get(time);
           const valid=a&&b&&a.chunk===b.chunk&&!Object.hasOwn(motion?.coordinate_failures??{},a.chunk);
@@ -117,9 +120,14 @@ export function stitch(source: RecordData[], receptor: number, spacing: number, 
             reference_error_pixels:F.maximum_reference_error_spacing*spacing,continuation_error_pixels:error,
             reference_offset_range_pixels:registered.range,common_offset_range_pixels:[lower,upper],
             references:registered.references,reappearances:initial.map(([t,y])=>({time:t,y,phase:at.get(t).phase,source_pts_seconds:at.get(t).source_pts}))};
-        }else if(initial.some(([t,y])=>Math.abs(y-prediction(t))>error))continue;
-        const track=joined(tracks[index],other),fit=(motion?fitClock(motion,track,receptor,layout):null)??fitTrack(track,receptor,spacing);
-        if(fit.status!=='estimated')continue;
+        }else{
+          if(registered.status==='fitted'||initial.some(([t,y])=>Math.abs(y-prediction(t))>error))continue;
+        }
+        const track=joined(tracks[index],other);
+        if(!connection){
+          const fit=(motion?fitClock(motion,track,receptor,layout):null)??fitTrack(track,receptor,spacing);
+          if(fit.status!=='estimated')continue;
+        }
         if(connection)track.fragment_connections=[...(track.fragment_connections??[]),connection];
         if(!candidates.has(index))candidates.set(index,[]);candidates.get(index).push({successor,track});
         if(!incoming.has(successor))incoming.set(successor,[]);incoming.get(successor).push(index);

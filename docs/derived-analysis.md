@@ -37,7 +37,12 @@ asynchronous or incomparable positions do not establish that order. Missing
 observations cannot make a following note inherit another identity through a
 wide proximity threshold. Ambiguous fragments are kept separately with
 `ambiguous_note_tracking`, original timestamps and candidate pixel positions.
-Later coordinate refitting preserves these warnings. Co-observed compatible image
+Later coordinate refitting preserves these warnings. Registered fragment recovery tests one common
+position interval against every approach reference and initial reappearance in the same supported
+motion chunk. A slow crossing behind the HUD can exceed the local extrapolation timeout; that
+timeout applies only without a registered common origin. Competing successors, another motion chunk
+or contradictory positions keep fragments separate. Connecting identities does not fill missing
+image observations or dismiss visibility warnings. Co-observed compatible image
 positions in at least two lanes can independently measure one common signed frame
 translation before identities are selected. Equal competing translations remain
 unavailable. Without that measurement, association uses a speed bound in both
