@@ -61,6 +61,14 @@ actually qualified. Required cap features remain independent mandatory checks.
 Cap coverage retains every independently positive same-anchor comparison even
 when another reference supplies the hold role. A failed connector cannot erase
 that cap footprint or contribute body rows. Conflicted alternatives are excluded.
+
+Finding a cap does not finish its role measurement. Declared endpoint-feature
+references are also checked at already localized caps, aligning their registered
+reference centers in the analysis image. Only other caps may hide pixels in this
+check; the cap's own observed artwork remains available. Visible cap RGB and all
+required discriminating features must pass. The anchor observation is retained,
+and contradictory positive roles remain conflicts. No input or counter timing
+supplies an endpoint role.
 A successful full boundary comparison can provide additional observed edge
 support; an unverified boundary cannot. Body and connector regions retain
 their declared context rules.

@@ -7,7 +7,11 @@ from piu_timeline.play.skins.sampling import key
 from piu_timeline.play.skins.visible_search import VisibleSearch
 from piu_timeline.play.skins.spatial import VISIBLE_FORMAT,visible_region
 
-FORMAT={'schema':1,'method':'visible_cap_with_measured_foreground','proposal':'visible_mask_ssd_correlations',
+KNOWN_ANCHOR_FORMAT={'schema':1,'method':'declared_endpoint_features_at_measured_native_center',
+ 'foreground':'other_caps_only','features':'fully_observed','conflicts':'retain_all_positive_roles',
+ 'anchor_center':'registered_reference_center_in_analysis_pixels'}
+
+FORMAT={'schema':1,'known_anchor_roles':KNOWN_ANCHOR_FORMAT,'method':'visible_cap_with_measured_foreground','proposal':'visible_mask_ssd_correlations',
         'required_cap_features':'fully_visible','foreground_basis':'matched_cap_with_sampling_influence',
         'sampling_influence':'area_fractional_pixel_or_bicubic_stencil',
         'minimum_visible_fraction':.25,'minimum_visible_width_fraction':.5,
@@ -176,3 +180,36 @@ def recover(detector,image,seeds):
             a,b,c,d=source['foreground_bounds_pixels'];known[b:d,a:c]|=mask;owners.append((source,mask))
         roots.extend(additions)
     return recovered
+
+
+def recover_roles(detector,image,seeds):
+    """A measured cap can still have a hidden role-specific reference region.
+
+    Compare at its registered center, excluding other caps but not itself.
+    Required discriminators and the visible cap must independently pass RGB.
+    """
+    from piu_timeline.play.skins.shared_roles import native_offset
+    templates=[t for t in detector.templates if t.get('cap_role_identification')=='distinct_cap_features']
+    if not templates:return []
+    caps=[r for r in detector.resolve(seeds)if r['role']!='hold_body']
+    if len(caps)<2:return []
+    owners=[foreground(detector,image,r)for r in caps];planes=[]
+    for source,mask in owners:
+        plane=np.zeros((detector.height,detector.width),bool);a,b,c,d=source['foreground_bounds_pixels'];plane[b:d,a:c]=mask;planes.append(plane)
+    total=np.sum(planes,axis=0,dtype='uint16');result=[]
+    for index,root in enumerate(caps):
+        relevant=[t for t in templates if t['lane_kind']==root['lane']%5 and t['role']!=root['role']]
+        if not relevant:continue
+        known=(total-planes[index])>0;other=[source for i,source in enumerate(owners)if i!=index]
+        donor=detector.by_sampling[key(root)]
+        center=np.array([root['x']*detector.width,root['y']*detector.height])+native_offset(donor)
+        for template in relevant:
+            desired=center-native_offset(template)-template['anchor'];left,top=np.rint(desired).astype(int);h,w=template['mask'].shape
+            if not 0<=left<left+w<=detector.width or not 0<=top<top+h<=detector.height:continue
+            record=recovery_record(detector,image,template,root['lane'],int(left),int(top),known,other)
+            if record is None:continue
+            record['occlusion_evidence']['anchor_observation']={
+                **{k:root[k]for k in ('template','x','y','bounds_pixels','sampling_phase_pixels','sampling_kernel','sampling_origin_pixels')if k in root},
+                'registered_center_analysis_pixels':center.tolist()}
+            result.append(record)
+    return result

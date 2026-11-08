@@ -9,13 +9,13 @@ from piu_timeline.play.skins.subfeatures import account
 from piu_timeline.play.skins.canvas import comparison_canvas
 from piu_timeline.play.skins.matching import RegionSearch,prepare_regions
 from piu_timeline.play.skins.spatial import FORMAT as SPATIAL_FORMAT
-from piu_timeline.play.skins.overlap import FORMAT as OVERLAP_FORMAT,recover
+from piu_timeline.play.skins.overlap import FORMAT as OVERLAP_FORMAT,recover,recover_roles
 from piu_timeline.play.skins.overlap import runs
 from piu_timeline.play.skins.shared_roles import FORMAT as SHARED_ROLE_FORMAT,candidates as shared_roles
 from piu_timeline.play.skins.classification import FORMAT as CLASSIFICATION_FORMAT,QUALIFIED,identify
 from piu_timeline.play.skins.connection_visibility import FORMAT as CONNECTION_FORMAT,qualify as qualify_connections
 
-FORMAT = {'schema': 1, 'revision': 11,'connector_ownership':CONNECTION_FORMAT,'classification':CLASSIFICATION_FORMAT, 'shared_roles':SHARED_ROLE_FORMAT, 'method': 'lane_masked_rgb_regions','spatial_support':SPATIAL_FORMAT,'overlap':OVERLAP_FORMAT,'sampling':SAMPLING_FORMAT,
+FORMAT = {'schema': 1, 'revision': 12,'connector_ownership':CONNECTION_FORMAT,'classification':CLASSIFICATION_FORMAT, 'shared_roles':SHARED_ROLE_FORMAT, 'method': 'lane_masked_rgb_regions','spatial_support':SPATIAL_FORMAT,'overlap':OVERLAP_FORMAT,'sampling':SAMPLING_FORMAT,
           'scale_basis':'declared_uniform_game_frame_or_lane_spacing',
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor',
           'body_candidates': {'schema':1,'selection':'qualified_rows_horizontal_minima'}}
@@ -116,6 +116,7 @@ class SkinDetector:
                                           if any(not np.isfinite(values[row,col])for values in errors.values())else{}),
                                        'bounds_pixels': bounds, 'method': 'skin_image', 'skin': self.bank['skin']})
         candidates.extend(recover(self,image,candidates))
+        candidates.extend(recover_roles(self,image,candidates))
         candidates.extend(shared_roles(self,image,candidates))
         return qualify_connections(self,image,candidates)
 
