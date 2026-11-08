@@ -222,3 +222,10 @@ extension. The same complete proof is required when a cap disappears beyond the
 local spatial horizon: distant partial trajectories cannot extrapolate to a target
 from their own speed alone. The existing local time limits still bound unsupported extrapolation;
 position-error and crossing-uncertainty limits are unchanged.
+
+When the ordinary full-cap clearance leaves fewer than two registered positions,
+a certified native center can retain observations whose complete coordinate-error
+interval remains below the receptor. These observations must still pass shared
+motion, measured displacement, source timestamp and crossing checks. A stationary
+receptor remnant or an unregistered image anchor cannot use this path. Existing
+intact approach trajectories continue to use the ordinary clearance band.

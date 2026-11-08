@@ -1,3 +1,4 @@
+import {approachPoints} from './coordinates/approach.ts';
 import {linear, mean, median, rms, std, sum} from './math.ts';
 import {refine} from './registration.ts';
 import {contracts} from './contracts.ts';
@@ -5,7 +6,7 @@ import type {RecordData} from './types.ts';
 
 export function registered(tracks: RecordData[], timeline: RecordData[], height: number, spacing: number, receptor: number, bottom: number): RecordData {
   const at = new Map<number, RecordData>();
-  tracks.forEach((track, i) => { for (const [t, y] of track.points) if (receptor + .85 * spacing < y && y < bottom - .55 * spacing) {
+  tracks.forEach((track, i) => { for (const [t, y] of approachPoints(track,receptor,spacing,bottom)) {
     if (!at.has(t)) at.set(t, {}); at.get(t)[i] = [track.lane, y];
   } });
   const samples = [],nativeConflicts=[];

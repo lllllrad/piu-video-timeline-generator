@@ -2,12 +2,11 @@
 import {contracts} from './contracts.ts';
 import {fit as renderClocks,crossingRange}from './coordinates/phase_clock.ts';
 import {frameBounds} from './frame_bounds.ts';
+import {qualifiedCap as qualified,approachPoints} from './coordinates/approach.ts';
 import {compare, linear, lowerBound, median, rms} from './math.ts';
 import type {RecordData} from './types.ts';
 import type {ClockParameters}from './coordinates/clock_model.ts';
 const F = contracts.local_clock;
-const qualified=(track:RecordData)=>track.coordinate_basis==='native_cap_center'&&
- Number.isFinite(track.registration_uncertainty_pixels)&&track.registration_uncertainty_pixels>0;
 const cadenceOf = samples => median(samples.slice(1).map((s, i) => s.time - samples[i].time));
 
 export function* crossingWindows(samples: RecordData[], before: RecordData, after: RecordData): Generator<RecordData[]> {
@@ -139,8 +138,8 @@ export class MotionClock {
       crossing_frame_seconds: [before.time, after.time], crossing_capture_range: [before.time - capture, after.time + capture]};
   }
   fit(track, receptor, layout = null): RecordData | null {
-    const {spacing, height} = this.state, bottom = (layout?.note_y_max ?? .95) * height - .55 * spacing;
-    const visible = track.points.filter(([t, y]) => receptor + .85 * spacing < y && y < bottom).map(([t, y]) => [t, y, this.at.get(t)]);
+    const {spacing, height} = this.state, bottom = (layout?.note_y_max ?? .95) * height;
+    const visible:[number,number,RecordData][]=approachPoints(track,receptor,spacing,bottom).map(([t,y])=>[t,y,this.at.get(t)!]);
     if (!visible.length || !visible.at(-1)[2]) return null;
     const chunk = visible.at(-1)[2].chunk, latest = visible.filter(p => p[2]?.chunk === chunk);
     if (latest.length >= (qualified(track)?2:4) && latest.at(-1)[0] - latest[0][0] >= (qualified(track)?Number.EPSILON:.065)) return this.fitVisible(track, latest, receptor, layout);

@@ -100,7 +100,8 @@
   },
   "registration": {
     "schema": 1,
-    "revision": 2,
+    "revision": 3,
+    "approach": "same_qualified_positions_as_endpoint_clock",
     "single_head_support": "measured_native_center_with_declared_error",
     "model": "head_y_plus_frame_displacement_equals_head_offset",
     "robust_passes": 3,
@@ -133,6 +134,7 @@
     "revision": 5,
     "long_approach": "continuous_independent_peer_motion_through_crossing",
     "distant_cap": "observed_peer_travel_required_beyond_local_spatial_limit",
+    "near_receptor": "qualified_observed_centers_wholly_below_row_when_clearance_removes_trajectory",
     "selection": "precision_then_native_support",
     "position_floor_pixels": 0.75,
     "maximum_radius_seconds": 0.5,
@@ -145,7 +147,8 @@
   },
   "shared_motion": {
     "schema": 1,
-    "revision": 21,
+    "revision": 22,
+    "approach": "same_qualified_positions_as_endpoint_clock",
     "method": "registered_peer_or_measured_cap_displacement",
     "native_steps": "intersection_of_declared_endpoint_intervals",
     "incomplete_clock": "source_bound_native_interval_with_explicit_warning",

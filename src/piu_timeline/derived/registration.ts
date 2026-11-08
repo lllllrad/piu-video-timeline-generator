@@ -1,3 +1,4 @@
+import {approachPoints} from './coordinates/approach.ts';
 /** Joint head/frame coordinate registration on measured positions. */
 import {contracts} from './contracts.ts';
 import {maximum, mean, rms, sum} from './math.ts';
@@ -54,7 +55,7 @@ export function solve(head: number[], frame: number[], y: number[], initial: num
 export function refine(samples: RecordData[], tracks: RecordData[], receptor: number, spacing: number, bottom: number): RecordData {
   samples = samples.map(s => ({...s}));
   const positions = new Map<number, Map<number, number>>(), chunks = new Map<number, RecordData[]>();
-  tracks.forEach((track, i) => { for (const [t, y] of track.points) if (receptor + .85 * spacing < y && y < bottom - .55 * spacing) {
+  tracks.forEach((track, i) => { for (const [t, y] of approachPoints(track,receptor,spacing,bottom)) {
     if (!positions.has(t)) positions.set(t, new Map()); positions.get(t).set(i, y);
   } });
   for (const s of samples) { if (!chunks.has(s.chunk)) chunks.set(s.chunk, []); chunks.get(s.chunk).push(s); }
