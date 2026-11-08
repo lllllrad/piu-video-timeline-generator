@@ -206,3 +206,17 @@ even when that exceeds a fixed fraction of the displayed lane spacing. The
 intersection of measured gap intervals governs both row-domain constraints and
 final concurrency validation. Finer rows retain compatible small separations;
 large measurement errors cannot silently become exact simultaneity.
+
+## Slow observed approaches
+
+The clearance between accepted cap measurements and the receptor is spatial.
+Slow travel can therefore leave more than 250 ms between the final cap used for
+fitting and the receptor crossing. A longer duration does not by itself imply
+extrapolation: independent registered peers can measure that displacement through
+the crossing. Accept such a crossing only with continuous original playback and
+source PTS, nondecreasing shared phase, and independent multi-lane displacement
+support on every intervening captured step in the same registered chunk. Retain
+those source timestamps as `motion_clock_validation.supported_approach`.
+Missing frames, unsupported steps and one-lane observations do not qualify this
+extension. The existing local time limits still bound unsupported extrapolation;
+position-error and crossing-uncertainty limits are unchanged.

@@ -34,6 +34,25 @@ export function clock(samples: RecordData[], spacing: number): ClockParameters |
   return {origin: samples[0].time, velocity, intercept, residual, window: [samples[0].time, samples.at(-1).time]};
 }
 
+/** Long approaches need captured peer motion through the crossing, not extrapolated time. */
+function supportedApproach(chunk:RecordData[],sample:RecordData,phase:number):RecordData|null{
+  const first=chunk.findIndex(s=>s.time===sample.time),last=lowerBound(chunk.map(s=>s.phase),phase);
+  if(first<0||last<=first||last>=chunk.length||sample.phase>=phase)return null;
+  const frames=chunk.slice(first,last+1);
+  if(frames.some(s=>!Number.isFinite(s.source_pts)||!Number.isFinite(s.phase)))return null;
+  for(let i=1;i<frames.length;i++){
+    const before=frames[i-1],after=frames[i];
+    if(!(0<after.time-before.time&&after.time-before.time<=.05+1e-6&&
+         0<after.source_pts-before.source_pts&&after.source_pts-before.source_pts<=.05+1e-6)||
+       after.phase<before.phase||after.displacement_basis!=='independent_registered_peers'||
+       after.support<2||!(after.lanes>=2))return null;
+  }
+  return {method:'continuous_independent_peer_motion',
+    playback_range_seconds:[frames[0].time,frames.at(-1).time],
+    source_pts_seconds:frames.map(s=>s.source_pts),
+    phase_range_pixels:[frames[0].phase,frames.at(-1).phase],target_phase_pixels:phase};
+}
+
 export class MotionClock {
   state: RecordData;
   chunks: Map<number, RecordData[]>;
@@ -167,7 +186,12 @@ export class MotionClock {
     if (intercept - receptor > (hud ? 6 : 2.5) * spacing) return null;
     const target = phase.at(-1) + intercept - receptor, error = Math.max(.75, 2 * residual, short?bound:(track.registration_uncertainty_pixels ?? 0));
     const r = this.crossing(visible.at(-1)[2], target, error);
-    if (!r || !(0 <= r.target_seconds - visible.at(-1)[0] && r.target_seconds - visible.at(-1)[0] <= (hud ? .65 : .25))) return null;
+    if(!r||r.target_seconds<visible.at(-1)[0])return null;
+    if(r.target_seconds-visible.at(-1)[0]>(hud?.65:.25)){
+      const proof=supportedApproach(this.chunks.get(chunk),visible.at(-1)[2],target);
+      if(!proof)return null;
+      r.motion_clock_validation={...r.motion_clock_validation,supported_approach:proof};
+    }
     if(calibrated){
       const endpoint=track.registration_uncertainty_pixels;
       if(!this.renderModels.has(endpoint))this.renderModels.set(endpoint,renderClocks(this.state,endpoint));

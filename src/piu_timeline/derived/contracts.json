@@ -130,7 +130,8 @@
   },
   "local_clock": {
     "schema": 1,
-    "revision": 4,
+    "revision": 5,
+    "long_approach": "continuous_independent_peer_motion_through_crossing",
     "selection": "precision_then_native_support",
     "position_floor_pixels": 0.75,
     "maximum_radius_seconds": 0.5,
