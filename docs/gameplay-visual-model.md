@@ -73,7 +73,7 @@ A disappearance is an observation gap, not proof of a note ending, a successful 
 
 ## Taps, holds and two adjacent heads
 
-A tap has one approaching head. A normal hold has a leading head, a colored connection extending below it, and a trailing tail. Both caps can look like ordinary arrows. The tail reaching the receptor ends the chart's hold duration; it is not an additional tap. The panel may already be held before the head and may remain held after the tail.
+A tap has one approaching head. A normal hold has a leading head, a colored connection extending below it, and a trailing tail. The leading cap may resemble a tap; a skin can have distinctive terminal artwork that identifies the tail independently of its connection. The tail reaching the receptor ends the chart's hold duration; it is not an additional tap. The panel may already be held before the head and may remain held after the tail.
 
 To distinguish a hold from two taps, inspect several nearby frames:
 

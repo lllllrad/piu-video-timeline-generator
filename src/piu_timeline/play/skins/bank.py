@@ -37,6 +37,9 @@ def load_bank(path):
         identifiers.add(identifier)
         if entry.get('role') not in ROLES or type(entry.get('lane_kind')) is not int or not 0 <= entry['lane_kind'] < 5:
             raise ValueError('Skin template requires a note role and a lane kind from 0 to 4')
+        identification=entry.get('cap_role_identification')
+        if identification is not None and(identification!='distinct_full_cap'or entry['role']not in('hold_start','hold_end')):
+            raise ValueError('Distinct cap role identification requires an endpoint reference')
         evidence=entry.get('source_evidence',{})
         if not isinstance(evidence,dict):raise ValueError('Skin source evidence must be an object')
         if frame and 'reference_dimensions'in evidence and evidence['reference_dimensions']!=[frame['width'],frame['height']]:

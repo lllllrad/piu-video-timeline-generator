@@ -105,3 +105,26 @@ creating a `motion_link` or any timing clock. Missing images and capture gaps
 break this support. Competing endpoint identities and intervening taps retain
 their existing conflict rules. Missing motion/coverage remains separately
 reviewable even when the body identity can be connected.
+
+## Distinct terminal artwork
+
+An endpoint reference may declare `cap_role_identification: "distinct_full_cap"`
+when its complete cap artwork identifies its role independently of a body neck.
+This is an explicit skin fact, not an inference from color, a template filename
+or an expected chart. It is available only to endpoint references; undeclared
+banks continue to require the full cap-and-connection pattern.
+
+Every required cap region and identifying feature keeps its original RGB limit.
+A recovered partial cap cannot use this declaration. If the complete distinct
+cap matches but its connector does not, the observation retains the known role
+with `classification_status: "cap_role_pattern"`. Its failed connector error is
+preserved, and `role_evidence` names the separate identification rule. Only the
+actually compared cap footprint supplies positive support; no failed connector
+or missing body row becomes positive evidence.
+
+This boundary is useful for short holds whose start drawing occupies part of a
+long-neck reference window. A known tail remains a tail even if its body link is
+unresolved. It cannot become an additional tap; unpaired tails keep explicit
+geometry warnings and remain excluded from independent chart-note projection.
+A full competing tap/start pattern remains a role conflict. Source-bound native
+centers and source PTS are unchanged by a role declaration.

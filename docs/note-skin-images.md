@@ -64,7 +64,7 @@ Additional same-role templates can cover animation and rendering variants.
 
 Hold-start and hold-end templates must have separate `cap` and `connection`
 regions. A start's connection lies below its anchor; an end's lies above it.
-Each region passes its own masked mean squared RGB error limit. Connection and
+An explicit distinct-cap declaration can identify an endpoint independently of its connector (see [role evidence](shared-cap-roles.md)). Connection and
 body masks also check every nonempty cell of a 3 by 3 partition, including
 disconnected shoulders and corners. Empty cells supply no evidence.
 For a short hold, the opposite cap can overlap a long connection window.
