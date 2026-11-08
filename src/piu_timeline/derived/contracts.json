@@ -1,7 +1,7 @@
 {
   "frame_tracking": {
     "schema": 1,
-    "revision": 9,
+    "revision": 10,
     "coordinates": "measured_centers_or_identical_reference_anchors",
     "assignment": "mutually_unique_edges_in_every_measured_translation",
     "order": "never_used_as_identity_proof",
@@ -10,6 +10,7 @@
     "identity_history_seconds": 0.35,
     "motion": "signed_compatible_image_steps_with_retained_endpoint_intervals",
     "alternative_views": "positive_shared_cap_pixels_with_separate_reference_origins",
+    "compact_observations": "validated_explicit_binding_to_complete_native_image_views",
     "gap_prediction": "search_only_never_identity_proof",
     "gap_identity": "direct_endpoint_displacement_of_continuously_observed_independent_peers_in_two_lanes",
     "maximum_capture_interval_seconds": 0.05,

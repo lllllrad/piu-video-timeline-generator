@@ -140,6 +140,7 @@ def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
         print('Refreshing counter crops; preserving saved note observations, no OCR.',flush=True)
         refreshed = refresh_counter_observations(cached,output,replace_font=replaced_font or reader_changed)
     from piu_timeline.play.skins.bank import load_bank
+    from piu_timeline.play.observations.cache import tracking_notes
     tracker = NoteTracker(cached['layout'], cached['analysis_width'], cached['analysis_height'],skin_bank=load_bank(note_skin))
     combo, count, last = ComboTracker(), 0, None
     with (output / 'frames.jsonl').open()as stream:
@@ -151,7 +152,7 @@ def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
                 raise ValueError('Saved observation timestamps are not increasing')
             last = seconds; count += 1
             tracker.hold_candidate = frame.get('possible_hold_or_dense_stack', False)
-            tracker.update(seconds, frame['notes'], frame['source_pts_seconds']); combo.update(seconds,frame['combo'],frame.get('combo_confidence'),
+            tracker.update(seconds, tracking_notes(frame), frame['source_pts_seconds']); combo.update(seconds,frame['combo'],frame.get('combo_confidence'),
                               frame.get('combo_read_mode'),frame['source_pts_seconds'])
     if count != cached['frame_count']:
         raise ValueError('Saved native-frame observations are incomplete')

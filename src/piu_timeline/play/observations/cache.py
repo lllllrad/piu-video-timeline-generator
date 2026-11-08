@@ -27,6 +27,24 @@ def validate_native_frame(frame,lane_count):
         raise ValueError('Native note observations require image-template evidence')
 
 
+def tracking_notes(frame):
+    """Resolve explicit compact-row bindings without discarding image alternatives."""
+    rows=[]
+    for note in frame['notes']:
+        if 'skin_observation' not in note:
+            rows.append(note)
+            continue
+        index=note['skin_observation'];observed=frame['skin_observations']
+        if type(index)is not int or not 0<=index<len(observed):
+            raise ValueError('Compact note has an invalid image-observation binding')
+        image=observed[index]
+        if image.get('role')=='hold_body' or any(k!='skin_observation'and(k not in image or image[k]!=value)
+                                              for k,value in note.items()):
+            raise ValueError('Compact note differs from its bound image observation')
+        rows.append(image)
+    return rows
+
+
 def observation_settings_match(cached, document, segment, start, end, options):
     chart=segment.get('chart') or ''
     lanes=10 if re.match(r'^(?:HD|D)\d',chart) else 5 if re.match(r'^(?:S\d|VERY HARD )',chart) else None

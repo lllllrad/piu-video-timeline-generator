@@ -117,6 +117,11 @@ and acceleration without assuming the earlier velocity persists. Gap connections
 cannot certify each other. Retain the reference identities, coordinate views,
 endpoint recording times and original source PTS in `tracking_connections`.
 Keep 350 ms of peer observations alongside the minimum tracking history.
+Compact native rows must resolve their explicit `skin_observation` index before
+replaying tracking. Every saved compact field must agree with that image record;
+a foreign index, changed position, lane or template fails explicitly. This
+restores all pixel-qualified alternative views and localization conflicts
+without modifying the saved frame or treating unrelated detections as aliases.
 
 Summed step bounds, an inferred terminal step and extrapolated history remain
 search envelopes. Missing or conflicting direct evidence leaves separate
