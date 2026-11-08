@@ -96,13 +96,17 @@ class SkinDetector:
                                 or template['role']=='tap' and not template['tap_clearance'])
                     context_qualified=('cap_context'in errors and errors['cap_context'][row,col]
                         <=next(r.get('maximum_error',.015)for r in template['regions']if r['name']=='cap'))
+                    cap_visible=template['cap_support']if context_qualified else template['cap_core_support'].copy()
+                    for region in template['regions']:
+                        if region['name']in template.get('cap_features',[]):
+                            a,b,c,d=region['box'];cap_visible[b:d,a:c]|=region['mask'].astype(bool)
                     candidates.append({'lane': lane, 'x': x / self.width, 'y': y / self.height,
                                        'role': 'unknown'if cap_only else template['role'], 'template': template['id'],
                                        'template_role':template['role'], 'hud_region_overlap':hidden,
                                        **({k:template[k]for k in ('sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels')if k in template}),
                                        'classification_status':'cap_only'if cap_only else'full_pattern',
                                        **({'cap_context_qualified':bool(context_qualified),
-                                           'visible_cap_runs':runs(template['cap_support']if context_qualified else template['cap_core_support'])}
+                                           'visible_cap_runs':runs(cap_visible)}
                                           if 'cap'in errors else{}),
                                        **({'reason':'skin_tap_clearance_unresolved'if template['role']=='tap'
                                            else'skin_image_connection_unresolved'}if cap_only else{}),

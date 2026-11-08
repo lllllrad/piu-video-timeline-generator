@@ -122,6 +122,22 @@ preserved, and `role_evidence` names the separate identification rule. Only the
 actually compared cap footprint supplies positive support; no failed connector
 or missing body row becomes positive evidence.
 
+A bank may instead declare `cap_role_identification: "distinct_cap_features"`
+with a nonempty `cap_features` list. This asserts that those specific image
+features distinguish the endpoint from taps, other endpoints and bare stems.
+Reference controls must establish that distinction; an arbitrary colored patch
+is insufficient. The cap comparison and every named feature retain their RGB
+limits. Every supported pixel of every discriminating feature must be actually
+visible and compared. A hidden or damaged feature, missing visibility footprint
+or unexplained obstruction cannot qualify.
+
+This rule can identify a recovered partial cap or one with an unverified mixed
+boundary while its discriminating artwork remains complete. It preserves the
+actual `visible_cap_runs` and existing observed connector runs, rather than
+filling the cap or body silhouette. `role_evidence` names the feature rule and
+its discriminators. This establishes a role only: it neither connects a head
+to a tail nor supplies endpoint timing or missing body pixels.
+
 This boundary is useful for short holds whose start drawing occupies part of a
 long-neck reference window. A known tail remains a tail even if its body link is
 unresolved. It cannot become an additional tap; unpaired tails keep explicit
