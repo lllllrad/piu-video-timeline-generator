@@ -158,3 +158,17 @@ test('unowned warnings do not acquire note ownership from lane or neighboring ti
   const {evaluate}=inspector({recognition_diagnostics:{warnings}});
   assert.deepEqual(evaluate('inspectorWarningCases.map(c=>[c.note,c.items.length])'),[[null,1],[null,1],[null,2]]);
 });
+
+
+test('an untimed connected hold exposes its image geometry without inventing a timed hold',()=>{
+ const connection={id:4,lane:0,head_note:1,tail_note:0,covered_notes:[1,0],body_frames:8,
+  source_pts_range:[101,101.02],image_connection_evidence:[{time:11,source_pts:101,covered_bounds_pixels:[90,160]}]};
+ const instance=inspector({hold_analysis:{holds:[],image_connections:[connection]}}),{elements,evaluate,run}=instance;
+ const before=evaluate('data');run("inspectAt(11,0,1);selectInspectorTab('analysis')");
+ const block=elements.get('derivationDetails').children.find(n=>n.children[0]?.textContent==='Observed hold connections · independent of timing');
+ assert.ok(block);block.open=true;block.handlers.toggle[0]();
+ assert.deepEqual(JSON.parse(block.children[1].textContent),[connection]);
+ assert.ok(descendants(elements.get('derivationChain')).some(n=>n.textContent.includes('Geometry is retained independently')));
+ assert.equal(evaluate('data.notes[1].target_seconds'),null);
+ assert.deepEqual(evaluate('data.hold_analysis.holds'),[]);assert.deepEqual(evaluate('data'),before);
+});

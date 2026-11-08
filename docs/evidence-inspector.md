@@ -98,3 +98,8 @@ Hold connection proof keeps `observed_intervals_pixels` separate from
 hole. Original endpoint/component PTS and source frame links remain inspectable
 in the derivation JSON. Positive body/tail observations after head processing
 retain the proven hold identity without a fabricated head position.
+
+Image-confirmed hold topology is available in the derivation tab for either
+endpoint, including excluded tracks with no target time. Its source-frame
+connections are shown separately from timed hold intervals and recognition
+states. Inspecting this topology never creates a chart target or an input range.

@@ -17,13 +17,16 @@ function renderDerivation(){
     'No note selected. Frame and warning evidence remains accessible without inventing a fitted chart target.';
   if(selectedWarning!==null){const item=inspectorWarnings[selectedWarning];if(item)inspectJSON(root,'Selected warning · full diagnostic records',item.records)}
   if(!note){provenanceCard(chain,'Original observations','Inspect the selected recording position, including unassigned observations.','channels');return}
+  const connections=(data.hold_analysis?.image_connections??[]).filter(c=>c.head_note===index||c.tail_note===index||(c.covered_notes??[]).includes(index));
   const hold=holdFor(note),matched=matchByNote.get(index)?.match,range=rangeByNote[index],processing=data.visual_channels?.processing?.notes?.find(n=>n.note===index);
   provenanceCard(chain,'1 · Native channels',(note.points?.length??0)+' tracked positions. Independent popup, receptor, motion and processing observations.','channels');
   provenanceCard(chain,'2 · Coordinates & timing',(note.fit_method||'No accepted fit')+' · '+(note.beat_reconstruction?.status||'Beat reconstruction unavailable')+'. Target: '+formatRange(targetRange(note)),null);
+  if(connections.length)provenanceCard(chain,'Observed hold topology',connections.length+' image-confirmed connection(s). Geometry is retained independently of endpoint timing.','channels');
   provenanceCard(chain,'3 · UCS placement',data.inspector_artifacts?.chart?.registration?.status||'No saved registration','ucs');
   provenanceCard(chain,'4 · Judgment / held state',hold?'Sustained recognition; no separate head press.':range?.status||'No association','chart');
   const blocks=[['Tracked positions and raw type evidence',{lane:note.lane,points:note.points,type_status:note.type_status,type_evidence:note.type_evidence,type_unknown_reasons:note.type_unknown_reasons}],
     ['Registered geometry and target clock',Object.fromEntries(Object.entries(note).filter(([k])=>!['points','type_evidence','type_unknown_reasons'].includes(k)))],
+    ['Observed hold connections · independent of timing',connections],
     ['Independent note-processing observations',processing],['Long-note geometry and sustained recognition',hold],
     ['Timing association and uncertainty',{range:range??null,match:matched??null,conflicted_matches:(data.conflicted_matches||[]).filter(m=>m.note===index),
       combo_event:matched?.combo_event!=null?data.combo_events[matched.combo_event]:null,judgment_event:matched?.judgment_event!=null?data.judgment_events?.[matched.judgment_event]:null}],
