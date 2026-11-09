@@ -111,7 +111,7 @@ converting ticks into presses. `play/holds/features.py` acquires and caches nati
 image start/body/end connectivity is measured independently of endpoint clocks.
 `hold_analysis.image_connections` retains unique connected image objects even
 when endpoint timing fails. Timed `holds` reference them by `image_connection_id`;
-missing or contradictory endpoint times emit `hold_endpoint_timing_unresolved`
+`observed_holds` exposes untimed shapes; failed clocks emit `hold_endpoint_timing_unresolved`
 and never become invented timing bounds or UCS placements. Body gaps, competing
 endpoints and independently observed interior caps remain geometry failures.
 Touching template margins cannot join adjacent source holds across another

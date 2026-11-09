@@ -150,3 +150,20 @@ The JSON transport protects unsafe integer tokens before ordinary parsing,
 preserving exact provenance without V8 reviver source contexts for every field.
 Markers cannot collide with source strings; malformed JSON and nonfinite values
 fail. A bounded-heap regression covers large records and integer/escape handling.
+
+### Reusable tracking inputs and untimed hold shapes
+
+`tracking-observations.json` retains per-frame positive detections, qualified
+coordinate views and original PTS before track identity is assigned. Its digest
+binds source media, crop, window, layout, skin and coordinate contracts. Replaying
+identity assignment can reuse these positions without decoding video. When
+projecting compatible saved measurement records into this input, the adapter
+explicitly discards previous track IDs, targets and statuses; changed acquisition
+or coordinate contracts require new measurements.
+
+Hold interpretation exposes `observed_holds` independently of timed `holds`.
+Each connected shape retains its image connection, component IDs, observed frame
+extent and nullable endpoint ranges. A failed endpoint clock keeps the shape,
+emits its timing warning and suppresses duplicate tap components. The inspector
+lists these shapes and overlays only their positive per-frame image intervals;
+it does not invent target positions for an untimed shape.

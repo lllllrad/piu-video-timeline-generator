@@ -140,6 +140,13 @@ function renderFrameTracks(){
   for(const {note,noteIndex,point} of records){text('button','#'+(noteIndex+1)+' / lane '+(note.lane+1)+' / y '+point[1].toFixed(1)+' / '+note.status,root).onclick=()=>inspectAt(frame[0],noteIndex,note.lane,'analysis',selectedWarning)}
 }
 function initializeInspector(){
+  const observed=data.hold_analysis?.observed_holds||[];
+  inspectorElement('observedHoldsPanel').hidden=!observed.length;
+  inspectorElement('observedHoldsSummary').textContent=observed.length+' connected hold shapes; '+observed.filter(h=>h.timing_status==='unresolved').length+' without resolved endpoint timing.';
+  for(const hold of observed){
+    text('button','H'+(hold.id+1)+' · lane '+(hold.lane+1)+' · '+(hold.timing_status==='unresolved'?'timing unresolved':fmt(hold.start_range[0])),inspectorElement('observedHoldsList'))
+      .onclick=()=>inspectAt(hold.visible_start_seconds,hold.head_note,hold.lane,'channels');
+  }
   for(const [i,tab] of inspectorTabs.entries()){
     const button=inspectorElement('tab-'+tab);button.onclick=()=>selectInspectorTab(tab);
     button.onkeydown=event=>{let target=null;if(event.key==='ArrowRight')target=(i+1)%inspectorTabs.length;if(event.key==='ArrowLeft')target=(i+inspectorTabs.length-1)%inspectorTabs.length;if(event.key==='Home')target=0;if(event.key==='End')target=inspectorTabs.length-1;

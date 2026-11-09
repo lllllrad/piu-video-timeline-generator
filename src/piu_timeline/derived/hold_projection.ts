@@ -86,9 +86,13 @@ export function chartProjection(data: RecordData): RecordData {
     return {...n, chart_timing_status:'unresolved', target_timing_basis:'native_motion'};
   });
   if (!data.hold_analysis || !Object.keys(data.hold_analysis).length) return {...data, notes, note_type_diagnostics: projectTypes(data, notes, [])};
-  const suppressed = new Set<number>(holds.flatMap(h => [...h.covered_notes, h.head_note, h.tail_note]).filter(i => i != null));
+  const observed=data.hold_analysis.observed_holds??[];
+  const suppressed = new Set<number>([...holds,...observed].flatMap(h => [...h.covered_notes, h.head_note, h.tail_note]).filter(i => i != null));
   const tailRoles = observedTailRoles(data).filter(r => !suppressed.has(r.tail_note)); tailRoles.forEach(r => suppressed.add(r.tail_note));
   for (const i of suppressed) Object.assign(notes[i], {status: 'excluded', reason: 'long_note_body_or_tail', note_type: 'hold_component'});
+  for(const h of observed)for(const i of h.covered_notes)Object.assign(notes[i],{
+    observed_hold_id:h.id,observed_note_type:'hold',input_requirement:'held_state',requires_head_press:false,
+    ...(h.timing_status==='unresolved'?{reason:'connected_hold_timing_unresolved'}:{})});
   for (const r of tailRoles) Object.assign(notes[r.tail_note], {reason: 'observed_hold_tail_pending_geometry', hold_cap_role: 'tail', observed_hold_head: r.head_note});
   const projected = [], unresolved = [];
   for (const original of holds) {

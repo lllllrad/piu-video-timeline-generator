@@ -64,6 +64,10 @@ test('image connectivity survives a failed clock and does not manufacture an end
  const s=occludedHold();Object.assign(s.data.notes[0],{status:'excluded',target_seconds:null,
   timing_reconstruction:{status:'failed'},reason:'shared_timing_reconstruction_failed'});
  const r=measure(s);assert.equal(r.image_connections.length,1);assert.deepEqual(r.holds,[]);
+ assert.equal(r.observed_holds.length,1);assert.equal(r.observed_holds[0].geometry_status,'connected');
+ assert.equal(r.observed_holds[0].timing_status,'unresolved');assert.equal(r.observed_holds[0].start_range,null);
+ assert.equal(r.observed_holds[0].head_note,0);assert.equal(r.observed_holds[0].tail_note,1);
+ assert.equal(r.observed_holds[0].requires_head_press,false);
  assert.ok(r.unresolved_tracks.some(w=>w.reason==='hold_endpoint_timing_unresolved'));
 });
 

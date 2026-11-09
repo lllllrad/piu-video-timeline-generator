@@ -11,7 +11,7 @@ export function present(input: RecordData, preHoldProofs: Record<string, RecordD
   const view = chartProjection(data);
   if (!data.hold_analysis || !Object.keys(data.hold_analysis).length) return view;
   const notes = view.notes, holds = data.hold_analysis.holds ?? [], projected = view.hold_analysis.holds, tails = view.hold_analysis.observed_tail_roles;
-  const suppressed = new Set<number>([...projected, ...view.hold_analysis.unresolved_holds].flatMap(h => h.covered_notes).concat(tails.map(r => r.tail_note)));
+  const suppressed = new Set<number>([...projected, ...view.hold_analysis.unresolved_holds,...(view.hold_analysis.observed_holds??[])].flatMap(h => h.covered_notes).concat(tails.map(r => r.tail_note)));
   const duringHold = (lo, hi) => holds.some(h => hi >= (h.start_censored ? h.start_range[1] : (h.start_range[0] + h.start_range[1]) / 2) + .04 && lo <= (h.end_range ? (h.end_range[0] + h.end_range[1]) / 2 : h.last_body_seconds));
   const inputMatches = [...data.matches], assigned = new Set(inputMatches.map(m => m.note)), deferred = [];
   for (const m of data.deferred_matches ?? []) {
@@ -101,6 +101,8 @@ export function present(input: RecordData, preHoldProofs: Record<string, RecordD
   }
   validated=annotateMatches({...data,notes,matches});matches=validated.matches;data={...data,conflicted_matches:validated.conflicted_matches};
   const coverage = {...data.coverage, visible_note_heads: notes.filter(n => n.status === 'estimated').length, timed_note_heads: matches.length,
+    observed_long_notes:(view.hold_analysis.observed_holds??[]).length,
+    untimed_long_notes:(view.hold_analysis.observed_holds??[]).filter(h=>h.timing_status==='unresolved').length,
     matched_combo_updates: new Set(matches.filter(m => m.combo_event != null).map(m => m.combo_event)).size, judgment_only_note_heads: matches.filter(m => m.evidence_source === 'judgment').length,
     judgment_labeled_note_heads: matches.filter(m => m.judgment_label).length, unlabeled_timed_note_heads: matches.filter(m => !m.judgment_label).length,
     combo_frame_labeled_note_heads: matches.filter(m => m.judgment_label_source === 'post_combo_frames').length, long_notes: projected.length, sustained_recognition_spans: projected.reduce((n, h) => n + h.input.segments.length, 0)};
