@@ -36,7 +36,8 @@ def associate_counters(data,combo,display_delay_ms,directory=None):
     if len(combo.events) != len(original):
         from piu_timeline.play.tracking import associate
         baseline = associate(notes,[dict(e) for e in original],display_delay=display_delay_ms/1000)
-        constraints = refinement_constraints(notes,original,baseline,combo.events)
+        constraints = {str(event):sorted(allowed) for event,allowed in
+                       refinement_constraints(notes,original,baseline,combo.events).items()}
     from piu_timeline.derived import call
     request={'schema':1,'notes':[{key:note[key] for key in ('lane','status','target_seconds','prediction_uncertainty_seconds','reason') if key in note} for note in notes],'events':combo.events,'display_delay_seconds':display_delay_ms/1000,
              'unsupported_intervals':data['unsupported_intervals'],'constraints':constraints}
