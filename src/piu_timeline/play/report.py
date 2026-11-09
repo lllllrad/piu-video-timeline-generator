@@ -24,15 +24,18 @@ def write_report(data,path,final_directory=None):
     from piu_timeline.derived import call
     final_directory=Path(final_directory or path.parent)
     media=quote(os.path.relpath(data['media']['path'],final_directory),safe='/')
-    content=call('report.render',json.dumps(data,ensure_ascii=False),
-                 data.get('song') or 'Unknown song',data.get('chart') or 'Unknown chart',media)
     pending=path.with_name(f'.{path.name}.{uuid4().hex}.tmp')
+    prepared=pending.with_suffix('.data.json')
     try:
-        pending.write_text(content,encoding='utf-8')
+        with prepared.open('w',encoding='utf-8')as stream:
+            json.dump(data,stream,ensure_ascii=False,allow_nan=False)
+        call('report.renderFile',str(prepared),str(pending),
+             data.get('song') or 'Unknown song',data.get('chart') or 'Unknown chart',media)
         pending.replace(path)
         write_summary(data,path.parent)
     finally:
         pending.unlink(missing_ok=True)
+        prepared.unlink(missing_ok=True)
     return path
 
 

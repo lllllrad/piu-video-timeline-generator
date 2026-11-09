@@ -4,7 +4,7 @@ import {mkdtempSync, readFileSync, writeFileSync, rmSync, statSync} from 'node:f
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {current} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
+import {current,materializeFiles,prepare as prepareArtifact,materialize} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
 import {inspectionView as prepare,inspectionRequest,type InspectionFixture as PresentationInput} from './fixtures.ts';
 import {parseData, stringifyData} from '../../src/piu_timeline/derived/json.ts';
 import {fingerprint, Store} from '../../src/piu_timeline/derived/pipeline/store.ts';
@@ -28,6 +28,21 @@ test('prepared observations replay entirely without source media or native libra
   assert.equal(report.timing_ranges.notes['0'].status, 'unknown');
   assert.ok(report.recognition_diagnostics.warnings.some(w => w.reason === 'timing_evidence_unresolved'));
   assert.equal(Object.hasOwn(report, 'visual_channels'), false);
+});
+
+test('file composition retains artifact binding and the complete prepared view',()=>{
+ const directory=mkdtempSync(join(tmpdir(),'piu-composition-'));
+ try{
+  const request=inspectionRequest(input()),result=prepareArtifact(request),expected=materialize(request,result);
+  const inputPath=join(directory,'input.json'),resultPath=join(directory,'result.json'),outputPath=join(directory,'view.json');
+  writeFileSync(inputPath,stringifyData(request));writeFileSync(resultPath,stringifyData(result));
+  materializeFiles(inputPath,resultPath,outputPath);
+  assert.deepEqual(parseData(readFileSync(outputPath,'utf8')),expected);
+  const changed={...request,source:{...request.source,metadata:{...request.source.metadata,song:'Different title'}}};
+  writeFileSync(inputPath,stringifyData(changed));
+  assert.throws(()=>materializeFiles(inputPath,resultPath,outputPath));
+  assert.deepEqual(parseData(readFileSync(outputPath,'utf8')),expected);
+ }finally{rmSync(directory,{recursive:true,force:true});}
 });
 
 test('four full observation channels survive consumer projections unchanged', () => {

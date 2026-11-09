@@ -2,6 +2,7 @@
 import json
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 
 def prepare_report(data,path,final_directory=None):
@@ -15,7 +16,13 @@ def prepare_report(data,path,final_directory=None):
     result=call('presentation.prepare',request,str(path.parent))
     from piu_timeline.play.observations.artifacts import save_input
     save_input(path.with_name('inspection-result.json'),result)
-    data=call('presentation.materialize',request,result)
+    view=path.with_name(f'.inspection-view.{uuid4().hex}.json')
+    try:
+        call('presentation.materializeFiles',str(path.with_name('presentation-input.json')),
+             str(path.with_name('inspection-result.json')),str(view))
+        data=json.loads(view.read_text())
+    finally:
+        view.unlink(missing_ok=True)
     from piu_timeline.play.observations.inspector import snapshot
     data['inspector_artifacts'] = snapshot(source, path.parent)
     artifacts = {'visual-support.json': data.get('visual_support'),

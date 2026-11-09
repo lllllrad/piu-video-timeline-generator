@@ -17,10 +17,16 @@ import {
   calculationView, type InspectionArtifact, type InterpretationArtifact,
   type PresentationInput, type ViewArtifact,
 } from './contracts.ts';
-import {result, applyResult} from './composition.ts';
+import {result, applyResult, materialize} from './composition.ts';
 export {input} from './contracts.ts';
 export {materialize} from './composition.ts';
 export type {PresentationInput} from './contracts.ts';
+
+/** Compose saved artifacts independently; do not join both documents in one wire request. */
+export function materializeFiles(inputPath:string,resultPath:string,outputPath:string):void{
+  const input=parseData(readFileSync(inputPath,'utf8')),result=parseData(readFileSync(resultPath,'utf8'));
+  atomicJSON(outputPath,materialize(input,result));
+}
 
 const composition = readFileSync(new URL('./presentation.ts', import.meta.url), 'utf8');
 const modules = {

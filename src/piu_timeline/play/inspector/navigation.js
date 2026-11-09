@@ -61,6 +61,9 @@ function warningActions(parent,item){
     (record.lane!=null?' · lane '+(record.lane+1):'')+' · '+item.origins.join(', '),actions);
   if(time!==null)for(const [tab,label] of [['channels','Video + channels'],['analysis','Derived data'],['chart','Note chart']])
     text('button',label,actions).onclick=()=>inspectAt(time,note,record.lane??null,tab,item.id);
+  if(record.tracking_evidence){
+    const link=text('a','Original tracking proof',actions);link.href=record.tracking_evidence.path;link.target='_blank';link.rel='noopener';
+  }
 }
 function renderInspectorWarnings(){
   const query=$('warningSearch').value.toLowerCase(),scoped=$('warningScope').value==='selected';

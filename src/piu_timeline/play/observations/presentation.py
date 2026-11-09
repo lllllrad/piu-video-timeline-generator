@@ -20,13 +20,14 @@ def risk_proofs(data, directory):
 
 
 def prepare(data, directory):
+    from piu_timeline.play.observations.warnings import presentation_source
     from piu_timeline.play.support import visual_support
     from piu_timeline.charts.policy import attach_regions
     from piu_timeline.play.holds.input_risk import native_body_risk_available
     from piu_timeline.play.screen_regions import note_occluders
     from piu_timeline.play.object_roles import filter_frames
     from piu_timeline.play.observations.records import retained
-    source = attach_regions({**data, 'visual_support': visual_support(data)}, directory)
+    source = attach_regions({**presentation_source(data, directory), 'visual_support': visual_support(data)}, directory)
     path = directory/'frames.jsonl'
     frames = retained(source, path)
     if path.is_file() and data.get('frame_count', len(frames)) != len(frames):

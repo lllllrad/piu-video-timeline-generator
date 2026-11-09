@@ -1,5 +1,6 @@
 /** Pure HTML presentation. The input document has already been analyzed. */
-import {readFileSync} from 'node:fs';
+import {readFileSync,openSync,readSync,writeSync,closeSync} from 'node:fs';
+import {StringDecoder}from 'node:string_decoder';
 const resource = name => readFileSync(new URL(`../play/${name}`, import.meta.url), 'utf8');
 const template = resource('report.html').replace('__STYLE__', () => resource('report.css') + '\n' + resource('inspector/workspace.css'))
   .replace('__SCRIPT__', () => ['report-evidence.js', 'inspector/warning-groups.js', 'inspector/navigation.js', 'inspector/provenance.js', 'inspector/overlay.js', 'report.js'].map(resource).join('\n'));
@@ -9,6 +10,25 @@ export function render(dataJSON: string, song: string, chart: string, media: str
   const parts = {TITLE: escape(`${song} · ${chart}`), MEDIA: escape(media),
     DATA: dataJSON.replace(/[<>&]/g, c => ({'<': '\\u003c', '>': '\\u003e', '&': '\\u0026'}[c]))};
   return template.replace(/__(TITLE|MEDIA|DATA)__/g, (_match, name) => parts[name]);
+}
+
+/** Copy prepared JSON into HTML in bounded chunks; no analysis or giant JS string. */
+export function renderFile(dataPath:string,outputPath:string,song:string,chart:string,media:string):void{
+  const [before,after]=template.split('__DATA__').map(part=>part.replace(/__(TITLE|MEDIA)__/g,
+    (_match,name)=>name==='TITLE'?escape(`${song} · ${chart}`):escape(media)));
+  const source=openSync(dataPath,'r');let target:number;
+  const bytes=Buffer.alloc(65536),decoder=new StringDecoder('utf8');
+  const write=(text:string)=>{
+    const encoded=Buffer.from(text);let offset=0;
+    while(offset<encoded.length)offset+=writeSync(target,encoded,offset,encoded.length-offset);
+  };
+  const safe=(text:string)=>text.replace(/[<>&]/g,c=>({'<':'\\u003c','>':'\\u003e','&':'\\u0026'}[c]));
+  try{
+    target=openSync(outputPath,'wx');
+    write(before);
+    for(;;){const count=readSync(source,bytes,0,bytes.length,null);if(!count)break;write(safe(decoder.write(bytes.subarray(0,count))));}
+    write(safe(decoder.end()));write(after);
+  }finally{closeSync(source);if(target!==undefined)closeSync(target);}
 }
 
 export function index(entries): string {

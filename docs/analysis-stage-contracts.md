@@ -71,6 +71,17 @@ Numerical views retain the measured bounds and compact warnings with an
 `evidence_file` reference, rather than repeatedly carrying the complete conflict
 lists through coordinate, beat and inspection transport.
 
+Inspection preparation also stores repeated frame-wide tracking ambiguity proofs
+once under `evidence/tracking-warnings/<sha256>.json`. Every warning keeps its
+reason, note association, times and source PTS; only `candidate_edges` and
+`candidate_frame_displacements` move to the referenced, content-verified file.
+The inspector links each affected warning to its complete original proof. The
+saved analysis and native tracking artifacts remain unchanged. HTML rendering
+streams the prepared JSON from a temporary file rather than sending the entire
+HTML or an escaped JSON string through the numerical runtime transport.
+Inspection composition reads its separately persisted input and result files;
+the combined documents do not need to fit in one transport message.
+
 ## Execution, reuse and failures
 
 `pipeline-status.json` records actual execution boundaries, start/finish times,
