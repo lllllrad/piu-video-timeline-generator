@@ -5,7 +5,7 @@ from piu_timeline.play.observations.coordinates import detection_points
 import numpy as np
 
 from piu_timeline.play.skins.bank import load_bank
-from piu_timeline.play.skins.anchors import cap_reference, FORMAT as ANCHOR_FORMAT
+from piu_timeline.play.skins.anchors import cap_reference
 from piu_timeline.play.skins.sampling import phases,reference_scale,FORMAT as SAMPLING_FORMAT
 
 from piu_timeline.derived import CONTRACTS
@@ -32,60 +32,52 @@ def validate_origin(candidate,template,width,height,scale):
 
 
 
-def registered_comparison(image,bank,templates,lane,y,height,scale,comparisons=None):
-    """Project a positive comparison from its matching anchor to its native center."""
+def comparison_input(image,bank,templates,lane,y,height,scale,comparisons=None,references=None):
+    """Collect native comparison evidence; TypeScript owns position decisions."""
+    from piu_timeline.play.skins.subfeatures import shared_cap_pixels
     choices=[]
     for index,candidate in enumerate([image,*image.get('alternatives',[])]):
-        name=candidate['template']
-        if name not in bank['anchor_registrations']:continue
-        template=templates[name]
+        name=candidate['template'];template=templates[name]
         if template['lane_kind']!=lane%5 or candidate.get('lane',lane)!=lane:
             raise ValueError('Registered image comparison belongs to another lane')
         cap=next(r for r in template['regions']if r['name']=='cap')
         error=candidate.get('region_errors',{}).get('cap',float('nan'))
         if (type(error)not in(int,float)or not np.isfinite(error)or error<0
                 or np.float32(error)/cap.get('maximum_error',.015)>1):continue
-        row=candidate['y']*height
-        if not np.isfinite(row):raise ValueError('Nonfinite registered comparison coordinate')
-        original_height=template['mask'].shape[0];sy=max(2,round(original_height*scale))/original_height
+        sy=candidate.get('reference_scale_y',max(2,round(template['mask'].shape[0]*scale))/template['mask'].shape[0])
         if 'reference_scale_y'in candidate:
-            sy=candidate['reference_scale_y'];phase=candidate.get('sampling_phase_pixels',[0,0])
+            phase=candidate.get('sampling_phase_pixels',[0,0])
             if (not np.isfinite(sy)or abs(sy-scale)>1e-8 or len(phase)!=2
                     or candidate.get('sampling_kernel','area')not in SAMPLING_FORMAT['kernels']
                     or any(not any(abs(v-p)<1e-8 for p in phases(scale))for v in phase)):
                 raise ValueError('Registered comparison has incompatible reference sampling')
-        # The source center certificate and target search live on different grids.
-        # An integer match location rounds a continuous target translation by up
-        # to half a target pixel, independently of reference-image scaling.
-        sampling_error=FORMAT['position_search']['uncertainty_pixels']if 'sampling_origin_pixels'in candidate else 0
-        uncertainty=bank['anchor_registrations'][name]['coordinate_uncertainty_pixels']*sy+sampling_error
-        center=row+bank['anchor_registrations'][name]['center_offset_y_pixels']*sy
-        choices.append({'template':name,'comparison_index':index,'detected_y_pixels':row,'native_y_pixels':center,
-                        'cap_error':error,'scale_y':sy,'uncertainty_pixels':uncertainty,
-                        'sampling_uncertainty_pixels':sampling_error})
-    if not choices:return {},None
-    lo=max(c['native_y_pixels']-c['uncertainty_pixels']for c in choices)
-    hi=min(c['native_y_pixels']+c['uncertainty_pixels']for c in choices)
-    conflict={'coordinate_intersection_pixels':[lo,hi],'comparisons':choices}if lo>hi+1e-6 else None
-    coincident=[c for c in choices if abs(c['detected_y_pixels']-y)<1e-5]
-    if not coincident and comparisons is not None:
-        from piu_timeline.play.skins.subfeatures import shared_cap_pixels
-        patterns=[image,*image.get('alternatives',[])]
-        for choice in choices:
-            proof=shared_cap_pixels(image,patterns[choice['comparison_index']],comparisons,
-                                    FORMAT['minimum_same_cap_support_fraction'])
-            if proof:coincident.append({**choice,'shared_cap_pixels':proof})
-    if not coincident:return {},conflict
-    chosen=min(coincident,key=lambda c:(c['uncertainty_pixels'],c['comparison_index']))
-    projection_error=max(abs(c['native_y_pixels']-chosen['native_y_pixels'])+c['uncertainty_pixels']for c in choices)
-    return {'native_y_pixels':chosen['native_y_pixels'],
-            'native_cap_projection_uncertainty_pixels':projection_error,
-            **({'native_cap_coordinate_uncertainty_pixels':chosen['uncertainty_pixels']}if not conflict else{}),
-            **({'native_cap_sampling_uncertainty_pixels':chosen['sampling_uncertainty_pixels']}
-               if chosen['sampling_uncertainty_pixels']else{}),
-            **({'native_cap_shared_pixel_evidence':chosen['shared_cap_pixels']}if 'shared_cap_pixels'in chosen else{}),
-            'native_cap_reference_scale_y':chosen['scale_y'],'native_cap_reference_template':chosen['template'],
-            'native_cap_reference_error':chosen['cap_error'],'native_cap_comparison_index':chosen['comparison_index']},conflict
+        shared=None
+        same=bool(abs(candidate['y']*height-y)<=32*np.finfo(float).eps*max(1,abs(candidate['y']*height),abs(y)))
+        if not same and comparisons is not None:
+            shared=shared_cap_pixels(image,candidate,comparisons,FORMAT['minimum_same_cap_support_fraction'])
+            same=shared is not None
+        registration=bank['anchor_registrations'].get(name)
+        pixel=candidate.get('cap_localization')
+        if pixel is not None:
+            from piu_timeline.play.skins.localization_pixels import FORMAT as PIXELS
+            if (pixel.get('method')!=PIXELS['method']or type(pixel.get('compared_pixels'))is not int
+                    or type(pixel.get('vertical_contrast_pixels'))is not int):
+                raise ValueError('Unsupported cap localization pixels')
+        choices.append({'template':name,'comparison_index':index,'image_y':candidate['y'],
+                        'cap_error':error,'maximum_error':cap.get('maximum_error',.015),'scale_y':sy,
+                        'same_cap':same,
+                        **({'localization_pixels':pixel}if pixel is not None else{}),
+                        **({'reference':references[name]}if references is not None else{}),
+                        **({'center_offset_y_pixels':registration['center_offset_y_pixels']}if registration else{}),
+                        **({'shared_cap_pixels':shared}if shared else{})})
+    return {'height':height,'raw_y':y,'comparisons':choices}
+
+
+def registered_comparison(image,bank,templates,lane,y,height,scale,comparisons=None):
+    from piu_timeline.derived import call
+    result=call('skinLocalization.resolve',comparison_input(image,bank,templates,lane,y,height,scale,comparisons))
+    return result['measurement'],result['conflict']
+
 
 
 def measure(data,frames):
@@ -134,7 +126,7 @@ def measure(data,frames):
             registration,conflict=registered_comparison(image,bank,templates,lane,y,height,scale,comparisons)
             if conflict:
                 conflicts[index].append({'time':time,'source_pts_seconds':pts,**conflict})
-                registration={**registration,'native_cap_registration_status':'conflicting'}
+                registration={**registration,'native_cap_registration_status':conflict['reason']}
             samples[index].append({'time':time,'source_pts_seconds':pts,'native_y_pixels':y,'detected_y_pixels':y,
                                    'image_anchor':[image['x'],image['y']],'template':image['template'],
                                    'cap_error':error,'cap_reference_sha256':identities[image['template']],
@@ -150,7 +142,8 @@ def measure(data,frames):
 def assemble(data,samples,conflicts):
     records=[{'note':i,'lane':note['lane'],'status':'measured','coordinate_method':FORMAT['method'],
               'observations':samples[i]}for i,note in enumerate(data['notes'])]
-    warnings=[{'note':i,'lane':data['notes'][i]['lane'],'reason':'conflicting_registered_image_anchors',
+    warnings=[{'note':i,'lane':data['notes'][i]['lane'],'reason':'image_position_unresolved',
+               'failure_details':sorted({e['reason']for e in evidence}),
                'check':'timing_reconstruction','visible_start_seconds':evidence[0]['time'],
                'visible_end_seconds':evidence[-1]['time'],'observed_points':len(evidence),
                'source_pts_seconds':[e['source_pts_seconds']for e in evidence],
@@ -173,7 +166,7 @@ def assemble(data,samples,conflicts):
 
 def from_tracks(data):
     """Reuse pre-assignment native measurements; do not reopen or remeasure frames."""
-    if data.get('coordinate_measurement_contract')!=data['skin_detector']['contract']:
+    if data.get('coordinate_measurement_contract')!={'skin':data['skin_detector']['contract'],'coordinates':FORMAT}:
         raise ValueError('Tracked coordinate measurements have a different detector contract')
     timeline={s['time']:s['source_pts']for s in data['frame_timeline']}
     samples=[];conflicts=defaultdict(list)

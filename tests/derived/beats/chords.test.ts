@@ -91,25 +91,10 @@ for(const missing of [false,true])test(`nonuniform motion or absent original cap
  assert.deepEqual(prepare(d,40),[]);
 });
 
-for(const spacing of [19.25,38.5,77])test(`native center precision follows the actual sampling grid: spacing=${spacing}`,()=>{
- const d=measuredGapScene(spacing,60,[[.85,0],[.85,1]],{renderTime:t=>t-.012*Math.sin(2*Math.PI*(t-.2)/.4)}),
-  scale=spacing/77,sampling=contracts.image_coordinates.position_search.uncertainty_pixels,
-  error=scale*contracts.native_anchor.coordinate_uncertainty_pixels+sampling;
- d.head_registration.format.position_search=structuredClone(contracts.image_coordinates.position_search);
- for(const r of d.head_registration.notes)for(const o of r.observations)Object.assign(o,{
-  native_cap_reference_scale_y:scale,native_cap_sampling_uncertainty_pixels:sampling,
-  native_cap_coordinate_uncertainty_pixels:error,sampling_origin_pixels:[0,0]});
- const before=structuredClone(d),proof=prepare(d,spacing)[0];assert.ok(proof?.capture_phase_motion);
- assert.equal(proof.measurement_basis,'source_bound_native_cap_centers');
- assert.ok(proof.endpoint_uncertainty_pixels.every(r=>r.every(v=>v===error)));
- const distance=Math.max(...proof.native_gap_range_pixels.map(Math.abs)),legacy=(contracts.chords.maximum_gap_spacing+2*contracts.chords.coordinate_error_spacing)*spacing;
- assert.ok(distance>legacy);
- const sign=Math.abs(proof.native_gap_range_pixels[0])>Math.abs(proof.native_gap_range_pixels[1])?-1:1;
- const notes=[{lane:0,points:[],prediction_uncertainty_seconds:.01,status:'estimated',target_seconds:0},{lane:1,points:[],prediction_uncertainty_seconds:.01,status:'estimated',target_seconds:sign*(distance+legacy)/2/proof.minimum_velocity_pixels_per_second}];
- assert.deepEqual(conflicts(notes,[proof]),[],'actual endpoint uncertainty must also govern the final validation');
- notes[1].target_seconds=sign*(distance+.01*spacing)/proof.minimum_velocity_pixels_per_second;
- assert.equal(conflicts(notes,[proof]).length,2,'declared precision is a bound, not unconditional concurrency');
- assert.deepEqual(d,before);
+for(const spacing of [19.25,38.5,77])test(`sampled-image localization cannot inherit a blanket source/search budget: spacing=${spacing}`,()=>{
+ const d=measuredGapScene(spacing,60,[[.85,0],[.85,1]]);
+ d.head_registration.format=structuredClone(contracts.image_coordinates);
+ assert.throws(()=>prepare(d,spacing),/missing_image_localization/);
 });
 
 test('a source gap excluding zero cannot become an exact chord on a coarse grid',()=>{

@@ -9,13 +9,14 @@ from piu_timeline.play.skins.subfeatures import account
 from piu_timeline.play.skins.canvas import comparison_canvas
 from piu_timeline.play.skins.matching import RegionSearch,prepare_regions
 from piu_timeline.play.skins.spatial import FORMAT as SPATIAL_FORMAT
-from piu_timeline.play.skins.overlap import FORMAT as OVERLAP_FORMAT,recover,recover_roles
+from piu_timeline.play.skins.overlap import FORMAT as OVERLAP_FORMAT,recover,recover_roles,refine_positions
 from piu_timeline.play.skins.overlap import runs
 from piu_timeline.play.skins.shared_roles import FORMAT as SHARED_ROLE_FORMAT,candidates as shared_roles
 from piu_timeline.play.skins.classification import FORMAT as CLASSIFICATION_FORMAT,QUALIFIED,identify
 from piu_timeline.play.skins.connection_visibility import FORMAT as CONNECTION_FORMAT,qualify as qualify_connections
+from piu_timeline.play.skins.localization_pixels import FORMAT as LOCALIZATION_FORMAT,acquire as localization_pixels
 
-FORMAT = {'schema': 1, 'revision': 12,'connector_ownership':CONNECTION_FORMAT,'classification':CLASSIFICATION_FORMAT, 'shared_roles':SHARED_ROLE_FORMAT, 'method': 'lane_masked_rgb_regions','spatial_support':SPATIAL_FORMAT,'overlap':OVERLAP_FORMAT,'sampling':SAMPLING_FORMAT,
+FORMAT = {'schema': 1, 'revision': 13,'localization_pixels':LOCALIZATION_FORMAT,'connector_ownership':CONNECTION_FORMAT,'classification':CLASSIFICATION_FORMAT, 'shared_roles':SHARED_ROLE_FORMAT, 'method': 'lane_masked_rgb_regions','spatial_support':SPATIAL_FORMAT,'overlap':OVERLAP_FORMAT,'sampling':SAMPLING_FORMAT,
           'scale_basis':'declared_uniform_game_frame_or_lane_spacing',
           'horizontal_search_spacing': .12, 'same_anchor_spacing': .25, 'vertical_limit': 'anchor',
           'body_candidates': {'schema':1,'selection':'qualified_rows_horizontal_minima'}}
@@ -116,9 +117,10 @@ class SkinDetector:
                                           if any(not np.isfinite(values[row,col])for values in errors.values())else{}),
                                        'bounds_pixels': bounds, 'method': 'skin_image', 'skin': self.bank['skin']})
         candidates.extend(recover(self,image,candidates))
+        candidates.extend(refine_positions(self,image,candidates))
         candidates.extend(recover_roles(self,image,candidates))
         candidates.extend(shared_roles(self,image,candidates))
-        return qualify_connections(self,image,candidates)
+        return localization_pixels(self,image,qualify_connections(self,image,candidates))
 
     def resolve(self, candidates):
         candidates=[identify(self.by_sampling[key(c)],c)for c in candidates]
@@ -131,7 +133,7 @@ class SkinDetector:
                 retained.append({**candidate, 'alternatives': []})
                 continue
             current = peers[0]
-            fields=('role','template_role','classification_status','template','quality','region_errors',
+            fields=('role','template_role','classification_status','template','quality','region_errors','cap_localization',
                     'x','y','bounds_pixels','shared_role','role_evidence','connector_ownership','cap_context_qualified','visible_cap_runs','visible_connection_runs','occlusion_evidence','sampling_phase_pixels','reference_scale_y','sampling_kernel','sampling_origin_pixels','unavailable_regions')
             proof = {k: candidate[k] for k in fields if k in candidate}
             current['alternatives'].append(proof)

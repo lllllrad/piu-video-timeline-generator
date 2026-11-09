@@ -14,12 +14,12 @@ const format={native_cap_registration:contracts.native_anchor};
 const sample={time:1,source_pts_seconds:81,native_y_pixels:100,template:'cap',cap_reference_sha256:'reference',
  native_cap_coordinate_uncertainty_pixels:1,native_cap_reference_scale_y:1};
 
-test('one reader distinguishes reference anchors, measured centers, bounded conflicts and invalid positions',()=>{
+test('one reader distinguishes reference anchors, measured centers, rejected conflicts and invalid positions',()=>{
  assert.equal(imagePosition(sample,100,format).kind,'native_cap_center');
  const raw={...sample};delete raw.native_cap_coordinate_uncertainty_pixels;
  assert.equal(imagePosition(raw,100,format).kind,'image_reference_anchor');
  const conflict={...raw,native_cap_registration_status:'conflicting',native_cap_projection_uncertainty_pixels:2,native_cap_reference_template:'cap'};
- assert.equal(imagePosition(conflict,100,format).kind,'conflicting_center_projection');
+ assert.equal(imagePosition(conflict,100,format).kind,'unavailable');
  for(const bad of[{...sample,native_y_pixels:NaN},{...sample,native_y_pixels:101},
   {...sample,native_cap_coordinate_uncertainty_pixels:2},{...sample,source_pts_seconds:NaN}])assert.equal(imagePosition(bad,100,format).kind,'unavailable');
  assert.equal(imagePosition(sample,100,{}).kind,'unavailable');

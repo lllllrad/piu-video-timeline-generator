@@ -11,7 +11,8 @@ KNOWN_ANCHOR_FORMAT={'schema':1,'method':'declared_endpoint_features_at_measured
  'foreground':'other_caps_only','features':'fully_observed','conflicts':'retain_all_positive_roles',
  'anchor_center':'registered_reference_center_in_analysis_pixels'}
 
-FORMAT={'schema':1,'known_anchor_roles':KNOWN_ANCHOR_FORMAT,'method':'visible_cap_with_measured_foreground','proposal':'visible_mask_ssd_correlations',
+FORMAT={'schema':1,'revision':2,'known_anchor_roles':KNOWN_ANCHOR_FORMAT,'method':'visible_cap_with_measured_foreground','proposal':'visible_mask_ssd_correlations',
+        'existing_caps':'remeasure_position_with_other_caps_only',
         'required_cap_features':'fully_visible','foreground_basis':'matched_cap_with_sampling_influence',
         'sampling_influence':'area_fractional_pixel_or_bicubic_stencil',
         'minimum_visible_fraction':.25,'minimum_visible_width_fraction':.5,
@@ -212,4 +213,41 @@ def recover_roles(detector,image,seeds):
                 **{k:root[k]for k in ('template','x','y','bounds_pixels','sampling_phase_pixels','sampling_kernel','sampling_origin_pixels')if k in root},
                 'registered_center_analysis_pixels':center.tolist()}
             result.append(record)
+    return result
+
+
+def refine_positions(detector,image,seeds):
+    """A weak initial match must not block a better visible-cap localization.
+
+    Discovery excludes neighborhoods already containing a cap. Refinement uses
+    only other caps as foreground and searches this cap's neighborhood again;
+    the initial center is a search seed, never a fixed registration constraint.
+    """
+    caps=[r for r in detector.resolve(seeds)if r['role']!='hold_body']
+    if len(caps)<2:return []
+    owners=[foreground(detector,image,r)for r in caps];planes=[]
+    for source,mask in owners:
+        plane=np.zeros((detector.height,detector.width),dtype=bool)
+        a,b,c,d=source['foreground_bounds_pixels'];plane[b:d,a:c]=mask;planes.append(plane)
+    total=np.sum(planes,axis=0,dtype='uint16');result=[]
+    for index,root in enumerate(caps):
+        known=(total-planes[index])>0
+        other=[source for i,source in enumerate(owners)if i!=index]
+        searcher=VisibleSearch(image,known)
+        for template in detector.templates:
+            if template['lane_kind']!=root['lane']%5 or template['role']=='hold_body':continue
+            search=detector.search_bounds(detector.layout['lanes'][root['lane']],template)
+            if search is None:continue
+            left,top,right,bottom=search;h=template['mask'].shape[0];ay=template['anchor'][1]
+            row=root['y']*detector.height;radius=detector.same_anchor_pixels
+            top=max(top,math.floor(row-radius-ay));bottom=min(bottom,math.ceil(row+radius-ay)+h)
+            if bottom-top<h or not known[top:bottom,left:right].any():continue
+            for y,x in proposals(searcher,template,[left,top,right,bottom]):
+                anchor=top+y+ay
+                if abs(anchor-row)>=radius or anchor>detector.layout.get('note_y_max',.95)*detector.height:continue
+                record=recovery_record(detector,image,template,root['lane'],left+x,top+y,known,other)
+                if record is not None:
+                    record['occlusion_evidence']['position_seed']={
+                        'template':root['template'],'image_anchor':[root['x'],root['y']]}
+                    result.append(record)
     return result

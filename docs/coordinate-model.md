@@ -19,8 +19,10 @@ establish it.
 | UCS timing | Song-relative beats/rows and seconds | Verified audio translation and official UCS tempo sections; no media retiming |
 
 Analysis resolution is not fixed. Pixel quantities must be interpreted with the
-saved dimensions and lane spacing. A reference-pixel uncertainty scales once
-into analysis pixels; there is no second analysis-pixel floor in registration.
+saved dimensions and lane spacing. A localized raster center is a point in the declared reference convention.
+Candidate scatter and an assumed continuous translation do not create a spatial
+radius. Independently measured source-geometry bounds belong to their own
+measurement producer; they cannot be added automatically to raster localization.
 Geometric cap centers do not establish engine timing anchors or capture latency.
 
 Image-reference scale uses a bank's explicit full-game `reference_frame` when
@@ -63,9 +65,9 @@ of these explicit kinds:
 
 | Kind | Meaning | Permitted use |
 | --- | --- | --- |
-| `native_cap_center` | Source registration, scaled error and current position agree | Bounded center distances and independent references, subject to each consumer's ordinary limits |
+| `native_cap_center` | Source registration and a uniquely localized current position agree | Bounded center distances and independent references, subject to each consumer's ordinary limits |
 | `image_reference_anchor` | Original image-matching origin | Relative distances only when both origins use the identical reference |
-| `conflicting_center_projection` | A projected center convention with conflicting localization hypotheses and a retained encompassing error | Preserve the trajectory convention and warning; do not supply an independent frame measurement |
+| Conflicting localization | Distinct sampled-image positions have indistinguishable comparison scores | Explicit failure; no center projection, encompassing interval or independent measurement |
 | `unavailable` | Missing, contradictory or unsupported registration | Explicit failure with a reason; no assumed center |
 
 `coordinates/trajectories.ts` checks the complete fit trajectory and source PTS,

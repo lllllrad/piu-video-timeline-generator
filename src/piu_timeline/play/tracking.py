@@ -53,13 +53,13 @@ class NoteTracker:
         return .12
 
     def observations(self,seconds,detections):
+        if self.frame_centers is not None:
+            return [{'time':seconds,**position}for position in self.frame_centers.positions(detections)]
         result=[]
         for image in detections:
-            if self.frame_centers is not None:position=self.frame_centers.position(image)
-            else:
-                # Direct non-image callers provide normalized cap-center coordinates.
-                center={'yPixels':image['y']*self.height,'uncertaintyPixels':.5,'basis':{'kind':'native_cap_center'}}
-                position={'anchor':center,'center':center}
+            # Direct non-image callers provide normalized cap-center coordinates.
+            center={'yPixels':image['y']*self.height,'uncertaintyPixels':0,'basis':{'kind':'native_cap_center'}}
+            position={'anchor':center,'center':center}
             result.append({'time':seconds,**position})
         return result
 
@@ -358,18 +358,21 @@ def associate(notes,combo_events,window=.045,display_delay=0.0,event_note_constr
 def collect_tracks(tracker,combo,directory,source):
     """Persist visual identities and independent counter events, without timing fits."""
     from pathlib import Path
+    from piu_timeline.derived import CONTRACTS
     result={'notes':tracker.finish(),'frame_timeline':[
         {'time':s['time'],'source_pts':s['source_pts']}for s in tracker.timeline],
-        'unsupported_intervals':tracker.unsupported_intervals,'combo_events':combo.events,'counter_observations':combo.observations,'tracking_complete':True,'coordinate_measurement_contract':source.get('skin_detector',{}).get('contract')}
+        'unsupported_intervals':tracker.unsupported_intervals,'combo_events':combo.events,'counter_observations':combo.observations,'tracking_complete':True,
+        'coordinate_measurement_contract':{'skin':source.get('skin_detector',{}).get('contract'),
+                                           'coordinates':CONTRACTS['image_coordinates']}}
     from piu_timeline.play.observations.artifacts import save_input
     from piu_timeline.play.stages import fingerprint
-    from piu_timeline.derived import CONTRACTS
     identity={'source':{k:source.get(k)for k in ('media','game_roi','start_seconds','end_seconds')},
               'geometry':{'width':tracker.width,'height':tracker.height,'layout':tracker.layout},
               'detector_contract':source.get('skin_detector',{}).get('contract'),
               'frame_observations_sha256':source.get('frame_observations_sha256'),
               'object_roles':source.get('object_interpretation',{}).get('contract'),
-              'tracking_contract':CONTRACTS['frame_tracking'],'fragment_contract':CONTRACTS['fragments']}
+              'tracking_contract':CONTRACTS['frame_tracking'],'fragment_contract':CONTRACTS['fragments'],
+              'coordinate_contract':CONTRACTS['image_coordinates']}
     save_input(Path(directory)/'counter-events.json',{'schema':1,'events':combo.events,'observations':combo.observations})
     save_input(Path(directory)/'tracking.json',{'schema':1,'stage':'visual-tracks','input_fingerprint':fingerprint(identity),'input':identity,
                'notes':result['notes'],'timeline':result['frame_timeline']})

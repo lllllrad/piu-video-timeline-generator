@@ -16,6 +16,7 @@ from piu_timeline.play.skins.calibration import register_anchors
 from piu_timeline.play.skins.reuse import reusable_groups
 from piu_timeline.play.skins.replay import detector_metadata
 from tests.play.skins.test_detector import examples
+from tests.play.skins.coordinate_fixtures import localization_pixels
 
 
 def fixture(root):
@@ -58,7 +59,7 @@ def chord_trace(path):
         frames.append({'playback_seconds':time,'source_pts_seconds':50+time,'skin_observations':[
             {'lane':lane,'x':data['layout']['lanes'][lane]['x'],'y':y/data['analysis_height'],
              'role':role,'template':role,'skin':bank['skin'],'classification_status':'full_pattern',
-             'region_errors':{'cap':0.}}for lane,role in ((0,'tap'),(5,'hold_start'))]})
+             'region_errors':{'cap':0.},'cap_localization':localization_pixels()}for lane,role in ((0,'tap'),(5,'hold_start'))]})
     return data,frames
 
 
@@ -135,19 +136,20 @@ class AnchorRegistrationTest(unittest.TestCase):
             self.assertEqual(proofs[0]['registered_image_templates'],['hold_start','tap'])
             enlarged=deepcopy(data);enlarged['analysis_width']=400
             enlarged['head_registration']=measure(enlarged,frames)
-            self.assertEqual(enlarged['head_registration']['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels'],2.)
+            self.assertEqual(enlarged['head_registration']['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels'],0)
             wider=prepare(enlarged,40)
             self.assertEqual(len(wider),1)
-            self.assertEqual(wider[0]['native_gap_range_pixels'],[-4.,4.])
-            self.assertTrue(all(errors==[2.,2.]for errors in wider[0]['endpoint_uncertainty_pixels']))
-            # Larger calibrated error remains evidence, but cannot collapse fine rows.
-            self.assertEqual(constrain([(0,0),(0,1)],.002,[{**wider[0],'indices':[0,1]}])[0],[(0,0),(0,1)])
+            self.assertEqual(wider[0]['native_gap_range_pixels'],[0.,0.])
+            self.assertTrue(all(errors==[0.,0.]for errors in wider[0]['endpoint_uncertainty_pixels']))
+            # Exact co-observed centers constrain simultaneous rows directly.
+            self.assertEqual(constrain([(0,0),(0,1)],.002,[{**wider[0],'indices':[0,1]}])[0],[(0,0),(0,0)])
             smaller=deepcopy(data);smaller['analysis_width']=100
             smaller['head_registration']=measure(smaller,frames)
-            self.assertEqual(smaller['head_registration']['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels'],.5)
+            self.assertEqual(smaller['head_registration']['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels'],0)
             for record in data['head_registration']['notes']:
                 for sample in record['observations']:
                     sample.pop('native_cap_coordinate_uncertainty_pixels');sample.pop('native_cap_reference_scale_y')
+                    sample.pop('native_cap_localization')
             # Without source registration, these distinct references cannot be pooled.
             self.assertEqual(prepare(data,40),[])
             sample=data['head_registration']['notes'][0]['observations'][0]
@@ -192,19 +194,16 @@ class AnchorRegistrationTest(unittest.TestCase):
                 actual=measure(data,changed);index=0 if case=='registered_primary_conflict'else 1
                 measured=actual['notes'][index]['observations'][0]
                 with self.subTest(case=case):
-                    self.assertNotIn('native_cap_coordinate_uncertainty_pixels',measured)
-                    self.assertEqual(prepare({**data,'head_registration':actual},40),[])
                     if 'conflict'in case:
-                        self.assertEqual(actual['status'],'failed')
-                        self.assertEqual(measured['native_cap_registration_status'],'conflicting')
-                        warning=actual['warnings'][0]
-                        self.assertEqual(warning['note'],index)
-                        self.assertEqual(warning['observed_points'],9)
-                        self.assertEqual(warning['source_pts_seconds'][0],50.6)
-                        reviewed={**data,'head_registration':actual,'start_seconds':.5,'end_seconds':1.2}
-                        warnings=recognition_diagnostics(reviewed,{'notes':{}})['warnings']
-                        self.assertTrue(any(w['reason']=='conflicting_registered_image_anchors'for w in warnings))
-                    else:self.assertEqual(actual['warnings'],[])
+                        # A different raw row without shared image-pixel proof is
+                        # an unrelated comparison, not another center constraint.
+                        self.assertEqual(measured['native_cap_coordinate_uncertainty_pixels'],0)
+                        self.assertEqual(actual['warnings'],[])
+                        self.assertTrue(prepare({**data,'head_registration':actual},40))
+                    else:
+                        self.assertNotIn('native_cap_coordinate_uncertainty_pixels',measured)
+                        self.assertEqual(prepare({**data,'head_registration':actual},40),[])
+                        self.assertEqual(actual['warnings'],[])
 
     def test_mismatched_source_artifact_or_media_fails_before_creating_a_bank(self):
         for kind in ('artifact','media'):

@@ -10,7 +10,7 @@ FORMAT = {'schema': 1, 'revision': 5, 'evidence': 'native_image_trace_references
 def producer_contract():
     from piu_timeline.play.observations.artifacts import producer
     return producer('play/skins/observations.py','play/skins/coverage.py','play/skins/sampling.py',
-                    'play/skins/detector.py','play/skins/matching.py','play/skins/spatial.py','play/skins/overlap.py','play/skins/visible_search.py','play/skins/support.py','play/skins/bank.py','play/skins/shared_roles.py','play/skins/classification.py','play/skins/connection_visibility.py','play/screen_regions.py')
+                    'play/skins/detector.py','play/skins/matching.py','play/skins/localization_pixels.py','play/skins/spatial.py','play/skins/overlap.py','play/skins/visible_search.py','play/skins/support.py','play/skins/bank.py','play/skins/shared_roles.py','play/skins/classification.py','play/skins/connection_visibility.py','play/screen_regions.py')
 
 
 def clearance_occlusions(image,references,layout,width,height):

@@ -22,3 +22,9 @@ def chord_fixture():
               'observations':[{'time':t,'source_pts_seconds':50+t}for t in times]}for i in range(3)]
     return {'notes':notes,'head_registration':{'notes':records},'analysis_width':400,'analysis_height':400,
             'layout':{'receptor_y':.1,'lanes':[{'x':.2+.1*i}for i in range(3)]}}
+
+
+def localization_pixels(error=0.):
+    """Measured pixel-channel records for coordinate-only consumer fixtures."""
+    return {'method':'visible_cap_rgb_and_vertical_contrast','compared_pixels':400,
+            'vertical_contrast_pixels':80,'squared_rgb_error':error,'vertical_contrast_error':0.}

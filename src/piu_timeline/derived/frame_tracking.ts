@@ -1,5 +1,6 @@
 /** Assign observations only when their coordinate basis and identity are unambiguous. */
 import {contracts} from './contracts.ts';
+import {roundoff} from './math.ts';
 import {sameBasis,type CoordinateBasis} from './coordinates/measurements.ts';
 
 type Position={yPixels:number;uncertaintyPixels:number;basis:CoordinateBasis};
@@ -19,7 +20,7 @@ function displacement(a:Observation,b:Observation):[number,number]|null{
  if(!views.length)return null;
  const ranges=views.map(([p,q])=>{const delta=p.yPixels-q.yPixels,error=p.uncertaintyPixels+q.uncertaintyPixels;return [delta-error,delta+error];}),
   lo=Math.max(...ranges.map(r=>r[0])),hi=Math.min(...ranges.map(r=>r[1]));
- return lo<=hi?[lo,hi]:null;
+ return lo<=hi?[lo,hi]:lo-hi<=roundoff(...views.flatMap(([p,q])=>[p.yPixels,q.yPixels]))?[(lo+hi)/2,(lo+hi)/2]:null;
 }
 
 function predict(points:{time:number;position:Position}[],time:number,spacing:number,motion:Displacements):[number,number]|null{
@@ -95,10 +96,13 @@ function translationsAtLimit(tracks:Track[],detections:Detection[],time:number,s
   const lo=Math.max(-limit,range[0]),hi=Math.min(limit,range[1]);
   return lo<=hi?[lo,hi]:null;
  }));
- const boundaries=[...new Set(intervals.flat().filter(Boolean).flat())].sort((a,b)=>a-b);
+ const epsilon=roundoff(...tracks.flatMap(t=>t.observations.map(o=>o.center?.yPixels??o.anchor.yPixels)),
+  ...detections.map(d=>d.observation.center?.yPixels??d.observation.anchor.yPixels));
+ const boundaries=[...new Set(intervals.flat().filter(Boolean).flat())].sort((a,b)=>a-b)
+  .filter((p,i,sorted)=>!i||p-sorted[i-1]>epsilon);
  const ranges:number[][]=[],completePatterns:number[][]=[];
  const inspect=(lo:number,hi:number)=>{
-  const value=(lo+hi)/2,edges=intervals.map(row=>row.map(r=>!!r&&r[0]-1e-9<=value&&value<=r[1]+1e-9));
+  const value=(lo+hi)/2,edges=intervals.map(row=>row.map(r=>!!r&&r[0]-epsilon<=value&&value<=r[1]+epsilon));
   const pairs=matching(edges);
   const independent=pairs.some(([i],k)=>pairs.slice(k+1).some(([j])=>{
    if(before[i].lane!==before[j].lane)return true;
@@ -173,9 +177,11 @@ function gapDisplacement(trackIndex:number,tracks:Track[],detections:Detection[]
  });
  if(new Set(references.map(r=>r.lane)).size<2)return null;
  const lo=Math.max(...references.map(r=>r.range[0])),hi=Math.min(...references.map(r=>r.range[1]));
- if(lo>hi)return null;
- return {fromSeconds,pixels:(lo+hi)/2,uncertaintyPixels:(hi-lo)/2,
-  proof:{fromSeconds,toSeconds:time,displacementRangePixels:[lo,hi],references}};
+ const epsilon=roundoff(...references.flatMap(r=>[r.from.center?.yPixels??r.from.anchor.yPixels,r.to.center?.yPixels??r.to.anchor.yPixels]));
+ if(lo>hi+epsilon)return null;
+ const range=lo>hi?[(lo+hi)/2,(lo+hi)/2]:[lo,hi];
+ return {fromSeconds,pixels:(lo+hi)/2,uncertaintyPixels:(range[1]-range[0])/2,
+  proof:{fromSeconds,toSeconds:time,displacementRangePixels:range,references}};
 }
 
 // Maximum matching answers how many edges can be selected, not whether an

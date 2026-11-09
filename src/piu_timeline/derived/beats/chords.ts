@@ -29,16 +29,16 @@ export function prepare(data: RecordData, spacing: number): RecordData[] {
       (record.coordinate_uncertainty_pixels ?? Infinity) > F.coordinate_error_spacing * spacing)) continue;
     const index = record.note, note = data.notes[index], points = new Map<number, number>(fitTrajectory(note).points);
     for (const sample of record.observations) {
-      if (image && sample.native_cap_registration_status === 'conflicting') continue;
+      if (image && sample.native_cap_registration_status) continue;
       const time = sample.time;
       if (!points.has(time)) continue;
-      let model = ['native_cap_center', null], endpointError = 0;
+      let model = ['native_cap_center', null], endpointError = 0,hasEndpointBound=false;
       if (image) {
         const position=imagePosition(sample,points.get(time),data.head_registration?.format);
         if(position.kind==='unavailable')throw new Error(`Invalid image chord coordinate: ${position.reason}`);
-        if(position.kind==='conflicting_center_projection')continue;
         if(position.kind==='native_cap_center'){
           endpointError=position.uncertaintyPixels;
+          hasEndpointBound=true;
         }else{
           // A projected center and its raw matching anchor are distinct frames,
           // including when a large uncertainty prevents a certified chord.
@@ -46,7 +46,7 @@ export function prepare(data: RecordData, spacing: number): RecordData[] {
         }
       }
       if (!at.has(time)) at.set(time, []);
-      at.get(time).push({index, lane: note.lane, y: points.get(time), pts: sample.source_pts_seconds, model, endpointError,
+      at.get(time).push({index, lane: note.lane, y: points.get(time), pts: sample.source_pts_seconds, model, endpointError,hasEndpointBound,
         reference: image ? (sample.native_cap_reference_template ?? sample.template) : null});
     }
   }
@@ -59,7 +59,7 @@ export function prepare(data: RecordData, spacing: number): RecordData[] {
       if (a.lane === b.lane || Math.abs(a.pts - b.pts) > 1e-6 || !equal(a.model, b.model)) continue;
       const key = JSON.stringify([a.index, b.index, a.model]);
       if (!pairs.has(key)) pairs.set(key, {a: a.index, b: b.index, model: a.model, samples: []});
-      pairs.get(key).samples.push([time, a.y, b.y, a.pts, a.reference, b.reference, a.endpointError, b.endpointError]);
+      pairs.get(key).samples.push([time, a.y, b.y, a.pts, a.reference, b.reference, a.endpointError, b.endpointError,a.hasEndpointBound&&b.hasEndpointBound]);
     }
   }
   const result = [];
@@ -68,7 +68,7 @@ export function prepare(data: RecordData, spacing: number): RecordData[] {
     const gap = Math.max(...samples.map(s => Math.abs(s[1] - s[2])));
     // Only source-certified per-frame image positions supply endpoint intervals.
     // Every co-observed frame must admit one common physical inter-head gap.
-    const measuredBounds = samples.every(s => s[6] > 0 && s[7] > 0);
+    const measuredBounds = samples.every(s => s[8]===true);
     const gapRange = measuredBounds ? [Math.max(...samples.map(s => s[2] - s[1] - s[6] - s[7])),
       Math.min(...samples.map(s => s[2] - s[1] + s[6] + s[7]))] : null;
     const maximumGap = F.maximum_gap_spacing * spacing;

@@ -52,19 +52,14 @@ test('uncalibrated origins cancel only for the same image reference',()=>{
  assert.ok([0,1].every(i=>incompatible.some(w=>w.note===i&&w.failure_detail==='incompatible_coordinate_origins')));
 });
 
-test('one explicitly bounded projection conflict does not change the trajectory convention',()=>{
+test('a conflicting position cannot certify a trajectory by encompassing its candidate centers',()=>{
  const d=scene(40,60),r=d.head_registration.notes[1],o=r.observations[5];
  r.coordinate_status='projected';o.native_cap_registration_status='conflicting';
  o.native_cap_projection_uncertainty_pixels=1.5;o.native_cap_reference_template=o.template;
  delete o.native_cap_coordinate_uncertainty_pixels;
- const support=prepare(d,40);
- assert.ok(support.chunks[0][1]);
- assert.ok(!support.observed[1].includes(o.time),'the conflict itself cannot supply an independent coordinate');
- const result=reconstruct({schema:1,data:d,reference:{status:'available',song_start_seconds:0,alignment_uncertainty_seconds:0},timing_text:text(template(4,64))});
- assert.ok([1,2].every(i=>result.notes[i].status==='estimated'&&Math.abs(result.notes[i].target_seconds-1.125)<1e-8));
- assert.equal(d.head_registration.notes[1].observations[5].native_cap_registration_status,'conflicting');
- delete o.native_cap_projection_uncertainty_pixels;
- assert.ok(!prepare(d,40).chunks[0][1],'an unsupported conflict cannot claim the projected convention');
+ assert.ok(!prepare(d,40).chunks[0][1]);
+ o.native_cap_projection_uncertainty_pixels=1000;
+ assert.ok(!prepare(d,40).chunks[0][1],'a larger interval cannot make a conflicted position usable');
 });
 
 test('a scene containing only unsupported origins still reports coordinate failures',()=>{

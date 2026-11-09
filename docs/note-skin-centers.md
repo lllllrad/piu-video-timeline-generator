@@ -140,10 +140,50 @@ does not establish this identity. The actual shared-pixel count and both support
 fractions are retained as `native_cap_shared_pixel_evidence`.
 The sample retains both `detected_y_pixels` and `native_y_pixels`, its actual reference,
 comparison index and cap error; failed context does not erase positive cap
-pixels. Another glyph cannot transfer calibration. All positively matched
-registered coordinate intervals must intersect. Mutually contradictory
-comparisons produce an explicit per-track warning and do not supply chord or
-independent coordinate-model support; raw detections and comparisons remain.
+pixels. Another glyph cannot transfer calibration. Native acquisition also retains `cap_localization`: a double-precision RGB
+residual over the visible, source-supported cap core, its pixel count, and an
+independent vertical-contrast residual. Contrast pairs use adjacent observed
+rows whose reference RGB difference exceeds that cap's photometric error bound.
+Missing vertical features, hidden pairs or a failed contrast comparison cannot
+establish a vertical center. A body stripe without a visible boundary is a
+refusal case. Missing pixel observations require acquisition; aggregate saved
+RGB errors cannot reconstruct this channel.
+
+Occlusion recovery must also remeasure existing weak caps. Its discovery pass
+skips neighborhoods that already have a cap, so it cannot correct an initial
+shifted match there. Position refinement excludes that cap itself from the
+foreground, retains only independently measured neighboring caps, and searches
+its original neighborhood using the actual visible two-dimensional footprint.
+The initial center is a search seed, not a fixed coordinate. Refinement adds
+competing pixel measurements without erasing the original evidence.
+
+RGB acceptance and spatial localization are separate decisions. A positive cap
+comparison proposes a position; it does not establish that every positive pose
+or sampling variant locates the same center. `derived/skins/localization.ts`
+projects the source-bound center convention for each same-cap comparison, then
+selects the unique minimum normalized cap RGB error. Reference aliases and
+sampling variants at the same center do not compete as different positions.
+Distinct centers with scores indistinguishable at the declared numerical
+precision remain `image_position_ambiguous`. This precision is a floating-point
+score tolerance, not a positional allowance. No best-position choice is made
+from motion, input timing, a beat row or a neighboring lane.
+
+The saved `native_cap_localization` records the selected score, the strongest
+competing position's score, their separation and the number of distinct positions.
+A weaker positive comparison does not widen a point, constrain its location or
+turn into independent corroboration. The coordinate is on the sampled image
+grid in the certified reference convention; its spatial radius is zero. The
+source certificate's fixed geometry budget and a hypothetical half-target-pixel
+rounding error are not automatically added to that raster coordinate. This does
+not claim a continuous engine position, subpixel accuracy outside the sampled
+reference models, or exact target time. Capture phase, motion reconstruction and
+reference-convention validity remain separate obligations.
+
+Python validates native comparison pixels, sampling origins and shared cap
+support. It sends all per-frame comparison evidence in one batch to TypeScript,
+which owns reference-center projection, score competition and the selected
+coordinate. A same-reference tracking anchor likewise receives no candidate-
+spread radius; indistinguishable different locations cannot provide that anchor.
 Pair support counts use only jointly qualified source-frame measurements.
 
 Timing fits use each qualified frame's projected center and retain the raw
@@ -154,12 +194,13 @@ enter that fit. `image_center_registration_incomplete` identifies every frame
 still lacking a center. Missing frames are not interpolated, and ordinary timing
 and capture-gap checks must still pass with the measured subset. Mixing raw
 origins and corrected centers would create artificial motion.
-Conflicting localization hypotheses retain their explicit
-warning, a source-bound representative projection and an error covering every
-qualified hypothesis. They supply no independent chord/spacing coordinate proof.
-There is no lane-wide or neighboring-frame center correction. Reapplying
-registration starts from the raw trajectory. Image ownership, role
-joins and hold connectivity use raw matching positions and original PTS.
+Conflicting localization hypotheses retain an explicit warning and the original
+comparison evidence, without a representative center projection. They cannot
+enter a timing fit, certify the trajectory convention or provide a fallback
+tracking anchor with an enlarged error. There is no lane-wide or neighboring-
+frame center correction. Reapplying registration starts from the raw trajectory.
+Image ownership, role joins and hold connectivity use raw matching positions
+and original PTS.
 
 A trajectory whose fitted samples all have certified native center bounds can
 measure displacement even while it is the only visible note. The native adapter
@@ -171,20 +212,11 @@ its endpoint errors. Unknown frames are not filled, and source PTS, capture gaps
 target-clock checks and independent chord requirements remain separate.
 
 Coordinates retain registration only for the reference that actually supplied
-the positive cap measurement. Uncertainty is converted through the actual
-vertical reference scale. The one-pixel source bound belongs to the original
-reference image, including its native raster measurement. Integer target-image
-search adds an independent half-target-pixel translation bound. For example,
-half-size acquisition has a 0.5-pixel source bound plus a 0.5-pixel search bound.
-The latter is stored as `native_cap_sampling_uncertainty_pixels` and qualified
-against the image-coordinate `position_search` contract. Resampling phase is
-retained separately; scaling the reference does not scale the target search grid.
-Cross-template concurrency uses these centers only within the existing
-lane-spacing-relative coordinate budget and all ordinary gap, motion, duration and PTS checks. Larger scaled
-uncertainty cannot widen that budget; unregistered references retain the
-identical-reference constraint. Complete chord proofs list the registered
-image references they used. Bank review status does not block automatic UCS
-drafts; actual missing or contradictory coordinate evidence remains explicit.
+the localized cap measurement. Cross-template concurrency uses these centers
+within its ordinary gap, motion, duration and PTS checks. An unregistered
+reference retains the identical-reference constraint. Complete chord proofs list
+the registered image references they used. Bank review status does not block
+automatic UCS drafts; missing or ambiguous coordinate evidence remains explicit.
 
 Cross-template image chord checks intersect the signed inter-head gap bounds
 from every qualified co-observed frame. Each bound uses both certified endpoint
@@ -206,3 +238,14 @@ between unregistered tracks require the same unchanged image reference throughou
 both trajectories, so the matching-origin offset cancels. Certified coordinate
 contradictions still fail the ordinary spacing checks. These checks use native
 positions and source PTS, independently of input and judgment timestamps.
+
+
+## Localization validation
+
+`tests/derived/skins/raster-localization.test.ts` renders taps and both boundaries
+of holds from the synthetic scene generator. It checks all expected centers
+against independently supplied scene positions across three animation poses,
+movement and four image scales. `localization.test.ts` separately checks weaker
+shifted matches, equal-score ambiguity, reference-anchor conversion, alias
+invariance, unchanged transport and rejection of added spatial budgets. These
+checks do not certify untested skin artwork or a corpus recognition rate.

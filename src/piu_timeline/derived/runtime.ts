@@ -3,6 +3,7 @@ import {readSync, writeSync} from 'node:fs';
 import {StringDecoder} from 'node:string_decoder';
 import * as coordinateMeasurements from './coordinates/measurements.ts';
 import * as skinCenters from './skins/centers.ts';
+import * as skinLocalization from './skins/localization.ts';
 import * as skinAnchors from './skins/anchors.ts';
 import * as skinSelection from './skins/selection.ts';
 import * as coordinates from './beats/coordinates.ts';
@@ -61,7 +62,7 @@ import * as holdRisk from './holds/risk.ts';
 import {parseData, stringifyData} from './json.ts';
 
 const operations = {
-  coordinateMeasurements, skinAnchors, skinCenters, skinSelection, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription, retention,
+  coordinateMeasurements, skinAnchors, skinCenters, skinLocalization, skinSelection, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription, retention,
   registration, clocks, nativeClock, tracks, frameTracking, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, chartCombo, chartMerge, localized,
   holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, timingSummary, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
   holdState, holdExtent, holdGeometry, holdRisk, stageCoordinates, physicalTiming, nativeTiming, stageAssociations, beats: {...beats,fitGrid},

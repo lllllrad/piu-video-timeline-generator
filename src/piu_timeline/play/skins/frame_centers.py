@@ -3,10 +3,8 @@ import math
 import numpy as np
 
 from piu_timeline.play.skins.anchors import cap_reference
-from piu_timeline.play.skins.coordinates import registered_comparison,validate_origin
+from piu_timeline.play.skins.coordinates import comparison_input,validate_origin
 from piu_timeline.play.skins.sampling import reference_scale
-from piu_timeline.play.skins.subfeatures import shared_cap_pixels
-from piu_timeline.derived import CONTRACTS
 
 
 class FrameCenters:
@@ -20,6 +18,15 @@ class FrameCenters:
                          if any(r['name']=='cap'for r in t['regions'])}
 
     def position(self,image):
+        return self.positions([image])[0]
+
+    def positions(self,images):
+        from piu_timeline.derived import call
+        requests=[self.prepare(image)for image in images]
+        localized=call('skinLocalization.resolveMany',requests)if requests else[]
+        return [self.assemble(image,result)for image,result in zip(images,localized,strict=True)]
+
+    def prepare(self,image):
         lane=image['lane'];name=image['template'];height=self.height
         if image.get('skin')!=self.bank['skin']or self.templates[name]['lane_kind']!=lane%5:
             raise ValueError('Tracking image belongs to another skin or lane')
@@ -35,23 +42,15 @@ class FrameCenters:
                 or np.float32(error)/cap.get('maximum_error',.015)>1):
             raise ValueError('Tracking image lacks a positive cap comparison')
         raw=image['y']*height
-        measured,conflict=registered_comparison(image,self.bank,self.templates,lane,raw,height,self.scale,self.comparisons)
-        equivalent=[p['y']*height for p in patterns if self.references.get(p['template'])==self.references[name]]
-        anchor={'yPixels':raw,'uncertaintyPixels':.5+max(abs(y-raw)for y in equivalent),
+        return comparison_input(image,self.bank,self.templates,lane,raw,height,self.scale,
+                                self.comparisons,self.references)
+
+    def assemble(self,image,result):
+        name=image['template'];raw=image['y']*self.height
+        measured,conflict=result['measurement'],result['conflict']
+        anchor={'yPixels':raw,'uncertaintyPixels':0,
                 'basis':{'kind':'image_reference_anchor','reference':{'kind':'sha256','value':self.references[name]}}}
-        positions={self.references[name]:[p['y']*height for p in patterns if self.references.get(p['template'])==self.references[name]]}
-        for candidate in patterns:
-            identity=self.references[candidate['template']]
-            if identity==self.references[name]:continue
-            region=next(r for r in self.templates[candidate['template']]['regions']if r['name']=='cap')
-            error=candidate.get('region_errors',{}).get('cap')
-            if (not isinstance(error,(int,float))or not math.isfinite(error)or error<0
-                    or np.float32(error)/region.get('maximum_error',.015)>1):continue
-            if shared_cap_pixels(image,candidate,self.comparisons,CONTRACTS['image_coordinates']['minimum_same_cap_support_fraction']):
-                positions.setdefault(identity,[]).append(candidate['y']*height)
-        anchors=[{'yPixels':(min(rows)+max(rows))/2,'uncertaintyPixels':.5+(max(rows)-min(rows))/2,
-                  'basis':{'kind':'image_reference_anchor','reference':{'kind':'sha256','value':identity}}}
-                 for identity,rows in positions.items()]
+        anchors=result['anchors']
         center=None
         if not conflict and 'native_cap_coordinate_uncertainty_pixels'in measured:
             center={'yPixels':measured['native_y_pixels'],
@@ -62,5 +61,5 @@ class FrameCenters:
                      'cap_reference_sha256':self.references[name],'classification_status':image['classification_status'],
                      **({'sampling_origin_pixels':image['sampling_origin_pixels']}if 'sampling_origin_pixels'in image else{}),
                      **measured,'trace':'frames.jsonl'}
-        if conflict:measurement.update(native_cap_registration_status='conflicting',registration_conflict=conflict)
+        if conflict:measurement.update(native_cap_registration_status=conflict['reason'],registration_conflict=conflict)
         return {'anchor':anchor,'anchors':anchors,'center':center,'measurement':measurement}

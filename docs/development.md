@@ -83,8 +83,9 @@ identity and source PTS; [object roles](object-roles.md) describes the scope and
 uncertainty contract. Pixel acquisition remains independent of these roles.
 
 `play/skins/` owns RGB reference banks, direct image detection, observed cap roles
-and image-based hold geometry. Direct reference-anchor measurements are retained
-by `play/skins/coordinates.py` with original PTS and cap-comparison provenance;
+and image-based hold geometry. Native comparison adapters in `play/skins/coordinates.py` retain original PTS
+and cap-comparison provenance. `derived/skins/localization.ts` selects raster
+positions and applies reference-center transforms in TypeScript;
 independent beat-spacing checks consume them without asserting absolute game
 calibration. See [note-skin images](note-skin-images.md).
 

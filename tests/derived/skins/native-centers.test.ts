@@ -68,19 +68,18 @@ with tempfile.TemporaryDirectory()as tmp:
   assert all(t==a and abs(v-y-1)<1e-10 for (t,v),(a,y)in zip(new['points'],old['points']))
   assert again['points']==new['points'] and again['detected_points']==old['points']
  assert prepare(first,40)[0]['measurement_basis']=='source_bound_native_cap_centers'
- # Resizing changes physical uncertainty in the same units as measured positions.
+ # Raster-center positions receive no blanket source or target-grid radius.
  smaller=deepcopy(trace);smaller['analysis_width']/=2
- assert measure(smaller,frames)['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels']==.5
- # Compatible alternatives retain the qualified center's own measurement bound.
- # Conflicting projections retain their wider, explicitly unqualified envelope.
+ assert measure(smaller,frames)['notes'][0]['observations'][0]['native_cap_coordinate_uncertainty_pixels']==0
+ # An unrelated comparison without same-cap pixel proof cannot enlarge the center.
  compatible=deepcopy(frames)
  for frame in compatible:
   image=frame['skin_observations'][0]
   image['alternatives']=[{**image,'template':'hold_end','y':image['y']+.5/raw['analysis_height']}]
  (root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n'for f in compatible))
  qualified=apply(raw,root)
- assert qualified['notes'][0]['head_registration']['coordinate_uncertainty_pixels']==1.
- assert qualified['head_registration']['notes'][0]['observations'][0]['native_cap_projection_uncertainty_pixels']>=1.5-1e-9
+ assert qualified['notes'][0]['head_registration']['coordinate_uncertainty_pixels']==0
+ assert qualified['head_registration']['notes'][0]['observations'][0]['native_cap_projection_uncertainty_pixels']==0
  # Partial acquisition fits measured centers without mixing in an unknown origin.
  partial_document=json.loads(path.read_text());partial_document['templates'][1].pop('native_anchor_registration')
  partial_path=path.parent/'partial-bank.json';partial_path.write_text(json.dumps(partial_document))
@@ -97,19 +96,16 @@ with tempfile.TemporaryDirectory()as tmp:
  assert any(w['reason']=='image_center_registration_incomplete'for w in unchanged['head_registration']['warnings'])
  assert record['observations'][0]['native_y_pixels']==record['observations'][0]['detected_y_pixels']
  assert record['observations'][1]['native_y_pixels']==record['observations'][1]['detected_y_pixels']+1
- # Conflicting localization hypotheses retain their warning and bounded center
- # projection, rather than inserting an arbitrary raw RGB origin into the fit.
+ # A reference on a different glyph is not another position of this glyph.
  competing=deepcopy(frames)
  image=competing[4]['skin_observations'][0]
  image['alternatives']=[{**image,'template':'hold_end','y':image['y']+3/raw['analysis_height']}]
  (root/'frames.jsonl').write_text(''.join(json.dumps(f)+'\n'for f in competing))
  bounded=apply(raw,root);record=bounded['head_registration']['notes'][0]
- assert record['coordinate_status']=='projected'
- assert record['observations'][4]['native_cap_registration_status']=='conflicting'
- assert 'native_cap_coordinate_uncertainty_pixels'not in record['observations'][4]
- assert record['observations'][4]['native_cap_projection_uncertainty_pixels']>=4-1e-9
+ assert record['observations'][4]['native_cap_coordinate_uncertainty_pixels']==0
+ assert record['observations'][4]['native_cap_projection_uncertainty_pixels']==0
  assert all(t==a and abs(v-y-1)<1e-10 for(t,v),(a,y)in zip(bounded['notes'][0]['points'],raw['notes'][0]['points']))
- assert bounded['head_registration']['warnings'][0]['reason']=='conflicting_registered_image_anchors'
+ assert not bounded['head_registration']['warnings']
  # Center metadata is bound to its original source certificate.
  changed=json.loads(path.read_text());changed['templates'][0]['native_center_pixels'][1]+=.5
  path.write_text(json.dumps(changed))

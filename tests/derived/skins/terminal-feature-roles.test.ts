@@ -88,9 +88,13 @@ for(const result of measured.results)test(`terminal role requires an exposed dis
  assert.equal(tail.classification_status,'cap_role_pattern');
  if(result.mode.startsWith('known_anchor')){
   const anchor=tail.occlusion_evidence.anchor_observation;
-  assert.equal(anchor.template,'terminal-locator');
-  assert.ok(Math.abs(anchor.registered_center_analysis_pixels[0]-20*result.scale)<=.5);
-  assert.ok(Math.abs(anchor.registered_center_analysis_pixels[1]-105*result.scale)<=.5);
+  const seed=tail.occlusion_evidence.position_seed;
+  assert.equal((anchor??seed).template,'terminal-locator');
+  if(anchor){
+   assert.ok(Math.abs(anchor.registered_center_analysis_pixels[0]-20*result.scale)<=.5);
+   assert.ok(Math.abs(anchor.registered_center_analysis_pixels[1]-105*result.scale)<=.5);
+  }
+  assert.ok(Math.abs(tail.y*300*result.scale-105*result.scale)<1e-8,'visible terminal pixels establish the actual position');
  }
  assert.equal(tail.role_evidence.method,'declared_distinct_cap_features');
  assert.deepEqual(tail.role_evidence.discriminating_features,['terminal']);

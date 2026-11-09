@@ -35,7 +35,7 @@ export class TrajectoryCoordinates {
     });
     const bad=samples.find(s=>s.kind==='unavailable');
     if(bad?.kind==='unavailable')return bad;
-    if(samples.every(s=>s.kind==='native_cap_center'||s.kind==='conflicting_center_projection'&&['projected','incomplete'].includes(r.coordinate_status)))
+    if(samples.every(s=>s.kind==='native_cap_center'))
       return {kind:'native_cap_center'};
     if(samples.every(s=>s.kind==='image_reference_anchor')){
       const reference=samples[0].reference;

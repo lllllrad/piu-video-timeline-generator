@@ -9,6 +9,8 @@ export const mean = (a: number[]) => sum(a) / a.length;
 export const rms = (a: number[]) => Math.sqrt(mean(a.map(x => x * x)));
 export const std = (a: number[]) => { const center = mean(a); return rms(a.map(x => x - center)); };
 export const maximum = (a: number[]) => a.reduce((best, x) => Math.max(best, x), -Infinity);
+/** Arithmetic roundoff only; never a measured coordinate-error budget. */
+export const roundoff = (...values:number[]) => 32*Number.EPSILON*Math.max(1,...values.filter(Number.isFinite).map(Math.abs));
 export function linear(x: number[], y: number[]): [number, number] {
   if (x.length !== y.length || x.length < 2) throw new Error('Linear fit requires paired observations');
   const mx = mean(x), my = mean(y), dx = x.map(v => v - mx);

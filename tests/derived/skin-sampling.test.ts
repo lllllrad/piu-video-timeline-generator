@@ -17,6 +17,7 @@ from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.replay import refresh,detector_metadata
 from piu_timeline.play.skins.reuse import reusable_groups
 from tests.play.skins.scenes import bank_at,render
+from tests.play.skins.coordinate_fixtures import localization_pixels
 rng=np.random.default_rng(71);rgb=rng.integers(0,255,(8,8,3),dtype='uint8')
 mask=np.ones((8,8),dtype=bool);mask[3]=False
 source={'id':'cap','rgb':rgb,'mask':mask,'anchor_pixels':[4,4],
@@ -44,7 +45,8 @@ for mode in ('contained','unsupported_hole','outside','other_lane','alternative_
  results[mode]=bool(out.get('cap_subfeature'))
 template={'mask':np.ones((8,8)), 'regions':[{'name':'cap','maximum_error':.002}],'lane_kind':0}
 bank={'anchor_registrations':{'cap':{'coordinate_uncertainty_pixels':1.,'center_offset_y_pixels':0.}}}
-sample={'template':'cap','y':.5,'region_errors':{'cap':0.},'reference_scale_y':1.5,'sampling_phase_pixels':[.5,.5]}
+sample={'template':'cap','y':.5,'region_errors':{'cap':0.},'reference_scale_y':1.5,'sampling_phase_pixels':[.5,.5],
+ 'cap_localization':localization_pixels()}
 registration,_=registered_comparison(sample,bank,{'cap':template},0,50,100,1.5)
 invalid=False
 try:registered_comparison({**sample,'sampling_phase_pixels':[.25,.5]},bank,{'cap':template},0,50,100,1.5)

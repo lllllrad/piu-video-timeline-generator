@@ -7,7 +7,8 @@ def image_geometry_contract():
     from piu_timeline.derived import CONTRACTS
     from piu_timeline.play.screen_regions import FORMAT
     return {'native_cap_registration':CONTRACTS['native_anchor'],
-            'position_search':CONTRACTS['image_coordinates']['position_search'],'occlusion_regions':FORMAT}
+            'position_search':CONTRACTS['image_coordinates']['position_search'],
+            'localization':CONTRACTS['image_coordinates']['localization'],'occlusion_regions':FORMAT}
 
 
 def geometry(data, directory, frames, reconstruct):

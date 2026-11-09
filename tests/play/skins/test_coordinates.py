@@ -11,7 +11,7 @@ from piu_timeline.play.spacing_checks import spacing_failures
 from piu_timeline.play.head_registration import measure_coordinates as apply
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.coordinates import measure,cap_reference
-from tests.play.skins.coordinate_fixtures import clock_fixture
+from tests.play.skins.coordinate_fixtures import clock_fixture,localization_pixels
 from tests.play.skins.test_detector import examples
 
 
@@ -29,7 +29,7 @@ def fixture(root):
             frame=frames.setdefault(time,{'playback_seconds':time,'source_pts_seconds':80+time,'skin_observations':[]})
             frame['skin_observations'].append({'lane':note['lane'],'x':data['layout']['lanes'][note['lane']]['x'],
                 'y':y/data['analysis_height'],'role':'tap','template':f'tap-{note["lane"]}',
-                'classification_status':'full_pattern','skin':bank['skin'],'region_errors':{'cap':0.}})
+                'classification_status':'full_pattern','skin':bank['skin'],'region_errors':{'cap':0.},'cap_localization':localization_pixels()})
     return data,list(frames.values())
 
 

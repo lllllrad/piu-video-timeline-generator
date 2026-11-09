@@ -193,16 +193,25 @@
   },
   "image_coordinates": {
     "schema": 1,
-    "revision": 10,
+    "revision": 11,
     "minimum_same_cap_support_fraction": 0.8,
     "position_search": {
       "grid_pixels": 1,
-      "uncertainty_pixels": 0.5
+      "uncertainty_pixels": 0
     },
     "projection": "measured_center_frames_without_mixed_anchor_conventions",
-    "uncertainty_units": "source_reference_pixels_scaled_to_analysis",
+    "uncertainty_units": "sampled_image_grid_no_added_radius",
     "method": "native_image_anchors",
-    "trace": "frames.jsonl"
+    "trace": "frames.jsonl",
+    "localization": {
+      "method": "unique_cap_rgb_minimum",
+      "minimum_normalized_score_margin": 1e-07,
+      "numeric_epsilon": 1e-07,
+      "coordinate_uncertainty_pixels": 0,
+      "coordinate_frame": "declared_reference_center_on_sampled_image_grid",
+      "ambiguity": "unavailable_without_projection",
+      "pixel_method": "visible_cap_rgb_and_vertical_contrast"
+    }
   },
   "visibility": {
     "schema": 1,
