@@ -3,6 +3,7 @@ import {lstatSync, readdirSync, readFileSync, realpathSync, rmSync, statSync} fr
 import {basename, dirname, join, relative, resolve, sep} from 'node:path';
 
 export interface RetentionResult {removed:string[];kept:string[];reason?:string}
+interface ValidatedManifest {size_bytes:number|bigint;mtime_ns:number|bigint}
 
 function directory(path:string):boolean {
   try {const stat=lstatSync(path);return stat.isDirectory()&&!stat.isSymbolicLink();}
@@ -19,19 +20,25 @@ function inside(path:string,root:string):boolean {
   return suffix===''||suffix!=='..'&&!suffix.startsWith('..'+sep)&&!suffix.startsWith(sep);
 }
 
-function manifest(path:string):boolean {
+function manifest(path:string,validated:ValidatedManifest|null):boolean {
   try {
+    if(validated){
+      const stat=statSync(join(path,'analysis.json'),{bigint:true});
+      if(stat.size!==BigInt(validated.size_bytes)||stat.mtimeNs!==BigInt(validated.mtime_ns))
+        throw Error('Validated analysis manifest changed before retention');
+      return true;
+    }
     const document=JSON.parse(readFileSync(join(path,'analysis.json'),'utf8'));
     return document!==null&&typeof document==='object'&&!Array.isArray(document);
   } catch(error) {if(error instanceof SyntaxError||error.code==='ENOENT')return false;throw error;}
 }
 
-export function prune(finalPath:string,newPrevious:string|null=null,protectedPaths:string[]=[]):RetentionResult {
+export function prune(finalPath:string,newPrevious:string|null=null,protectedPaths:string[]=[],validatedManifest:ValidatedManifest|null=null):RetentionResult {
   const final=resolve(finalPath),name=basename(final),parent=dirname(final);
   if(!/^(?:analysis|segment-\d{3})$/.test(name))throw new Error('Retention requires a canonical analysis directory');
   const play=name.startsWith('segment-');
   const required=play?['analysis.json','frames.jsonl','frames.base.jsonl','report.html']:['analysis.json'];
-  if(!directory(final)||!required.every(part=>file(join(final,part)))||!manifest(final)) {
+  if(!directory(final)||!required.every(part=>file(join(final,part)))||!manifest(final,validatedManifest)) {
     return {removed:[],kept:[],reason:'Canonical result or immutable native baseline is incomplete'};
   }
   const pattern=new RegExp(`^${name}\\.(previous|build)-[a-f0-9]+$`);

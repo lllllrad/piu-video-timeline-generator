@@ -18,8 +18,22 @@ def prune_history(directory, previous=None, media=None):
     from piu_timeline.derived import call
     protected=[media['path']]if media and media.get('path')else[]
     with history_guard(directory.parent):
+        manifest=None
+        path=directory/'analysis.json'
+        try:
+            with path.open()as stream:
+                before=path.stat()
+                document=json.load(stream)
+            after=path.stat()
+            if (before.st_size,before.st_mtime_ns)!=(after.st_size,after.st_mtime_ns):
+                raise ValueError('Analysis manifest changed during validation')
+            if isinstance(document,dict):
+                manifest={'size_bytes':after.st_size,'mtime_ns':after.st_mtime_ns}
+            del document
+        except (FileNotFoundError,json.JSONDecodeError):
+            pass
         return call('retention.prune',str(directory.absolute()),
-                    str(previous.absolute())if previous and previous.is_dir()else None,protected)
+                    str(previous.absolute())if previous and previous.is_dir()else None,protected,manifest)
 
 
 def relocate_evidence(directory, destination, source=None):

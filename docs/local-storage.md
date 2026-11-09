@@ -37,6 +37,11 @@ segment reuses a saved observation snapshot. Pruning takes the exclusive side of
 that lock, after staging has completed. Long-running inference does not hold the
 history lock. Retention is implemented in `derived/retention.ts`; Python adapters
 own native filesystem locks and call it only after successful publication.
+The adapter validates the complete analysis JSON with Python's file parser and
+passes its exact size and modification time to retention. TypeScript verifies
+that binding before deleting history; it does not reassemble a potentially
+gigabyte-sized analysis into one JavaScript string. Missing or invalid manifests
+cannot authorize deletion.
 
 Interrupted builds whose current result has not been successfully refreshed
 remain available for recovery. They are not automatically treated as completed

@@ -53,6 +53,38 @@ test('incomplete current evidence preserves histories, baselines and failed atte
   assert.equal(existsSync(old),true);
 });
 
+test('native manifest validation is bound to the exact file before history deletion',t=>{
+ const root=workspace(t),final=join(root,'segment-001'),old=join(root,'segment-001.previous-00000001');
+ snapshot(final,1);snapshot(old,0);
+ const path=join(final,'analysis.json'),stat=statSync(path,{bigint:true}),validated={size_bytes:stat.size,mtime_ns:stat.mtimeNs};
+ writeFileSync(path,'{"changed":true}');
+ assert.throws(()=>prune(final,old,[],validated),/manifest changed/);
+ assert.equal(existsSync(old),true);
+ const fresh=statSync(path,{bigint:true});
+ assert.deepEqual(prune(final,old,[],{size_bytes:fresh.size,mtime_ns:fresh.mtimeNs}).removed,[old]);
+});
+
+test('native JSON validation lets a bounded-heap retention worker inspect large saved analyses',()=>{
+ const script=String.raw`
+import json,tempfile,os
+from pathlib import Path
+from piu_timeline.storage import prune_history
+os.environ['NODE_OPTIONS']='--max-old-space-size=64'
+with tempfile.TemporaryDirectory()as tmp:
+ root=Path(tmp);final=root/'segment-001';final.mkdir()
+ for name in ('frames.jsonl','frames.base.jsonl','report.html'):(final/name).write_text('{}')
+ with (final/'analysis.json').open('w')as stream:
+  stream.write('{"padding":"')
+  for i in range(64):stream.write('a'*1024*1024)
+  stream.write('"}')
+ old=root/'segment-001.previous-00000001';old.mkdir();(old/'analysis.json').write_text('{}')
+ result=prune_history(final)
+ print(json.dumps({'removed':len(result['removed']),'current':final.exists(),'old':old.exists()}))
+`;
+ const r=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',script],{encoding:'utf8'}));
+ assert.deepEqual(r,{removed:1,current:true,old:false});
+});
+
 test('successful publication removes superseded snapshots including malformed results',t=>{
   const root=workspace(t),final=join(root,'analysis');snapshot(final,3,false);
   const good=join(root,'analysis.previous-00000001'),broken=join(root,'analysis.previous-00000002');
