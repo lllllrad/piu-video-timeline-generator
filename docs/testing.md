@@ -111,3 +111,12 @@ from these observations and retain ambiguous identities explicitly. Their matrix
 covers multiple game sizes and frame rates, simultaneous rows, missing detector
 observations, repeated frames and capture bursts. `nativeScene` supplies the
 separate approach-window data used by coordinate and clock consumers.
+
+Native skin scene tests pass detections through `NoteTracker.finish`, including
+identity finalization, before asserting trajectories. Dense tap and overlapping
+four-hold-pair scenes vary scale and each object's render phase independently.
+Tracking regressions cover boundary exit plus entry, HUD replacement ambiguity,
+cap-role conflicts, missing/repeated renders, inconsistent original PTS and
+unrefuted competing links. Independent motion must come from two other lanes;
+no input timing or chart target can resolve image identity. Hold projection tests
+also retain a positively connected shape when endpoint clocks fail.

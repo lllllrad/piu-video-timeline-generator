@@ -1,10 +1,10 @@
 {
   "frame_tracking": {
     "schema": 1,
-    "revision": 10,
+    "revision": 11,
     "coordinates": "measured_centers_or_identical_reference_anchors",
-    "assignment": "mutually_unique_edges_in_every_measured_translation",
-    "order": "never_used_as_identity_proof",
+    "assignment": "mutually_unique_compatible_edges_with_deferred_native_approach_validation",
+    "order": "complete_sampled_scene_with_no_boundary_replacement_or_known_occlusion",
     "maximum_speed_spacing_per_second": 30,
     "history_frames": 6,
     "identity_history_seconds": 0.35,
@@ -17,7 +17,10 @@
     "compressed_capture_step": "unique_independent_image_translation_with_explicit_cadence_warning",
     "translation_reference": "complete_rigid_image_constellations_or_all_supported_partial_translations",
     "ambiguous_capture_translation": "all_supported_translations_participate_in_identity_edges",
-    "ordinary_step": "one_frame_translation_consistent_with_independent_native_history_intervals"
+    "ordinary_step": "one_frame_translation_consistent_with_independent_native_history_intervals",
+    "sampled_motion": "sampled_image_steps_separate_from_exact_engine_translation",
+    "cap_roles": "opposing_endpoints_preserve_identity_tap_hold_contradictions_remain_observable",
+    "deferred_identity": "retain_candidate_edges_until_past_and_future_observations_refute_competitors"
   },
   "fragments": {
     "schema": 1,

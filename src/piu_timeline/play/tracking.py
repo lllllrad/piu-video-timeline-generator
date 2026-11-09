@@ -16,6 +16,8 @@ class Track:
     tracking_warnings: list = field(default_factory=list)
     tracking_connections: list = field(default_factory=list)
     coordinate_points: list = field(default_factory=list)
+    tracking_id: int = -1
+    tracking_resolutions: list = field(default_factory=list)
 
 
 class NoteTracker:
@@ -30,6 +32,9 @@ class NoteTracker:
         self.frame_centers = None
         self.frame_steps = []
         self.skin_observations = []
+        self.next_tracking_id = 0
+        self.pending_links = []
+        self.observation_frames = []
         if skin_bank is not None:
             from piu_timeline.play.skins.detector import SkinDetector
             self.skin_detector = SkinDetector(skin_bank, layout, width, height)
@@ -63,14 +68,17 @@ class NoteTracker:
             result.append({'time':seconds,**position})
         return result
 
-    def update(self, seconds, detections, source_pts=None):
+    def update(self, seconds, detections, source_pts=None, observations=None):
         from piu_timeline.derived import call,CONTRACTS
-        observations=self.observations(seconds,detections)
+        from piu_timeline.play.screen_regions import note_occluders
+        observations=self.observations(seconds,detections)if observations is None else observations
         if source_pts is not None:
             for observation in observations:
                 observation['sourcePtsSeconds']=source_pts
                 if 'measurement'in observation:observation['measurement'].update(time=seconds,source_pts_seconds=source_pts)
         tracking_view=[{k:v for k,v in o.items()if k!='measurement'}for o in observations]
+        self.observation_frames.append({'time':seconds,'source_pts':source_pts,
+            'detections':[{'lane':n['lane'],'y':n['y']}for n in detections],'observations':observations})
         self.timeline.append({'time':seconds,'source_pts':source_pts})
         self.source_pts[seconds]=source_pts
         if self.hold_candidate:
@@ -81,11 +89,16 @@ class NoteTracker:
                                                    'reason': 'possible_hold_or_dense_stack'})
         assignment=call('frameTracking.assign',
             [{'lane':t.lane,'observations':t.tracking_observations,'maximumGapSeconds':self.gap_limit(t)}for t in self.active],
-            [{'lane':n['lane'],'observation':o}for n,o in zip(detections,tracking_view,strict=True)],seconds,self.spacing,[],self.frame_steps)
+            [{'lane':n['lane'],'observation':o}for n,o in zip(detections,tracking_view,strict=True)],seconds,self.spacing,[],self.frame_steps,
+            {'width':self.width,'height':self.height,'layout':self.layout,'occluders':note_occluders(self.layout),
+             'capHeightPixels':self.frame_centers.cap_height_pixels if self.frame_centers is not None else self.spacing})
         self.frame_steps=[s for s in self.frame_steps if seconds-s['toSeconds']<=.35]
         if assignment['step']:self.frame_steps.append(assignment['step'])
         used_tracks, used_notes = set(), set()
         for i,j in assignment['matches']:
+            if assignment.get('constellationReference')and self.active[i].lane in assignment['constellationReference']['participating_lanes']:
+                self.active[i].tracking_connections.append({**assignment['constellationReference'],
+                    'source_pts_seconds':[self.source_pts[self.active[i].points[-1][0]],source_pts]})
             self.active[i].points.append((seconds, detections[j]['y'] * self.height))
             self.active[i].tracking_observations.append(tracking_view[j])
             self.active[i].coordinate_points.append(observations[j])
@@ -105,6 +118,8 @@ class NoteTracker:
             if i not in used_tracks:
                 track.missed += 1
         uncertain=set(assignment['ambiguousTracks'])
+        parents={j:[self.active[i].tracking_id for i,k in assignment['ambiguities']if k==j]
+                 for j in assignment['ambiguousDetections']}
         warning={'reason':'ambiguous_note_tracking','check':'note_visibility',
                  'visible_start_seconds':seconds,'visible_end_seconds':seconds,'source_pts_seconds':[source_pts],
                  'observed_points':len(assignment['ambiguities']),
@@ -119,8 +134,11 @@ class NoteTracker:
         self.active = [track for i,track in enumerate(self.active)if i not in uncertain and seconds-track.points[-1][0]<=self.gap_limit(track)]
         for j, note in enumerate(detections):
             if j not in used_notes:
+                identity=self.next_tracking_id;self.next_tracking_id+=1
+                self.pending_links.extend({'from':parent,'to':identity,'time':seconds}for parent in parents.get(j,[]))
                 self.active.append(Track(note['lane'],[(seconds,note['y']*self.height)],
                     tracking_observations=[tracking_view[j]],coordinate_points=[observations[j]],
+                    tracking_id=identity,
                     tracking_warnings=[warning]if j in assignment['ambiguousDetections']else[]))
 
     def finish(self):
@@ -129,6 +147,26 @@ class NoteTracker:
         from piu_timeline.play.shared_timing import registered_motion
         import json
         source_tracks=self.finished+self.active
+        if self.pending_links:
+            from piu_timeline.derived import call
+            groups=call('frameTracking.resolveDeferred',[
+                {'id':t.tracking_id,'lane':t.lane,'observations':[
+                    {k:v for k,v in r.items()if k!='measurement'}for r in t.coordinate_points]}
+                for t in source_tracks],self.pending_links,self.timeline,self.spacing)
+            deferred=[]
+            for group in groups:
+                members=[source_tracks[i]for i in group['indices']]
+                if len(members)==1:
+                    deferred.append(members[0]);continue
+                resolved=set(group['resolved_times'])
+                warnings=list({id(w):w for t in members for w in t.tracking_warnings}.values())
+                def answered(w):return w.get('reason')=='ambiguous_note_tracking'and w['visible_start_seconds']in resolved
+                deferred.append(Track(members[0].lane,sorted(p for t in members for p in t.points),
+                    coordinate_points=sorted((r for t in members for r in t.coordinate_points),key=lambda r:r['time']),
+                    tracking_connections=[p for t in members for p in t.tracking_connections]+group['connections'],
+                    tracking_warnings=[w for w in warnings if not answered(w)],
+                    tracking_resolutions=[w for w in warnings if answered(w)]))
+            source_tracks=deferred
         qualified=[];groups={};unqualified=[]
         for i,track in enumerate(source_tracks):
             records=track.coordinate_points
@@ -145,13 +183,15 @@ class NoteTracker:
             projected.coordinate_basis=positions[0]['basis']['kind']
             projected.registration_uncertainty_pixels=max(p['uncertaintyPixels']for p in positions)
             groups.setdefault(basis,[]).append((i,len(qualified)));qualified.append(projected)
-        relative=registered_motion(qualified,self.timeline,self.height,self.spacing,
-                                   self.layout['receptor_y']*self.height,self.layout.get('note_y_max',.95)*self.height)
-        identities=[([i],None)for i in unqualified]
-        for group in groups.values():
-            for track,fragments in stitch_tracks([qualified[j]for _,j in group],self.layout['receptor_y']*self.height,
-                                                  self.spacing,motion=relative,layout=self.layout):
-                identities.append(([group[j][0]for j in fragments],getattr(track,'fragment_connections',None)))
+        identities=[([i],None)for i in range(len(source_tracks))]
+        if self.frame_centers is None:
+            relative=registered_motion(qualified,self.timeline,self.height,self.spacing,
+                                       self.layout['receptor_y']*self.height,self.layout.get('note_y_max',.95)*self.height)
+            identities=[([i],None)for i in unqualified]
+            for group in groups.values():
+                for track,fragments in stitch_tracks([qualified[j]for _,j in group],self.layout['receptor_y']*self.height,
+                                                      self.spacing,motion=relative,layout=self.layout):
+                    identities.append(([group[j][0]for j in fragments],getattr(track,'fragment_connections',None)))
         identities.sort(key=lambda pair:min(pair[0]))
         notes=[]
         for fragments,proof in identities:
@@ -163,6 +203,8 @@ class NoteTracker:
             connections=[p for i in fragments for p in source_tracks[i].tracking_connections]
             if warnings:note['tracking_warnings']=warnings
             if connections:note['tracking_connections']=connections
+            resolutions=[p for i in fragments for p in source_tracks[i].tracking_resolutions]
+            if resolutions:note['tracking_resolutions']=resolutions
             if len(fragments)>1:
                 note.update(tracking_method='corroborated_fragments',source_track_fragments=fragments)
                 if proof:note['fragment_connections']=proof
@@ -359,12 +401,17 @@ def collect_tracks(tracker,combo,directory,source):
     """Persist visual identities and independent counter events, without timing fits."""
     from pathlib import Path
     from piu_timeline.derived import CONTRACTS
+    if tracker.frame_centers is not None:
+        from piu_timeline.play.observations.tracking import save
+        save(source,Path(directory),tracker.observation_frames,source.get('frame_observations_sha256'),tracker.unsupported_intervals)
     result={'notes':tracker.finish(),'frame_timeline':[
         {'time':s['time'],'source_pts':s['source_pts']}for s in tracker.timeline],
         'unsupported_intervals':tracker.unsupported_intervals,'combo_events':combo.events,'counter_observations':combo.observations,'tracking_complete':True,
         'coordinate_measurement_contract':{'skin':source.get('skin_detector',{}).get('contract'),
                                            'coordinates':CONTRACTS['image_coordinates']}}
     from piu_timeline.play.observations.artifacts import save_input
+    from piu_timeline.play.observations.warnings import presentation_source
+    result=presentation_source(result,Path(directory))
     from piu_timeline.play.stages import fingerprint
     identity={'source':{k:source.get(k)for k in ('media','game_roi','start_seconds','end_seconds')},
               'geometry':{'width':tracker.width,'height':tracker.height,'layout':tracker.layout},
@@ -385,6 +432,18 @@ def replay(data,directory,bank,tracker=None):
     import json
     from piu_timeline.play.observations.cache import tracking_notes,validate_native_frame
     tracker=tracker or NoteTracker(data['layout'],data['analysis_width'],data['analysis_height'],skin_bank=bank)
+    from piu_timeline.play.observations.tracking import retained
+    measured=retained(data,directory,bank)
+    if measured is not None:
+        from pathlib import Path
+        from types import SimpleNamespace
+        counters=json.loads((Path(directory)/'counter-events.json').read_text())
+        print('Reusing independent per-frame positions for tracking; no decoding or image comparison.',flush=True)
+        for frame in measured['frames']:
+            tracker.update(frame['time'],frame['detections'],frame['source_pts'],observations=frame['observations'])
+        tracker.unsupported_intervals=measured.get('unsupported_intervals',data.get('unsupported_intervals',[]))
+        return collect_tracks(tracker,SimpleNamespace(events=counters['events'],observations=counters['observations']),directory,
+            {**data,'frame_observations_sha256':measured['frame_observations_sha256']})
     from hashlib import sha256
     digest=sha256()
     combo=ComboTracker();count=0;last=None

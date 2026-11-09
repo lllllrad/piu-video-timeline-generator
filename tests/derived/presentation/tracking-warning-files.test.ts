@@ -11,7 +11,7 @@ with tempfile.TemporaryDirectory()as tmp:
   'visible_start_seconds':1,'visible_end_seconds':1,'source_pts_seconds':[81],
   'observed_points':2,'candidate_edges':[{'lane':0,'label':'한글🙂'}],
   'candidate_frame_displacements':[{'lower':2,'upper':2}]}
- data={'notes':[{'lane':i,'tracking_warnings':[warning]}for i in range(3)]}
+ data={'notes':[{'lane':i,'tracking_warnings':[warning],'tracking_resolutions':[warning]}for i in range(3)]}
  before=json.dumps(data);view=presentation_source(data,root)
  files=list((root/'evidence'/'tracking-warnings').glob('*.json'))
  proof=json.loads(files[0].read_text());again=presentation_source(data,root)
@@ -28,6 +28,7 @@ test('repeated tracking proofs keep every warning, original fields and one verif
  const paths=new Set();
  for(const [i,note]of r.view.notes.entries()){
   assert.equal(note.tracking_warnings.length,1);
+  assert.deepEqual(note.tracking_resolutions,note.tracking_warnings);
   const {tracking_evidence,...warning}=note.tracking_warnings[0];
   paths.add(tracking_evidence.path);
   assert.equal(tracking_evidence.path,`evidence/tracking-warnings/${tracking_evidence.sha256}.json`);

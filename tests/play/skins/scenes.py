@@ -155,7 +155,8 @@ def acquire(spec,root,bank):
         detections=tracker.detect(image);tracker.update(time,detections,pts)
         native.append({'playback_seconds':time,'source_pts_seconds':pts,'skin_observations':tracker.skin_observations})
     # Raw acquired tracks, not scene-supplied endpoints or fitted truth.
-    notes=[{'lane':t.lane,'points':t.points,'tracking_warnings':t.tracking_warnings}for t in tracker.finished+tracker.active]
+    notes=[{k:n[k]for k in ('lane','points','tracking_warnings','tracking_connections')if k in n}
+           for n in tracker.finish()]
     data={'analysis_width':width,'analysis_height':height,'layout':layout,'notes':notes,'game_roi':[0,0,width,height],
           'start_seconds':0,'end_seconds':duration,'skin_detector':{'bank_path':str(root/'bank.json'),'contract':{'bank':bank['contract']}}}
     if spec.get('role_clearance'):

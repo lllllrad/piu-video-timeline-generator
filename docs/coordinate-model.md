@@ -235,3 +235,13 @@ interval remains below the receptor and above the recorded field boundary. These
 motion, measured displacement, source timestamp and crossing checks. A stationary
 receptor remnant or an unregistered image anchor cannot use this path. Existing
 intact approach trajectories continue to use the ordinary clearance band.
+
+## Sampled positions and motion
+
+An exact sampled cap center has zero added spatial radius. Two sprites may have
+different raster phases and therefore different sampled frame displacements.
+Neither observation becomes uncertain merely because one exact shared engine
+translation cannot explain both. Local identity prediction may use a temporal
+capture-phase allowance derived from original frame cadence and independently
+bounded velocity. This allowance belongs to a motion model, never to the saved
+per-frame coordinate. It cannot qualify a coordinate or establish a beat target.

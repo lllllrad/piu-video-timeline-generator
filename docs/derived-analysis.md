@@ -30,32 +30,36 @@ scoped anchors are retained too. A changing representative can link through a
 shared exact reference; all shared views must agree. This does not certify an
 absolute center for an unregistered image.
 
-Frame assignment retains only links required by every maximum-cardinality
-matching. Co-observed, separated positions in a common basis establish note order;
-asynchronous or incomparable positions do not establish that order. Missing
-observations cannot make a following note inherit another identity through a
-wide proximity threshold. Ambiguous fragments are kept separately with
-`ambiguous_note_tracking`, original timestamps and candidate pixel positions.
-Later coordinate refitting preserves these warnings. Registered fragment recovery tests one common
-position interval against every approach reference and initial reappearance in the same supported
-motion chunk. A slow crossing behind the HUD can exceed the local extrapolation timeout; that
-timeout applies only without a registered common origin. Competing successors, another motion chunk
-or contradictory positions keep fragments separate. Connecting identities does not fill missing
-image observations or dismiss visibility warnings. Co-observed compatible image
-positions in at least two lanes can independently measure one common signed frame
-translation before identities are selected. Equal competing translations remain
-unavailable. Without that measurement, association uses a speed bound in both
-directions; past velocity cannot prohibit a new stop, acceleration or reversal.
-These identity bounds do not establish a clock or enlarge chart target ranges.
-Signed frame steps retain endpoint error intervals and can carry a disappeared
-cap forward through the observations of other caps. A gap breaks that chain;
-there is no interpolation over missing steps. A final unmeasured capture step
-retains its full speed bound. A visibility gap over 50 ms without a displacement
-chain needs at least four repeated, compatible positions; their measured errors
-and one capture-step allowance bound a trajectory prediction. A lone position
-cannot establish a reversal and return to the field. Only forced identities may supply a subsequent
-single-cap step in a compatible coordinate view, after the assignment has been
-decided independently.
+Frame assignment accepts mutually unique compatible edges. A complete sampled
+scene can also preserve visible order within a continuously visible field zone
+when exit and entry cannot replace caps simultaneously. Documented HUD footprints
+separate these zones; positive observations inside them remain usable candidates.
+This requires positive, exact centers with consistent original source PTS in at
+least two independent lanes. Opposing start/end roles cannot exchange identities. A tap/hold
+contradiction on a spatially unique continuation stays observable as a conflict. Matching cardinality alone never establishes identity.
+
+Sprite raster phases need not produce one exact shared translation: independently
+sampled sprites can move by different image steps in one captured frame. Search
+bounds account for source cadence without expanding any measured center interval.
+Compatible image translations can guide association, but a rigid translation is
+not imposed on a differently sampled complete scene.
+
+Ambiguous edges remain in a candidate graph between provisional fragments.
+`tracking/deferred.ts` revisits them using past and future native approaches or
+independent continuous observations in two other lanes. Local ordinary-motion
+bounds use the recorded source capture period as a temporal phase allowance;
+this is not a spatial error added to a cap measurement. Conflicting motion,
+source discontinuities, inconsistent cap roles and reversed co-observed order
+reject a candidate. Pending competitors prevent a merge even if another edge is
+closer. Resolved ambiguity proofs remain archived in `tracking_resolutions`;
+unresolved `ambiguous_note_tracking` warnings remain visible. The image-bank path
+does not run the older registered-fragment heuristic afterward.
+
+A visibility gap needs directly observed independent endpoint travel in two
+lanes; inferred missing steps cannot bootstrap another gap identity. Source-only
+association establishes neither receptor crossing time nor musical position.
+Connecting identities never fills missing image observations or dismisses an
+independent visibility warning.
 
 Tracking appends original matching anchors to the immutable detection trajectory.
 The independently measured centers guide association and are projected into the

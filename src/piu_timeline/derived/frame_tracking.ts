@@ -2,9 +2,12 @@
 import {contracts} from './contracts.ts';
 import {roundoff} from './math.ts';
 import {sameBasis,type CoordinateBasis} from './coordinates/measurements.ts';
+import type {RecordData}from './types.ts';
+export {resolve as resolveDeferred}from './tracking/deferred.ts';
 
 type Position={yPixels:number;uncertaintyPixels:number;basis:CoordinateBasis};
-type Observation={time:number;anchor:Position;anchors?:Position[];center:Position|null;sourcePtsSeconds?:number};
+export type Observation={time:number;anchor:Position;anchors?:Position[];center:Position|null;sourcePtsSeconds?:number;
+ coordinateSampling?:'sampled_image_grid';capRole?:string|null};
 type Track={lane:number;observations:Observation[];maximumGapSeconds:number};
 type Detection={lane:number;observation:Observation};
 type Edge=[number,number];
@@ -59,6 +62,7 @@ function predict(points:{time:number;position:Position}[],time:number,spacing:nu
 function compatible(track:Track,detection:Detection,time:number,spacing:number,motion:Displacements):boolean{
  const current=detection.observation;
  if(track.lane!==detection.lane||time-track.observations.at(-1).time>track.maximumGapSeconds+1e-9)return false;
+ if(!compatibleRole(track,detection))return false;
  const centers=current.center?track.observations.filter(o=>o.center&&sameBasis(o.center.basis,current.center.basis)):[];
  const views=centers.length?[{position:current.center,history:centers.map(o=>({time:o.time,position:o.center}))}]:
   (current.anchors??[current.anchor]).map(position=>({position,history:track.observations.flatMap(o=>{
@@ -68,6 +72,11 @@ function compatible(track:Track,detection:Detection,time:number,spacing:number,m
   const range=predict(history,time,spacing,motion);
   return !!range&&range[0]<=position.yPixels+position.uncertaintyPixels+1e-9&&position.yPixels-position.uncertaintyPixels<=range[1]+1e-9;
  });
+}
+
+function compatibleRole(track:Track,detection:Detection):boolean{
+ const role=detection.observation.capRole;
+ return !role||role==='tap'||track.observations.every(o=>!o.capRole||o.capRole==='tap'||o.capRole===role);
 }
 
 /** Test whether a rigid image constellation exists; never certify identity here. */
@@ -85,13 +94,13 @@ function matching(edges:boolean[][]):Edge[]{
 }
 
 /** Common signed translation in compatible views, before choosing identities. */
-function translationsAtLimit(tracks:Track[],detections:Detection[],time:number,spacing:number,intervalSeconds:number):Displacement[]{
+function translationsAtLimit(tracks:Track[],detections:Detection[],time:number,spacing:number,intervalSeconds:number,completeEligible:Set<number>|null=null):Displacement[]{
  const fromSeconds=Math.max(...tracks.map(t=>t.observations.at(-1).time)),dt=time-fromSeconds;
  if(!(0<dt&&dt<=.05+1e-6))return [];
  const before=tracks.filter(t=>t.observations.at(-1).time===fromSeconds),
   after=detections,limit=contracts.frame_tracking.maximum_speed_spacing_per_second*spacing*intervalSeconds;
  const intervals=before.map(t=>after.map(d=>{
-  if(t.lane!==d.lane)return null;
+  if(t.lane!==d.lane||!compatibleRole(t,d))return null;
   const range=displacement(t.observations.at(-1),d.observation);if(!range)return null;
   const lo=Math.max(-limit,range[0]),hi=Math.min(limit,range[1]);
   return lo<=hi?[lo,hi]:null;
@@ -115,6 +124,7 @@ function translationsAtLimit(tracks:Track[],detections:Detection[],time:number,s
   // the largest partial matching. Keep every such translation, without ranking
   // candidates by how many unrelated objects they happen to connect.
   const completeLanes=new Set([...new Set(before.map(t=>t.lane))].filter(lane=>{
+   if(completeEligible&&!completeEligible.has(lane))return false;
    const n=before.filter(t=>t.lane===lane).length,m=after.filter(d=>d.lane===lane).length;
    return n===m&&pairs.filter(([i])=>before[i].lane===lane).length===n;
   }));
@@ -154,10 +164,11 @@ function ordinaryHistory(tracks:Track[],step:Displacement,time:number):boolean{
  const dt=time-step.fromSeconds;
  return lanes.size>=2&&lo<=hi&&lo*dt-captureBound<=step.pixels+step.uncertaintyPixels&&step.pixels-step.uncertaintyPixels<=hi*dt+captureBound;
 }
-function translations(tracks:Track[],detections:Detection[],time:number,spacing:number):Displacement[]{
- const dt=time-Math.max(...tracks.map(t=>t.observations.at(-1).time)),ordinary=translationsAtLimit(tracks,detections,time,spacing,dt);
- if(ordinary.length===1&&ordinaryHistory(tracks,ordinary[0],time))return ordinary;
- return translationsAtLimit(tracks,detections,time,spacing,contracts.frame_tracking.maximum_capture_interval_seconds);
+function translations(tracks:Track[],detections:Detection[],time:number,spacing:number,completeEligible:Set<number>|null=null):Displacement[]{
+ const dt=time-Math.max(...tracks.map(t=>t.observations.at(-1).time)),ordinary=translationsAtLimit(tracks,detections,time,spacing,dt,completeEligible);
+ const supported=ordinary.filter(step=>ordinaryHistory(tracks,step,time));
+ if(supported.length)return supported;
+ return translationsAtLimit(tracks,detections,time,spacing,contracts.frame_tracking.maximum_capture_interval_seconds,completeEligible);
 }
 
 /** Endpoint measurements of independently continuous peers, never a sum of step errors. */
@@ -191,7 +202,57 @@ function uniqueEdges(edges:boolean[][]):Edge[]{
   row.filter(Boolean).length===1&&edges.filter(r=>r[j]).length===1?[[i,j] as Edge]:[]));
 }
 
-export function assign(tracks:Track[],detections:Detection[],time:number,spacing:number,motion:Displacement[]=[],pastSteps:Step[]=[]){
+/** Complete sampled constellations need no exact common sprite displacement. */
+function sampledConstellation(tracks:Track[],detections:Detection[],time:number,spacing:number,geometry:RecordData|null):{lanes:Set<number>;pairs:Edge[];persistent:Set<number>}{
+ const latest=Math.max(...tracks.map(t=>t.observations.at(-1).time));
+ if(!(0<time-latest&&time-latest<=.05+1e-6))return {lanes:new Set(),pairs:[],persistent:new Set()};
+ const lanes=new Set<number>(),pairs:Edge[]=[],persistent=new Set<number>();
+ for(const lane of new Set(detections.map(d=>d.lane))){
+  const before=tracks.filter(t=>t.lane===lane&&t.observations.at(-1).time===latest),after=detections.filter(d=>d.lane===lane);
+  if(!before.length||!after.length||!geometry&&before.length!==after.length)continue;
+  const observed=[...before.map(t=>t.observations.at(-1)),...after.map(d=>d.observation)];
+  if(observed.some(o=>o.coordinateSampling!=='sampled_image_grid'||!o.center||o.center.uncertaintyPixels!==0||!Number.isFinite(o.sourcePtsSeconds)))continue;
+  const from=before[0].observations.at(-1),to=after[0].observation;
+  if(before.some(t=>t.observations.at(-1).sourcePtsSeconds!==from.sourcePtsSeconds)||
+   after.some(d=>d.observation.sourcePtsSeconds!==to.sourcePtsSeconds)||
+   Math.abs((to.sourcePtsSeconds-from.sourcePtsSeconds)-(time-latest))>1e-6)continue;
+  let ordered=false;
+  if(geometry){
+   const half=geometry.capHeightPixels/2,travel=contracts.frame_tracking.maximum_speed_spacing_per_second*spacing*(time-latest),
+    receptor=geometry.layout.receptor_y*geometry.height,bottom=(geometry.layout.note_y_max??.95)*geometry.height,
+    x=geometry.layout.lanes[lane].x*geometry.width;
+   const blocked=(geometry.occluders??[]).filter(({rect:r})=>x-half<(r[0]+r[2])*geometry.width&&r[0]*geometry.width<x+half)
+    .map(({rect:r})=>[r[1]*geometry.height-half,(r[1]+r[3])*geometry.height+half]).sort((a,b)=>a[0]-b[0]);
+   const zones:number[][]=[];let low=receptor+half;
+   for(const [a,b]of blocked){if(a>low)zones.push([low,Math.min(a,bottom-half)]);low=Math.max(low,b);}
+   if(low<bottom-half)zones.push([low,bottom-half]);
+   const inside=(y:number,zone:number[])=>zone[0]<y&&y<zone[1];
+   const safe=zones.flatMap(zone=>{
+    const a=before.filter(t=>inside(t.observations.at(-1).center.yPixels,zone)).sort((a,b)=>a.observations.at(-1).center.yPixels-b.observations.at(-1).center.yPixels),
+     b=after.filter(d=>inside(d.observation.center.yPixels,zone)).sort((a,b)=>a.observation.center.yPixels-b.observation.center.yPixels);
+    if(!a.length||a.length!==b.length)return [];
+    const exit=a.some(t=>{const y=t.observations.at(-1).center.yPixels;return y-travel<=zone[0]||y+travel>=zone[1];}),
+     entry=b.some(d=>{const y=d.observation.center.yPixels;return y-travel<=zone[0]||y+travel>=zone[1];});
+    if(exit&&entry)return [];
+    const distinct=a.slice(1).every((t,i)=>t.observations.at(-1).center.yPixels>a[i].observations.at(-1).center.yPixels)&&
+     b.slice(1).every((d,i)=>d.observation.center.yPixels>b[i].observation.center.yPixels);
+    if(!distinct||!a.every((t,i)=>compatible(t,b[i],time,spacing,new Map())))return [];
+    return a.map((t,i)=>[tracks.indexOf(t),detections.indexOf(b[i])]as Edge);
+   });
+   pairs.push(...safe);ordered=!!safe.length;
+   if(safe.length===before.length)persistent.add(lane);
+  }
+  const edges=before.map(t=>after.map(d=>compatible(t,d,time,spacing,new Map())));
+  const unique=uniqueEdges(edges);
+  if(ordered||before.length===after.length&&unique.length===before.length){
+   lanes.add(lane);unique.forEach(([i,j])=>{const a=tracks.indexOf(before[i]),b=detections.indexOf(after[j]);
+    if(!pairs.some(([x,y])=>x===a||y===b))pairs.push([a,b]);});
+  }
+ }
+ return lanes.size>=2?{lanes,pairs,persistent}:{lanes:new Set(),pairs:[],persistent};
+}
+
+export function assign(tracks:Track[],detections:Detection[],time:number,spacing:number,motion:Displacement[]=[],pastSteps:Step[]=[],geometry:RecordData|null=null){
  if(!Number.isFinite(time)||!Number.isFinite(spacing)||spacing<=0)throw Error('Tracking requires finite time and positive lane spacing');
  for(const o of [...tracks.flatMap(t=>t.observations),...detections.map(d=>d.observation)]){
   if(o.sourcePtsSeconds!==undefined&&!Number.isFinite(o.sourcePtsSeconds))throw Error('Tracking requires finite source PTS');
@@ -203,7 +264,16 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
  if(tracks.some(t=>!Number.isFinite(t.maximumGapSeconds)||t.maximumGapSeconds<0||t.observations.slice(1).some((o,i)=>o.time<=t.observations[i].time)))throw Error('Invalid tracking history or expiry');
  const displacements=new Map(motion.map(s=>[s.fromSeconds,s]));
  if(displacements.size!==motion.length)throw Error('Duplicate tracking displacement origin');
- const alternatives=translations(tracks,detections,time,spacing),measured=alternatives.length===1?alternatives[0]:null;
+ const sampled=detections.length>0&&detections.every(d=>d.observation.coordinateSampling==='sampled_image_grid');
+ const reference=sampledConstellation(tracks,detections,time,spacing,geometry),constellation=reference.lanes,
+  completeEligible=sampled&&geometry?reference.persistent:null,
+  alternatives=constellation.size?translationsAtLimit(tracks,detections,time,spacing,time-Math.max(...tracks.map(t=>t.observations.at(-1).time)),completeEligible):translations(tracks,detections,time,spacing,completeEligible),
+  proposed=alternatives.length===1?alternatives[0]:null;
+ const measured=proposed&&(!sampled||tracks.filter(t=>t.observations.at(-1).time===proposed.fromSeconds).every(t=>
+   detections.some(d=>compatible(t,d,time,spacing,new Map([[proposed.fromSeconds,proposed]])))))?proposed:null,
+  adjacentInterval=time-Math.max(...tracks.map(t=>t.observations.at(-1).time)),
+  ordinaryLimit=contracts.frame_tracking.maximum_speed_spacing_per_second*spacing*adjacentInterval,
+  sampledOrdinary=sampled&&!motion.length&&alternatives.every(d=>Math.abs(d.pixels)+d.uncertaintyPixels<=ordinaryLimit+1e-9);
  let step:Step|null=measured?{...measured,toSeconds:time,basis:'coobserved_images'}:null;
  const steps=new Map(pastSteps.map(s=>[s.toSeconds,s]));
  if(steps.size!==pastSteps.length)throw Error('Duplicate frame displacement time');
@@ -226,18 +296,23 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
  const isGap=(t:Track)=>time-t.observations.at(-1).time>.05+1e-6||t.observations.at(-1).time<latestObservation-1e-9;
  const adjacentPairs:Edge[]=[],gapConnections:(NonNullable<ReturnType<typeof gapDisplacement>>['proof']&{track:number;detection:number})[]=[];
  // Only independently unique adjacent identities can certify a gap. Gap edges
- // never bootstrap other gap edges, and ordering/cardinality supplies no proof.
- const adjacentTables=(alternatives.length>1?alternatives.map(d=>new Map(displacements).set(d.fromSeconds,d)):[displacements])
-  .map(m=>tracks.map(t=>detections.map(d=>!isGap(t)&&compatible(t,d,time,spacing,m))));
+ // never bootstrap other gap edges. Cardinality alone supplies no proof.
+ // Raster positions are observations, not a common engine translation. Distinct
+ // sprites can move by different sampled amounts without changing identity.
+ // A motion search envelope never enlarges a measured endpoint coordinate.
+ const adjacentTables=(sampledOrdinary?[new Map<number,Displacement>()]:alternatives.length>1?alternatives.map(d=>new Map(displacements).set(d.fromSeconds,d)):[displacements])
+  .map(m=>tracks.map((t,i)=>detections.map((d,j)=>!isGap(t)&&(constellation.has(t.lane)?
+   reference.pairs.some(([a,b])=>a===i&&b===j):compatible(t,d,time,spacing,m)))));
  for(const edge of uniqueEdges(adjacentTables[0]))if(adjacentTables.every(table=>uniqueEdges(table).some(([i,j])=>i===edge[0]&&j===edge[1])))adjacentPairs.push(edge);
  const gapMotion=new Map(tracks.flatMap((t,i)=>isGap(t)?[[i,gapDisplacement(i,tracks,detections,adjacentPairs,time)] as const]:[]));
  const matches:Edge[]=[],uncertainTracks=new Set<number>(),uncertainDetections=new Set<number>(),ambiguities:Edge[]=[];
  for(const lane of new Set([...tracks,...detections].map(x=>x.lane))){
   const a=tracks.flatMap((t,i)=>t.lane===lane?[i]:[]),b=detections.flatMap((d,i)=>d.lane===lane?[i]:[]);
   if(!a.length||!b.length)continue;
-  const hypotheses=alternatives.length>1?alternatives.map(d=>new Map(displacements).set(d.fromSeconds,d)):[displacements];
+  const hypotheses=sampledOrdinary||constellation.has(lane)?[new Map<number,Displacement>()]:alternatives.length>1?alternatives.map(d=>new Map(displacements).set(d.fromSeconds,d)):[displacements];
   const search=hypotheses.map(m=>a.map(i=>b.map(j=>compatible(tracks[i],detections[j],time,spacing,m))));
   const tables=hypotheses.map((m,k)=>a.map((i,ii)=>b.map((j,jj)=>{
+   if(constellation.has(lane))return reference.pairs.some(([source,target])=>source===i&&target===j);
    if(!gapMotion.has(i))return search[k][ii][jj];
    const measured=gapMotion.get(i);
    return !!measured&&compatible(tracks[i],detections[j],time,spacing,new Map([[measured.fromSeconds,measured]]));
@@ -272,5 +347,8 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
   visible_start_seconds:measured.fromSeconds,visible_end_seconds:time,
   displacement_range_pixels:[measured.pixels-measured.uncertaintyPixels,measured.pixels+measured.uncertaintyPixels],
   source_cadence_limit_pixels:limit,interpretation:'measured_image_translation_without_engine_time_assumption'}]:[];
- return {gapConnections,translationAlternatives:alternatives,cadenceWarnings,matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step};
+ return {gapConnections,translationAlternatives:alternatives,cadenceWarnings,matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step,
+  constellationReference:constellation.size?{method:'complete_sampled_source_constellation',
+   recording_seconds:[Math.max(...tracks.map(t=>t.observations.at(-1).time)),time],participating_lanes:[...constellation],
+   observations:'tracking-observations.json'}:null};
 }

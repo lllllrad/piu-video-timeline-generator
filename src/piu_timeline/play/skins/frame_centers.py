@@ -16,6 +16,8 @@ class FrameCenters:
         self.scale=reference_scale(self.bank,self.layout,self.width,self.height)
         self.references={name:cap_reference(self.bank,t)for name,t in self.templates.items()
                          if any(r['name']=='cap'for r in t['regions'])}
+        self.cap_height_pixels=max((int(np.ptp(np.nonzero(t['cap_support'])[0]))+1
+            for t in self.comparisons.values()if t.get('cap_support')is not None and t['cap_support'].any()),default=0)
 
     def position(self,image):
         return self.positions([image])[0]
@@ -62,4 +64,7 @@ class FrameCenters:
                      **({'sampling_origin_pixels':image['sampling_origin_pixels']}if 'sampling_origin_pixels'in image else{}),
                      **measured,'trace':'frames.jsonl'}
         if conflict:measurement.update(native_cap_registration_status=conflict['reason'],registration_conflict=conflict)
-        return {'anchor':anchor,'anchors':anchors,'center':center,'measurement':measurement}
+        return {'anchor':anchor,'anchors':anchors,'center':center,'measurement':measurement,
+                'coordinateSampling':'sampled_image_grid',
+                'capRole':image.get('template_role',image['role'])
+                    if image.get('classification_status')in('full_pattern','cap_role_pattern')else None}
