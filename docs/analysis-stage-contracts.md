@@ -134,3 +134,8 @@ add a decoded-media cache. Regression tests compare complete geometry, warnings
 and role evidence against consumers operating on unprojected observations.
 Memory depends on the consumer view and derived output, not the complete native
 search trace.
+
+The JSON transport protects unsafe integer tokens before ordinary parsing,
+preserving exact provenance without V8 reviver source contexts for every field.
+Markers cannot collide with source strings; malformed JSON and nonfinite values
+fail. A bounded-heap regression covers large records and integer/escape handling.
