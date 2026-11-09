@@ -41,9 +41,10 @@ def prepare(data,directory):
         if manifest['contract']!={'format':PIXEL_FORMAT,'source':source_contract(data)}:
             raise ValueError('Native clearance features differ from source or geometry')
         if manifest['frame_count']!=data['frame_count']:raise ValueError('Native clearance frame count differs')
-        with (directory/'frames.jsonl').open()as stream:frames=filter_frames(data,[json.loads(line)for line in stream])
-        if len(frames)!=data['frame_count']:raise ValueError('Clearance frame observations are incomplete')
-        result=derive(data,frames,read_chunks(native,manifest),load_bank(data['skin_detector']['bank_path']),profile)
+        from piu_timeline.play.observations.trace import stream_frames
+        with stream_frames(directory/'frames.jsonl', data['frame_count']) as frames:
+            interpreted=(filter_frames(data,[frame])[0] for frame in frames)
+            result=derive(data,interpreted,read_chunks(native,manifest),load_bank(data['skin_detector']['bank_path']),profile)
     except (OSError,ValueError,KeyError)as error:
         result={'status':'failed','notes':{},'warnings':[{'reason':'skin_clearance_profile_unavailable',
             'failure_detail':str(error),'lane':0,'check':'note_type_unresolved','observed_points':0,

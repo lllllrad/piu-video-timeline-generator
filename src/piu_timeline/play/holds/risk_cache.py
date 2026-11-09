@@ -35,9 +35,10 @@ def prepare(data,directory):
     from piu_timeline.play.skins.bank import load_bank
     from piu_timeline.play.object_roles import filter_frames
     try:
-        with trace.open()as stream:frames=filter_frames(data,[json.loads(line)for line in stream])
-        if len(frames)!=data['frame_count']:raise ValueError('Native risk frame count differs')
-        result=derive(data,frames,load_bank(data['skin_detector']['bank_path']))
+        from piu_timeline.play.observations.trace import stream_frames
+        with stream_frames(trace, data['frame_count']) as frames:
+            interpreted=(filter_frames(data,[frame])[0] for frame in frames)
+            result=derive(data,interpreted,load_bank(data['skin_detector']['bank_path']))
     except (OSError,ValueError,KeyError)as error:
         result={'status':'failed','frames':[],'warnings':[{'reason':'native_body_risk_evidence_unavailable',
             'failure_detail':str(error),'lane':0,'check':'note_processing_unresolved','observed_points':0,

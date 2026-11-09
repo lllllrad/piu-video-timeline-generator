@@ -40,10 +40,9 @@ def geometry(data, directory, frames, reconstruct):
         unresolved = [];image_connections=[]
         if data.get('skin_detector'):
             from piu_timeline.play.skins.holds import measure_connections
-            import json
-            with native_path.open() as stream:
-                native = filter_frames(data, [json.loads(line) for line in stream])
-            image_connections=measure_connections(data,native,unresolved)
+            from piu_timeline.play.observations.trace import FrameTrace
+            with FrameTrace(native_path, data.get('frame_count')) as native:
+                image_connections=measure_connections(data,filter_frames(data,native),unresolved)
             return {'image_connections':image_connections,'unresolved_tracks':unresolved}
         else:
             holds = reconstruct(data, frames, unresolved, include_state=False)

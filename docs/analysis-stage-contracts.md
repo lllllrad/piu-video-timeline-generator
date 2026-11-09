@@ -121,3 +121,14 @@ exercise acquisition followed by explicit coordinate/timing/association calls.
 They do not establish a corpus recognition rate or a wall-clock performance
 budget. Costs still depend on observed candidate counts and trajectory density;
 large inputs need measurement, rather than an assumption that saved data is cheap.
+
+Native interpretation reads retained JSONL observations without materializing an
+entire trace. Clearance and body-risk producers stream frames and validate the
+exhausted frame count. Hold geometry and channel collection use a replayable
+file-offset view: scalar frame identities stay in memory, and nested observations
+are loaded on demand with one decoded frame cached. Decorative-art views overlay
+observations without copying unrelated nested fields. Every original comparison
+and timestamp remains accessible; this is an I/O policy, not evidence pruning or
+a new decoded-media cache. Consumers must keep these views inside the reader
+context and treat observations as immutable. Memory still depends on the largest
+individual frame and the derived output, rather than the complete native trace.

@@ -49,7 +49,9 @@ def derive(data,native,bank):
             if point.get('body_template_support')and 'covered_bounds_pixels'in point and point.get('trace')=='frames.jsonl':
                 components[point['time'],hold['lane']].append((hold,point))
     frames=[];intervals=[];previous=None
+    frame_count=0
     for frame in native:
+        frame_count+=1
         time,pts=frame['playback_seconds'],frame['source_pts_seconds']
         if not all(math.isfinite(v)for v in(time,pts))or previous is not None and(time<=previous[0]or pts<=previous[1]):
             raise ValueError('Native risk frames need increasing original PTS')
@@ -79,6 +81,6 @@ def derive(data,native,bank):
         frames.append({'playback_seconds':time,'source_pts_seconds':pts,'causes':records})
     expected=[[r['start_seconds'],r['end_seconds']]for r in data['unsupported_intervals']]
     if intervals!=expected:raise ValueError('Native risk frame groups differ from tracked intervals')
-    return {'status':'available','frame_count':len(native),'frames':frames,'verified_native_flags':True,
+    return {'status':'available','frame_count':frame_count,'frames':frames,'verified_native_flags':True,
             'geometry':{'lane_spacing_pixels':held.spacing,'receptor_y_pixels':held.receptor,'cap_extent_pixels':extent},
             'counts':dict(Counter(c['state']for f in frames for c in f['causes'])),'warnings':[]}

@@ -28,9 +28,14 @@ def read_frames(path):
 
 
 def collect(data, directory, frames):
+    """Keep replayable native observations on disk while collecting channel views."""
+    from piu_timeline.play.observations.trace import FrameTrace
+    with FrameTrace(directory/'frames.jsonl', len(frames)) as native:
+        return collect_native(data, directory, frames, native)
+
+
+def collect_native(data, directory, frames, native):
     """Retain unassigned observations and raw trace references, not only matches."""
-    native_path = directory/'frames.jsonl'
-    native = list(read_frames(native_path))
     if len(native) != len(frames):
         raise ValueError('Visual channels have different native frame counts')
     timestamps = {}
