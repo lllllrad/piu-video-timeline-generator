@@ -325,7 +325,7 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
     from piu_timeline.play.presentation import prepare_report,refresh_registration
     from piu_timeline.play.report import write_report
     prepared=execute(pending,'inspection',lambda:prepare_report(result,pending/'report.html',final),('report-data.json',))
-    execute(pending,'render',lambda:write_report(prepared,pending/'report.html',final),('report.html',))
+    execute(pending,'render',lambda:write_report(prepared,pending/'report.html',final,prepared_path=pending/'report-data.json'),('report.html',))
     from piu_timeline.play.stages import publish
     backup=publish(pending,final)
     from piu_timeline.storage import prune_history

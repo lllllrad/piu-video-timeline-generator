@@ -53,13 +53,44 @@ def geometry(data, directory, frames, reconstruct):
     measured=cached(directory,'hold-geometry',inputs,build)
     if not image:return measured
     from piu_timeline.derived import call
-    return call('holdImages.projectCached',{'schema':1,'notes':data['notes'],'geometry':measured},str(directory))
+    from piu_timeline.play.holds.state import timing_notes
+    import json
+    from pathlib import Path
+    def request():
+        notes=[{**n,'points':source['points'],**{k:source[k]for k in ('beat_reconstruction',)if k in source}}
+               for n,source in zip(timing_notes(data['notes']),data['notes'],strict=True)]
+        return {'schema':1,'notes':notes,'geometry':measured}
+    if (directory/'beat-result.json').is_file():
+        from piu_timeline.play.observations.artifacts import save_input
+        inputs=['native-stages/hold-geometry.json','coordinates.json','physical-timing.json','beat-result.json']
+        saved=call('holdImages.lookupSaved',str(directory),inputs)
+        if saved is None:
+            save_input(directory/'hold-intervals-input.json',request())
+            saved=call('holdImages.runSaved',str(directory),inputs)
+        return json.loads(Path(saved['path']).read_text())
+    return call('holdImages.projectCached',request(),str(directory))
 
 
 def sustained(data, directory, frames, geometry):
-    from piu_timeline.play.holds.state import prepare_input
+    from piu_timeline.play.holds.state import prepare_input,geometry_input
+    from piu_timeline.play.holds.geometry import HoldGeometry
     from piu_timeline.derived import call
     from piu_timeline.play.observations.artifacts import save_input
-    request = prepare_input(data, frames, geometry['holds'])
-    save_input(directory/'hold-state-input.json', request)
-    return {**geometry, **call('holdState.sustainedCached', request, str(directory))}
+    import json
+    from pathlib import Path
+    # Complete persisted pipelines use file identities before constructing input.
+    # Direct native fixtures may intentionally have no musical-stage artifacts.
+    if (directory/'beat-result.json').is_file():
+        inputs=['coordinates.json','physical-timing.json','beat-result.json','hold-frames.jsonl','native-stages/hold-geometry.json']
+        if data.get('skin_detector'):inputs.append('hold-intervals-output.json')
+        parameters={'geometry':geometry_input(HoldGeometry.from_analysis(data,325)),
+                    'require_hold_geometry':bool(data.get('skin_detector')),
+                    'events':{key:data.get(key,[])for key in ('combo_events','judgment_events')}}
+        result=call('holdState.lookupSaved',str(directory),parameters,inputs)
+        if result is None:
+            save_input(directory/'hold-state-input.json',prepare_input(data,frames,geometry['holds']))
+            result=call('holdState.runSaved',str(directory),parameters,inputs)
+        return {**geometry,**json.loads(Path(result['path']).read_text())}
+    request=prepare_input(data,frames,geometry['holds'])
+    save_input(directory/'hold-state-input.json',request)
+    return {**geometry,**call('holdState.sustainedCached',request,str(directory))}

@@ -12,6 +12,41 @@ def files(directory, names):
             for name in names}
 
 
+
+_file_identities={}
+
+
+def file_identities(directory,names):
+    """Hash existing serialized bytes without parsing or serializing their values."""
+    result={}
+    for name in names:
+        path=directory/name;before=path.stat()
+        key=(str(path.resolve()),str(directory.resolve()),before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)
+        if key in _file_identities:
+            result[name]=dict(_file_identities[key]);continue
+        digest=sha256();size=0;pending=b''
+        prefix=json.dumps(str(directory.resolve())+'/',ensure_ascii=False)[:-1].encode();replacement=b'"@segment/'
+        with path.open('rb')as stream:
+            while True:
+                block=stream.read(1024*1024);pending+=block
+                cut=max(0,len(pending)-len(prefix)+1)if block else len(pending)
+                start=0
+                while True:
+                    match=pending.find(prefix,start)
+                    if match<0 or match>=cut:break
+                    part=pending[start:match];digest.update(part);size+=len(part)
+                    digest.update(replacement);size+=len(replacement)
+                    start=match+len(prefix);cut=max(cut,start)
+                part=pending[start:cut];digest.update(part);size+=len(part);pending=pending[cut:]
+                if not block:break
+        after=path.stat()
+        if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)!=(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns):
+            raise ValueError('Serialized artifact changed while reading')
+        result[name]={'size_bytes':size,'sha256':digest.hexdigest()}
+        if len(_file_identities)>=128:_file_identities.clear()
+        _file_identities[key]=dict(result[name])
+    return result
+
 def producer(*modules):
     root = Path(__file__).parents[2]
     return {name: sha256((root/name).read_bytes()).hexdigest() for name in modules}

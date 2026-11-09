@@ -39,3 +39,27 @@ test('publication status follows successful atomic promotion and records failed 
   {between:'running',stage:'complete',after:'failed',report:'previous report',publication:'failed'},
  ],missing_output:'failed'});
 });
+
+const nested=String.raw`
+import json,tempfile
+from pathlib import Path
+from piu_timeline.play.stages import execute
+with tempfile.TemporaryDirectory()as tmp:
+ root=Path(tmp)
+ execute(root,'hold-evidence',lambda:execute(root,'hold-image-geometry',lambda:None))
+ success=json.loads((root/'pipeline-status.json').read_text())
+ def fail():raise ValueError('contradictory observations')
+ try:execute(root,'hold-evidence',lambda:execute(root,'hold-sustained-state',fail))
+ except ValueError:pass
+ failed=json.loads((root/'pipeline-status.json').read_text())
+ print(json.dumps({'success':success,'failed':failed}))
+`;
+test('outer hold stages retain completed and failed child stages for progress inspection',()=>{
+ const r=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',nested],{encoding:'utf8'}).trim().split('\n').at(-1));
+ assert.equal(r.success.stages['hold-image-geometry'].status,'complete');
+ assert.equal(r.success.stages['hold-evidence'].status,'complete');
+ assert.equal(r.failed.stages['hold-image-geometry'].status,'complete');
+ assert.equal(r.failed.stages['hold-sustained-state'].status,'failed');
+ assert.equal(r.failed.stages['hold-evidence'].status,'failed');
+ assert.match(r.failed.stages['hold-sustained-state'].error,/contradictory observations/);
+});

@@ -34,14 +34,15 @@ def feature_contract(data):
             'region':judgment_region(layout) if 'combo_roi' in layout else None}
 
 
-def cache_contracts(data, models):
+def cache_contracts(data, models, directory=None):
+    from piu_timeline.play.holds.analysis import notes_identity
     fonts=[{key:model[key] for key in ('label','hue','mask')} for model in models]
     observations={'format':OBSERVATION_FORMAT,'features':feature_contract(data),
                   'templates':fingerprint(fonts)}
     combo_matches=[{key:match.get(key) for key in ('note','combo_event','combo_lower_seconds','combo_upper_seconds')}
                    for match in source_assignments(data) if match.get('combo_event') is not None]
     association={'format':ASSOCIATION_FORMAT,'events':EVENT_FORMAT,'observations':fingerprint(observations),
-                 'notes':fingerprint(data.get('notes',[])),
+                 'notes':notes_identity(data,directory)if directory is not None else fingerprint(data.get('notes',[])),
                  'combo_events':fingerprint(data.get('combo_events',[])),
                  'combo_matches':fingerprint(combo_matches),
                  'unsupported_intervals':fingerprint(data.get('unsupported_intervals',[])),
@@ -108,7 +109,7 @@ def cache_current(data, root, directory=None):
     models=load_bank(root,data['media'],data['analysis_width'])
     if models and directory is not None and not (directory/'evidence/judgments/templates.json').is_file():
         return False
-    return data.get('judgment_cache')==cache_contracts(data,models)
+    return data.get('judgment_cache')==cache_contracts(data,models,directory)
 
 
 def observations_current(data, root, directory):
@@ -117,7 +118,7 @@ def observations_current(data, root, directory):
     if models and not (directory/'evidence/judgments/templates.json').is_file():
         return False
     return ((directory/'judgments.jsonl').is_file()
-            and data.get('judgment_cache',{}).get('observations') == cache_contracts(data,models)['observations'])
+            and data.get('judgment_cache',{}).get('observations') == cache_contracts(data,models,directory)['observations'])
 
 
 def collect_features(data, output):
@@ -287,7 +288,7 @@ def augment_judgments(data, output):
             provenance.write_text(json.dumps({'ocr_images':0,'method':'compatible_font_bank',
                                              'templates':fingerprint(models)})+'\n')
     trace=output/'judgments.jsonl'
-    contract=cache_contracts(data,models)
+    contract=cache_contracts(data,models,output)
     if trace.is_file() and data.get('judgment_cache',{}).get('observations')==contract['observations']:
         with trace.open() as saved:
             observations=[json.loads(line) for line in saved]
@@ -297,7 +298,7 @@ def augment_judgments(data, output):
         for observation in observations:
             tracker.update(observation['playback_seconds'],observation)
         result=merge_judgments(data,tracker.events,observations,directory=output)
-        result['judgment_cache']=cache_contracts(result,models)
+        result['judgment_cache']=cache_contracts(result,models,output)
         return result
     print('Reading native judgment words independently of combo visibility...',flush=True)
     features,pts,times,samples = collect_features(data,output)
@@ -324,5 +325,5 @@ def augment_judgments(data, output):
     with trace.open() as saved:
         observations=[json.loads(line) for line in saved]
     result=merge_judgments(data,tracker.events,observations,directory=output)
-    result['judgment_cache']=cache_contracts(result,models)
+    result['judgment_cache']=cache_contracts(result,models,output)
     return result

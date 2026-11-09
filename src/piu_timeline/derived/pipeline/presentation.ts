@@ -28,6 +28,11 @@ export function materializeFiles(inputPath:string,resultPath:string,outputPath:s
   atomicJSON(outputPath,materialize(input,result));
 }
 
+/** Consume the persisted request; the process boundary carries paths only. */
+export function prepareFile(inputPath:string,directory:string,outputPath:string):void{
+ atomicJSON(outputPath,prepare(parseData(readFileSync(inputPath,'utf8')),directory));
+}
+
 const composition = readFileSync(new URL('./presentation.ts', import.meta.url), 'utf8');
 const modules = {
   'hold-view': 'hold_presentation', 'motion-effects': 'scroll', 'effect-view': 'effects',

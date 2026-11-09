@@ -13,9 +13,8 @@ def prepare_report(data,path,final_directory=None):
     pending.write_text(json.dumps(request, ensure_ascii=False, allow_nan=False)+'\n')
     pending.replace(path.with_name('presentation-input.json'))
     source = data
-    result=call('presentation.prepare',request,str(path.parent))
-    from piu_timeline.play.observations.artifacts import save_input
-    save_input(path.with_name('inspection-result.json'),result)
+    call('presentation.prepareFile',str(path.with_name('presentation-input.json')),str(path.parent),
+         str(path.with_name('inspection-result.json')))
     view=path.with_name(f'.inspection-view.{uuid4().hex}.json')
     try:
         call('presentation.materializeFiles',str(path.with_name('presentation-input.json')),
@@ -70,5 +69,5 @@ def refresh_registration(data, directory):
     view['inspector_artifacts'] = artifacts
     pending = directory/'report-data.build.json'
     pending.write_text(json.dumps(view, ensure_ascii=False)+'\n')
-    write_report(view, directory/'report.html')
+    write_report(view,directory/'report.html',prepared_path=pending)
     pending.replace(prepared)

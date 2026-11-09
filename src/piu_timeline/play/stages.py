@@ -82,11 +82,15 @@ def execute(directory,name,compute,outputs=()):
         for output in outputs:
             if not (directory/output).is_file():raise ValueError(f'{name} did not produce {output}')
     except BaseException as error:
+        if path.is_file():state=json.loads(path.read_text());state['stages'][name]=record
+        state['stage']=name
         record.update(status='failed',error=type(error).__name__+': '+str(error),finished_seconds=time.time())
         state['status']='failed';state['stage_status']='failed';save_input(path,state)
         raise
     if path.parent!=directory and directory.is_dir():
         path.unlink(missing_ok=True);path=directory/'pipeline-status.json'
+    if path.is_file():state=json.loads(path.read_text());state['stages'][name]=record
+    state['stage']=name
     record.update(status='complete',finished_seconds=time.time())
     state['status']='running';state['stage_status']='complete';save_input(path,state)
     return result

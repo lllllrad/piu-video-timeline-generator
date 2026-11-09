@@ -120,3 +120,11 @@ cap-role conflicts, missing/repeated renders, inconsistent original PTS and
 unrefuted competing links. Independent motion must come from two other lanes;
 no input timing or chart target can resolve image identity. Hold projection tests
 also retain a positively connected shape when endpoint clocks fail.
+
+Serialized-stage regressions verify unchanged-input reuse without rebuilding or
+rewriting requests, producer/dependency invalidation, input/output corruption,
+promotion across different directory prefixes and mutation during calculation.
+Channel projection tests keep baseline counter values independent, reject changed
+source geometry/native files and fail on mismatched source PTS. Sustained-state
+wire tests compare actual recognition results before/after removing unused
+acquisition proofs, including native timing recovery and a following tap.

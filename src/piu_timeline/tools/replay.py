@@ -16,7 +16,7 @@ from piu_timeline.tools.warning_batch import WarningBatch
 from piu_timeline import ROOT
 from piu_timeline.play.analysis import VERSION, TIMING_FORMAT
 from piu_timeline.play.judgments import cache_current as judgment_current
-from piu_timeline.play.holds.analysis import ASSOCIATION_FORMAT, fingerprint
+from piu_timeline.play.holds.analysis import ASSOCIATION_FORMAT, fingerprint, notes_identity
 from piu_timeline.play.holds.features import feature_contract
 from piu_timeline.play.associations import FORMAT as ASSOCIATION_VIEW_FORMAT
 
@@ -123,7 +123,7 @@ def current(path):
     media = data['media']; stat = Path(media['path']).stat()
     return ((stat.st_size, stat.st_mtime_ns) == (media['size_bytes'], media['mtime_ns'])
             and holds.get('feature_contract') == feature_contract(data)
-            and contract.get('notes') == fingerprint(data.get('notes', []))
+            and contract.get('notes') == notes_identity(data,path.parent)
             and contract.get('hud_events') == fingerprint({key:data.get(key, [])
                                                           for key in ('combo_events', 'judgment_events')})
             and judgment_current(data, path.parent.parent, path.parent))

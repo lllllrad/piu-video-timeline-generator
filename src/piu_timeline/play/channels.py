@@ -31,8 +31,11 @@ def collect(data, directory, frames):
     """Keep replayable native observations on disk while collecting channel views."""
     from piu_timeline.play.observations.trace import stream_frames
     from piu_timeline.play.skins.views import channel_frames
-    with stream_frames(directory/'frames.jsonl',len(frames)) as native:
-        retained=channel_frames(native)if data.get('skin_detector')else list(native)
+    from piu_timeline.play.observations.channel_projection import retained as saved_projection
+    retained=saved_projection(data,directory)
+    if retained is None:
+        with stream_frames(directory/'frames.jsonl',len(frames)) as native:
+            retained=channel_frames(native)if data.get('skin_detector')else list(native)
     return collect_native(data,directory,frames,retained)
 
 
@@ -61,8 +64,12 @@ def collect_native(data, directory, frames, native):
             words.append(word)
             word_counts[word.get('label') or ('blank' if word.get('blank') else 'unknown')] += 1
     baseline_path = directory/'frames.base.jsonl'
-    baseline = [{key:frame.get(key)for key in ('source_pts_seconds','playback_seconds','combo','combo_confidence')}
-                for frame in read_frames(baseline_path)]if baseline_path.is_file()else native
+    if native and all('baseline_combo'in f for f in native):
+        baseline=[{'playback_seconds':f['playback_seconds'],'source_pts_seconds':f['source_pts_seconds'],
+                   'combo':f['baseline_combo'],'combo_confidence':f.get('baseline_combo_confidence')}for f in native]
+    else:
+        baseline=[{key:frame.get(key)for key in ('source_pts_seconds','playback_seconds','combo','combo_confidence')}
+                  for frame in read_frames(baseline_path)]if baseline_path.is_file()else native
     if len(baseline) != len(native) or any(
             any(abs(a[k]-b[k]) > 1e-6 for k in ('source_pts_seconds', 'playback_seconds'))
             for a,b in zip(native, baseline, strict=True)):
@@ -96,7 +103,12 @@ def collect_native(data, directory, frames, native):
     def read_types(source):
         if source.get('skin_detector'):
             from piu_timeline.play.skins.observations import observe
-            return observe(source, native)
+            if native and 'skin_observations'not in native[0]:
+                from piu_timeline.play.observations.trace import stream_frames
+                from piu_timeline.play.skins.views import channel_frames
+                with stream_frames(directory/'frames.jsonl',len(frames))as raw:
+                    return observe(source,channel_frames(raw))
+            return observe(source,native)
         appearance = retained(source,directory,native)
         return observe_appearance(source,appearance,interpreted) if appearance else observe_types(source,pixel_path,interpreted)
     types = measured_types(data, directory, native, interpreted, read_types)
@@ -167,9 +179,14 @@ def augment_channels(data, directory, frames=None):
     """Rebuild associations from retained pixels; invalidate independently of OCR."""
     from piu_timeline.play.holds.analysis import fingerprint
     inputs = ('frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz','counter-pixels.npz','native-features/manifest.json')
+    from piu_timeline.play.holds.analysis import notes_identity
+    from piu_timeline.play.observations.artifacts import file_identities
+    values={key:data.get(key)for key in ('media','layout','analysis_height','combo_events','judgment_events',
+                                         'scroll_motion','object_interpretation','skin_role_evidence','body_risk_evidence')}
+    values['notes']=notes_identity(data,directory)
+    values['hold_analysis']=file_identities(directory,('holds.json',))if(directory/'holds.json').is_file()else data.get('hold_analysis')
     contract = {'format': CHANNEL_FORMAT,
-                'analysis': fingerprint({key:data.get(key) for key in
-                                         ('media','layout','analysis_height','notes','hold_analysis','combo_events','judgment_events','scroll_motion','object_interpretation','skin_role_evidence','body_risk_evidence')}),
+                'analysis': fingerprint(values),
                 'traces': {name: [p.stat().st_size, p.stat().st_mtime_ns] if (p:=directory/name).is_file() else None for name in inputs}}
     from piu_timeline.play.observations.artifacts import producer
     from piu_timeline.play.observations.channel_stages import derived_motion_contract

@@ -167,3 +167,42 @@ extent and nullable endpoint ranges. A failed endpoint clock keeps the shape,
 emits its timing warning and suppresses duplicate tap components. The inspector
 lists these shapes and overlays only their positive per-frame image intervals;
 it does not invent target positions for an untimed shape.
+
+### Serialized stage reuse
+
+Image-interval projection uses `hold-intervals-input.json`, `hold-intervals-output.json`
+and `hold-intervals.stage.json` to bind image geometry to saved timing stages.
+The sustained-state producer stores `hold-state-input.json`,
+`hold-state-output.json` and `hold-state.stage.json`. Its manifest binds producer
+code, geometry/event parameters and the serialized coordinate, physical timing,
+beat, hold-frame and image-geometry artifacts. Cache lookup checks those file
+identities before assembling the input. An unchanged stage neither rebuilds nor
+rewrites its request and does not send observation objects through the worker
+transport. On a miss, the adapter persists the minimal timing view once and the
+TypeScript producer consumes that file and writes its output once. Input/output
+corruption fails explicitly; changed dependencies invalidate reuse. File identity
+hashes stream existing bytes with segment path prefixes normalized, preserving
+identity through pending-directory promotion without parsing and re-encoding JSON.
+
+Native type/processing producers also keep small file-reference receipts before
+building or hashing a composed request; receipts bind the existing producer
+artifact bytes and do not replace its provenance.
+
+Hold and judgment association and channel contracts reference the saved note-stage artifacts
+instead of reserializing the full composed note view. Channel assembly can reuse
+unassigned popup/motion rows when acquisition identity, original frame timeline
+and native file signatures still agree. Track-dependent type/processing artifacts
+keep their own bindings; a type-cache miss acquires the required native role view.
+Changing track identity cannot silently reuse another track's type assignment.
+
+Inspection preparation consumes `presentation-input.json` directly and writes
+`inspection-result.json`; production rendering consumes `report-data.json`
+directly. The worker boundary carries paths. Direct in-memory calculation APIs
+remain available for small synthetic cases. Other coordinate/clock adapters still
+use composed in-memory views; these file boundaries do not imply that every
+producer in the pipeline has already adopted file-only transport.
+
+Progress records distinguish role clearance, hold frames, image geometry,
+sustained state, native risk and channel assembly. A parent stage preserves its
+children's completion/failure records; only atomic publication marks the report
+published.

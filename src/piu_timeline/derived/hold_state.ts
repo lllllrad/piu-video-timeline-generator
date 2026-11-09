@@ -6,6 +6,7 @@ import {readFileSync, existsSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {parseData} from './json.ts';
 import {inputNotes} from './holds/input.ts';
+import * as serialized from './pipeline/serialized.ts';
 export interface Geometry {receptor: number; spacing: number; note_scale: number; edge_tolerance: number}
 type Context = Record<string, RecordData[]>;
 
@@ -85,7 +86,18 @@ export function sustained(input: RecordData): RecordData {
 export function sustainedCached(input: RecordData, directory: string): RecordData {
   return new Store(directory).run('hold-state', implementation(new URL('./hold_state.ts', import.meta.url)), input, () => sustained(input));
 }
+export function lookupSaved(directory:string,parameters:RecordData,inputs:string[]):RecordData|null{
+ return serialized.lookup(directory,serialized.definition(directory,'hold-state',implementation(new URL('./hold_state.ts',import.meta.url)),parameters,inputs));
+}
+export function runSaved(directory:string,parameters:RecordData,inputs:string[]):RecordData{
+ return serialized.run(directory,serialized.definition(directory,'hold-state',implementation(new URL('./hold_state.ts',import.meta.url)),parameters,inputs),sustained);
+}
 export function current(directory: string): boolean {
+  const manifest=resolve(directory,'hold-state.stage.json');
+  if(existsSync(manifest)){
+    const saved=parseData(readFileSync(manifest,'utf8'));
+    return lookupSaved(directory,saved.parameters,Object.keys(saved.inputs))!==null;
+  }
   const path = resolve(directory, 'hold-state-input.json');
   return existsSync(path) && artifactCurrent(directory, 'hold-state', implementation(new URL('./hold_state.ts', import.meta.url)), parseData(readFileSync(path, 'utf8')));
 }

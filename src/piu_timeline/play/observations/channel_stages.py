@@ -18,7 +18,7 @@ def processing(data, directory, observe):
               'producer': producer('play/observations/channel_stages.py', 'play/processing/__init__.py', 'play/processing/motion.py',
                                    'play/processing/templates.py', 'play/processing/poses.py', 'play/processing/passage.py'),
               'derived': derived_motion_contract()}
-    return cached(directory, 'processing', inputs, lambda: observe(source, directory/'processing-features.npz'))
+    return serialized(directory,'processing',inputs,lambda:cached(directory,'processing',inputs,lambda:observe(source,directory/'processing-features.npz')))
 
 
 def derived_motion_contract():
@@ -38,10 +38,23 @@ def note_types(data, directory, native, frames, observe):
     if data.get('skin_detector'):
         from piu_timeline.play.skins.observations import producer_contract
         inputs['producer'].update(producer_contract())
-    result = cached(directory, 'note-types', inputs, lambda: observe(source))
+    result=serialized(directory,'note-types',inputs,lambda:cached(directory,'note-types',inputs,lambda:observe(source)))
     # A first acquisition may have created the appearance cache. Bind the same
     # result to the finalized measurement inputs without performing it twice.
     finalized = {**inputs, 'files': files(directory, ('processing-features.npz', 'appearance-features.npz'))}
     if finalized != inputs:
         cached(directory, 'note-types', finalized, lambda: result)
     return result
+
+
+def serialized(directory,name,inputs,compute):
+    from piu_timeline.play.observations.serialized import reuse
+    dependencies=('coordinates.json','physical-timing.json','beat-result.json','holds.json',
+                  'hold-frames.jsonl','object-interpretation.json','skin-role-evidence.json')
+    if not all((directory/file).is_file()for file in dependencies):return compute()
+    for file in ('processing-features.npz','appearance-features.npz','native-features/manifest.json'):
+        if(directory/file).is_file():dependencies+=file,
+    source=inputs['data']
+    parameters={'scroll_pause_model':source.get('scroll_pause_model'),'scroll_speed_model':source.get('scroll_speed_model'),
+                'native':inputs.get('native'),'derived':inputs.get('derived')}
+    return reuse(directory,name,dependencies,parameters,inputs['producer'],compute)

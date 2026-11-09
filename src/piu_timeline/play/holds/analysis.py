@@ -12,8 +12,18 @@ def fingerprint(value):
     return sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
+
+def notes_identity(data,directory):
+    """Use producer artifacts, rather than serializing their composed read model."""
+    from piu_timeline.play.observations.artifacts import file_identities
+    names=('coordinates.json','physical-timing.json','beat-result.json')
+    if all((directory/name).is_file()for name in names):
+        return {'kind':'serialized_note_stages','inputs':file_identities(directory,names)}
+    return fingerprint(data.get('notes',[]))
+
 def augment_holds(data, output):
     from piu_timeline.play.channels import augment_channels,annotate_matches
+    from piu_timeline.play.stages import execute
     # Synthetic/legacy metadata without source stream geometry cannot reacquire
     # pixels; keep it explicit rather than invoking a decoder with invented data.
     if not data.get('media', {}).get('video_streams') or any('color' not in lane for lane in data.get('layout', {}).get('lanes', [])):
@@ -21,9 +31,9 @@ def augment_holds(data, output):
     from piu_timeline.play.holds.risk_cache import prepare as prepare_risk
     if data.get('skin_detector'):
         from piu_timeline.play.skins.clearance_cache import prepare
-        data=prepare(data,output)
+        data=execute(output,'hold-role-clearance',lambda:prepare(data,output))
     contract = feature_contract(data)
-    association = {'format': ASSOCIATION_FORMAT, 'notes': fingerprint(data['notes']),
+    association = {'format': ASSOCIATION_FORMAT, 'notes': notes_identity(data,output),
                    'object_roles':fingerprint(data.get('object_interpretation',{}).get('effects',[])),
                    'hud_events': fingerprint({key: data.get(key, []) for key in ('combo_events', 'judgment_events')})}
     if data.get('skin_detector'):
@@ -33,22 +43,23 @@ def augment_holds(data, output):
         association['skin_role_clearance']=data.get('skin_role_evidence',{}).get('contract')
     path = output / 'holds.json'
     from piu_timeline.play.observations.acquisition import hold_observations
-    frames = hold_observations(data, output)
+    frames=execute(output,'hold-frame-observations',lambda:hold_observations(data,output))
     from piu_timeline.play.object_roles import filter_frames
     interpreted=filter_frames(data,frames,bodies=True)
     art=[{'source_pts_seconds':raw['source_pts_seconds'],'playback_seconds':raw['playback_seconds'],
           'observation':body,'role':'decorative_art'}for raw,view in zip(frames,interpreted,strict=True)
          for body in raw['bodies']if body not in view['bodies']]
     from piu_timeline.play.holds.stages import geometry as build_geometry, sustained
-    geometry = build_geometry(data, output, frames, reconstruct)
-    state = sustained(data, output, frames, geometry)
+    geometry=execute(output,'hold-image-geometry',lambda:build_geometry(data,output,frames,reconstruct))
+    state=execute(output,'hold-sustained-state',lambda:sustained(data,output,frames,geometry))
     result = {'feature_contract': contract, 'association_contract': association, **state,
               'decorative_body_observations':art,
               'semantics': 'Long notes are sustained states. Hold ticks are not independent presses; release is not measured.'}
     pending = path.with_suffix('.build-json')
     pending.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     pending.replace(path)
-    return augment_channels(prepare_risk({**data, 'hold_analysis': result},output), output, frames)
+    risk=execute(output,'hold-risk',lambda:prepare_risk({**data,'hold_analysis':result},output))
+    return execute(output,'visual-channels',lambda:augment_channels(risk,output,frames))
 
 
 def chart_projection(data):

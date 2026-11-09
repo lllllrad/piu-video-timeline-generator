@@ -2,6 +2,7 @@
 import {inputNotes} from './input.ts';
 import {Store,implementation} from '../pipeline/store.ts';
 import type {RecordData} from '../types.ts';
+import * as serialized from '../pipeline/serialized.ts';
 
 function range(note:RecordData):number[]|null{
  if(note.status!=='estimated'||note.timing_reconstruction?.status==='failed'||!Number.isFinite(note.target_seconds))return null;
@@ -43,4 +44,12 @@ export function projectCached(input:RecordData,directory:string):RecordData{
  if(input.schema!==1||!Array.isArray(input.notes)||!Array.isArray(input.geometry?.image_connections))throw Error('Invalid image timing input');
  return new Store(directory).run('hold-intervals',implementation(new URL('./image_timing.ts',import.meta.url)),input,
   ()=>project(input.notes,input.geometry));
+}
+
+export function lookupSaved(directory:string,inputs:string[]):RecordData|null{
+ return serialized.lookup(directory,serialized.definition(directory,'hold-intervals',implementation(new URL('./image_timing.ts',import.meta.url)),{},inputs));
+}
+export function runSaved(directory:string,inputs:string[]):RecordData{
+ return serialized.run(directory,serialized.definition(directory,'hold-intervals',implementation(new URL('./image_timing.ts',import.meta.url)),{},inputs),
+  request=>project(request.notes,request.geometry));
 }
