@@ -29,9 +29,11 @@ def read_frames(path):
 
 def collect(data, directory, frames):
     """Keep replayable native observations on disk while collecting channel views."""
-    from piu_timeline.play.observations.trace import FrameTrace
-    with FrameTrace(directory/'frames.jsonl', len(frames)) as native:
-        return collect_native(data, directory, frames, native)
+    from piu_timeline.play.observations.trace import stream_frames
+    from piu_timeline.play.skins.views import channel_frames
+    with stream_frames(directory/'frames.jsonl',len(frames)) as native:
+        retained=channel_frames(native)if data.get('skin_detector')else list(native)
+    return collect_native(data,directory,frames,retained)
 
 
 def collect_native(data, directory, frames, native):
@@ -173,7 +175,7 @@ def augment_channels(data, directory, frames=None):
     from piu_timeline.play.observations.channel_stages import derived_motion_contract
     contract['measurement_producers'] = producer('play/observations/channel_stages.py', 'play/processing/__init__.py', 'play/processing/motion.py',
         'play/processing/templates.py', 'play/processing/poses.py', 'play/processing/passage.py',
-        'play/note_types.py', 'play/holds/type_links.py', 'play/holds/geometry.py', 'play/skins/observations.py')
+        'play/skins/views.py', 'play/note_types.py', 'play/holds/type_links.py', 'play/holds/geometry.py', 'play/skins/observations.py')
     contract['measurement_producers']['motion'] = derived_motion_contract()
     if data.get('skin_detector'):
         from piu_timeline.play.skins.observations import FORMAT as IMAGE_ROLE_FORMAT,producer_contract

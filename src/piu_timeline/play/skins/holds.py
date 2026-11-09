@@ -124,6 +124,8 @@ def measure_connections(data,native,diagnostics,*,references=None,cap_references
     if references is None and body_references is None:body_references=reference_rows(data,body_only=True)
     references=reference_rows(data)if references is None else references
     cap_references=reference_rows(data,cap_only=True)if cap_references is None else cap_references
+    from piu_timeline.play.skins.views import geometry_frames
+    native=geometry_frames(native,references,cap_references,body_references)
     from piu_timeline.play.skins.extents import LengthChecks
     lengths = LengthChecks(data)
     records = observe(data, native)['notes']

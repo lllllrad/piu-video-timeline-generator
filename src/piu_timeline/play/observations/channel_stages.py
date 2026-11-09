@@ -34,7 +34,7 @@ def note_types(data, directory, native, frames, observe):
               'frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'bodies', 'color_connections') if k in f} for f in frames],
               'native': files(directory, (baseline,)),
               'files': files(directory, ('processing-features.npz', 'appearance-features.npz')),
-              'producer': producer('play/observations/channel_stages.py', 'play/note_types.py', 'play/holds/type_links.py', 'play/holds/geometry.py', 'play/skins/observations.py')}
+              'producer': producer('play/observations/channel_stages.py', 'play/note_types.py', 'play/holds/type_links.py', 'play/holds/geometry.py', 'play/skins/observations.py','play/skins/views.py')}
     if data.get('skin_detector'):
         from piu_timeline.play.skins.observations import producer_contract
         inputs['producer'].update(producer_contract())

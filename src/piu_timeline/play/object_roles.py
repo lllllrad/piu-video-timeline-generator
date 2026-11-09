@@ -1,6 +1,5 @@
 """Interpret configured non-playable artwork before reconstructing note tracks."""
 import json
-from collections.abc import Mapping
 from pathlib import Path
 
 import numpy as np
@@ -76,36 +75,12 @@ def cap_bounds(data,note):
             note['x']+radius/width,note['y']+radius/height]
 
 
-class InterpretedFrame(Mapping):
-    """Overlay object roles without retaining another frame's nested evidence."""
-    def __init__(self, data, frame, bodies):
-        self.data, self.frame, self.bodies = data, frame, bodies
-        field='bodies'if bodies else'notes'
-        self.fields={field}
-        self.skipped=skipped_frame(frame['playback_seconds'],effects(data))
-        if self.skipped:self.fields.update(('skin_observations','possible_hold_or_dense_stack','non_playable_effects'))
-
-    def __iter__(self):
-        return iter(dict.fromkeys([*self.frame,*self.fields]))
-
-    def __len__(self):
-        return len(set(self.frame)|self.fields)
-
-    def __getitem__(self, key):
-        if key not in self.fields:return self.frame[key]
-        # Resolve only this requested frame; the ordinary dictionary path owns
-        # exactly the same interpretation policy and validation.
-        return filter_frames(self.data,[dict(self.frame)],self.bodies)[0][key]
-
-
 def filter_frames(data,frames,bodies=False):
     """Return a derived view; native files and individual observations stay intact."""
     candidates=effects(data)
     if not candidates:return frames
     result=[]
     for frame in frames:
-        if not isinstance(frame,dict):
-            result.append(InterpretedFrame(data,frame,bodies));continue
         skipped=skipped_frame(frame['playback_seconds'],candidates)
         if skipped:
             result.append({**frame,('bodies'if bodies else'notes'):[], 'skin_observations':[],

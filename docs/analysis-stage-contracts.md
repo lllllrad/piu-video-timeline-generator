@@ -122,13 +122,15 @@ They do not establish a corpus recognition rate or a wall-clock performance
 budget. Costs still depend on observed candidate counts and trajectory density;
 large inputs need measurement, rather than an assumption that saved data is cheap.
 
-Native interpretation reads retained JSONL observations without materializing an
-entire trace. Clearance and body-risk producers stream frames and validate the
-exhausted frame count. Hold geometry and channel collection use a replayable
-file-offset view: scalar frame identities stay in memory, and nested observations
-are loaded on demand with one decoded frame cached. Decorative-art views overlay
-observations without copying unrelated nested fields. Every original comparison
-and timestamp remains accessible; this is an I/O policy, not evidence pruning or
-a new decoded-media cache. Consumers must keep these views inside the reader
-context and treat observations as immutable. Memory still depends on the largest
-individual frame and the derived output, rather than the complete native trace.
+Native interpretation streams retained JSONL observations and validates the
+exhausted frame count. Clearance and body-risk producers consume frames directly.
+Hold geometry first projects every image comparison to exact compared-row spans
+for its declared reference objects and retains the exact role proofs consumed by
+the role join. Channel collection retains popup scalars, motion positions and the
+same role proofs. Repeated note queries use these consumer views, rather than
+reparsing full search alternatives from disk. Native traces keep every original
+comparison and timestamp; these in-memory views do not overwrite acquisition or
+add a decoded-media cache. Regression tests compare complete geometry, warnings
+and role evidence against consumers operating on unprojected observations.
+Memory depends on the consumer view and derived output, not the complete native
+search trace.

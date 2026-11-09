@@ -25,7 +25,7 @@ def geometry(data, directory, frames, reconstruct):
         values['scroll_motion']={'samples':[{k:s[k]for k in fields if k in s}
                                            for s in data.get('scroll_motion',{}).get('samples',[])]}
     modules=['play/holds/stages.py','play/skins/holds.py','play/skins/temporal.py','play/skins/coverage.py','play/skins/occlusion.py',
-             'play/skins/observations.py','play/skins/extents.py','play/skins/detector.py','play/skins/bank.py',
+             'play/skins/observations.py','play/skins/views.py','play/skins/extents.py','play/skins/detector.py','play/skins/bank.py',
              'derived/holds/extent.ts','derived/holds/image_motion.ts','derived/coordinates/measurements.ts','play/observations/coordinates.py','play/object_roles.py']if image else[
              'play/holds/stages.py','play/holds/reconstruction.py','play/holds/geometry.py','play/holds/continuity.py',
              'derived/holds/input.ts','play/object_roles.py']
@@ -40,9 +40,10 @@ def geometry(data, directory, frames, reconstruct):
         unresolved = [];image_connections=[]
         if data.get('skin_detector'):
             from piu_timeline.play.skins.holds import measure_connections
-            from piu_timeline.play.observations.trace import FrameTrace
-            with FrameTrace(native_path, data.get('frame_count')) as native:
-                image_connections=measure_connections(data,filter_frames(data,native),unresolved)
+            from piu_timeline.play.observations.trace import stream_frames
+            with stream_frames(native_path, data.get('frame_count')) as native:
+                interpreted=(filter_frames(data,[frame])[0]for frame in native)
+                image_connections=measure_connections(data,interpreted,unresolved)
             return {'image_connections':image_connections,'unresolved_tracks':unresolved}
         else:
             holds = reconstruct(data, frames, unresolved, include_state=False)

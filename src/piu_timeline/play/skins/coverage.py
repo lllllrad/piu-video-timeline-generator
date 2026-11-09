@@ -54,6 +54,8 @@ def observed_cap_rows(pattern):
 
 def image_spans(image,references,*,cap_only=False,full_only=False):
     """These are compared image rows, not a claim of solid foreground pixels."""
+    if hasattr(image,'spans'):
+        return image.spans[id(references),cap_only,full_only]
     patterns=[image]
     cap_alternatives=[p for p in image.get('alternatives',[])
                       if p.get('role')=='unknown'and p.get('classification_status')=='cap_only']
