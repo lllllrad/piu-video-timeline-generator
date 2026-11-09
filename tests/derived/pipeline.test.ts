@@ -4,7 +4,7 @@ import {mkdtempSync, readFileSync, writeFileSync, rmSync, statSync} from 'node:f
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {current,materializeFiles,prepare as prepareArtifact,materialize} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
+import {current,input as captureInput,inputFiles,previewFile,prepareFile,materializeFiles,prepare as prepareArtifact,materialize} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
 import {inspectionView as prepare,inspectionRequest,type InspectionFixture as PresentationInput} from './fixtures.ts';
 import {parseData, stringifyData} from '../../src/piu_timeline/derived/json.ts';
 import {fingerprint, Store} from '../../src/piu_timeline/derived/pipeline/store.ts';
@@ -144,4 +144,36 @@ test('standalone presentation CLI replays saved JSON and leaves old output intac
     writeFileSync(source, '{"schema":99}'); assert.equal(run().status, 1);
     assert.equal(readFileSync(output, 'utf8'), before);
   } finally {rmSync(directory, {recursive: true, force: true});}
+});
+
+
+test('file capture, preview and inspection retain exact source integers and composed results',()=>{
+ const directory=mkdtempSync(join(tmpdir(),'piu-inspection-files-'));
+ try{
+  const fixture=input(),source=join(directory,'source.json'),native=join(directory,'native.json'),
+   request=join(directory,'request.json'),preview=join(directory,'preview.json'),result=join(directory,'result.json'),view=join(directory,'view.json');
+  writeFileSync(source,stringifyData(fixture.data));writeFileSync(native,stringifyData(fixture.observations));
+  inputFiles(source,native,directory+'/',request);
+  const captured=captureInput(fixture.data,fixture.observations as any,directory+'/');
+  assert.deepEqual(parseData(readFileSync(request,'utf8')),captured);
+  previewFile(request,directory,preview);
+  assert.equal(parseData(readFileSync(preview,'utf8')).stage,'interpretation');
+  prepareFile(request,directory,result);materializeFiles(request,result,view);
+  assert.deepEqual(parseData(readFileSync(view,'utf8')),materialize(captured,prepareArtifact(captured)));
+ }finally{rmSync(directory,{recursive:true,force:true});}
+});
+
+test('untimed image-connected holds survive inspection stage ownership without becoming taps',()=>{
+ const request=input();
+ request.data.notes.push({...request.data.notes[0],status:'excluded',reason:'insufficient_track',target_seconds:null,points:[[.92,140]]});
+ request.data.hold_analysis.observed_holds=[{id:0,image_connection_id:0,lane:0,head_note:0,tail_note:1,covered_notes:[0,1],
+  geometry_status:'connected',timing_status:'unresolved',start_range:[.99,1.01],end_range:null,
+  visible_start_seconds:.9,visible_end_seconds:.92,input_requirement:'held_state',requires_head_press:false}];
+ const view=prepare(request);
+ assert.equal(view.hold_analysis.observed_holds.length,1);
+ for(const note of view.notes){
+  assert.equal(note.observed_hold_id,0);assert.equal(note.observed_note_type,'hold');
+  assert.equal(note.note_type,'hold_component');assert.equal(note.requires_head_press,false);
+ }
+ assert.equal(view.hold_analysis.holds.length,0);
 });

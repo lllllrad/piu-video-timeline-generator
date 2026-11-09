@@ -8,12 +8,9 @@ from uuid import uuid4
 def prepare_report(data,path,final_directory=None):
     from piu_timeline.play.observations.presentation import prepare
     from piu_timeline.derived import call
-    request = prepare(data, path.parent)
-    pending = path.with_name('presentation-input.build.json')
-    pending.write_text(json.dumps(request, ensure_ascii=False, allow_nan=False)+'\n')
-    pending.replace(path.with_name('presentation-input.json'))
+    request_path=prepare(data,path.parent)
     source = data
-    call('presentation.prepareFile',str(path.with_name('presentation-input.json')),str(path.parent),
+    call('presentation.prepareFile',str(request_path),str(path.parent),
          str(path.with_name('inspection-result.json')))
     view=path.with_name(f'.inspection-view.{uuid4().hex}.json')
     try:

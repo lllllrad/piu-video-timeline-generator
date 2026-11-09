@@ -195,6 +195,12 @@ and native file signatures still agree. Track-dependent type/processing artifact
 keep their own bindings; a type-cache miss acquires the required native role view.
 Changing track identity cannot silently reuse another track's type assignment.
 
+Inspection source and native preparation are persisted independently as
+`inspection-source.json` and `inspection-observations.json`. Input capture and
+preview pass paths and produce `presentation-input.json`,
+`interpretation-result.json` and `interpretation-view.json`. Repeated tracking
+connection references and alternatives remain in content-addressed evidence files;
+read models retain verifiable links instead of duplicating complete proof graphs.
 Inspection preparation consumes `presentation-input.json` directly and writes
 `inspection-result.json`; production rendering consumes `report-data.json`
 directly. The worker boundary carries paths. Direct in-memory calculation APIs

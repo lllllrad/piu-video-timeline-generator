@@ -10,7 +10,7 @@ import type {RecordData} from '../types.ts';
 const holdNoteFields = [
   'status', 'reason', 'target_seconds', 'prediction_uncertainty_seconds', 'type_status', 'type_evidence',
   'type_unknown_reasons', 'note_type', 'hold_cap_role', 'observed_hold_head', 'hold_id', 'input_requirement',
-  'requires_head_press', 'chart_timing_status', 'target_timing_basis', 'geometry_native_range', 'geometry_source_failure',
+  'requires_head_press', 'observed_hold_id', 'observed_note_type', 'chart_timing_status', 'target_timing_basis', 'geometry_native_range', 'geometry_source_failure',
 ];
 const ownedOutputs = {
   'configured-processing': ['visual_channels'],

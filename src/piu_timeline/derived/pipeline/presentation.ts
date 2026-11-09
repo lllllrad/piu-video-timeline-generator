@@ -18,6 +18,7 @@ import {
   type PresentationInput, type ViewArtifact,
 } from './contracts.ts';
 import {result, applyResult, materialize} from './composition.ts';
+import {input as captureInput}from './contracts.ts';
 export {input} from './contracts.ts';
 export {materialize} from './composition.ts';
 export type {PresentationInput} from './contracts.ts';
@@ -26,6 +27,14 @@ export type {PresentationInput} from './contracts.ts';
 export function materializeFiles(inputPath:string,resultPath:string,outputPath:string):void{
   const input=parseData(readFileSync(inputPath,'utf8')),result=parseData(readFileSync(resultPath,'utf8'));
   atomicJSON(outputPath,materialize(input,result));
+}
+
+/** Acquisition persists independent pieces once; the worker receives paths only. */
+export function inputFiles(sourcePath:string,nativePath:string,artifactRoot:string,outputPath:string):void{
+ atomicJSON(outputPath,captureInput(parseData(readFileSync(sourcePath,'utf8')),parseData(readFileSync(nativePath,'utf8')),artifactRoot));
+}
+export function previewFile(inputPath:string,directory:string,outputPath:string):void{
+ atomicJSON(outputPath,preview(parseData(readFileSync(inputPath,'utf8')),directory));
 }
 
 /** Consume the persisted request; the process boundary carries paths only. */

@@ -39,3 +39,27 @@ test('repeated tracking proofs keep every warning, original fields and one verif
  }
  assert.equal(paths.size,1);
 });
+
+const connections=String.raw`
+import json,tempfile
+from pathlib import Path
+from piu_timeline.play.observations.warnings import presentation_source
+with tempfile.TemporaryDirectory()as tmp:
+ root=Path(tmp);proof={'method':'deferred_independent_native_clock','source_pts_seconds':[80,81],
+  'references':[{'fragment':3,'observations':[{'time':1,'y_pixels':200}]}],
+  'alternatives':[{'predecessor_fragments':[1],'successor_fragments':[2],'status':'refuted'}]}
+ data={'notes':[{'tracking_connections':[proof]}for _ in range(3)]};before=json.dumps(data)
+ view=presentation_source(data,root);files=list((root/'evidence/tracking-connections').glob('*.json'))
+ print(json.dumps({'view':view,'original':proof,'unchanged':json.dumps(data)==before,'files':len(files),'proof':json.loads(files[0].read_text())}))
+`;
+test('large repeated connection proofs remain verifiable without duplicating their graph in read models',()=>{
+ const r=JSON.parse(execFileSync('sh',['scripts/run.sh','.venv/bin/python','-c',connections],{encoding:'utf8'}));
+ assert.equal(r.unchanged,true);assert.equal(r.files,1);assert.deepEqual(r.proof,r.original);
+ const paths=new Set();
+ for(const n of r.view.notes){
+  const {tracking_evidence,...proof}=n.tracking_connections[0];paths.add(tracking_evidence.path);
+  assert.deepEqual({...proof,references:r.proof.references,alternatives:r.proof.alternatives},r.original);
+  assert.ok(tracking_evidence.path.startsWith('evidence/tracking-connections/'));
+ }
+ assert.equal(paths.size,1);
+});

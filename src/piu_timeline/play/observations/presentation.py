@@ -2,7 +2,7 @@
 import json
 
 from piu_timeline.derived import call
-from piu_timeline.play.observations.artifacts import cached, files, producer
+from piu_timeline.play.observations.artifacts import cached, files, producer, save_input
 
 
 def risk_proofs(data, directory):
@@ -38,11 +38,16 @@ def prepare(data, directory):
               'frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'combo', 'combo_confidence') if k in f} for f in frames],
               'visibility_frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'notes') if k in f}
                                     for f in filter_frames(source, frames)]}
-    request=call('presentation.input',source,native,str(directory.resolve())+'/')
+    source_path=directory/'inspection-source.json';native_path=directory/'inspection-observations.json'
+    request_path=directory/'presentation-input.json';interpretation_path=directory/'interpretation-result.json'
+    view_path=directory/'interpretation-view.json'
+    save_input(source_path,source);save_input(native_path,native)
+    call('presentation.inputFiles',str(source_path),str(native_path),str(directory.resolve())+'/',str(request_path))
     # This measurement depends on interpreted geometry and concrete motion, but
     # remains a native pixel operation rather than a report-side callback.
-    interpretation=call('presentation.preview',request,str(directory))
-    view=call('presentation.materialize',request,interpretation)
+    call('presentation.previewFile',str(request_path),str(directory),str(interpretation_path))
+    call('presentation.materializeFiles',str(request_path),str(interpretation_path),str(view_path))
+    view=json.loads(view_path.read_text())
     pixel_path = directory/'processing-features.npz'
     if (view['scroll_pause_model'] or view['scroll_speed_model']) and pixel_path.is_file():
         from piu_timeline.play.processing import observe_processing
@@ -57,4 +62,6 @@ def prepare(data, directory):
                 note['id'] = 'processing:'+str(note['note'])
             return result
         native['configured_processing'] = {'input': inputs, 'output': cached(directory, 'configured-processing', contract, measure)}
-    return call('presentation.input',source,native,str(directory.resolve())+'/')
+        save_input(native_path,native)
+        call('presentation.inputFiles',str(source_path),str(native_path),str(directory.resolve())+'/',str(request_path))
+    return request_path
