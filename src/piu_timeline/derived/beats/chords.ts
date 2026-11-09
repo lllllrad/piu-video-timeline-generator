@@ -2,9 +2,23 @@ import {contracts} from '../contracts.ts';
 import {imagePosition} from '../coordinates/measurements.ts';
 import {fitTrajectory} from '../coordinates/points.ts';
 import {affineDomain}from '../coordinates/phase_clock.ts';
-import {equal, linear} from '../math.ts';
+import {equal, linear, roundoff} from '../math.ts';
 import type {Interval, Note, RecordData} from '../types.ts';
 const F = contracts.chords;
+
+/** Intersect measured gaps without turning arithmetic roundoff into an empty interval. */
+function measuredGapRange(samples:number[][]):Interval|null{
+ const bounds=samples.map(s=>{
+  const difference=s[2]-s[1],gap=Math.abs(difference)<=roundoff(s[1],s[2])?0:difference;
+  return [gap-s[6]-s[7],gap+s[6]+s[7]];
+ });
+ const lo=Math.max(...bounds.map(b=>b[0])),hi=Math.min(...bounds.map(b=>b[1]));
+ if(lo<=hi)return [lo,hi];
+ const scale=Math.max(...samples.flatMap(s=>[Math.abs(s[1]),Math.abs(s[2]),s[6],s[7]]));
+ if(lo-hi>roundoff(scale))return null;
+ const point=lo+(hi-lo)/2;
+ return [point,point];
+}
 
 /** Paired visibility can have a HUD gap while original capture stays continuous. */
 function captureMotion(samples:number[][],timeline:RecordData[]):RecordData|null{
@@ -69,10 +83,10 @@ export function prepare(data: RecordData, spacing: number): RecordData[] {
     // Only source-certified per-frame image positions supply endpoint intervals.
     // Every co-observed frame must admit one common physical inter-head gap.
     const measuredBounds = samples.every(s => s[8]===true);
-    const gapRange = measuredBounds ? [Math.max(...samples.map(s => s[2] - s[1] - s[6] - s[7])),
-      Math.min(...samples.map(s => s[2] - s[1] + s[6] + s[7]))] : null;
+    const gapRange = measuredBounds ? measuredGapRange(samples) : null;
+    if(measuredBounds&&!gapRange)continue;
     const maximumGap = F.maximum_gap_spacing * spacing;
-    if (gapRange ? Math.max(gapRange[0], -maximumGap) > Math.min(gapRange[1], maximumGap) + 1e-9 : gap > maximumGap) continue;
+    if (gapRange ? Math.max(gapRange[0], -maximumGap) > Math.min(gapRange[1], maximumGap) : gap > maximumGap) continue;
     const time = samples.map(s => s[0] - samples[0][0]), y = samples.map(s => (s[1] + s[2]) / 2);
     const [velocity, intercept] = linear(time, y), error = Math.max(...y.map((v, i) => Math.abs(v - velocity * time[i] - intercept)));
     const displacement = y[0] - y.at(-1);

@@ -5,6 +5,7 @@ import {measuredGapScene}from '../fixtures.ts';
 import {chord,apply} from './fixtures.ts';
 import {prepare,constrain,conflicts} from '../../../src/piu_timeline/derived/beats/chords.ts';
 import {fitGrid} from '../../../src/piu_timeline/derived/beats/grid.ts';
+import {resolve} from '../../../src/piu_timeline/derived/skins/localization.ts';
 const proof=()=>({...prepare(chord(),40)[0],indices:[0,1]});
 test('measured chord resolves one member but retains its original clock domain',()=>{
  const d=chord(),before=structuredClone(d),p=prepare(d,40);assert.equal(p.length,1);assert.deepEqual(p[0].peer_notes,[0,1]);
@@ -105,4 +106,34 @@ test('a source gap excluding zero cannot become an exact chord on a coarse grid'
  const notes=[{lane:0,points:[],prediction_uncertainty_seconds:.01,status:'estimated',target_seconds:0},{lane:1,points:[],prediction_uncertainty_seconds:.01,status:'estimated',target_seconds:.003}];
  assert.deepEqual(conflicts(notes,[p]),[]);
  for(const target of [0,-.003,.005]){notes[1].target_seconds=target;assert.equal(conflicts(notes,[p]).length,2);}
+});
+
+function exactGap(spacing:number,gap:number,jitter:number){
+ const d=measuredGapScene(spacing,60,[[.85,0],[.85,1]]);
+ d.notes[1].points=d.notes[0].points.map(([t,y],i)=>[t,y+gap+(i%2?jitter:0)]);
+ d.head_registration.format=structuredClone(contracts.image_coordinates);
+ d.head_registration.notes.forEach((r,i)=>r.observations.forEach((s,j)=>{
+  const y=d.notes[i].points[j][1];
+  Object.assign(s,resolve({height:d.analysis_height,raw_y:y,comparisons:[{
+   template:s.template,comparison_index:0,image_y:y/d.analysis_height,cap_error:0,maximum_error:.015,
+   scale_y:spacing/40,same_cap:true,center_offset_y_pixels:0,reference:'generated-reference',
+   localization_pixels:{method:'visible_cap_rgb_and_vertical_contrast',compared_pixels:400,
+    vertical_contrast_pixels:80,squared_rgb_error:0,vertical_contrast_error:0}}]}).measurement);
+  d.notes[i].points[j][1]=s.native_y_pixels;
+ }));
+ return d;
+}
+for(const spacing of [20,40,80])for(const gap of [0,.25,-.25])
+test(`zero-radius measured gaps tolerate only arithmetic roundoff: spacing=${spacing}, gap=${gap}`,()=>{
+ const d=exactGap(spacing,gap,Number.EPSILON*128),before=structuredClone(d),proofs=prepare(d,spacing);
+ assert.equal(proofs.length,1);
+ const p=proofs[0],[lo,hi]=p.native_gap_range_pixels;
+ assert.ok(lo<=hi&&Math.abs(lo-gap)<1e-11&&Math.abs(hi-gap)<1e-11);
+ assert.ok(p.endpoint_uncertainty_pixels.every(pair=>pair.every(e=>e===0)));
+ const domains=constrain([[0,0],[0,0]],.125,[{...p,indices:[0,1]}])[0];
+ assert.deepEqual(domains,gap===0?[[0,0],[0,0]]:[[1,0],[1,0]]);
+ assert.deepEqual(d,before);
+});
+test('a changing measured gap exceeding roundoff supplies no chord proof',()=>{
+ assert.deepEqual(prepare(exactGap(40,.25,1e-10),40),[]);
 });
