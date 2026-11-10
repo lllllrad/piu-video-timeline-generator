@@ -5,6 +5,8 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {current,input as captureInput,inputFiles,previewFile,prepareFile,materializeFiles,prepare as prepareArtifact,materialize} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
 import {inspectionView as prepare,inspectionRequest,type InspectionFixture as PresentationInput} from './fixtures.ts';
+import {processingFile}from '../../src/piu_timeline/derived/native_calls.ts';
+import {processing}from '../../src/piu_timeline/derived/pipeline/inputs.ts';
 import {parseData, stringifyData} from '../../src/piu_timeline/derived/json.ts';
 
 function input(): PresentationInput {
@@ -132,6 +134,7 @@ test('file capture, preview and inspection retain exact source integers and comp
   assert.equal(parseData(readFileSync(preview,'utf8')).stage,'interpretation');
   prepareFile(request,directory,result);materializeFiles(request,result,view);
   assert.deepEqual(parseData(readFileSync(view,'utf8')),materialize(captured,prepareArtifact(captured)));
+  assert.deepEqual(processingFile(view),processing(materialize(captured,prepareArtifact(captured))));
  }finally{rmSync(directory,{recursive:true,force:true});}
 });
 

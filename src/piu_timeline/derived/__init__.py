@@ -21,7 +21,7 @@ CONTRACTS['timing'].update(clock_conversion=CONTRACTS['clock_conversion'],render
 _process = None
 _owner = None
 _sequence = 0
-_lock = threading.RLock()
+_lock = threading.Lock()
 
 
 def _json_default(value):
@@ -72,23 +72,7 @@ def close():
 atexit.register(close)
 
 
-def _merge(original, value):
-    """Apply changed fields without replacing retained acquisition objects."""
-    if isinstance(original, dict) and isinstance(value, dict):
-        for key in list(original):
-            if key not in value:del original[key]
-        for key,item in value.items():
-            original[key]=_merge(original.get(key),item)
-        return original
-    if isinstance(original, (list,tuple)) and isinstance(value,list):
-        result=[_merge(original[i]if i<len(original)else None,v)for i,v in enumerate(value)]
-        if isinstance(original,tuple):return tuple(result)
-        original[:]=result
-        return original
-    return value
-
-
-def call(operation, *args, callback=None, mutated=()):
+def call(operation, *args):
     """Keep one Node worker per acquisition process; errors never select a fallback."""
     global _process, _owner, _sequence
     with _lock:
@@ -101,26 +85,15 @@ def call(operation, *args, callback=None, mutated=()):
         def send(message):
             _process.stdin.write(json.dumps(message, default=_json_default, ensure_ascii=False, allow_nan=False)+'\n')
             _process.stdin.flush()
-        send({'protocol':1,'id':identity,'operation':operation,'args':args,
-              'callback':callback is not None,'mutated':list(mutated)})
-        while True:
-            line = _process.stdout.readline()
-            if not line:
-                raise RuntimeError(f'TypeScript analysis worker exited during {operation}')
-            reply = json.loads(line)
-            if reply.get('id') != identity:
-                raise RuntimeError('Mismatched TypeScript analysis response')
-            if reply['kind'] == 'callback':
-                try:
-                    value = callback(reply['fits'])
-                except Exception as error:
-                    send({'kind':'callbackResult','id':identity,'error':str(error)})
-                    _process.stdout.readline()
-                    raise
-                send({'kind':'callbackResult','id':identity,'value':value})
-                continue
-            if reply['kind'] == 'error':
-                raise ValueError(f'{operation}: {reply["error"]}')
-            for index, value in zip(mutated, reply.get('mutated',()), strict=True):
-                _merge(args[index],value)
-            return reply['value']
+        send({'protocol':1,'id':identity,'operation':operation,'args':args})
+        line = _process.stdout.readline()
+        if not line:
+            raise RuntimeError(f'TypeScript analysis worker exited during {operation}')
+        reply = json.loads(line)
+        if reply.get('id') != identity:
+            raise RuntimeError('Mismatched TypeScript analysis response')
+        if reply['kind'] == 'error':
+            raise ValueError(f'{operation}: {reply["error"]}')
+        if reply['kind'] != 'result':
+            raise RuntimeError('Unexpected TypeScript analysis response kind')
+        return reply['value']

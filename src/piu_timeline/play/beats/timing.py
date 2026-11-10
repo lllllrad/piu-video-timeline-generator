@@ -8,13 +8,6 @@ from piu_timeline.derived import CONTRACTS, call
 FORMAT=CONTRACTS['timing']
 
 
-def fit_grid(targets,uncertainties,bpm,origin,splits=None,phase_uncertainty=0,native_chords=(),native_coordinates=()):
-    result=call('beats.fitGrid',targets,uncertainties,bpm,origin,splits,phase_uncertainty,native_chords,native_coordinates)
-    for key in ('row_domains','unconstrained_row_domains'):
-        if key in result:result[key]=[tuple(d)for d in result[key]]
-    return result
-
-
 def reference(data, directory):
     from piu_timeline.charts.data import default_repository, resolve_code
     from piu_timeline.charts.gimmicks import known_origin
@@ -55,7 +48,6 @@ def current(data,directory):
     return data.get('beat_timing',{}).get('contract')=={'format':FORMAT,'reference':reference(data,directory)}
 
 
-
 def prepare_reference(data,directory):
     """Prepare audio-only alignment before beat inference, without policy gates.
 
@@ -77,10 +69,6 @@ def prepare_reference(data,directory):
     except (OSError,ValueError,KeyError,subprocess.SubprocessError) as error:
         return {'status':'failed','reason':str(error)}
     return {'status':'prepared','method':'reference_audio_translation'}
-
-
-def spacing_supported_notes(notes,groups,fits,spacing,motion,coordinate_support=None,chords=()):
-    return tuple(call('validation.spacingSupportedNotes',notes,groups,fits,spacing,motion,coordinate_support or None,chords))
 
 
 def validate_physical(data,directory):

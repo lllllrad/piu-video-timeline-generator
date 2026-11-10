@@ -7,7 +7,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from piu_timeline.play.note_types import shape, project_types, body_type_observations, observe_types
+from piu_timeline.play.note_types import shape, body_type_observations, observe_types
 from piu_timeline.play.exclusions import recognition_diagnostics
 from piu_timeline.charts.policy import validate_regions
 
@@ -93,54 +93,6 @@ class NoteTypeTest(unittest.TestCase):
             self.assertEqual(hold_frames,{42+39/60})
             self.assertTrue(any(o['kind']=='tap' for o in record['observations']))
 
-    def test_one_opposing_frame_survives_many_agreeing_frames_and_does_not_change_native_notes(self):
-        notes=[{'status':'estimated','lane':0,'target_seconds':2,'points':[[1,80],[1.5,60]]}]
-        observations=[evidence('hold',1+i/60) for i in range(20)]+[evidence('tap',1.5)]
-        data={'notes':deepcopy(notes),'visual_channels':{'note_types':{'notes':[{'note':0,'observations':observations}]}}}
-        before=deepcopy(data)
-        diagnostics=project_types(data,notes,[])
-        self.assertEqual(data,before)
-        self.assertEqual(notes[0]['type_status'],'conflict')
-        self.assertEqual(diagnostics[0]['reason'],'note_type_conflict')
-        self.assertEqual(len(diagnostics[0]['type_evidence']),21)
-        self.assertEqual(diagnostics[0]['type_evidence'][-1]['source_pts_seconds'],41.5)
-
-    def test_unknown_samples_do_not_refute_hold_and_unproved_heads_stay_unknown(self):
-        notes=[{'status':'estimated','lane':0,'target_seconds':2,'points':[]} for _ in range(3)]
-        records=[{'note':i,'observations':obs} for i,obs in enumerate(
-            ([evidence('hold',1),evidence('unknown',1.1)], [evidence('tap',1)], []))]
-        data={'visual_channels':{'note_types':{'notes':records}}}
-        diagnostics=project_types(data,notes,[])
-        self.assertEqual([n['type_status'] for n in notes],['hold','tap','unknown'])
-        self.assertEqual({d['note'] for d in diagnostics},{0,2})
-
-    def test_hold_component_identity_combines_proofs_but_not_same_lane_neighbors(self):
-        notes=[{'status':'estimated','lane':0,'target_seconds':2,'points':[],'note_type':'hold'},
-               {'status':'excluded','lane':0,'target_seconds':2.2,'points':[]},
-               {'status':'estimated','lane':0,'target_seconds':2.3,'points':[]}]
-        data={'visual_channels':{'timeline':{'frames':[[1,41],[1.4,41.4]]},'note_types':{'notes':[
-            {'note':1,'observations':[evidence('tap',1.3,1)]},
-            {'note':2,'observations':[evidence('tap',1.2,2)]}]}}}
-        holds=[{'id':0,'display_note':0,'head_note':0,'covered_notes':[0,1],'source_pts_range':[41,41.4]}]
-        diagnostics=project_types(data,notes,holds)
-        self.assertEqual([notes[i]['type_status'] for i in (0,2)],['conflict','tap'])
-        self.assertEqual(len(diagnostics),1)
-        proof=diagnostics[0]['type_evidence']
-        self.assertEqual({p['kind'] for p in proof},{'tap','hold'})
-        self.assertEqual(proof[-1]['source_pts_range'],[41,41.4])
-        self.assertEqual(diagnostics[0]['visible_start_seconds'],1)
-        self.assertEqual(diagnostics[0]['visible_end_seconds'],1.4)
-
-    def test_isolated_tail_after_hold_contact_is_unknown_instead_of_conflicting_tap(self):
-        notes=[{'status':'estimated','lane':0,'target_seconds':1,'points':[],'note_type':'hold'}]
-        raw=evidence('tap',1.1)
-        data={'visual_channels':{'note_types':{'notes':[{'note':0,'observations':[raw]}]}}}
-        hold={'id':0,'display_note':0,'head_note':0,'covered_notes':[0],'start_range':[.99,1.01]}
-        self.assertEqual(project_types(data,notes,[hold]),[])
-        self.assertEqual(notes[0]['type_status'],'hold')
-        self.assertEqual(notes[0]['type_evidence'][0]['kind'],'unknown')
-        self.assertEqual(notes[0]['type_evidence'][0]['observed_kind'],'tap')
-        self.assertEqual(raw['kind'],'tap')
 
     def test_only_explicit_type_exception_covering_all_evidence_suppresses_the_warning(self):
         observation={'note':0,'lane':0,'reason':'note_type_conflict',

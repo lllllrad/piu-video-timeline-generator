@@ -14,7 +14,15 @@ def image_analysis(data,receptors,native,warnings,*,references=None,cap_referenc
     from piu_timeline.derived import call
     from piu_timeline.play.holds.state import attach_state
     connections=measure_connections(data,native,warnings,references=references,cap_references=cap_references)
-    result=call('holdImages.project',data['notes'],{'image_connections':connections,'unresolved_tracks':warnings})
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from piu_timeline.play.observations.artifacts import save_input
+    from piu_timeline.play.stages import read_view
+    with TemporaryDirectory()as temporary:
+        directory=Path(temporary)
+        save_input(directory/'hold-intervals-input.json',{'schema':1,'notes':data['notes'],
+                   'geometry':{'image_connections':connections,'unresolved_tracks':warnings}})
+        result=read_view(call('holdImages.runSaved',str(directory.resolve()),[]),directory)
     warnings[:]=result['unresolved_tracks']
     return attach_state(data,receptors,result['holds'],require_hold_geometry=True)
 

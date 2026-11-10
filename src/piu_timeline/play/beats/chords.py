@@ -10,7 +10,3 @@ def prepare(data,spacing):
 def constrain(domains,step,constraints):
     options,proofs=call('chords.constrain',domains,step,constraints)
     return [tuple(d)for d in options],proofs
-
-
-def conflicts(notes,constraints):
-    return call('chords.conflicts',notes,constraints)

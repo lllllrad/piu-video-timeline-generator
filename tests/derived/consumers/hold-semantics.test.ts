@@ -130,3 +130,36 @@ test('ambiguous hold ownership cannot remove a source type contradiction',()=>{
   holds=[0,2].map(head=>({id:head,display_note:head,head_note:head,covered_notes:[head,1],start_range:[1.5,1.51],source_pts_range:[51.2,51.4]})),warnings=projectTypes(d,notes,holds);
  assert.equal(notes[1].type_status,'conflict');assert.ok(warnings.some(w=>w.note===1&&w.reason==='note_type_conflict'));
 });
+
+const shapeEvidence=(kind:string,time:number,note=0)=>({kind,playback_seconds:time,source_pts_seconds:time+40,source_note:note,reason:'synthetic_visible_shape'});
+test('one opposing type frame survives twenty agreeing frames without changing source notes',()=>{
+ const notes:RecordData[]=[{status:'estimated',lane:0,target_seconds:2,points:[[1,80],[1.5,60]]}],
+  observations=[...Array.from({length:20},(_,i)=>shapeEvidence('hold',1+i/60)),shapeEvidence('tap',1.5)],
+  data={notes:structuredClone(notes),visual_channels:{note_types:{notes:[{note:0,observations}]}}},before=structuredClone(data),warnings=projectTypes(data,notes,[]);
+ assert.deepEqual(data,before);assert.equal(notes[0].type_status,'conflict');assert.equal(warnings[0].reason,'note_type_conflict');
+ assert.equal(warnings[0].type_evidence.length,21);assert.equal(warnings[0].type_evidence.at(-1).source_pts_seconds,41.5);
+});
+test('unknown type samples neither refute a hold nor prove an unobserved head',()=>{
+ const notes:RecordData[]=Array.from({length:3},()=>({status:'estimated',lane:0,target_seconds:2,points:[]})),
+  records=[[shapeEvidence('hold',1),shapeEvidence('unknown',1.1)],[shapeEvidence('tap',1)],[]].map((observations,note)=>({note,observations})),
+  warnings=projectTypes({visual_channels:{note_types:{notes:records}}},notes,[]);
+ assert.deepEqual(notes.map(n=>n.type_status),['hold','tap','unknown']);assert.deepEqual(warnings.map(w=>w.note).sort(),[0,2]);
+});
+test('hold component identities combine their proofs while same-lane neighbors remain separate',()=>{
+ const notes:RecordData[]=[{status:'estimated',lane:0,target_seconds:2,points:[],note_type:'hold'},
+  {status:'excluded',lane:0,target_seconds:2.2,points:[]},{status:'estimated',lane:0,target_seconds:2.3,points:[]}],
+  data={visual_channels:{timeline:{frames:[[1,41],[1.4,41.4]]},note_types:{notes:[
+   {note:1,observations:[shapeEvidence('tap',1.3,1)]},{note:2,observations:[shapeEvidence('tap',1.2,2)]}]}}},
+  warnings=projectTypes(data,notes,[{id:0,display_note:0,head_note:0,covered_notes:[0,1],source_pts_range:[41,41.4]}]);
+ assert.deepEqual([notes[0].type_status,notes[2].type_status],['conflict','tap']);assert.equal(warnings.length,1);
+ assert.deepEqual(new Set(warnings[0].type_evidence.map(p=>p.kind)),new Set(['tap','hold']));
+ assert.deepEqual(warnings[0].type_evidence.at(-1).source_pts_range,[41,41.4]);
+ assert.equal(warnings[0].visible_start_seconds,1);assert.equal(warnings[0].visible_end_seconds,1.4);
+});
+test('an isolated hold remnant after contact stays unknown and does not change its original observation',()=>{
+ const notes:RecordData[]=[{status:'estimated',lane:0,target_seconds:1,points:[],note_type:'hold'}],raw=shapeEvidence('tap',1.1),
+  data={visual_channels:{note_types:{notes:[{note:0,observations:[raw]}]}}};
+ assert.deepEqual(projectTypes(data,notes,[{id:0,display_note:0,head_note:0,covered_notes:[0],start_range:[.99,1.01]}]),[]);
+ assert.equal(notes[0].type_status,'hold');assert.equal(notes[0].type_evidence[0].kind,'unknown');
+ assert.equal(notes[0].type_evidence[0].observed_kind,'tap');assert.equal(raw.kind,'tap');
+});

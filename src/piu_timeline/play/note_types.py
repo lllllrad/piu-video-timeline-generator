@@ -186,8 +186,3 @@ def observe_appearance(data, path, frames):
             'counts':dict(Counter(r['status'] for r in records)),
             'traces':['appearance-features.npz','hold-frames.jsonl'],
             'pixel_coordinates':{'width':325,'height':round(height*source_scale),'origin':'game_crop_top_left'}}
-
-
-def project_types(data,notes,holds):
-    from piu_timeline.derived import call,projection_input
-    return call('holdProjection.projectTypes',projection_input(data),notes,holds,mutated=(1,))

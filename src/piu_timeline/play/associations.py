@@ -41,10 +41,13 @@ def associate_counters(data,combo,display_delay_ms,directory=None):
     from piu_timeline.derived import call
     request={'schema':1,'notes':[{key:note[key] for key in ('lane','status','target_seconds','prediction_uncertainty_seconds','reason') if key in note} for note in notes],'events':combo.events,'display_delay_seconds':display_delay_ms/1000,
              'unsupported_intervals':data['unsupported_intervals'],'constraints':constraints}
-    associations=call('stageAssociations.counters',request)
     if directory is not None:
         from pathlib import Path
         from piu_timeline.play.observations.artifacts import save_input
-        save_input(Path(directory)/'counter-input.json',request)
-        save_input(Path(directory)/'counter-associations.json',associations)
+        from piu_timeline.play.stages import read_view
+        directory=Path(directory)
+        save_input(directory/'counter-input.json',request)
+        associations=read_view(call('associationFiles.counter',str(directory.resolve())),directory)
+    else:
+        associations=call('stageAssociations.counters',request)
     return {**data,**associations['data']}

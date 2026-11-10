@@ -51,7 +51,7 @@ def prepare(data, directory):
     pixel_path = directory/'processing-features.npz'
     if (view['scroll_pause_model'] or view['scroll_speed_model']) and pixel_path.is_file():
         from piu_timeline.play.processing import observe_processing
-        inputs = call('stageInputs.processing', view)
+        inputs = call('nativeCalls.processingFile', str(view_path))
         contract = {'input': inputs, 'files': files(directory, ('processing-features.npz', 'native-features/manifest.json')),
                     'derived': call('stageInputs.processingProducer'),
                     'producer': producer('play/observations/presentation.py', 'play/processing/__init__.py', 'play/processing/templates.py', 'play/processing/poses.py',

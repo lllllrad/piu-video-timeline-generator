@@ -10,7 +10,7 @@ export interface CounterRequest {
 }
 export interface CounterResult {combo_events:readonly Evidence[];matches:readonly Evidence[];deferred_matches:readonly Evidence[];coverage:Evidence;excluded_notes:Evidence}
 export type CounterArtifact=Artifact<'counter-associations',CounterResult>;
-export function counters(input:CounterRequest):CounterArtifact{
+export function counters(input:CounterRequest,artifactRoot?:string):CounterArtifact{
  if(input.schema!==1||!Array.isArray(input.notes)||!Array.isArray(input.events)||!Number.isFinite(input.display_delay_seconds))throw new Error('Invalid counter association input');
  const fields=['lane','status','target_seconds','prediction_uncertainty_seconds','reason'];
  if(input.notes.some(n=>Object.keys(n).some(k=>!fields.includes(k))))throw new Error('Counter association received fields outside timing contract');
@@ -24,7 +24,7 @@ export function counters(input:CounterRequest):CounterArtifact{
  const excluded:Record<string,number>={};for(const n of input.notes as readonly (TimingNote&{reason?:string})[])if(n.status==='excluded')excluded[String(n.reason??null)]=(excluded[String(n.reason??null)]??0)+1;
  return boundArtifact('counter-associations',input,{combo_events:events,matches,deferred_matches:deferred,excluded_notes:excluded,
   coverage:{visible_note_heads:notes.filter(n=>n.status==='estimated').length,timed_note_heads:matches.length,
-   matched_combo_updates:new Set(matches.map(m=>m.combo_event)).size,observed_combo_updates:events.filter(e=>e.delta>0).length}});
+   matched_combo_updates:new Set(matches.map(m=>m.combo_event)).size,observed_combo_updates:events.filter(e=>e.delta>0).length}},artifactRoot);
 }
 export interface JudgmentSource {
  notes:readonly TimingNote[];matches?:readonly Evidence[];conflicted_matches?:readonly Evidence[];
@@ -40,10 +40,10 @@ export function judgmentInput(data:RecordData,events:RecordData[],observations:R
  const source=Object.fromEntries(judgmentInputs.filter(k=>Object.hasOwn(data,k)).map(k=>[k,k==='notes'?data.notes.map(n=>Object.fromEntries(timingFields.filter(f=>Object.hasOwn(n,f)).map(f=>[f,n[f]]))):data[k]])) as unknown as JudgmentSource;
  return {schema:1,source:artifact('judgment-input',source),events,observations};
 }
-export function judgments(request:JudgmentRequest):JudgmentArtifact{
+export function judgments(request:JudgmentRequest,artifactRoot?:string):JudgmentArtifact{
  if(request.schema!==1)throw new Error('Invalid judgment association input');requireArtifact(request.source,'judgment-input');
  if(Object.keys(request.source.data).some(k=>!judgmentInputs.includes(k))||request.source.data.notes.some(n=>Object.keys(n).some(k=>!timingFields.includes(k))))throw new Error('Foreign fields in judgment input');
  const data=structuredClone(request.source.data) as RecordData;
  const result=mergeJudgments(data,structuredClone(request.events) as RecordData[],structuredClone(request.observations) as RecordData[]);
- return boundArtifact('judgment-associations',request,Object.fromEntries(judgmentFields.filter(k=>Object.hasOwn(result,k)).map(k=>[k,result[k]])));
+ return boundArtifact('judgment-associations',request,Object.fromEntries(judgmentFields.filter(k=>Object.hasOwn(result,k)).map(k=>[k,result[k]])),artifactRoot);
 }

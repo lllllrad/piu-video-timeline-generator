@@ -393,8 +393,10 @@ class ComboTracker:
 def associate(notes,combo_events,window=.045,display_delay=0.0,event_note_constraints=None):
     from piu_timeline.derived import call
     fields=('lane','status','target_seconds')
-    return call('association.associate',[{k:n[k]for k in fields if k in n}for n in notes],
-                combo_events,window,display_delay,event_note_constraints,mutated=(1,))
+    result=call('nativeCalls.counterAlignment',[{k:n[k]for k in fields if k in n}for n in notes],
+                combo_events,window,display_delay,event_note_constraints)
+    for event,annotation in zip(combo_events,result['events'],strict=True):event.update(annotation)
+    return result['matches']
 
 
 def collect_tracks(tracker,combo,directory,source):

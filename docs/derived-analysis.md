@@ -14,8 +14,9 @@ Python adapters connect acquisition objects and callers to this implementation.
 There is one implementation of each migrated fit and consumer. One Node worker
 is reused per Python process. Coordinate projection and physical clock fitting use batches; the beat stage runs the whole phase search and validation
 inside TypeScript. Transport errors fail explicitly. There is no Python fallback.
-The callback transport exists for callers supplying a phase-scoring function;
-the production beat stage supplies its spatial validator directly in TypeScript.
+Phase search supplies its spatial validator directly in TypeScript. The worker
+returns one explicit result per request; process boundaries and their reasons
+are listed in [IPC boundaries](ipc-boundaries.md).
 
 ## Reusable boundaries
 
@@ -336,7 +337,7 @@ projection. It is independent of HTML preparation and supports replaying the com
 UCS draft through the existing `ucs` stage.
 
 Native processing still evaluates the fitted trajectory while inspecting pixels.
-The Python callback evaluates returned coefficients or measured displacement;
+Python locally evaluates returned coefficients or measured displacement;
 fitting and model selection run in TypeScript. Source-bound image ownership
 verification, including native hold-risk proof preparation, stays with acquisition.
 The projection/association consumer cannot invent that proof when it is absent.

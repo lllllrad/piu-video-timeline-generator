@@ -8,19 +8,12 @@ import * as skinAnchors from './skins/anchors.ts';
 import * as skinSelection from './skins/selection.ts';
 import * as coordinates from './beats/coordinates.ts';
 import * as chords from './beats/chords.ts';
-import * as domains from './beats/domains.ts';
 import * as spacing from './beats/spacing.ts';
-import * as phase from './beats/phase.ts';
-import * as recovery from './beats/recovery.ts';
-import * as validation from './beats/validation.ts';
 import * as ucs from './charts/ucs.ts';
-import * as transcription from './charts/transcription.ts';
-import {fitGrid} from './beats/grid.ts';
-import * as beats from './beats/stage.ts';
 import * as stageAssociations from './stages/associations.ts';
+import * as associationFiles from './stages/association_files.ts';
+import * as nativeCalls from './native_calls.ts';
 import * as physicalTiming from './stages/physical_timing.ts';
-import * as nativeTiming from './stages/native_timing.ts';
-import * as stageCoordinates from './stages/coordinates.ts';
 import * as coordinateFiles from './stages/coordinate_files.ts';
 import * as timingFiles from './stages/timing_files.ts';
 import * as beatFiles from './beats/files.ts';
@@ -28,7 +21,6 @@ import * as retention from './retention.ts';
 
 import * as registration from './registration.ts';
 import * as clocks from './clocks.ts';
-import * as nativeClock from './native_clock.ts';
 import * as tracks from './tracks.ts';
 import * as frameTracking from './frame_tracking.ts';
 import * as fragments from './fragments.ts';
@@ -37,20 +29,17 @@ import * as holdImages from './holds/image_timing.ts';
 import * as speed from './speed.ts';
 import * as report from './report.ts';
 import * as chartPhase from './charts/phase.ts';
-import * as chartHolds from './charts/holds.ts';
 import * as chartAssertions from './charts/assertions.ts';
 import * as chartDraft from './charts/draft.ts';
 import * as chartCombo from './charts/combo.ts';
 import * as chartMerge from './charts/merge.ts';
 import * as localized from './charts/localized.ts';
-import * as candidates from './candidates.ts';
 import * as ranges from './ranges.ts';
 import * as evidence from './evidence.ts';
 import * as association from './association.ts';
 import * as scroll from './scroll.ts';
 import * as visibility from './visibility.ts';
 import * as diagnostics from './diagnostics.ts';
-import * as timingSummary from './timing_summary.ts';
 import * as rowRecovery from './recovery.ts';
 import * as labels from './labels.ts';
 import * as holdProjection from './hold_projection.ts';
@@ -60,15 +49,58 @@ import * as presentation from './pipeline/presentation.ts';
 import * as stageInputs from './pipeline/inputs.ts';
 import * as holdState from './hold_state.ts';
 import * as holdExtent from './holds/extent.ts';
-import * as holdGeometry from './holds/input.ts';
 import * as holdRisk from './holds/risk.ts';
 import {parseData, stringifyData} from './json.ts';
 
 const operations = {
-  coordinateMeasurements, skinAnchors, skinCenters, skinLocalization, skinSelection, coordinates, chords, domains, spacing, phase, recovery, validation, ucs, transcription, retention,
-  registration, clocks, nativeClock, tracks, frameTracking, speed, report, chartPhase, chartHolds, chartAssertions, chartDraft, chartCombo, chartMerge, localized,
-  holdMotion, holdImages, fragments, candidates, ranges, evidence, association, scroll, visibility, diagnostics, timingSummary, rowRecovery, labels, holdProjection, holdPresentation, effects, presentation, stageInputs,
-  holdState, holdExtent, holdGeometry, holdRisk, coordinateFiles, timingFiles, beatFiles, stageCoordinates, physicalTiming, nativeTiming, stageAssociations, beats: {...beats,fitGrid},
+  coordinateMeasurements,
+  skinAnchors,
+  skinCenters,
+  skinLocalization,
+  skinSelection,
+  coordinates: {prepare:coordinates.prepare},
+  chords: {prepare:chords.prepare,constrain:chords.constrain},
+  spacing: {registeredGap:spacing.registeredGap},
+  ucs,
+  retention,
+  registration,
+  clocks,
+  tracks,
+  frameTracking,
+  speed,
+  report: {renderFile:report.renderFile,index:report.index},
+  chartPhase,
+  chartAssertions,
+  chartDraft,
+  chartCombo,
+  chartMerge,
+  localized,
+  holdMotion,
+  holdImages: {lookupSaved:holdImages.lookupSaved,runSaved:holdImages.runSaved,projectCached:holdImages.projectCached},
+  fragments,
+  ranges,
+  evidence,
+  association: {synchronizedRefreshes:association.synchronizedRefreshes},
+  scroll,
+  visibility,
+  diagnostics,
+  rowRecovery,
+  labels: {recoverPreHold:labels.recoverPreHold},
+  holdProjection: {chartProjection:holdProjection.chartProjection,imageTailRoles:holdProjection.imageTailRoles},
+  holdPresentation,
+  effects,
+  presentation: {current:presentation.current,inputFiles:presentation.inputFiles,previewFile:presentation.previewFile,prepareFile:presentation.prepareFile,materializeFiles:presentation.materializeFiles},
+  stageInputs: {coordinateProducer:stageInputs.coordinateProducer,processingProducer:stageInputs.processingProducer},
+  holdState,
+  holdExtent,
+  holdRisk,
+  nativeCalls,
+  coordinateFiles,
+  timingFiles,
+  beatFiles,
+  physicalTiming: {solve:physicalTiming.solve},
+  stageAssociations: {counters:stageAssociations.counters},
+  associationFiles,
 };
 const chunk = Buffer.alloc(65536);
 const decoder = new StringDecoder('utf8');
@@ -98,24 +130,9 @@ function dispatch(request): void {
     if (request.protocol !== 1) throw new Error('Unsupported analysis transport');
     const [module, name] = request.operation.split('.'), fn = operations[module]?.[name];
     if (typeof fn !== 'function') throw new Error(`Unknown analysis operation: ${request.operation}`);
-    const callback = request.callback ? fits => {
-      send({id: request.id, kind: 'callback', fits});
-      while (true) {
-        const reply = receive();
-        if (!reply) throw new Error('Callback transport closed');
-        if (reply.kind === 'callbackResult' && reply.id === request.id) {
-          if (reply.error) throw new Error(reply.error);
-          return reply.value;
-        }
-        dispatch(reply);
-      }
-    } : undefined;
     const args = request.args;
-    if (callback) args.push(callback);
     const result = fn(...args);
-    // Mutation results are explicit at the language boundary, not shared objects.
-    send({id: request.id, kind: 'result', value: result ?? null,
-      mutated: request.mutated?.map(i => args[i])});
+    send({id: request.id, kind: 'result', value: result ?? null});
   } catch (error) {
     send({id: request.id, kind: 'error', error: String(error.message ?? error)});
   }

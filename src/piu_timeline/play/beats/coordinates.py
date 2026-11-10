@@ -13,11 +13,3 @@ def prepare(data,spacing,include_failed=False):
     result['observed']={int(i):set(times)for i,times in result['observed'].items()}
     result['reference_notes']=set(result['reference_notes'])
     return result
-
-
-def fit(references,spacing):
-    return call('coordinates.fit',references,spacing)
-
-
-def predictions(a,b,notes,interval,support):
-    return call('coordinates.predictions',a,b,notes,interval,support or None,FORMAT['reference_radius_seconds'])

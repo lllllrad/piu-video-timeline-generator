@@ -16,8 +16,8 @@ call it or silently acquire missing pixels.
 | Physical timing | Bound coordinate artifact and its continuous original frame timeline | `physical-timing.json`: relative displacement, clocks, crossing ranges and explicit failures | Song origin, musical rows, popup values, switch effects |
 | Native interval validation | Coordinates and physical timing | `native-timing.json`: gap-validation updates and diagnostics | Musical reference preparation, input associations |
 | Musical placement | Coordinates, physical timing, native validation and prepared official UCS reference | `beat-input.json`, `beat-result.json`: musical rows and additional reference-conditioned timing proofs | Changing original coordinates or replacing the source-only crossing result |
-| Counter association | Final timing view, independent counter events, eligibility intervals | `counter-associations.json`: matches, deferred matches and coverage | Tracking, coordinate registration or fitting clocks |
-| Judgment and hold interpretation | Saved words/effects/processing, image geometry and the final timing view | Judgment associations, native hold geometry, timed holds and sustained-state artifacts | Inventing physical switch times, moving chart notes to match inputs |
+| Counter association | Saved `counter-input.json`: timing view, independent counter events, eligibility intervals | `counter-associations.json`: matches, deferred matches and coverage | Tracking, coordinate registration or fitting clocks |
+| Judgment and hold interpretation | `judgment-source.json`, saved words/effects/processing, image geometry and the final timing view | Judgment associations, native hold geometry, timed holds and sustained-state artifacts | Inventing physical switch times, moving chart notes to match inputs |
 | Inspection, UCS and rendering | Their explicitly prepared inputs | Inspection artifacts, UCS draft and HTML respectively | Implicit native acquisition or recomputing upstream timing |
 
 Native hold connectivity and timed hold projection are separate producers.
@@ -119,7 +119,12 @@ transport or persisted contract of another stage.
 Python orchestration passes the segment directory and retains acquisition
 metadata. It neither receives nor resends coordinate/physical/native arrays.
 Only the explicit downstream read-model boundary loads `timed-view.json` once
-for counter/judgment and native hold consumers.
+for counter/judgment and native hold consumers. Counter and judgment association
+then save their prepared inputs and invoke `associationFiles` with the directory.
+Judgment request construction and inference run together in TypeScript; no
+intermediate request object returns to Python. Each output is loaded once by its
+downstream native consumer. See [IPC boundaries](ipc-boundaries.md) for remaining
+record-based native adapters and why they still cross processes.
 
 `file-stages/<stage>.json` binds producer implementation, normalized input byte
 identities and output identity. Input identities use already loaded buffers;

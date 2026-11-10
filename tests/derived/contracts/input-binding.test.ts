@@ -5,7 +5,8 @@ import {capture as capturePhysical} from '../../../src/piu_timeline/derived/stag
 import {capture as captureCoordinates, materialize as coordinates} from '../../../src/piu_timeline/derived/stages/coordinates.ts';
 import {resolve, materialize as nativeTiming} from '../../../src/piu_timeline/derived/stages/native_timing.ts';
 import {input, reconstruct, materialize as beats} from '../../../src/piu_timeline/derived/beats/stage.ts';
-import {artifact, boundArtifact} from '../../../src/piu_timeline/derived/stages/contracts.ts';
+import {counters,judgmentInput,judgments}from '../../../src/piu_timeline/derived/stages/associations.ts';
+import {artifact, boundArtifact, requireInput} from '../../../src/piu_timeline/derived/stages/contracts.ts';
 import {input as inspectionInput} from '../../../src/piu_timeline/derived/pipeline/contracts.ts';
 import {prepare, preview} from '../../../src/piu_timeline/derived/pipeline/presentation.ts';
 import {applyResult, result, materialize} from '../../../src/piu_timeline/derived/pipeline/composition.ts';
@@ -63,8 +64,16 @@ test('directory promotion preserves bindings, local evidence links and opaque so
   const request = beatRequest(data, before), output = reconstruct(request), viewRequest = inspection(before);
   viewRequest.source.metadata = {...viewRequest.source.metadata, evidence: before + 'evidence/source.json'};
   const viewOutput = prepare(viewRequest);
-  const encoded = stringifyData({request, output, viewRequest, viewOutput}).replaceAll(before, after);
+  const counterRequest={schema:1 as const,notes:[{lane:0,status:'estimated',target_seconds:1}],
+    events:[{status:'candidate',delta:1,lower_seconds:.99,upper_seconds:1.01,trace:before+'evidence/counter.json'}],display_delay_seconds:0,unsupported_intervals:[]},
+    counterOutput=counters(counterRequest,before),
+    judgmentRequest=judgmentInput({notes:counterRequest.notes,...counterOutput.data},[{label:'PERFECT',status:'candidate',detection_status:'candidate',lower_seconds:.99,upper_seconds:1.01,trace:before+'evidence/word.json'}],[]),
+    judgmentOutput=judgments(judgmentRequest,before);
+  const encoded = stringifyData({request, output, viewRequest, viewOutput,counterRequest,counterOutput,judgmentRequest,judgmentOutput}).replaceAll(before, after);
   const moved = parseData(encoded);
+  requireInput(moved.counterOutput,moved.counterRequest);requireInput(moved.judgmentOutput,moved.judgmentRequest);
+  assert.equal(moved.counterOutput.data.combo_events[0].trace,after+'evidence/counter.json');
+  assert.equal(moved.judgmentOutput.data.matches[0].judgment_label,'PERFECT');
   const noteView = beats(moved.request, moved.output);
   assert.equal(noteView.notes[0].trace, after + 'evidence/cap.json');
   const display = materialize(moved.viewRequest, moved.viewOutput);

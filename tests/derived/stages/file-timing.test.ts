@@ -8,6 +8,7 @@ import {createHash}from 'node:crypto';
 import {save}from '../../../src/piu_timeline/derived/stages/coordinate_files.ts';
 import {physical,native}from '../../../src/piu_timeline/derived/stages/timing_files.ts';
 import {prepare,calculate,view}from '../../../src/piu_timeline/derived/beats/files.ts';
+import {counter,judgment}from '../../../src/piu_timeline/derived/stages/association_files.ts';
 import {nativeScene}from '../fixtures.ts';
 
 test('saved coordinates recover a chord and following row; stale dependencies and damaged output fail',()=>{
@@ -26,6 +27,15 @@ test('saved coordinates recover a chord and following row; stale dependencies an
   assert.equal(result.beat_timing.status,'restored');assert.equal(result.notes.length,3);
   result.notes.forEach((n,i)=>{assert.equal(n.status,'estimated');assert.ok(Math.abs(n.target_seconds-expected[i])<1e-8);assert.deepEqual(n.points,data.notes[i].points);});
   assert.deepEqual(result.frame_timeline,data.frame_timeline);
+  const notes=result.notes.map(n=>Object.fromEntries(['lane','status','target_seconds','prediction_uncertainty_seconds','reason'].filter(k=>Object.hasOwn(n,k)).map(k=>[k,n[k]]))),
+   events=[.875,1.125].map((t,i)=>({before:3+i,after:4+i,delta:1,status:'candidate',lower_seconds:t-.005,upper_seconds:t+.005}));
+  writeFileSync(join(root,'counter-input.json'),JSON.stringify({schema:1,notes,events,display_delay_seconds:0,unsupported_intervals:[]}));
+  const counters=JSON.parse(readFileSync(counter(root).path,'utf8')).data;
+  assert.deepEqual(counters.matches.map(m=>m.note),[0,1,2]);assert.equal(counters.coverage.matched_combo_updates,2);
+  const words=[.875,1.125].map((t,i)=>({label:i?'GREAT':'PERFECT',status:'candidate',detection_status:'candidate',lower_seconds:t-.005,upper_seconds:t+.005}));
+  writeFileSync(join(root,'judgment-source.json'),JSON.stringify({schema:1,data:{notes,...counters},events:words,observations:[]}));
+  const labeled=JSON.parse(readFileSync(judgment(root).path,'utf8')).data;
+  assert.deepEqual(labeled.matches.map(m=>[m.note,m.judgment_label]),[[0,'PERFECT'],[1,'PERFECT'],[2,'GREAT']]);
   const stamp=statSync(output.path,{bigint:true}).mtimeNs;
   physical(root);native(root);prepare(root);calculate(root);assert.equal(view(root).reused,true);
   assert.equal(statSync(output.path,{bigint:true}).mtimeNs,stamp);

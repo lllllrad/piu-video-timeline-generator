@@ -256,20 +256,16 @@ def synchronized_refreshes(data,events):
     return [tuple(p)for p in call('association.synchronizedRefreshes',{'combo_events':data.get('combo_events',[])},events)]
 
 
-def label_counter_frames(data,observations):
-    from piu_timeline.derived import call,evidence_input,_merge
-    result=call('labels.labelCounterFrames',evidence_input(data),observations)
-    for k in ('matches','coverage','counter_judgment_labels'):
-        if k in result:data[k]=_merge(data.get(k),result[k])
-
 
 def merge_judgments(data,events,observations=(),directory=None):
     from piu_timeline.derived import call,evidence_input
-    request=call('stageAssociations.judgmentInput',evidence_input(data),events,observations)
-    result=call('stageAssociations.judgments',request)
     if directory is not None:
         from piu_timeline.play.observations.artifacts import save_input
-        save_input(directory/'judgment-associations.json',result)
+        from piu_timeline.play.stages import read_view
+        save_input(directory/'judgment-source.json',{'schema':1,'data':evidence_input(data),'events':events,'observations':observations})
+        result=read_view(call('associationFiles.judgment',str(directory.resolve())),directory)
+    else:
+        result=call('nativeCalls.judgmentAssociation',evidence_input(data),events,observations)
     return {**data,**result['data']}
 
 

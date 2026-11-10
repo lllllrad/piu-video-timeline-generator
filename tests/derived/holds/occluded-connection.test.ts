@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {occludedHold} from './occlusion-fixtures.ts';
+import {project}from '../../../src/piu_timeline/derived/holds/image_timing.ts';
 const script=String.raw`
 import json,sys
 from piu_timeline.play.skins.holds import measure_connections
-from piu_timeline.derived import call
 s=json.load(sys.stdin);warnings=[]
 c=measure_connections(s['data'],s['native'],warnings,references=s['references'],cap_references=s['cap_references'])
-print(json.dumps(call('holdImages.project',s['data']['notes'],{'image_connections':c,'unresolved_tracks':warnings})))`;
-function measure(s:ReturnType<typeof occludedHold>){return JSON.parse(execFileSync('sh',
- ['scripts/run.sh','.venv/bin/python','-c',script],{input:JSON.stringify(s),encoding:'utf8'}));}
+print(json.dumps({'image_connections':c,'unresolved_tracks':warnings}))`;
+function measure(s:ReturnType<typeof occludedHold>){return project(s.data.notes,JSON.parse(execFileSync('sh',
+ ['scripts/run.sh','.venv/bin/python','-c',script],{input:JSON.stringify(s),encoding:'utf8'})));}
 for(const scale of [.5,1,2])for(const fps of [30,60,120])test(`known HUD connects visible hold portions without inventing pixels: scale=${scale}, fps=${fps}`,()=>{
  const s=occludedHold(scale,fps),before=structuredClone(s),r=measure(s);
  assert.equal(r.holds.length,1);assert.deepEqual(r.holds[0].covered_notes,[0,1]);assert.deepEqual(s,before);

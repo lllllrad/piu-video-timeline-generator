@@ -8,6 +8,7 @@ from pathlib import Path
 from piu_timeline.play.tracking import ComboTracker
 from piu_timeline.play.associations import associate_counters
 from piu_timeline.derived import call
+from piu_timeline.play.stages import read_view
 counter=ComboTracker()
 for t,value in [(0,5),(.017,5),(.033,5),(.116,6),(.149,7),(.166,7),(.25,7),(.267,8),(.284,8)]:
  counter.update(t,value,.99,'independent_template',40+t)
@@ -16,8 +17,8 @@ data={'notes':notes,'unsupported_intervals':[]};original=copy.deepcopy(data)
 with tempfile.TemporaryDirectory()as tmp:
  directory=Path(tmp);result=associate_counters(data,counter,0,directory)
  request=json.loads((directory/'counter-input.json').read_text())
- artifact=json.loads((directory/'counter-associations.json').read_text())
- replay=call('stageAssociations.counters',request)
+ artifact=read_view({'path':str(directory/'counter-associations.json')},directory)
+ replay=call('stageAssociations.counters',request,str(directory.resolve())+'/')
  assert all(isinstance(v,list)and v==sorted(set(v))for v in request['constraints'].values())
  assert request['constraints'] and len(request['events'])==3
  assert data==original
