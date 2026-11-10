@@ -1,6 +1,4 @@
 /** Coordinates -> musical timing. The result owns timing decisions, never observations. */
-import {Store,implementation,atomicJSON} from '../pipeline/store.ts';
-import {resolve as resolvePath} from 'node:path';
 import {reconstruct as calculate} from './reconstruct.ts';
 import {boundArtifact,requireArtifact,requireInput,beatFields,type BeatArtifact,type BeatRequest,type BeatReference,type Evidence,type TimingSource,type NativeTimingArtifact} from '../stages/contracts.ts';
 import {materialize as nativeView} from '../stages/native_timing.ts';
@@ -30,10 +28,4 @@ export function materialize(request:BeatInput,result:BeatArtifact):RecordData{
  return {...base,beat_timing:structuredClone(result.data.beat_timing),
   ...(result.data.native_recovery?{timing_reconstruction:structuredClone(result.data.native_recovery)}: {}),
   notes:apply(base.notes,result.data.notes,beatFields)};
-}
-
-/** Prepared beat inference has no counter or physical-switch input. */
-export function saved(request:BeatInput,directory:string):BeatArtifact{
- const store=new Store(directory),result=store.run('musical-timing',implementation(new URL('./stage.ts',import.meta.url)),request,()=>reconstruct(request));
- materialize(request,result);atomicJSON(resolvePath(directory,'beat-result.json'),result);return result;
 }

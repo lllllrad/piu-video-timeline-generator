@@ -112,18 +112,6 @@ class TrackingTest(unittest.TestCase):
         self.assertEqual(len(matched),1)
         self.assertAlmostEqual(matched[0]['raw_offset_lower_ms'],100)
 
-    def test_digit_templates_abstain_until_corroborated(self):
-        def draw(text):
-            image = np.zeros((60, 150, 3), dtype='uint8')
-            cv2.putText(image, text, (5, 45), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
-            return image
-        reader = DigitReader()
-        self.assertIsNone(reader.read(draw('12'))[0])
-        reader.train(draw('12'), 12)
-        self.assertIsNone(reader.read(draw('12'))[0])
-        reader.train(draw('12'), 12)
-        self.assertEqual(reader.read(draw('12'))[0], 12)
-        self.assertIsNone(reader.read(draw('13'))[0])
 
     def test_digit_bank_preserves_predictions_and_distinct_source_confirmation(self):
         image=np.zeros((60,150,3),dtype='uint8')

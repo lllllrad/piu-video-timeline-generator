@@ -2,12 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync, readFileSync, writeFileSync, rmSync, statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join, resolve} from 'node:path';
-import {spawnSync} from 'node:child_process';
+import {join} from 'node:path';
 import {current,input as captureInput,inputFiles,previewFile,prepareFile,materializeFiles,prepare as prepareArtifact,materialize} from '../../src/piu_timeline/derived/pipeline/presentation.ts';
 import {inspectionView as prepare,inspectionRequest,type InspectionFixture as PresentationInput} from './fixtures.ts';
 import {parseData, stringifyData} from '../../src/piu_timeline/derived/json.ts';
-import {fingerprint, Store} from '../../src/piu_timeline/derived/pipeline/store.ts';
 
 function input(): PresentationInput {
   const frames = [.9, .92, .94, .96].map(t => ({playback_seconds: t, source_pts_seconds: t + 80, notes: [], combo: null, combo_confidence: 0}));
@@ -20,7 +18,7 @@ function input(): PresentationInput {
 }
 const manifest = (directory: string) => parseData(readFileSync(join(directory, 'derived-stages/manifest.json'), 'utf8')).stages;
 
-test('prepared observations replay entirely without source media or native libraries and retain warnings', () => {
+test('inspection retains source identity, unresolved timing warnings and unchanged input', () => {
   const request = input(), before = stringifyData(request), report = prepare(request);
   assert.equal(stringifyData(request), before);
   assert.equal(report.media.mtime_ns, 1780000000000000001n);
@@ -117,32 +115,6 @@ test('corrupted stage output cannot be accepted or silently rebuilt', () => {
     const path = join(directory, 'derived-stages/hold-view.json'), artifact = parseData(readFileSync(path, 'utf8'));
     artifact.output.notes = []; writeFileSync(path, stringifyData(artifact));
     assert.throws(() => prepare(input(), directory), /Corrupt derived stage artifact/);
-  } finally {rmSync(directory, {recursive: true, force: true});}
-});
-
-test('artifact promotion preserves local references, opaque integers and producer invalidation', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'piu-stages-'));
-  try {
-    const store = new Store(directory), source = {path: join(directory, 'proof.json')};
-    const first = store.run('example', 'producer-a', source, () => ({path: source.path, pts: 1780000000000000001n}));
-    const again = new Store(directory).run('example', 'producer-a', source, () => {throw new Error('must reuse');});
-    assert.deepEqual(again, first);
-    assert.equal(new Store(directory).run('example', 'producer-b', source, () => ({updated: true})).updated, true);
-    assert.equal(fingerprint(parseData(stringifyData(first))), fingerprint(first));
-  } finally {rmSync(directory, {recursive: true, force: true});}
-});
-
-test('standalone presentation CLI replays saved JSON and leaves old output intact on failure', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'piu-stages-'));
-  try {
-    const source = join(directory, 'input.json'), output = join(directory, 'report-data.json');
-    writeFileSync(source, stringifyData(inspectionRequest(input())));
-    const run = () => spawnSync(process.execPath, [resolve('src/piu_timeline/derived/cli.ts'), 'presentation', source, output],
-      {encoding: 'utf8', env: {...process.env, PATH: directory}});
-    assert.equal(run().status, 0);
-    const before = readFileSync(output, 'utf8'); assert.equal(JSON.parse(before).stage,'inspection');
-    writeFileSync(source, '{"schema":99}'); assert.equal(run().status, 1);
-    assert.equal(readFileSync(output, 'utf8'), before);
   } finally {rmSync(directory, {recursive: true, force: true});}
 });
 

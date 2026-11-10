@@ -1,4 +1,5 @@
 {
+  "coordinate_artifact": {"schema": 4, "producer": "file_bound_coordinates_without_clocks_or_associations"},
   "frame_tracking": {
     "schema": 1,
     "revision": 11,

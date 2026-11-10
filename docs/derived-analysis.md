@@ -66,7 +66,7 @@ The independently measured centers guide association and are projected into the
 later coordinate fit through their source-bound records. Counter values, judgment
 words, switch effects and the musical grid are absent from frame assignment.
 
-`coordinates.json` stores a schema-3 source-bound snapshot containing two schema-1
+`coordinates.json` stores a schema-4 source-bound snapshot containing two schema-1
 artifacts: `track-observations` (original detection trajectories and geometry) and
 `coordinates` (registered trajectories and coordinate evidence only).
 `physical-timing.json` separately owns shared displacement, clocks and physical
@@ -75,7 +75,7 @@ It excludes popup events, matches and coverage. Its fingerprint binds it to sour
 identity, geometry, detector and upstream timing contracts.
 
 `derived/stages/contracts.ts` declares these immutable artifacts and owned fields.
-The persistence adapter in `stages/coordinates.ts` constructs them. Numerical
+`stages/coordinates.ts` constructs them; `stages/coordinate_files.ts` owns persistence. Numerical
 kernels use private mutable work arrays; public results contain indexed updates
 restricted to owned fields. Changing an observation ID, lane, trajectory or
 another stage's fields fails explicitly. Composition constructs fresh read models
@@ -98,13 +98,19 @@ Other paths and input values remain part of the fingerprint.
 
 `native-timing.json` records physical interval validation after source-only
 physical fitting and before musical fitting.
-`beat-input.json` has schema 1 with `observations`, `coordinates`, `physical_timing`, `native_timing`,
-`reference`, `timing_text` and optional `preparation`. The reference contains the
-verified song origin and uncertainty or an explicit unavailable reason. The stage
-does not fetch timing files or prepare audio alignment. `beat-result.json` is a
-`beats` artifact: owned timing updates, musical diagnostics and independent native
-recovery diagnostics. It contains no acquisition identity or input associations.
-`beats.materialize` explicitly combines results for downstream readers.
+`beat-reference.json` retains the externally prepared song origin, uncertainty
+and official UCS identity, or an explicit unavailable reason. `beat-input.json`
+is a schema-2 file descriptor: coordinate, physical and native artifact paths and
+byte identities, the prepared reference, an optional official UCS file reference
+and preparation diagnostics. Each stage preloads these files once before running
+its numerical kernel. The kernel's schema-1 `BeatRequest` is constructed locally
+from those inputs and never travels through Python or another stage.
+
+`beat-result.json` is a `beats` artifact: owned timing updates, musical diagnostics
+and independent native recovery diagnostics. It contains no acquisition identity
+or input associations. Explicit composition writes `timed-view.json` for downstream
+readers. See [execution contracts](analysis-stage-contracts.md) for the file graph,
+cache bindings and stage-entry loading rules.
 Nanosecond file timestamps remain outside numerical calculations.
 
 Counter association accepts only lane, status, target, uncertainty and exclusion
@@ -196,15 +202,17 @@ available for review.
 Replay a prepared input without Python, OCR or video decoding:
 
 ```sh
-just derive beats .local/data/SOURCE/play/segment-001/beat-input.json .local/tmp/beats.json
+just derive-file musical-timing .local/data/SOURCE/play/segment-001
 ```
 
-The same command supports `native-gaps`, `coordinates`, `clocks`, `speed` and `ucs`:
+For explicit numerical requests, `just derive STAGE INPUT.json OUTPUT.json`
+supports the following kernels. These request objects are distinct from persisted
+file descriptors:
 
+* `beats`: a schema-1 numerical `BeatRequest`, including UCS text and bound artifacts.
 * `physical-timing`: the `observations` and `coordinates` artifacts from the
   coordinate snapshot. Output adds the separately bound `physical_timing` artifact.
-* `native-gaps`: schema 1 with `observations`, `coordinates` and `physical_timing` artifacts. A
-  `beat-input.json` supplies these fields too; musical reference fields are unused.
+* `native-gaps`: schema 1 with `observations`, `coordinates` and `physical_timing` artifacts.
   Output is a `native-timing` artifact before musical-row fitting.
 * `coordinates`: `tracks`, `timeline`, `height`, `spacing`, `receptor`, `bottom`.
   This invokes the registered-track solver and returns its numerical result;

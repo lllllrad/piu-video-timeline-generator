@@ -6,7 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import Mock
 
-from piu_timeline.play.stages import load_coordinates,save_coordinates
+from piu_timeline.play.stages import load_coordinates,save_coordinates,read_view
+from piu_timeline.derived import call
 from piu_timeline.play.observations.artifacts import cached
 from piu_timeline.play.observations.records import retained
 
@@ -63,13 +64,17 @@ class CoordinateStageTest(unittest.TestCase):
                     'matches':[]}
             saved=save_coordinates(source,pending);original=deepcopy(saved)
             final=root/'segment';pending.rename(final)
-            saved['head_registration']['evidence']=str(final/'evidence/proof.npz')
+            saved['head_registration']={'evidence':str(final/'evidence/proof.npz')}
+            saved['notes']=[{'target_seconds':99}]
             saved['notes'][0]['target_seconds']=99
             saved['beat_timing']={'contract':{'format':'different beat rules'}}
             resumed=load_coordinates(saved,final)
-            self.assertNotIn('target_seconds',resumed['notes'][0])
+            self.assertNotIn('notes',resumed)
+            self.assertNotIn('head_registration',resumed)
+            view=read_view(call('coordinateFiles.view',str(final.resolve())),final)
+            self.assertNotIn('target_seconds',view['notes'][0])
             self.assertEqual(resumed['media'],original['media'])
-            self.assertEqual(resumed['head_registration']['evidence'],str(final/'evidence/proof.npz'))
+            self.assertEqual(view['head_registration']['evidence'],str(final/'evidence/proof.npz'))
             self.assertEqual(saved['notes'][0]['target_seconds'],99)
             saved['timing_format']={'coordinates':2}
             self.assertIsNone(load_coordinates(saved,final))

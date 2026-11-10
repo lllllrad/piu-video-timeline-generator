@@ -50,8 +50,7 @@ and ambiguous cases.
 The HTML runtime harness executes the shipped JavaScript with observable DOM and
 animation substitutes. It checks actual note/range output, spacing, seeking,
 playback and retained geometry. It does not establish browser CSS layout or
-legibility; the small desktop CSS check only verifies that the standalone report
-ships its layout rules.
+legibility.
 
 Contract and regression tests do not measure corpus recognition accuracy.
 Timing-evidence coverage and consistency with result-grade totals require
@@ -87,7 +86,7 @@ hold appearance or the complete four-channel evidence combination.
 Stage-boundary tests execute real consumer calculations over synthetic native
 records. They verify selective reuse, source-PTS and opaque-integer preservation,
 full four-channel retention, explicit damaged-cache and stale-proof failure,
-standalone replay without Python, and atomic output preservation on failure.
+saved-file composition and atomic output preservation on failure.
 Native integration tests forbid decoding or image remeasurement when only HUD
 associations change. Missing acquisition must fail before a measurement consumer
 can open the video. Bulk skin/detection details are excluded from counter and
@@ -128,3 +127,12 @@ Channel projection tests keep baseline counter values independent, reject change
 source geometry/native files and fail on mismatched source PTS. Sustained-state
 wire tests compare actual recognition results before/after removing unused
 acquisition proofs, including native timing recovery and a following tap.
+
+Keep tests that distinguish a concrete correct result from a plausible defect.
+Do not duplicate source constants, CSS declarations or dispatch wiring as expected
+values. Do not repeat a shared CLI/storage test for each numerical stage. A
+successful child process does not prove absence of hidden dependencies or repeated
+I/O. Stage I/O restrictions belong in the adapter/kernel interfaces. File-stage
+coverage checks generator-specified chord/row times through persisted outputs,
+selective reuse, stale official timing and damaged output rejection; it does not
+claim architectural isolation from process launch alone.

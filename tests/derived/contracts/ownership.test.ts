@@ -12,7 +12,6 @@ import {prepare,preview} from '../../../src/piu_timeline/derived/pipeline/presen
 import {materialize,result,applyResult} from '../../../src/piu_timeline/derived/pipeline/composition.ts';
 import {domain} from '../beats/fixtures.ts';
 import {processing} from '../../../src/piu_timeline/derived/pipeline/inputs.ts';
-import {derive} from '../../../src/piu_timeline/derived/cli.ts';
 const capture=(data,root?:string)=>capturePhysical(captureCoordinates(data,root),data);
 test('coordinate result contains no HUD associations and owns no raw detection edits',()=>{
  const data={...domain(),combo_events:[{delta:1}],matches:[{note:0}],coverage:{timed:1}},before=structuredClone(data),source=capture(data);
@@ -47,7 +46,6 @@ test('inspection scopes keep metadata out of inference and preserve channels',()
  const calculation=calculationView(request.source);assert.ok(!Object.hasOwn(calculation,'media'));assert.ok(!Object.hasOwn(calculation,'title'));
  const r=prepare(request),view=materialize(request,r);assert.equal(r.stage,'inspection');assert.equal(view.title,'opaque');assert.equal(view.media.mtime_ns,1234567890123456789n);
  assert.deepEqual(request.source.channels,before.source.channels);assert.deepEqual(request.source.tracks,before.source.tracks);assert.deepEqual(request.observations,before.observations);
- assert.deepEqual(derive('inspection-view',{request,result:r}),view);
 });
 test('inspection rejects missing, duplicate, reordered and foreign stage results',()=>{
  const request=inspection(),r=prepare(request),stages=r.data.stages;

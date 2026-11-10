@@ -32,8 +32,8 @@ def refresh(cached,final,segment_number,display_delay_ms,source_media):
     if any(cached.get('timing_format',{}).get(k)!=TIMING_FORMAT.get(k)for k in ('counter_reader','counter_revision')):
         from piu_timeline.play.stages import execute
         source={**source,**execute(pending,'counter-observations',lambda:refresh_counter_observations(copied,pending,replace_font=True),('counter-events.json',))}
-    source.pop('_coordinate_source',None)
     print('Reusing saved registered coordinates for downstream stages.',flush=True)
-    result={**source,'timing_format':TIMING_FORMAT}
+    from piu_timeline.play.stages import coordinate_context
+    result={**coordinate_context(source),'timing_format':TIMING_FORMAT}
     from piu_timeline.play.analysis import finish_play
     return finish_play(result,pending,final,segment_number,display_delay_ms,source_media,registered_coordinates=True)

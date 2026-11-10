@@ -128,7 +128,7 @@ invokes `play/report.py:write_report`. UCS uses `charts/data.py:draft` and
 * `coordinates.json` separates original observations and coordinate results,
   excluding clocks and HUD associations. `physical-timing.json` stores crossing
   inference; `native-timing.json` stores subsequent physical validation.
-  `beat-input.json` supplies all three artifacts and reference text; `beat-result.json`
+  `beat-input.json` references all three artifacts and the official timing file by byte identity; `beat-result.json`
   stores musical decisions. Explicit composition builds a downstream reader view.
 * Native geometry, note processing and type observations have separate cached
   outputs under `native-stages/`. Hold geometry does not depend on HUD refreshes.

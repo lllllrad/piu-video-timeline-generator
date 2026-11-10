@@ -7,7 +7,8 @@ import sys,json,tempfile,copy
 from pathlib import Path
 from unittest.mock import patch
 from piu_timeline.play import analysis
-from piu_timeline.play.stages import save_coordinates
+from piu_timeline.play.stages import save_coordinates,read_view
+from piu_timeline.derived import call
 from piu_timeline.play.observations.cache import NATIVE_FRAME_FORMAT
 from piu_timeline.play.coordinate_replay import applicable
 scene=json.load(sys.stdin)
@@ -32,7 +33,7 @@ with tempfile.TemporaryDirectory()as tmp:
   if stale:cached['timing_format']['frame_tracking']['revision']+=100
   cached=save_coordinates(cached,final);(final/'analysis.json').write_text(json.dumps(cached))
   captured=[]
-  def finish(value,*args,**kwargs):captured.append((value,kwargs));return 'published'
+  def finish(value,*args,**kwargs):captured.append((value,args[0],kwargs));return 'published'
   with (patch.object(analysis,'LOCAL_DATA',root),
         patch.object(analysis,'source_id',return_value='example'),
         patch.object(analysis,'observation_settings_match',return_value=True),
@@ -48,10 +49,12 @@ with tempfile.TemporaryDirectory()as tmp:
    except RuntimeError as error:outcome=str(error)
   if stale:results.append(outcome=='raw replay requested'and not captured)
   else:
-   value,options=captured[0]
+   value,pending,options=captured[0]
+   view=read_view(call('coordinateFiles.view',str(pending.resolve())),pending)
    results.append(outcome=='published'and options.get('registered_coordinates')is True and value['timing_format']==analysis.TIMING_FORMAT
-    and [n['points']for n in value['notes']]==[n['points']for n in scene['notes']]
-    and [s['source_pts']for s in value['frame_timeline']]==[s['source_pts']for s in scene['scroll_motion']['samples']])
+    and 'notes'not in value and 'frame_timeline'not in value
+    and [n['points']for n in view['notes']]==[n['points']for n in scene['notes']]
+    and [s['source_pts']for s in view['frame_timeline']]==[s['source_pts']for s in scene['scroll_motion']['samples']])
  print(json.dumps({'clock_only':results[0],'other_producer_requires_replay':results[1],'media_preserved':video.read_bytes()==b'original'}))
 `;
 test('a native-clock-only change refits bound coordinates; changed observation producers require frame replay',()=>{

@@ -1,14 +1,10 @@
 /** Saved observations and stage ownership, independently of any recording or song. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,writeFileSync,rmSync,statSync} from 'node:fs';
-import {join} from 'node:path';
-import {tmpdir} from 'node:os';
 import {capture,materialize as coordinates} from '../../../src/piu_timeline/derived/stages/coordinates.ts';
-import {reconstruct,materialize,saved} from '../../../src/piu_timeline/derived/stages/physical_timing.ts';
+import {reconstruct,materialize} from '../../../src/piu_timeline/derived/stages/physical_timing.ts';
 import {boundArtifact} from '../../../src/piu_timeline/derived/stages/contracts.ts';
 import {nativeScene} from '../fixtures.ts';
-import {derive} from '../../../src/piu_timeline/derived/cli.ts';
 function scene(spacing=40,fps=60,repeated=false){
  const data=nativeScene([[.85,0],[.85,1],[1.1,2]],spacing,fps,5,{end:1.3,...(repeated?{repeated:[[.5,.5+1/fps]] as [number,number][]}:{})});
  data.frame_timeline=data.scroll_motion.samples.map(({time,source_pts})=>({time,source_pts}));
@@ -36,7 +32,6 @@ test('physical results cannot edit coordinates, borrow another input or depend o
  assert.throws(()=>materialize({...capture(changed),physical_timing:first.physical_timing}),/different inputs/);
  const foreign=boundArtifact('physical-timing',source,{...first.physical_timing.data,notes:[{note:0,values:{points:[]}}]});
  assert.throws(()=>materialize({...source,physical_timing:foreign as never}),/Foreign/);
- assert.deepEqual(derive('physical-timing',source),first);
 });
 test('physical timing preserves explicit failures without requiring musical reference or input evidence',()=>{
  const data=scene();data.notes.forEach((n,i)=>{n.points=n.points.map(([t,y])=>[t,y+i*70*t]);});
@@ -52,13 +47,4 @@ test('coincident cap components are classified without deleting observed traject
  assert.equal(result.notes.length,2);
  assert.equal(result.notes.filter(n=>n.reason==='duplicate_head_component').length,1);
  assert.deepEqual(result.notes.map(n=>n.points),coordinates(source).notes.map(n=>n.points));
-});
-test('physical cache reuses an intact result and rejects corruption instead of recomputing',()=>{
- const directory=mkdtempSync(join(tmpdir(),'piu-physical-'));
- try{
-  const source=capture(scene()),first=saved(source,directory),path=join(directory,'derived-stages/physical-timing.json'),stamp=statSync(path).mtimeMs;
-  assert.deepEqual(saved(source,directory),first);assert.equal(statSync(path).mtimeMs,stamp);
-  const payload=JSON.parse(readFileSync(path,'utf8'));payload.output.notes=[];writeFileSync(path,JSON.stringify(payload));
-  assert.throws(()=>saved(source,directory),/Corrupt derived stage/);
- }finally{rmSync(directory,{recursive:true,force:true});}
 });

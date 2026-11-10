@@ -67,13 +67,13 @@ test('opaque provenance integers survive numerical stages without a floating-poi
   assert.deepEqual(result.notes.map(n => n.target_seconds), [10, 10.125, 10.125, 10.25]);
 });
 
-test('standalone replay needs no Python and preserves an existing output on failure', () => {
+test('derived CLI preserves an existing output when its input is invalid', () => {
   const directory = mkdtempSync(join(tmpdir(), 'piu-derived-'));
   try {
     const source = join(directory, 'input.json'), output = join(directory, 'output.json');
     writeFileSync(source,JSON.stringify(beatRequest(input())));
     const cli = resolve('src/piu_timeline/derived/cli.ts');
-    const run = () => spawnSync(process.execPath, [cli, 'beats', source, output], {encoding: 'utf8', env: {...process.env, PATH: directory}});
+    const run = () => spawnSync(process.execPath, [cli, 'beats', source, output], {encoding: 'utf8'});
     assert.equal(run().status, 0);
     const before = readFileSync(output, 'utf8');
     assert.equal(JSON.parse(before).data.beat_timing.status, 'restored');

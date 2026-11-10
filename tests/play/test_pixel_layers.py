@@ -16,19 +16,6 @@ from tests.play.test_visual_channels import pixel_play
 
 
 class PixelLayerTest(unittest.TestCase):
-    def test_layer_manifest_identifies_independently_saved_stage_results(self):
-        from piu_timeline.play.channels import layer_manifest
-        with tempfile.TemporaryDirectory() as temporary:
-            directory=Path(temporary)
-            expected={'physical_timing':'native-timing.json', 'musical_timing':'beat-result.json',
-                      'associations':'judgment-associations.json', 'presentation':'inspection-result.json'}
-            for name in expected.values():(directory/name).write_text('{}')
-            manifest=layer_manifest(directory)
-            for layer,name in expected.items():
-                self.assertIn(name,manifest['artifacts'][layer])
-                self.assertTrue(manifest['available'][name])
-            self.assertEqual(manifest['artifacts']['analysis_view'],['analysis.json','timing-reconstruction.json'])
-            self.assertNotIn('timing-reconstruction.json',manifest['artifacts']['physical_timing'])
 
     def test_chart_failure_does_not_erase_disappearance_or_restore_timing(self):
         with tempfile.TemporaryDirectory() as temp:

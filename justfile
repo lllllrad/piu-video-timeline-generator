@@ -24,6 +24,10 @@ skins +args:
 derive stage input output:
     node src/piu_timeline/derived/cli.ts "$1" "$2" "$3"
 
+# Run one timing stage from its persisted input files.
+derive-file stage directory:
+    node src/piu_timeline/derived/pipeline/run.ts "$1" "$2"
+
 # Render an already prepared report without Python or observation analysis.
 render input output:
     node src/piu_timeline/derived/render.ts "$1" "$2"

@@ -2,7 +2,9 @@
 from hashlib import sha256
 import json
 
-FORMAT={'schema':3,'producer':'coordinates_without_clocks_or_associations'}
+from piu_timeline.derived import CONTRACTS
+
+FORMAT=CONTRACTS['coordinate_artifact']
 IDENTITY=('media','game_roi','start_seconds','end_seconds','player','participant_slots',
           'analysis_width','analysis_height','layout','native_frame_format')
 
@@ -26,44 +28,48 @@ def paths(value,before,after):
     return value
 
 
+def coordinate_context(data):
+    """Control flow retains acquisition metadata and a small coordinate identity."""
+    return {**observation_context(data),**{k:data[k]for k in ('coordinate_stage',)if k in data}}
+
+
 def save_coordinates(data,directory):
     from piu_timeline.derived import call
+    from piu_timeline.play.observations.artifacts import save_input
     fields=('notes','frame_timeline','head_registration','analysis_width','analysis_height','layout','start_seconds','end_seconds')
-    source=call('stageCoordinates.capture',{k:data[k]for k in fields if k in data},str(directory.resolve())+'/')
-    payload={'format':FORMAT,'identity':identity(data),'output':source}
-    payload=paths(payload,str(directory.resolve())+'/', '@segment/')
-    digest=fingerprint(payload)
-    destination=directory/'coordinates.json'
-    temporary=directory/'coordinates.build.json'
-    temporary.write_text(json.dumps({**payload,'fingerprint':digest},ensure_ascii=False)+'\n')
-    temporary.replace(destination)
-    return {**data,'coordinate_stage':{'format':FORMAT,'fingerprint':digest},'_coordinate_source':source}
+    source={k:data[k]for k in fields if k in data}
+    # Raw coordinate measurements already belong to native tracking/registration.
+    # Numerical coordinate capture does not consume that duplicate per-note copy.
+    source['notes']=[{k:v for k,v in n.items()if k!='coordinate_measurements'}for n in source['notes']]
+    save_input(directory/'coordinate-input.json',{'schema':1,'identity':identity(data),'data':source})
+    reference=call('coordinateFiles.save',str(directory.resolve()))
+    return {**coordinate_context(data),'coordinate_stage':reference}
 
 
 def load_coordinates(data,directory):
-    """Missing legacy output requires refit; contradictory saved output is an error."""
-    expected=data.get('coordinate_stage')
-    if not expected or expected.get('format')!=FORMAT:return None
-    path=directory/'coordinates.json'
-    if not path.is_file():return None
-    payload=json.loads(path.read_text());digest=payload.pop('fingerprint',None)
-    if digest!=expected.get('fingerprint')or fingerprint(payload)!=digest:
-        raise ValueError('Stored coordinate-stage fingerprint does not match its analysis')
-    restored=paths(payload,'@segment/',str(directory.resolve())+'/')
-    if restored.get('format')!=FORMAT or restored.get('identity')!=identity(data):return None
-    result={k:v for k,v in data.items()if k not in ('conflicted_matches','association_view_format')}
     from piu_timeline.derived import call
-    coordinates=call('stageCoordinates.materialize',restored['output'])
-    return {**result,**coordinates,'_coordinate_source':restored['output']}
+    expected=data.get('coordinate_stage')
+    if not expected or expected.get('format')!=FORMAT or not(directory/'coordinates.json').is_file():return None
+    reference=call('coordinateFiles.inspect',str(directory.resolve()),expected,identity(data))
+    return coordinate_context(data)if reference is not None else None
 
 
 def physical_timing(data,directory):
-    """Run or reuse physical timing from the completed coordinate artifact only."""
     from piu_timeline.derived import call
     from piu_timeline.play.analysis import TIMING_FORMAT
-    timed=call('physicalTiming.saved',data['_coordinate_source'],str(directory.resolve()))
-    composed=call('physicalTiming.materialize',timed)
-    return {**data,**composed,'timing_format':TIMING_FORMAT,'_timing_source':timed}
+    call('timingFiles.physical',str(directory.resolve()))
+    return {**coordinate_context(data),'timing_format':TIMING_FORMAT}
+
+
+def read_view(reference,directory):
+    """Materialize a persisted read model only at a consumer boundary."""
+    from pathlib import Path
+    return paths(json.loads(Path(reference['path']).read_text()),'@segment/',str(directory.resolve())+'/')
+
+
+def physical_view(data,directory):
+    from piu_timeline.derived import call
+    return {**data,**read_view(call('timingFiles.view',str(directory.resolve())),directory)}
 
 
 def execute(directory,name,compute,outputs=()):
@@ -100,7 +106,7 @@ def observation_context(data):
     """Retain acquisition metadata/cache identities, not a previous interpretation."""
     downstream={'notes','matches','conflicted_matches','deferred_matches','miss_candidates',
                 'coverage','excluded_notes','scroll_motion','timing_reconstruction',
-                'head_registration','beat_timing','coordinate_stage','visual_channels',
+                'head_registration','frame_timeline','beat_timing','coordinate_stage','visual_channels',
                 'hold_analysis','association_view_format','judgment_events'}
     return {k:v for k,v in data.items()if k not in downstream and not k.startswith('_')}
 

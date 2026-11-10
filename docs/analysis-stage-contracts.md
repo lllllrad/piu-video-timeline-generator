@@ -49,7 +49,7 @@ association is called after the final timing view is composed.
 
 ## Coordinate and time ownership
 
-The schema-3 `coordinates.json` snapshot contains `track-observations` and
+The schema-4 `coordinates.json` snapshot contains `track-observations` and
 `coordinates` artifacts. Observations own original trajectories, geometry and
 source timeline. Coordinates own projected `points` and registration evidence.
 They contain no target times, velocity estimates, motion clocks or HUD matches.
@@ -95,27 +95,51 @@ between stages; `stage_status: complete` describes only that stage. Only
 successful promotion sets `status: published`. A failed promotion retains the
 previous report and a failed publication record in the pending directory.
 
-The physical cache is `derived-stages/physical-timing.json`. Its key includes
-the bound coordinate input and the transitive TypeScript implementation graph.
-Changed physical algorithms reuse coordinates. Changed popup data or song
-references do not enter the physical input. Counter-reader-only changes refresh
-`counter-events.json` while reusing saved coordinates. Musical calculation has
-its own `derived-stages/musical-timing.json` cache keyed by the prepared beat
-request; counter events do not enter that request. A damaged cache fails explicitly;
-it is not silently replaced by a fresh calculation. As with other derived
-stores, a shared implementation dependency can invalidate several consumers.
+Coordinate capture writes `coordinate-input.json` once at the native producer
+boundary. `coordinates.json` is the independently reusable coordinate output.
+The subsequent file graph is:
 
-Replay the physical calculation without video, OCR, Python or musical data:
+| Stage | Files loaded at entry | Output |
+| --- | --- | --- |
+| Physical timing | `coordinates.json` | `physical-timing.json` |
+| Native interval validation | `coordinates.json`, `physical-timing.json` | `native-timing.json` |
+| Reference preparation | `beat-reference.json`, the three preceding outputs, available official UCS | `beat-input.json` |
+| Musical timing | `beat-input.json` and all dependencies it names | `beat-result.json` |
+| Timing read model | Musical timing inputs and `beat-result.json` | `timed-view.json` |
+
+`beat-input.json` is a schema-2 descriptor with file names, byte identities and the
+prepared official reference. It does not duplicate observations or UCS contents.
+Each adapter loads all declared files into one invocation-local `InputFiles`
+snapshot before calculation. Repeated accesses reuse its buffers and parsed
+values. Loading closes before the numerical kernel runs; undeclared inputs fail.
+The numerical kernels receive data, not paths, loaders or callbacks that open
+files. Private work arrays are local to that calculation. They are not the
+transport or persisted contract of another stage.
+
+Python orchestration passes the segment directory and retains acquisition
+metadata. It neither receives nor resends coordinate/physical/native arrays.
+Only the explicit downstream read-model boundary loads `timed-view.json` once
+for counter/judgment and native hold consumers.
+
+`file-stages/<stage>.json` binds producer implementation, normalized input byte
+identities and output identity. Input identities use already loaded buffers;
+checking reuse does not reopen the files for parsing. Cache hits leave output
+files untouched. Changed dependencies invalidate reuse; damaged manifests or
+reused outputs fail explicitly. Inputs changing while loading or calculating also fail.
+Segment-local prefixes normalize to `@segment/` for promotion. A shared
+implementation dependency can invalidate multiple consumers together.
+
+Replay one producer without upstream recomputation:
 
 ```sh
-just derive physical-timing COORDINATE_ARTIFACTS.json PHYSICAL_RESULT.json
+just derive-file physical-timing .local/data/SOURCE/play/segment-001
+just derive-file native-timing .local/data/SOURCE/play/segment-001
+just derive-file musical-timing .local/data/SOURCE/play/segment-001
+just derive-file timed-view .local/data/SOURCE/play/segment-001
 ```
 
-The input is the `output` pair from `coordinates.json`: `observations` and
-`coordinates`. The output adds `physical_timing`; it is suitable for subsequent
-native interval validation. Standalone execution does not publish a report or
-register a chart. Existing observation artifacts remain reusable; there is no
-media or chart migration.
+Missing inputs fail; a consumer never acquires pixels or invokes its upstream
+producer. These commands do not publish a report or register a chart.
 
 ## Feasibility and validation limits
 
@@ -203,10 +227,10 @@ connection references and alternatives remain in content-addressed evidence file
 read models retain verifiable links instead of duplicating complete proof graphs.
 Inspection preparation consumes `presentation-input.json` directly and writes
 `inspection-result.json`; production rendering consumes `report-data.json`
-directly. The worker boundary carries paths. Direct in-memory calculation APIs
-remain available for small synthetic cases. Other coordinate/clock adapters still
-use composed in-memory views; these file boundaries do not imply that every
-producer in the pipeline has already adopted file-only transport.
+directly. The worker boundary carries paths. Direct calculation APIs remain
+available for synthetic cases. Coordinate, physical, native and beat production
+use the file graph above; inspection and hold interpretation retain their own
+explicit input artifacts.
 
 Progress records distinguish role clearance, hold frames, image geometry,
 sustained state, native risk and channel assembly. A parent stage preserves its

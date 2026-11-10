@@ -29,7 +29,7 @@ Codex-only environment generation and optional mise installation are documented 
 ## Architecture
 
 See [the current play data flow](play-data-flow.md) and [execution contracts](analysis-stage-contracts.md) for stage ownership, stored
-artifacts, [independent capture](independent-observations.md), stage reuse and validation limits.
+artifacts, eager stage input loading, [independent capture](independent-observations.md), reuse and validation limits.
 
 Use the [coordinate model](coordinate-model.md) when selecting raw image positions,
 registered centers or motion offsets.

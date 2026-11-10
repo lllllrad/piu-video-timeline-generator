@@ -34,7 +34,7 @@ from piu_timeline.play.counter_pixels import READER_FORMAT
 from piu_timeline.play.beats.timing import current as beat_current, apply as apply_beats, reassociate as reassociate_beats
 
 VERSION = 18
-TIMING_FORMAT = {'schema':1,'execution_stages':2,'counter_revision':6,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'native_clock':CONTRACTS['native_clock'],'object_roles':OBJECT_FORMAT,'fragment_identity':FRAGMENT_FORMAT,'frame_tracking':CONTRACTS['frame_tracking']}
+TIMING_FORMAT = {'schema':1,'execution_stages':3,'counter_revision':6,'counter_reader':READER_FORMAT,'time_epsilon_seconds':TIME_EPSILON,'head_registration':HEAD_REGISTRATION_FORMAT,'image_coordinates':IMAGE_COORDINATE_FORMAT,'shared_motion':SHARED_TIMING_FORMAT,'native_clock':CONTRACTS['native_clock'],'object_roles':OBJECT_FORMAT,'fragment_identity':FRAGMENT_FORMAT,'frame_tracking':CONTRACTS['frame_tracking']}
 FRAME_OBSERVATION_VERSION = 4
 
 
@@ -309,8 +309,9 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
         result=execute(pending,'object-interpretation',lambda:interpret_objects(result,pending,display_delay_ms))
         from piu_timeline.play.head_registration import measure_coordinates
         result=execute(pending,'coordinate-measurement',lambda:measure_coordinates(result,pending),('head-registration.json',))
-    from piu_timeline.play.stages import save_coordinates
-    result=execute(pending,'coordinate-artifact',lambda:save_coordinates(result,pending),('coordinates.json',))
+    if not registered_coordinates:
+        from piu_timeline.play.stages import save_coordinates
+        result=execute(pending,'coordinate-artifact',lambda:save_coordinates(result,pending),('coordinates.json',))
     from piu_timeline.play.stages import physical_timing
     result=execute(pending,'physical-timing',lambda:physical_timing(result,pending),('physical-timing.json',))
     result=musical_stages(result,pending)

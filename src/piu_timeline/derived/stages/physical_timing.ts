@@ -5,8 +5,6 @@ import {fitMany as nativeClocks} from '../native_clock.ts';
 import {spacingFailures} from '../beats/spacing.ts';
 import {summarize} from '../timing_summary.ts';
 import {contracts} from '../contracts.ts';
-import {Store,implementation,atomicJSON} from '../pipeline/store.ts';
-import {resolve as resolvePath} from 'node:path';
 import {median} from '../math.ts';
 import {materialize as coordinateView} from './coordinates.ts';
 import {boundArtifact,requireArtifact,requireInput,physicalFields,type CoordinateSource,type TimingSource} from './contracts.ts';
@@ -93,12 +91,4 @@ export function solve(data:RecordData,suppliedTracks?:RecordData[]):RecordData{
  for(const conflict of conflicts){const note=notes[conflict.note],previous=pick(note,['target_seconds','prediction_uncertainty_seconds','fit_method']);
   Object.assign(note,{status:'excluded',reason:conflict.reason,target_seconds:null,timing_reconstruction:{status:'failed',reason:conflict.reason,unaccepted_previous_estimate:previous}});}
  return {notes,scroll_motion:motion,motion_state:result,timing_reconstruction:{format:contracts.shared_motion,...summarize(notes,warnings)}};
-}
-
-/** Reuse only the declared coordinate input and complete implementation dependency graph. */
-export function saved(source:CoordinateSource,directory:string):TimingSource{
- const store=new Store(directory),physical_timing=store.run('physical-timing',implementation(new URL('./physical_timing.ts',import.meta.url)),source,()=>reconstruct(source).physical_timing);
- const result={...inputOf(source),physical_timing};materialize(result);
- atomicJSON(resolvePath(directory,'physical-timing.json'),physical_timing);
- return result;
 }

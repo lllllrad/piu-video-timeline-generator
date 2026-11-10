@@ -84,33 +84,26 @@ def spacing_supported_notes(notes,groups,fits,spacing,motion,coordinate_support=
 
 
 def validate_physical(data,directory):
-    """Validate native intervals without preparing or consulting a song reference."""
-    native=call('nativeTiming.resolve',data['_timing_source'])
-    from piu_timeline.play.observations.artifacts import save_input
-    save_input(Path(directory)/'native-timing.json',native)
-    return {**data,'_native_timing':native}
+    """Consume saved coordinate/physical artifacts; control flow carries no arrays."""
+    call('timingFiles.native',str(Path(directory).resolve()))
+    return data
 
 
 def prepare_input(data,directory):
-    """Explicit reference I/O producer, separate from numerical beat inference."""
+    """External reference preparation owns I/O; beat inference receives file references."""
     preparation=prepare_reference(data,directory)
-    ref=reference(data,directory)
-    timing=Path(ref['timing']).read_bytes().decode('utf-8')if ref['status']=='available'else None
-    request=call('beats.input',data['_timing_source'],data['_native_timing'],ref,timing,preparation)
     from piu_timeline.play.observations.artifacts import save_input
-    save_input(Path(directory)/'beat-input.json',request)
-    return {**data,'_beat_request':request}
+    save_input(Path(directory)/'beat-reference.json',{'schema':1,'reference':reference(data,directory),'preparation':preparation})
+    call('beatFiles.prepare',str(Path(directory).resolve()))
+    return data
 
 
 def apply(data,directory):
-    """Calculate musical placement from a completed prepared request only."""
-    request=data['_beat_request']
-    output=call('beats.saved',request,str(Path(directory).resolve()))
-    composed=call('beats.materialize',request,output)
-    from piu_timeline.play.observations.artifacts import save_input
-    save_input(Path(directory)/'beat-result.json',output)
-    source_data={k:v for k,v in data.items()if k not in ('_coordinate_source','_timing_source','_native_timing','_beat_request')}
-    return {**source_data,**composed}
+    """Calculate from persisted dependencies, then load the downstream read model once."""
+    from piu_timeline.play.stages import read_view
+    call('beatFiles.calculate',str(Path(directory).resolve()))
+    reference=call('beatFiles.view',str(Path(directory).resolve()))
+    return {**data,**read_view(reference,Path(directory))}
 
 
 def reassociate(data, display_delay_ms, directory=None):

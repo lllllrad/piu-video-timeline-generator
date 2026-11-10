@@ -40,11 +40,11 @@ def track_analysis(data,directory):
 
 def physical_analysis(data,directory):
     from piu_timeline.play.head_registration import measure_coordinates
-    from piu_timeline.play.stages import save_coordinates,physical_timing
+    from piu_timeline.play.stages import save_coordinates,physical_timing,physical_view
     from piu_timeline.play.beats.timing import reassociate
     with patch('piu_timeline.play.skins.coordinates.measure',side_effect=AssertionError('Repeated frame-coordinate measurement')):
         projected=measure_coordinates(data,directory)
-    return reassociate(physical_timing(save_coordinates(projected,directory),directory),0,directory)
+    return reassociate(physical_view(physical_timing(save_coordinates(projected,directory),directory),directory),0,directory)
 
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg unavailable')
