@@ -10,6 +10,10 @@ patchedDependencies:
 importers:
 
   .:
+    dependencies:
+      '@piu/chart-editor':
+        specifier: file:.local/editor/piu-chart-editor-a9c17cc1069e.tgz
+        version: file:.local/editor/piu-chart-editor-a9c17cc1069e.tgz
     devDependencies:
       '@slop-lab/qg':
         specifier: 0.1.0
@@ -25,6 +29,10 @@ importers:
         version: 7.0.2
 
 packages:
+
+  '@piu/chart-editor@file:.local/editor/piu-chart-editor-a9c17cc1069e.tgz':
+    resolution: {integrity: sha512-U1BeUTosmNUmUuveiYvHOq859mbnEkEYrgZCGlFGkUmd+mtHtZ33l5bIkNmh6mDw7M2iqCeSDJCeBZLoq/S5yg==, tarball: file:.local/editor/piu-chart-editor-a9c17cc1069e.tgz}
+    version: 0.1.0
 
   '@slop-lab/qg-check-runner@0.1.0':
     resolution: {integrity: sha512-xY0QbWrYEdR0sRsz25zNc3oJUn/8N89AIUu4wXrcqrTZEs9wt8jOits1pnWcTVuLcH71eUVKWpcjiu9Mx0/0zw==}
@@ -309,6 +317,8 @@ packages:
     hasBin: true
 
 snapshots:
+
+  '@piu/chart-editor@file:.local/editor/piu-chart-editor-a9c17cc1069e.tgz': {}
 
   '@slop-lab/qg-check-runner@0.1.0':
     dependencies:

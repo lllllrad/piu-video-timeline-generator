@@ -28,7 +28,7 @@ class ExclusionWarningTest(unittest.TestCase):
         from piu_timeline.play.presentation import prepare_report
         from piu_timeline.play.report import write_report as render_report
         def write_report(data,path,final_directory=None):
-            return render_report(prepare_report(data,path,final_directory),path,final_directory)
+            return render_report(prepare_report(data,path,final_directory),path,final_directory,legacy=True)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); data = self.sample()
             data.update(song='Example', chart='S20', media={'path':str(root/'source.mkv')})

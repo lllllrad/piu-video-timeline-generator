@@ -18,6 +18,7 @@
   "include": [
     "src/piu_timeline/derived/**/*.ts",
     "formats/**/*.ts",
+    "scripts/editor/*.mjs",
     "tests/**/*.ts",
     "src/piu_timeline/play/report*.js",
     "src/piu_timeline/play/inspector/*.js"

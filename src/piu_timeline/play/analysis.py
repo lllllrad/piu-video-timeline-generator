@@ -277,7 +277,7 @@ def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_sk
         cached['skin_detector']={**cached['skin_detector'],'bank_path':note_skin}
     cached = augment_holds(cached, final)
     prepared=prepare_report(cached,final/'report.html',final)
-    write_report(prepared,final/'report.html',final)
+    write_report(prepared,final/'report.html',final,prepared_path=final/'report-data.json')
     if coordinates is not None or {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
         updated = final / 'analysis.refresh-build.json'
         updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')

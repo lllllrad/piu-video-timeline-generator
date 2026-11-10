@@ -11,3 +11,6 @@ opencv-python-headless>=4.8,<6
 
 # Official UCS song catalogue parsing.
 pypdf>=6,<7
+
+# Stream prepared evidence into bounded review indexes.
+ijson>=3.4,<4

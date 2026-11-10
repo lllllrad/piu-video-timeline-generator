@@ -11,7 +11,7 @@ from piu_timeline.play.report import write_report as render_report
 
 
 def write_report(data,path,final_directory=None):
-    return render_report(prepare_report(data,path,final_directory),path,final_directory)
+    return render_report(prepare_report(data,path,final_directory),path,final_directory,legacy=True)
 
 
 class ReportTest(unittest.TestCase):
@@ -28,7 +28,8 @@ class ReportTest(unittest.TestCase):
                 refresh_registration(data, root)
             saved = json.loads((root/'report-data.json').read_text())
             self.assertEqual(saved['inspector_artifacts']['chart']['registration'],record)
-            self.assertIn(record['reason'],(root/'report.html').read_text())
+            self.assertNotIn(record['reason'],(root/'report.html').read_text())
+            self.assertLess((root/'report.html').stat().st_size,10000)
 
 
     def test_saved_ucs_note_links_reject_changed_source_order_media_and_edited_chart(self):

@@ -84,30 +84,14 @@ just play VIDEO --segment 1
 just play VIDEO --all
 ```
 
-Open `.local/data/SOURCE_ID/play/segment-001/report.html` for the **Play evidence inspector**.
-One original recording stays beside six tabs: notes and judgment, channel observations,
-derivation, UCS transcription, warnings, and data/setup. Selecting a note or warning
-shares its identity and recording position across tabs. Channel overlays map saved
-head/body positions and documented popup/receptor regions onto the source video.
-Frame navigation retains both recording time and source PTS. Named stage artifacts
-keep observed tracks, coordinates, physical timing, musical decisions and input
-associations separate. The inspector uses an explicitly composed view; HTML
-rendering does not run inference. See [execution contracts](docs/analysis-stage-contracts.md) and
-[derived artifacts](docs/derived-analysis.md).
-
-The synchronized SVG chart keeps fixed-size colored notes while spacing changes.
-Lime ranges show reconstructed targets; magenta ranges show display-based input
-estimates or sustained hold recognition. Candidate connections are optional and
-limited to 250 ms early / 500 ms late. MISS never supplies a press timestamp.
-Warnings open their observed interval even when a track has no reconstructed target.
-The derivation tab exposes selected observations, clock/beat results, processing,
-policy and association records. UCS placements appear only from a saved draft;
-source-note links require exact saved-analysis and unchanged UCS identities.
-The inspector does not upload, re-encode or change media. `--all` and background
-replay write a linked `play/index.html` overview. Replay creates it before work
-starts, repairs missing indexes for current analyses, and updates links as plays
-finish. Unfinished rows remain unavailable. A batch with deferred work exits
-unsuccessfully instead of claiming completion. See [the inspector](docs/evidence-inspector.md) and [play analysis](docs/play-analysis.md).
+The generated `report.html` is a small entry page for the local evidence editor.
+Run `just editor SOURCE --segment 1` to open the original recording beside a
+bounded chart view and review panel. Saved popup, receptor, motion and processing
+channels retain original recording time and source PTS. Full stage artifacts stay
+separate and downloadable; selecting evidence does not rerun inference.
+`--all` and background replay maintain a linked `play/index.html` overview.
+See [the interval editor](docs/review-editor.md), [execution contracts](docs/analysis-stage-contracts.md)
+and [play analysis](docs/play-analysis.md).
 
 Saved-data modeling and report consumers run in TypeScript; Python handles media,
 OCR and native image evidence. Registered coordinates and prepared report data
@@ -124,6 +108,21 @@ It stores source-bound timelines, compact spatial masks and ungrouped detector
 observations under `.local/data/SOURCE/observations/`. Compatible detector observations are reused directly. Changed pixel detectors decode
 the original recording; decoded RGB frames are never cached. A detector failure
 preserves the acquired timeline and masks. See [independent observations](docs/independent-observations.md).
+
+## Interval review editor
+
+Open saved evidence beside the original recording and edit source-bound interval truth:
+
+```sh
+just editor-build
+just editor VIDEO --segment 1
+```
+
+The desktop browser editor uses English labels. Notes, censored holds, weighted/nonuniform
+ticks and independent scroll changes stay under `.local/`, separate from automatic evidence.
+Default reports are small entry pages; the server fetches bounded evidence windows instead
+of embedding the full analysis in HTML. Shared editor primitives are built as a tarball from
+a pinned local DCM checkout. See [setup, data model and limits](docs/review-editor.md).
 
 ## Editable chart data
 

@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare": "qg hooks install",
-    "quality": "qg check",
-    "quality:full": "qg check --full",
-    "typecheck": "tsc --project tsconfig.json",
-    "test": "qg check --full"
+    "prepare": "python3 scripts/editor/prepare.py",
+    "quality": "sh scripts/run.sh pnpm exec qg check",
+    "quality:full": "sh scripts/run.sh pnpm exec qg check --full",
+    "typecheck": "tsc --project tsconfig.json && tsc --project web/review/tsconfig.json --noEmit",
+    "test": "sh scripts/run.sh pnpm exec qg check --full"
   },
   "devDependencies": {
     "@slop-lab/qg": "0.1.0",
@@ -18,5 +18,8 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "pnpm@11.10.0"
+  "packageManager": "pnpm@11.10.0",
+  "dependencies": {
+    "@piu/chart-editor": "file:.local/editor/piu-chart-editor-a9c17cc1069e.tgz"
+  }
 }

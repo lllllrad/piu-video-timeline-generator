@@ -1,5 +1,10 @@
 # Play evidence inspector
 
+Default reports now use the [local interval review editor](review-editor.md), with a small
+HTML entry page and bounded server queries. The embedded six-tab inspector described below
+is retained as a legacy renderer and regression surface; it is not the default new report.
+
+
 Open `.local/data/SOURCE_ID/play/segment-001/report.html` locally for the **Play evidence
 inspector**. This stable filename is retained for existing links. The standalone page
 embeds its data and uses no external scripts, fonts or services.

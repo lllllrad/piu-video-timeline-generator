@@ -296,7 +296,7 @@ def auto_register(data, output, **options):
                 from piu_timeline.play.presentation import prepare_report
                 from piu_timeline.play.report import write_report
                 prepared=prepare_report(data,Path(output)/'report.html')
-                write_report(prepared,Path(output)/'report.html')
+                write_report(prepared,Path(output)/'report.html',prepared_path=Path(output)/'report-data.json')
         except (OSError,ValueError,KeyError) as error:
             candidates = {'status':'pending','reason':str(error)}
         result['gimmick_candidates'] = candidates

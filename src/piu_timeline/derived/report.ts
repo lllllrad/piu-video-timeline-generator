@@ -1,5 +1,6 @@
 /** Pure HTML presentation. The input document has already been analyzed. */
 import {readFileSync,openSync,readSync,writeSync,closeSync} from 'node:fs';
+import {basename,dirname} from 'node:path';
 import {StringDecoder}from 'node:string_decoder';
 const resource = name => readFileSync(new URL(`../play/${name}`, import.meta.url), 'utf8');
 const template = resource('report.html').replace('__STYLE__', () => resource('report.css') + '\n' + resource('inspector/workspace.css'))
@@ -44,4 +45,20 @@ export function index(entries): string {
 a{color:#9cddbe}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #314448}.scroll{overflow:auto}</style>
 <h1>Play evidence inspector</h1><p>Each play compares visible note trajectories with observed combo and judgment refreshes. A chord is one judged row and may contain several heads. Counts are partial reconstruction, not a complete chart or physical switch measurement. Open a play for excluded motion and unassigned counter evidence.</p>
 <div class="scroll"><table><thead><tr><th>Segment</th><th>Play</th><th>Reconstructed heads</th><th>Long notes</th><th>Heads with tap timing</th><th>Matched combo refreshes</th><th>Judgment-only timed heads</th><th>Readable counter frames</th><th>Analyzer version</th></tr></thead><tbody>${rows.join('')}</tbody></table></div></html>`;
+}
+
+/** Small server-backed entry point. Evidence is fetched by interval, never embedded. */
+export function renderShellFile(_dataPath:string,outputPath:string,song:string,chart:string,media:string):void{
+ const title=escape(`${song} · ${chart}`);
+ const source=basename(dirname(dirname(dirname(_dataPath)))),segment=basename(dirname(_dataPath)).match(/segment-(\d+)/)?.[1];
+ const open=`http://127.0.0.1:4180/?source=${encodeURIComponent(source)}&segment=${Number(segment)||1}`;
+ const command=escape(`just editor '${source.replaceAll("'","'\"'\"'")}' --segment ${Number(segment)||1}`);
+ const body=`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title} · Play review</title><style>body{font:16px/1.6 system-ui;background:#101719;color:#e7efed;max-width:760px;margin:10vh auto;padding:24px}a{color:#a9dec2}code{background:#192226;padding:6px}h1{font-size:24px}</style>
+<h1>${title}</h1><p>Open this play in the local evidence editor to inspect the original recording, interval chart, independent channels and saved review truth.</p>
+<p><a href="${escape(open)}">Open local Play review</a></p>
+<p>Start the server for this source and segment with <code>${command}</code>. Run <code>just editor-build</code> once after updating the shared package.</p>
+<p><a href="${escape(media)}">Original recording</a> · <a href="report-data.json" download>Complete prepared evidence</a> · <a href="recognition-warnings.json" download>Recognition diagnostics</a></p>
+<p>This page contains no embedded analysis. Review data stays under .local; original media and timestamps are unchanged. Confirm the song and segment in the editor before reviewing.</p></html>`;
+ const target=openSync(outputPath,'wx');try{const bytes=Buffer.from(body);let offset=0;while(offset<bytes.length)offset+=writeSync(target,bytes,offset,bytes.length-offset);}finally{closeSync(target);}
 }

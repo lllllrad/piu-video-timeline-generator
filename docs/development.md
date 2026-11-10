@@ -6,7 +6,7 @@ The project requires Python 3.12, uv, FFmpeg, Node.js 24 or newer, pnpm and `jus
 
 ```sh
 mise install
-mise exec -- pnpm install --frozen-lockfile
+mise exec -- python3 scripts/editor/build.py
 mise exec -- just check
 mise exec -- just auto SOURCE
 ```
@@ -272,7 +272,8 @@ the shared tests from `.qg.yaml` against the working tree.
 
 Quality Gate and its JS/TS rules are project-local pnpm development dependencies, pinned in
 `package.json` with its transitive dependencies locked in `pnpm-lock.yaml`.
-Run `pnpm install --frozen-lockfile` after cloning or updating the lockfile; its prepare script installs
+Run `python3 scripts/editor/build.py` after cloning to build the pinned local editor tarball, then use
+`pnpm install --frozen-lockfile` for dependency-only updates; its prepare script installs
 the QG hook. `just check` and `just qg` use the installed package without fetching
 or building the tool. `node_modules/` is ignored, and pnpm keeps its package store under `.local/cache/pnpm/` through `pnpm-workspace.yaml`.
 The `js` preset checks source directives, fixture practices and pnpm lockfile

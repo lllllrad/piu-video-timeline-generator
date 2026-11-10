@@ -92,3 +92,15 @@ _chart-motion *args:
 # Review skin tail appearance separately from the current UCS processing gate.
 _visual-support *args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.visual_support_review "$@"
+
+# Build the pinned DCM shared package tarball and the local review application.
+editor-build:
+    python3 scripts/editor/build.py
+
+# Inspect evidence and edit source-bound interval truth in a local browser.
+editor +args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.review.server "$@"
+
+# Run Chromium review tests with all browser dependencies inside a container.
+editor-browser *args:
+    python3 scripts/editor/browser.py "$@"

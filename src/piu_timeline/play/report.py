@@ -1,4 +1,4 @@
-"""Self-contained, local HTML review of video-derived timing evidence."""
+"""Small local review entry points and an explicit legacy inspector renderer."""
 import json
 import os
 from pathlib import Path
@@ -19,24 +19,27 @@ def write_summary(data,directory):
     return summary
 
 
-def write_report(data,path,final_directory=None,*,prepared_path=None):
+def write_report(data,path,final_directory=None,*,prepared_path=None,legacy=False):
     """Render prepared view data only; never inspect observations or infer timing."""
     from piu_timeline.derived import call
     final_directory=Path(final_directory or path.parent)
     media=quote(os.path.relpath(data['media']['path'],final_directory),safe='/')
     pending=path.with_name(f'.{path.name}.{uuid4().hex}.tmp')
     prepared=Path(prepared_path)if prepared_path is not None else pending.with_suffix('.data.json')
+    owns_prepared=prepared_path is None
     try:
-        if prepared_path is None:
+        if owns_prepared:
             with prepared.open('w',encoding='utf-8')as stream:
                 json.dump(data,stream,ensure_ascii=False,allow_nan=False)
-        call('report.renderFile',str(prepared),str(pending),
+        call('report.renderFile' if legacy else 'report.renderShellFile',str(prepared),str(pending),
              data.get('song') or 'Unknown song',data.get('chart') or 'Unknown chart',media)
         pending.replace(path)
+        if not legacy and owns_prepared:
+            prepared.replace(path.with_name('report-data.json'))
         write_summary(data,path.parent)
     finally:
         pending.unlink(missing_ok=True)
-        if prepared_path is None:prepared.unlink(missing_ok=True)
+        if owns_prepared:prepared.unlink(missing_ok=True)
     return path
 
 

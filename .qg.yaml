@@ -9,9 +9,10 @@ rules:
     severity: error
     options:
       ignoredShadowDirectories: [.git, .local, .qg, dist, node_modules, .venv, build, __pycache__]
+      pnpmCommand: piu-pnpm-lock-check
 artifacts:
   generated:
-    include: [".venv/**", "build/**"]
+    include: [".venv/**", "build/**", ".local/**"]
 
 hooks:
   preCommit:
@@ -22,6 +23,10 @@ checks:
     command: pnpm
     args: [exec, tsc, --project, tsconfig.json]
     message: "Fix TypeScript type errors before committing."
+  - name: review-typescript
+    command: pnpm
+    args: [exec, tsc, --project, web/review/tsconfig.json, --noEmit]
+    message: "Fix the review editor type errors before committing."
   - name: derived-tests
     type: node-test
     files: ["tests/**/*.test.ts"]
