@@ -266,8 +266,8 @@ block the check. `just check-ocr` separately exercises the host Vision implement
 
 `just qg` forwards arguments to the upstream CLI. Its default checks staged
 contents and runs the same tests; use `check --full --rules-only` for a full
-rule scan without tests. QG automatically installs its pre-commit hook on first
-use, preserving an existing custom hook. The hook checks staged files and runs
+rule scan without tests. Dependency setup installs the project-environment QG hook, preserving existing custom hooks.
+The hook checks staged files and runs
 the shared tests from `.qg.yaml` against the working tree.
 
 Quality Gate and its JS/TS rules are project-local pnpm development dependencies, pinned in

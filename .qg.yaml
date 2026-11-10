@@ -16,7 +16,8 @@ artifacts:
 
 hooks:
   preCommit:
-    installation: auto
+    # Dependency setup installs the environment-aware hook; its checks remain enabled.
+    installation: "off"
 
 checks:
   - name: typescript

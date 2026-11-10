@@ -34,7 +34,10 @@ intentional pin update, update the tarball dependency path in `package.json`, th
 Package/cache outputs stay ignored. QG's shadow-workspace wrapper copies only explicitly
 listed local tarball dependencies, retaining pnpm's ordinary lockfile comparison.
 The prepare script adapts QG's generated hook to use `scripts/run.sh`, so project-local
-commands resolve during commits. Existing user-authored hooks remain unchanged.
+commands resolve during commits. Repeated installs preserve that hook, and existing
+user-authored hooks remain unchanged. Hook installation is managed by dependency setup;
+QG automatic installation is off so it cannot replace the environment wrapper. Staged
+rules and all configured commit checks remain enabled.
 
 ## Review model
 
