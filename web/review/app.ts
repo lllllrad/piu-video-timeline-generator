@@ -14,7 +14,6 @@ const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(
 const input=(id:string)=>$<HTMLInputElement>(id);
 const select=(id:string)=>$<HTMLSelectElement>(id);
 const video=$<HTMLVideoElement>('video'),canvas=$<HTMLCanvasElement>('chart');
-const syncPlayer=installPlayer(video);
 let meta:any,review:ReviewDocument,reviewId:string=uuid(),dirty=false,selected:string|null=null;
 let observations:ReviewNote[]=[],automatic:any[]=[],rows:any[]=[],nextOffset:number|null=null;
 let history:ReviewDocument[]=[],future:ReviewDocument[]=[],loop=false,generation=0,rowGeneration=0;
@@ -22,6 +21,7 @@ let selectedAuto:any=null,frameEvidence:any=null,frameRequest=0;
 let lastFrameRequest=-Infinity,windowRange:[number,number]=[0,1],pageOffset=0,detailRequest=0;
 let commentEditing=false;
 let followRange:[number,number]|null=null,loopRange:[number,number]|null=null;
+const syncPlayer=installPlayer(video,()=>meta?[meta.start_seconds,meta.end_seconds]:null,()=>loop&&loopRange?loopRange[0]:null);
 let panTarget:[number,number]|null=null,panTimer:ReturnType<typeof setTimeout>|undefined;
 const selection=new URLSearchParams(location.search);
 function scoped(path:string){
@@ -44,13 +44,22 @@ async function showWindow(range:[number,number],panning=false){
  if(!panning){clearTimeout(panTimer);panTimer=undefined;panTarget=null;}
  input('from').value=String(range[0]);input('to').value=String(range[1]);await loadWindow();
 }
+function anchorOffset(){return (coverage()[1]-coverage()[0])*8/Math.max(1,canvas.clientHeight-30);}
+function panWindow(current:readonly[number,number],direction:number):[number,number]{
+ const span=current[1]-current[0],time=Math.max(meta.start_seconds,Math.min(meta.end_seconds,current[0]+anchorOffset()+span*direction));
+ return [time-anchorOffset(),time-anchorOffset()+span];
+}
 function panTo(range:[number,number]){
- stopFollow();
- panTarget=range;input('chart-position').value=String(range[0]);
+ stopFollow();video.pause();panTarget=range;input('chart-position').value=String(range[0]+anchorOffset());
  if(panTimer!==undefined)return;
  panTimer=setTimeout(guarded(async()=>{
-  panTimer=undefined;const target=panTarget;if(!target)return;
-  await showWindow(target,true);if(panTarget===target)panTarget=null;
+  panTimer=undefined;const target=panTarget;if(!target)return;const run=++generation;
+  followRange=target;windowRange=moveWindow(target,bounds(),0);
+  input('from').value=String(windowRange[0]);input('to').value=String(windowRange[1]);
+  video.currentTime=Math.max(meta.start_seconds,Math.min(meta.end_seconds,target[0]+anchorOffset()));
+  paint();$('load').setAttribute('aria-busy','true');
+  try{await loadRows(0);if(run===generation)renderReview();}
+  finally{if(run===generation)$('load').removeAttribute('aria-busy');if(panTarget===target)panTarget=null;}
  }),70);
 }
 function blank():ReviewDocument{
@@ -108,9 +117,9 @@ async function loadWindow(){
   const preset=[5,10,20,60].find(seconds=>Math.abs(seconds-(end-start))<.000001);
   select('zoom').value=preset?String(preset):'custom';
   windowRange=range;
-  const position=input('chart-position');position.min=String(meta.start_seconds);position.max=String(Math.max(meta.start_seconds,meta.end_seconds-(end-start)));
+  const position=input('chart-position');position.min=String(meta.start_seconds);position.max=String(meta.end_seconds);
   position.disabled=Number(position.min)===Number(position.max);position.step='any';
-  if(!panTarget)position.value=String(start);
+  if(!panTarget)position.value=String(Math.min(meta.end_seconds,start+anchorOffset()));
   position.setAttribute('aria-valuetext',`${start.toFixed(3)} to ${end.toFixed(3)} recording seconds`);
   await loadRows(0);renderReview();paint();
   $<HTMLButtonElement>('previous-window').disabled=start<=meta.start_seconds;
@@ -180,10 +189,11 @@ function updateFollowing(){
  const span=coverage()[1]-coverage()[0],offset=span*8/Math.max(1,canvas.clientHeight-30),start=video.currentTime-offset;
  followRange=[start,start+span];windowRange=moveWindow(followRange,bounds(),0);
  for(const [id,value]of [['from',windowRange[0]],['to',windowRange[1]]] as const)if(document.activeElement!==input(id))input(id).value=value.toFixed(6);
- input('chart-position').value=String(windowRange[0]);
+ input('chart-position').value=String(video.currentTime);
  drawChart(canvas,view());
 }
 function trackPlayback(){
+ if(video.paused)return;
  if(loop&&loopRange&&video.currentTime>=loopRange[1])video.currentTime=loopRange[0];
  updateFollowing();
  if(Math.abs(video.currentTime-lastFrameRequest)>.2){lastFrameRequest=video.currentTime;void refreshFrame().catch(e=>error(e.message));}
@@ -212,11 +222,11 @@ async function boot(){
  $('play-picker').removeAttribute('inert');
  selection.set('source',sourcePicker.value);selection.set('segment',segmentPicker.value);
  window.history.replaceState(null,'','/?'+selection);
- video.src=scoped('/media');
  $<HTMLAnchorElement>('full-evidence').href=scoped('/artifact?path=report-data.json');
  $<HTMLAnchorElement>('report-link').href=scoped('/report.html');
 
  meta=await api('/api/meta');
+ video.src=scoped('/media');video.currentTime=meta.start_seconds;
  const chart=await api('/api/chart');automatic=chart.rows;observations=automatic.map(autoNote).filter((n):n is ReviewNote=>n!==null);
  $('title').textContent=`${meta.song??'Unknown song'} · ${meta.chart??'Unknown chart'}`;
  $('subtitle').textContent=`Segment ${meta.segment_number??''} · source-bound interval review`;
@@ -226,6 +236,7 @@ async function boot(){
  review=blank();showNote(null);await listReviews();await loadWindow();video.currentTime=coverage()[0];
  document.querySelectorAll('[inert]').forEach(element=>element.removeAttribute('inert'));document.body.setAttribute('aria-busy','false');
 }
+for(const id of ['from','to'])input(id).onfocus=()=>{stopFollow();video.pause();};
 $('load').onclick=guarded(()=>{stopFollow();clearTimeout(panTimer);panTimer=undefined;panTarget=null;return loadWindow();});
 $('at-playhead').onclick=guarded(()=>showWindow(zoomWindow(video.currentTime,coverage()[1]-coverage()[0],bounds())));
 $('previous-window').onclick=guarded(()=>showWindow(moveWindow(coverage(),bounds(),-1)));
@@ -295,17 +306,17 @@ canvas.onclick=e=>{guarded(async()=>{
 input('follow').onchange=()=>{if(input('follow').checked){updateFollowing();updatePlayhead();}else{followRange=null;paint();}};
 video.onclick=()=>$('play-toggle').click();
 input('chart-position').oninput=()=>{
- const current=panTarget??coverage(),start=Number(input('chart-position').value);
- panTo([start,start+current[1]-current[0]]);
+ const span=coverage()[1]-coverage()[0],start=Number(input('chart-position').value)-anchorOffset();
+ panTo([start,start+span]);
 };
 canvas.addEventListener('wheel',e=>{
  if(!meta||!review||e.ctrlKey||e.metaKey||!e.deltaY)return;
  e.preventDefault();
- const height=canvas.getBoundingClientRect().height,current=panTarget??coverage();
+ const height=canvas.getBoundingClientRect().height,current=panTarget??chartRange();
  const pixels=e.deltaMode===1?e.deltaY*16:e.deltaMode===2?e.deltaY*height:e.deltaY;
- panTo(moveWindow(current,bounds(),pixels/height));
+ panTo(panWindow(current,pixels/height));
 },{passive:false});
-canvas.onkeydown=e=>{if(e.key==='PageDown'||e.key==='PageUp'){e.preventDefault();panTo(moveWindow(panTarget??coverage(),bounds(),e.key==='PageDown'?1:-1));return;}if(e.key==='Delete'&&selected){e.preventDefault();$('remove-note').click();}};
+canvas.onkeydown=e=>{if(e.key==='PageDown'||e.key==='PageUp'){e.preventDefault();panTo(panWindow(panTarget??chartRange(),e.key==='PageDown'?1:-1));return;}if(e.key==='Delete'&&selected){e.preventDefault();$('remove-note').click();}};
 for(const [id,direction]of [['frame-back',-1],['frame-next',1]] as const)$(id).onclick=guarded(async()=>{
  video.pause();
  const low=Math.max(meta.start_seconds,video.currentTime-1),high=Math.min(meta.end_seconds,video.currentTime+1);
@@ -313,7 +324,7 @@ for(const [id,direction]of [['frame-back',-1],['frame-next',1]] as const)$(id).o
  const times=result.rows.map((r:any)=>r.time??r.playback_seconds).filter((t:any)=>typeof t==='number'&&(direction>0?t>video.currentTime+.000001:t<video.currentTime-.000001)).sort((a:number,b:number)=>a-b);
  if(times.length)video.currentTime=direction>0?times[0]:times.at(-1);
 });
-$('play-toggle').onclick=guarded(async()=>{if(video.paused){if(loop&&loopRange&&(video.currentTime<loopRange[0]||video.currentTime>=loopRange[1]))video.currentTime=loopRange[0];await video.play();}else video.pause();});
+$('play-toggle').onclick=guarded(async()=>{if(video.paused){if(video.currentTime>=meta.end_seconds||video.currentTime<meta.start_seconds)video.currentTime=meta.start_seconds;if(loop&&loopRange&&(video.currentTime<loopRange[0]||video.currentTime>=loopRange[1]))video.currentTime=loopRange[0];await video.play();}else video.pause();});
 video.onpause=()=>{$('play-toggle').textContent='Play';if(meta&&review){void loadRows(0).catch(e=>error(e.message));renderReview();}};
 video.onplay=()=>{clearTimeout(panTimer);panTimer=undefined;panTarget=null;input('follow').checked=true;$('play-toggle').textContent='Pause';trackPlayback();};video.ontimeupdate=updatePlayhead;video.onseeking=updatePlayhead;video.onseeked=guarded(async()=>{updateFollowing();updatePlayhead();await refreshFrame();});
 video.onerror=()=>error('The browser cannot decode this original recording. Try a browser with support for its codec; the source is never transcoded.');

@@ -170,7 +170,9 @@ the saved revision. A save response never discards edits made while that save wa
 ## Recording player and following
 
 The recording uses dedicated seek, playback, observed-frame step, volume, speed and fullscreen
-controls. The seek bar uses original recording seconds and the displayed clock includes milliseconds.
+controls. The seek bar is limited to the selected segment and uses original recording seconds, with
+milliseconds in the clock. Playback stops at the segment end; Play there restarts the segment.
+Chart scrolling pauses playback and seeks the recording to the fixed judgment line.
 Playback speed changes only browser playback. Source files and PTS are preserved.
 **Follow playback** keeps the current source time on a fixed judgment line, eight pixels below
 the 30-pixel lane header (one rendered note height). All chart objects are already in memory.

@@ -18,6 +18,14 @@ try{
  const start=meta.start_seconds+Math.min(40,Math.max(0,meta.end_seconds-meta.start_seconds-10));
  const end=Math.min(meta.end_seconds,start+10),span=end-start;
  const head=start+span*.2,other=start+span*.6;
+ const seekLimits=await page.locator('#video-seek').evaluate(e=>[Number(e.min),Number(e.max)]);
+ if(seekLimits[0]!==meta.start_seconds||seekLimits[1]!==meta.end_seconds)throw Error('Player seek is not segment bounded');
+ await page.locator('video').evaluate((v,start)=>{v.currentTime=start-2;},meta.start_seconds);
+ await page.waitForFunction(start=>document.querySelector('video').currentTime>=start,meta.start_seconds);
+ await page.locator('video').evaluate(async(v,end)=>{v.currentTime=end-.2;await v.play();},meta.end_seconds);
+ await page.waitForFunction(end=>document.querySelector('video').paused&&Math.abs(document.querySelector('video').currentTime-end)<.01,meta.end_seconds);
+ await page.locator('#play-toggle').click();await page.waitForFunction(start=>document.querySelector('video').currentTime<start+2&&!document.querySelector('video').paused,meta.start_seconds);
+ await page.locator('#play-toggle').click();
  if(await page.locator('video').evaluate(v=>v.controls))throw Error('Native recording controls are still enabled');
  await page.locator('#playback-rate').selectOption('0.5');
  if(await page.locator('video').evaluate(v=>v.playbackRate)!==.5)throw Error('Custom playback speed failed');
@@ -42,10 +50,18 @@ try{
  await page.locator('#chart').hover();await page.mouse.wheel(0,160);
  await page.waitForFunction(t=>Number((/** @type {HTMLInputElement} */(document.querySelector('#from'))).value)>t&&!document.querySelector('#load').hasAttribute('aria-busy'),start)
  .catch(async failure=>{await page.screenshot({path:'.local/editor/artifacts/player-failure.png',fullPage:true});throw Error(failure.message+JSON.stringify({from:await page.locator('#from').inputValue(),to:await page.locator('#to').inputValue(),error:await page.locator('#error').textContent(),errors}));});
+ const scrolled=Number(await page.locator('#from').inputValue());
+ const chartHeight=await page.locator('#chart').evaluate(e=>e.clientHeight);
+ const scrolledTime=await page.locator('video').evaluate(v=>v.currentTime);
+ if(Math.abs(scrolledTime-(scrolled+span*8/(chartHeight-30)))>.01)throw Error('Chart scroll did not seek to its judgment line');
  const wheelSpan=Number(await page.locator('#to').inputValue())-Number(await page.locator('#from').inputValue());
  if(Math.abs(wheelSpan-span)>.00001)throw Error('Chart scrolling changed zoom');
  await page.locator('#chart-position').focus();await page.keyboard.press('End');
  await page.waitForFunction(end=>Number((/** @type {HTMLInputElement} */(document.querySelector('#to'))).value)>end-1&&!document.querySelector('#load').hasAttribute('aria-busy'),meta.end_seconds);
+ await page.waitForFunction(end=>Math.abs(document.querySelector('video').currentTime-end)<.01&&document.querySelector('video').paused,meta.end_seconds);
+ await page.locator('#chart-position').focus();await page.keyboard.press('Home');
+ await page.waitForFunction(start=>Math.abs(document.querySelector('video').currentTime-start)<.01&&document.querySelector('video').paused,meta.start_seconds);
+
  await page.locator('#from').fill(String(start));await page.locator('#to').fill(String(end));await page.locator('#load').click();
  await page.waitForFunction(()=>!document.querySelector('#load').hasAttribute('aria-busy'));
  await page.locator('#chart').focus();await page.keyboard.press('Shift+ArrowRight');
