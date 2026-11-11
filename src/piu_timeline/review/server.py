@@ -1,4 +1,4 @@
-"""Loopback-only evidence editor with bounded queries and original-media Range delivery."""
+"""Configurable-bind evidence editor with bounded queries and original-media Range delivery."""
 import argparse
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -10,7 +10,7 @@ import secrets
 from urllib.parse import parse_qs, urlparse
 
 from piu_timeline import ROOT
-from piu_timeline.review.index import build, ReportIndex
+from piu_timeline.review.library import ReviewLibrary
 from piu_timeline.review.store import Conflict, ReviewStore
 from piu_timeline.workflow import LOCAL_DATA, source_id
 
@@ -32,12 +32,18 @@ def bounded_detail(value, depth=0):
     return value
 
 
-def handler_for(index, store, assets, segment):
+def handler_for(index, store, assets, segment, bind_host=None, library=None):
     token = secrets.token_urlsafe(32)
-    metadata = index.metadata()
-    media = Path(metadata['media']['path'])
+    metadata = index.metadata() if index else None
+    media = Path(metadata['media']['path']) if metadata else None
 
     class Handler(BaseHTTPRequestHandler):
+        def context(self):
+            if library is None:
+                return index, store, metadata, media, segment
+            query = parse_qs(urlparse(self.path).query)
+            return library.open(query.get('source', [None])[0], query.get('segment', [None])[0])
+
         def log_message(self, *_args):
             pass
 
@@ -96,11 +102,18 @@ def handler_for(index, store, assets, segment):
             self.do_GET()
 
         def valid_host(self):
-            return self.headers.get('Host') in (f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}')
+            try:
+                authority = urlparse('http://' + self.headers.get('Host', ''))
+                allowed = {'localhost', '127.0.0.1', bind_host,
+                           self.server.server_address[0], self.connection.getsockname()[0]}
+                allowed -= {'0.0.0.0', None}
+                return authority.hostname in allowed and (authority.port or 80) == self.server.server_port and not authority.username and not authority.password
+            except ValueError:
+                return False
 
         def do_GET(self):
             if not self.valid_host():
-                return self.json({'error':'Use the loopback editor URL'},403)
+                return self.json({'error':'Use the configured editor address'},403)
             try:
                 self.read_route()
             except (BrokenPipeError, ConnectionResetError):
@@ -114,13 +127,20 @@ def handler_for(index, store, assets, segment):
 
         def read_route(self):
             parsed = urlparse(self.path)
+            index, store, metadata, media, segment = self.context() if library is None else (None, None, None, None, None)
             query = parse_qs(parsed.query)
             def arg(key, default=None):
                 return query.get(key, [default])[0]
-            if parsed.path=='/' and (arg('source',store.metadata['source_id'])!=store.metadata['source_id'] or int(arg('segment',metadata.get('segment_number',1)))!=metadata.get('segment_number',1)):
-                raise ValueError('This server is reviewing another play; start the editor for the requested source and segment')
+            if parsed.path == '/api/library':
+                sources = library.catalog() if library else [{'id': store.metadata['source_id'], 'segments': [{'number': metadata.get('segment_number', 1), 'song': metadata.get('song'), 'chart': metadata.get('chart')}]}]
+                return self.json({'sources': sources, 'default_source': library.default_source if library else store.metadata['source_id'],
+                                  'default_segment': library.default_segment if library else metadata.get('segment_number', 1)})
+            if parsed.path.startswith('/api/') or parsed.path in ('/media', '/artifact', '/report.html'):
+                index, store, metadata, media, segment = self.context()
             if parsed.path == '/api/meta':
                 self.json({**metadata, 'source_id': store.metadata['source_id'], 'write_token': token})
+            elif parsed.path == '/api/chart':
+                self.json(index.chart())
             elif parsed.path == '/api/window':
                 start, end = float(arg('start')), float(arg('end'))
                 if not all(math.isfinite(v) for v in (start, end)) or not start < end or end - start > 120:
@@ -136,6 +156,8 @@ def handler_for(index, store, assets, segment):
                 self.json(store.list())
             elif parsed.path == '/api/review':
                 self.json(store.get(arg('id')))
+            elif parsed.path == '/report.html':
+                self.file(segment / 'report.html', 'text/html; charset=utf-8')
             elif parsed.path == '/media':
                 stat = media.stat()
                 if stat.st_size != metadata['media']['size_bytes'] or str(stat.st_mtime_ns) != metadata['media']['mtime_ns']:
@@ -156,7 +178,7 @@ def handler_for(index, store, assets, segment):
 
         def do_PUT(self):
             if not self.valid_host():
-                return self.json({'error':'Use the loopback editor URL'},403)
+                return self.json({'error':'Use the configured editor address'},403)
             try:
                 if self.headers.get('X-Review-Token') != token:
                     return self.json({'error': 'Reload the editor before saving'}, HTTPStatus.FORBIDDEN)
@@ -168,9 +190,12 @@ def handler_for(index, store, assets, segment):
                     raise ValueError('Review request must be at most 4 MiB')
                 request = json.loads(self.rfile.read(length))
                 identity = parse_qs(parsed.query)['id'][0]
-                self.json(store.save(identity, request['document'], request['base_revision']))
+                _index, selected_store, _metadata, _media, _segment = self.context()
+                self.json(selected_store.save(identity, request['document'], request['base_revision']))
             except Conflict as error:
                 self.json({'error': str(error)}, 409)
+            except FileNotFoundError as error:
+                self.json({'error': str(error)}, 404)
             except (ValueError, KeyError, TypeError) as error:
                 self.json({'error': str(error)}, 400)
     return Handler
@@ -178,23 +203,29 @@ def handler_for(index, store, assets, segment):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('source')
-    parser.add_argument('--segment', type=int, default=1)
+    parser.add_argument('source', nargs='?', help='Initially selected video; videos can also be selected in the browser')
+    parser.add_argument('--segment', type=int, help='Initially selected segment (default: first prepared segment)')
+    parser.add_argument('--host', default='127.0.0.1', help='IPv4 bind address or hostname (default: 127.0.0.1)')
     parser.add_argument('--port', type=int, default=4180)
     args = parser.parse_args()
-    if args.segment < 1 or not 0 <= args.port <= 65535:
+    if (args.segment is not None and args.segment < 1) or not 0 <= args.port <= 65535:
         parser.error('Invalid segment or port')
-    directory = LOCAL_DATA / source_id(args.source) / 'play' / f'segment-{args.segment:03}'
-    prepared = directory / 'report-data.json'
     assets = ROOT / '.local/editor/app'
     if not (assets / 'index.html').is_file():
         parser.error('Build the shared editor first: just editor-build')
-    print('Indexing prepared evidence (streaming; source media is never changed)...', flush=True)
-    index = ReportIndex(build(prepared, directory / 'review/index.sqlite'))
-    metadata = {**index.metadata(), 'source_id': source_id(args.source)}
-    store = ReviewStore(directory / 'review/intervals', metadata)
-    server = ThreadingHTTPServer(('127.0.0.1', args.port), handler_for(index, store, assets, directory))
-    print(f'Play review: http://127.0.0.1:{server.server_port}', flush=True)
+    library = ReviewLibrary(LOCAL_DATA)
+    catalog = library.catalog()
+    if not catalog:
+        parser.error('No prepared plays found; run play analysis first')
+    library.default_source = source_id(args.source) if args.source else catalog[0]['id']
+    chosen = next((item for item in catalog if item['id'] == library.default_source), None)
+    if chosen is None:
+        parser.error('No prepared plays for the selected video')
+    library.default_segment = args.segment or chosen['segments'][0]['number']
+    if library.default_segment not in {item['number'] for item in chosen['segments']}:
+        parser.error('No prepared analysis for the selected segment')
+    server = ThreadingHTTPServer((args.host, args.port), handler_for(None, None, assets, None, args.host, library))
+    print(f'Play review: http://{args.host}:{server.server_port}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

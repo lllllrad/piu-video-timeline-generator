@@ -4,11 +4,28 @@ Build the shared DCM package and open an existing prepared play:
 
 ```sh
 just editor-build
-just editor SOURCE --segment 13
+just editor
 ```
 
-Open the printed loopback URL (default `http://127.0.0.1:4180`). Use `--port` to select
-another local port. The server does not download, decode, OCR, infer, transcode or rewrite
+Open the printed URL (default `http://127.0.0.1:4180`). Set the bind address and port explicitly:
+
+```sh
+just editor SOURCE --segment 13 --host 100.66.142.3 --port 4180
+```
+
+Then open `http://100.66.142.3:4180`. Use **Video**, **Segment**, then **Open play** in the
+header to switch between prepared analyses without restarting the server. Video choices
+show source IDs and play counts; segment choices show the song and chart. Only segments
+with a saved `report-data.json` are listed. `SOURCE` and `--segment` are optional initial
+selections, not server restrictions. A first visit lazily indexes the selected play; the
+header remains available while evidence loads. Navigation warns about unsaved changes.
+Each tab retains its selection in the URL, and all media, evidence and review requests
+carry that selection; another tab's selection never changes its save target. The default remains loopback. Binding a non-loopback
+address makes the original recording and review editor available to clients that can reach
+that address; the review token protects writes against cross-origin requests, not access authentication.
+The small standalone `report.html` shows summary metrics and up to 30 warning examples without
+starting a server. While the editor runs, `/report.html` serves that same report; its editor link
+uses the current server address. Use `--port` to select another port. The server does not download, decode, OCR, infer, transcode or rewrite
 recordings. It needs a completed `report-data.json` from play analysis.
 
 ## Shared package and reproducible checkout
@@ -80,9 +97,11 @@ reviews remain readable and cannot overwrite a review against changed evidence.
 
 ## Bounded report delivery
 
-Default report publication now writes a small HTML entry point rather than embedding the
-prepared analysis. `just render INPUT.json OUTPUT.html` also produces a small entry point.
-Existing large reports can be replaced with this render command without rerunning inference.
+Default publication writes a standalone HTML summary with reconstruction metrics and at most
+30 warning examples, rather than embedding the prepared analysis. No API calls are needed to
+read it. `just render INPUT.json OUTPUT.html` reuses a current adjacent `report-summary.json`;
+missing or stale summaries show explicit unavailable values. Existing large reports can be
+replaced with this render command without rerunning inference.
 The legacy embedded renderer remains available explicitly for inspector runtime regressions.
 
 The server streams prepared JSON into SQLite, retaining records individually with compressed
@@ -91,16 +110,19 @@ saved original channel timeline. It never loads the complete prepared JSON into 
 The index is disposable; interval truth is not. An individual evidence record is materialized
 while indexing; index building is not a constant-size bound on arbitrary malformed records.
 
-Queries are limited to 120-second windows and 500 records per page. The observation list
-pages independently. The chart overlay is capped at 500 automatic note records per window;
-a message asks the user to narrow crowded windows. Detail previews cap nesting and array
+The editor loads all compact note/hold objects once per play through `/api/chart`. Native
+trajectories and proofs remain separate; panning, zooming and playback never re-fetch chart
+objects. Detailed evidence queries are limited to 120-second windows and 500 records per page. The observation list
+pages independently. The chart draws from the complete in-memory object set. Detail previews cap nesting and array
 lengths. Original JSON/JSONL/image/mask artifacts remain available by explicit streamed
 download. Video uses HTTP byte ranges over the original file. Browser codec support is
 required; an error never triggers transcoding.
 
-The server listens on loopback only. Writes require a per-process token, source binding,
+The server defaults to loopback; `--host` selects an IPv4 bind address or hostname. Host headers
+must match the configured name or the local address used by the connection. Writes require a per-process token, source binding,
 revision checks and size limits. Evidence paths must remain inside the selected segment.
-Use one server/port per play; report links validate source and segment before opening.
+One server serves all prepared local plays. Review stores remain isolated by source and segment.
+Only the selected play is indexed on demand; the library list never loads full prepared analyses.
 
 ## Validation
 
@@ -128,10 +150,13 @@ scroll changes, saved values, bounded channel queries and original-media Range r
 
 Desktop keeps the recording, chart and independently scrolling review panel in one viewport.
 The observation list pages forward and backward without loading a complete analysis.
+Scroll over the chart to pan its time window, drag the vertical position control to jump,
+or use Page Up/Down while the chart has focus. Panning keeps the current zoom and does not
+change review coverage. Wheel requests are coalesced instead of fetching once per pixel.
 **Previous interval**, **Next interval**, **At playhead**, and the view-size selector only change
 the inspection window. Typing bounds does not change the chart until **Inspect interval** succeeds.
 **Show review interval** returns to saved truth coverage; navigating never expands that coverage.
-Comparisons are withheld when the view omits truth or automatic evidence is capped.
+Comparisons are withheld when the view omits truth coverage.
 
 Click an automatic chart object to reveal its original saved evidence and recording position.
 Copying remains an explicit draft operation. Clicking empty chart space seeks the recording;
@@ -140,3 +165,14 @@ Space toggles playback, Left/Right step original observed frames, Shift+Left/Rig
 window, Ctrl/Cmd+S saves, and Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z undo/redo. Native input controls
 retain ordinary typing and selection shortcuts. Undo changes draft content without rewinding
 the saved revision. A save response never discards edits made while that save was in flight.
+
+
+## Recording player and following
+
+The recording uses dedicated seek, playback, observed-frame step, volume, speed and fullscreen
+controls. The seek bar uses original recording seconds and the displayed clock includes milliseconds.
+Playback speed changes only browser playback. Source files and PTS are preserved.
+**Follow playback** keeps the current source time on a fixed judgment line, eight pixels below
+the 30-pixel lane header (one rendered note height). All chart objects are already in memory.
+Manual chart navigation releases following; enable the checkbox or start playback to resume. Frame steps pause
+playback. Looping retains the interval selected when the loop was enabled, even as the chart follows.

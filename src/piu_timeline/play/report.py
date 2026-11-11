@@ -1,4 +1,4 @@
-"""Small local review entry points and an explicit legacy inspector renderer."""
+"""Bounded standalone evidence reports and an explicit legacy inspector renderer."""
 import json
 import os
 from pathlib import Path
@@ -9,6 +9,17 @@ from uuid import uuid4
 def write_summary(data,directory):
     """Publish index fields from the prepared view, without running inference."""
     summary={key:data.get(key)for key in ('coverage','combo_readable_fraction','play_analysis_version')}
+    summary['counts']={key:len(data.get(key) or [])for key in ('notes','matches','combo_events','judgment_events')}
+    summary['start_seconds']=data.get('start_seconds')
+    summary['end_seconds']=data.get('end_seconds')
+    summary['warnings']=[]
+    summary['warning_count']=0
+    for kind in ('recognition_diagnostics','exclusion_diagnostics'):
+        warnings=(data.get(kind) or {}).get('warnings') or []
+        summary['warning_count']+=len(warnings)
+        for warning in warnings[:max(0,30-len(summary['warnings']))]:
+            summary['warnings'].append({key:warning[key][:240]if isinstance(warning[key],str)else warning[key]for key in
+                ('reason','check','lane','visible_start_seconds','visible_end_seconds','start_seconds','end_seconds')if key in warning})
     path=directory/'report-summary.json'
     pending=path.with_name(f'.report-summary.{uuid4().hex}.tmp')
     try:
@@ -31,12 +42,13 @@ def write_report(data,path,final_directory=None,*,prepared_path=None,legacy=Fals
         if owns_prepared:
             with prepared.open('w',encoding='utf-8')as stream:
                 json.dump(data,stream,ensure_ascii=False,allow_nan=False)
-        call('report.renderFile' if legacy else 'report.renderShellFile',str(prepared),str(pending),
-             data.get('song') or 'Unknown song',data.get('chart') or 'Unknown chart',media)
+        summary=write_summary(data,path.parent)
+        arguments=[str(prepared),str(pending),data.get('song') or 'Unknown song',data.get('chart') or 'Unknown chart',media]
+        if not legacy:arguments.append(summary)
+        call('report.renderFile' if legacy else 'report.renderShellFile',*arguments)
         pending.replace(path)
         if not legacy and owns_prepared:
             prepared.replace(path.with_name('report-data.json'))
-        write_summary(data,path.parent)
     finally:
         pending.unlink(missing_ok=True)
         if owns_prepared:prepared.unlink(missing_ok=True)

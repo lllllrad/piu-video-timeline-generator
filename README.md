@@ -84,7 +84,7 @@ just play VIDEO --segment 1
 just play VIDEO --all
 ```
 
-The generated `report.html` is a small entry page for the local evidence editor.
+The generated `report.html` is a standalone summary with metrics and bounded warning examples.
 Run `just editor SOURCE --segment 1` to open the original recording beside a
 bounded chart view and review panel. Saved popup, receptor, motion and processing
 channels retain original recording time and source PTS. Full stage artifacts stay
@@ -115,12 +115,13 @@ Open saved evidence beside the original recording and edit source-bound interval
 
 ```sh
 just editor-build
-just editor VIDEO --segment 1
+just editor --host 127.0.0.1
 ```
 
+Choose a video and segment in the browser header; a server restart is unnecessary.
 The desktop browser editor uses English labels. Notes, censored holds, weighted/nonuniform
 ticks and independent scroll changes stay under `.local/`, separate from automatic evidence.
-Default reports are small entry pages; the server fetches bounded evidence windows instead
+Default reports open independently; the editor server fetches bounded evidence windows instead
 of embedding the full analysis in HTML. Shared editor primitives are built as a tarball from
 a pinned local DCM checkout. See [setup, data model and limits](docs/review-editor.md).
 

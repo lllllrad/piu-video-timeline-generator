@@ -11,17 +11,41 @@ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try{
  const page=await browser.newPage({viewport:{width:1600,height:1050}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
+ const chartRequests=[],windowChartRequests=[];
+ page.on('request',request=>{const url=new URL(request.url());if(url.pathname==='/api/chart')chartRequests.push(url.href);if(url.pathname==='/api/window'&&['notes','holds'].includes(url.searchParams.get('kind')))windowChartRequests.push(url.href);});
  await page.goto(base);await page.waitForFunction(()=>document.querySelector('#row-count')?.textContent.includes('saved records'));
  const meta=await page.request.get(`${base}/api/meta`).then(r=>r.json());
  const start=meta.start_seconds+Math.min(40,Math.max(0,meta.end_seconds-meta.start_seconds-10));
  const end=Math.min(meta.end_seconds,start+10),span=end-start;
  const head=start+span*.2,other=start+span*.6;
+ if(await page.locator('video').evaluate(v=>v.controls))throw Error('Native recording controls are still enabled');
+ await page.locator('#playback-rate').selectOption('0.5');
+ if(await page.locator('video').evaluate(v=>v.playbackRate)!==.5)throw Error('Custom playback speed failed');
+ await page.locator('#playback-rate').selectOption('1');
+ await page.locator('#mute').click();if(!(await page.locator('video').evaluate(v=>v.muted)))throw Error('Custom mute failed');
+ await page.locator('#volume').evaluate(e=>{e.value='.35';e.dispatchEvent(new Event('input'));});
+ if(Math.abs(await page.locator('video').evaluate(v=>v.volume)-.35)>.001)throw Error('Custom volume failed');
+ await page.locator('#video-seek').evaluate((e,t)=>{e.value=String(t);e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));},meta.start_seconds+1);
+ await page.waitForFunction(t=>Math.abs(document.querySelector('video').currentTime-t)<.01,meta.start_seconds+1);
+ await page.locator('#fullscreen').click();await page.waitForFunction(()=>!!document.fullscreenElement);
+ await page.locator('#fullscreen').click();await page.waitForFunction(()=>!document.fullscreenElement);
  await page.locator('#chart').focus();await page.keyboard.press('Space');
  await page.waitForFunction(()=>!document.querySelector('video').paused);
+ await page.waitForTimeout(400);
+ if(Math.abs(await page.locator('#playhead').evaluate(e=>parseFloat(e.style.top))-38)>2)throw Error('Playback does not follow the fixed judgment line');
  await page.keyboard.press('Space');await page.waitForFunction(()=>document.querySelector('video').paused);
  const beforeFrame=await page.locator('video').evaluate(v=>v.currentTime);
  await page.keyboard.press('ArrowRight');await page.waitForFunction(t=>document.querySelector('video').currentTime>t,beforeFrame);
 
+ await page.locator('#from').fill(String(start));await page.locator('#to').fill(String(end));await page.locator('#load').click();
+ await page.waitForFunction(()=>!document.querySelector('#load').hasAttribute('aria-busy'));
+ await page.locator('#chart').hover();await page.mouse.wheel(0,160);
+ await page.waitForFunction(t=>Number((/** @type {HTMLInputElement} */(document.querySelector('#from'))).value)>t&&!document.querySelector('#load').hasAttribute('aria-busy'),start)
+ .catch(async failure=>{await page.screenshot({path:'.local/editor/artifacts/player-failure.png',fullPage:true});throw Error(failure.message+JSON.stringify({from:await page.locator('#from').inputValue(),to:await page.locator('#to').inputValue(),error:await page.locator('#error').textContent(),errors}));});
+ const wheelSpan=Number(await page.locator('#to').inputValue())-Number(await page.locator('#from').inputValue());
+ if(Math.abs(wheelSpan-span)>.00001)throw Error('Chart scrolling changed zoom');
+ await page.locator('#chart-position').focus();await page.keyboard.press('End');
+ await page.waitForFunction(end=>Number((/** @type {HTMLInputElement} */(document.querySelector('#to'))).value)>end-1&&!document.querySelector('#load').hasAttribute('aria-busy'),meta.end_seconds);
  await page.locator('#from').fill(String(start));await page.locator('#to').fill(String(end));await page.locator('#load').click();
  await page.waitForFunction(()=>!document.querySelector('#load').hasAttribute('aria-busy'));
  await page.locator('#chart').focus();await page.keyboard.press('Shift+ArrowRight');
@@ -32,7 +56,7 @@ try{
  if(Math.abs(Number(await page.locator('#to').inputValue())-Number(await page.locator('#from').inputValue())-Math.min(5,meta.end_seconds-start))>.00001)throw Error('Interval zoom failed');
  await page.locator('#from').fill(String(start));await page.locator('#to').fill(String(end));await page.locator('#load').click();
  await page.waitForFunction(()=>!document.querySelector('#load').hasAttribute('aria-busy'));
- const targets=await page.request.get(`${base}/api/window?kind=notes&start=${start}&end=${end}&limit=500`).then(r=>r.json());
+ const targets=await page.request.get(`${base}/api/chart`).then(r=>r.json());
  const target=targets.rows.find(n=>n.status==='estimated'&&n.target_seconds>start&&n.target_seconds<end&&n.lane!=null);
  if(target){
   const box=await page.locator('#chart').boundingBox();
@@ -92,6 +116,46 @@ try{
  if(workspace.height>workspace.viewport+1)throw Error('Desktop workspace scrolls the recording out of view');
  await page.screenshot({path:'.local/editor/artifacts/desktop.png',fullPage:true});
  await page.setViewportSize({width:1100,height:900});await page.screenshot({path:'.local/editor/artifacts/compact.png',fullPage:true});
+ const reportPage=await browser.newPage({viewport:{width:1280,height:900}});
+ const reportRequests=[];reportPage.on('request',request=>reportRequests.push(request.url()));
+ await reportPage.goto(`${base}/report.html`);
+ if(await reportPage.locator('h2').first().textContent()!=='Analysis summary')throw Error('Standalone report has no summary');
+ if(!(await reportPage.locator('#editor').getAttribute('href')).startsWith('/?source='))throw Error('Report editor link lost current server address');
+ await reportPage.screenshot({path:'.local/editor/artifacts/report.png',fullPage:true});
+ const localPath=meta.signature.path.slice(meta.signature.path.indexOf('/.local/')).replace(/report-data\.json$/,'report.html');
+ await reportPage.goto('file:///workspace'+localPath);
+ if(!(await reportPage.locator('body').textContent()).includes('This report opens without an editor server'))throw Error('File report did not open independently');
+ if(reportRequests.some(url=>url.includes('/api/')))throw Error('Standalone report depends on editor APIs');
+ await reportPage.setViewportSize({width:600,height:900});
+ if(await reportPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Standalone report overflows compact viewport');
+ await reportPage.screenshot({path:'.local/editor/artifacts/report-compact.png',fullPage:true});
+ await reportPage.close();
+ const catalog=await page.request.get(`${base}/api/library`).then(r=>r.json());
+ const switchPage=await browser.newPage({viewport:{width:1600,height:1050}});
+ await switchPage.goto(base);await switchPage.waitForFunction(()=>document.querySelector('#row-count')?.textContent.includes('saved records'));
+ const currentSource=await switchPage.locator('#source-picker').inputValue();
+ const currentSegment=await switchPage.locator('#segment-picker').inputValue();
+ const sourceEntry=catalog.sources.find(item=>item.id===currentSource);
+ const alternateSegment=sourceEntry.segments.find(item=>String(item.number)!==currentSegment);
+ if(alternateSegment){
+  await switchPage.locator('#segment-picker').selectOption(String(alternateSegment.number));
+  await switchPage.locator('#open-play').click();
+  await switchPage.waitForFunction(()=>document.body.getAttribute('aria-busy')==='false',null,{timeout:180000});
+  if(!(await switchPage.locator('#subtitle').textContent()).includes(`Segment ${alternateSegment.number} ·`))throw Error('Segment picker did not switch plays');
+ }
+ const otherSource=catalog.sources.find(item=>item.id!==currentSource);
+ if(otherSource){
+  await switchPage.locator('#source-picker').selectOption(otherSource.id);
+  await switchPage.locator('#open-play').click();
+  await switchPage.waitForFunction(()=>document.body.getAttribute('aria-busy')==='false',null,{timeout:180000});
+  const query=new URL(switchPage.url()).search;
+  const switchedMeta=await switchPage.request.get(`${base}/api/meta${query}`).then(r=>r.json());
+  if(switchedMeta.source_id!==otherSource.id||!(await switchPage.locator('video').getAttribute('src')).includes(`source=${encodeURIComponent(otherSource.id)}`))throw Error('Video picker did not bind recording and evidence to the new source');
+ }
+ await switchPage.screenshot({path:'.local/editor/artifacts/library.png',fullPage:true});
+ await switchPage.close();
+
+ if(chartRequests.length!==1||windowChartRequests.length)throw Error('Chart navigation refetched note objects: '+JSON.stringify({chartRequests,windowChartRequests}));
  const response=await page.request.get(`${base}/media`,{headers:{Range:'bytes=0-15'}});
  const forbidden=await page.request.put(`${base}/api/review?id=abc`,{data:{}});
  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);

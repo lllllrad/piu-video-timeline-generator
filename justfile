@@ -98,7 +98,7 @@ editor-build:
     python3 scripts/editor/build.py
 
 # Inspect evidence and edit source-bound interval truth in a local browser.
-editor +args:
+editor *args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.review.server "$@"
 
 # Run Chromium review tests with all browser dependencies inside a container.

@@ -15,7 +15,12 @@
 <h1 id="title">Play review</h1>
 <p id="subtitle">Loading saved evidence…</p>
 </div>
-<a href="/artifact?path=report-data.json" download>Download full evidence</a>
+<div id="play-picker" class="play-picker" inert>
+<label>Video <select id="source-picker" aria-label="Video"></select></label>
+<label>Segment <select id="segment-picker" aria-label="Segment"></select></label>
+<button id="open-play">Open play</button>
+</div>
+<div class="report-links"><a id="report-link" href="/report.html">Report</a><a id="full-evidence" href="/artifact?path=report-data.json" download>Download full evidence</a></div>
 </header>
 <div id="error" role="alert" hidden>
 </div>
@@ -38,20 +43,33 @@
 <main inert>
 <section class="recording" aria-label="Original recording">
 <h2>Original recording</h2>
+<div id="player" class="player">
 <div class="video-wrap">
-<video id="video" controls preload="metadata" src="/media">
+<video id="video" playsinline preload="metadata">
 </video>
 <canvas id="overlay" aria-hidden="true">
 </canvas>
 </div>
-<output id="clock">Recording time</output>
-<p id="channels" class="hint">Saved channel observations appear at the recording position.</p>
+<div class="player-controls">
+<label class="seek-label">Recording position<input id="video-seek" type="range" min="0" max="1" step="any" value="0" disabled aria-label="Seek original recording"></label>
+<output id="player-time">00:00.000 / —</output>
 <div class="tools">
 <button id="play-toggle" title="Play or pause (Space)">Play</button>
-<button id="frame-back">Previous observed frame</button>
-<button id="frame-next">Next observed frame</button>
+<button id="frame-back" title="Previous observed source frame">Previous frame</button>
+<button id="frame-next" title="Next observed source frame">Next frame</button>
 <button id="loop" aria-pressed="false">Loop interval: off</button>
 </div>
+<div class="tools player-settings">
+<label>Speed <select id="playback-rate" aria-label="Playback speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+<button id="mute" aria-pressed="false">Mute</button>
+<label class="volume-label">Volume<input id="volume" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volume"></label>
+<button id="fullscreen">Fullscreen</button>
+</div>
+<output id="player-state" role="status">Loading recording…</output>
+</div>
+</div>
+<output id="clock">Recording time</output>
+<p id="channels" class="hint">Saved channel observations appear at the recording position.</p>
 <p class="hint">Original recording time. Playback does not change saved media or source PTS.</p>
 <h2>Saved observations</h2>
 <div class="tools">
@@ -81,16 +99,19 @@
 <section class="chart" aria-label="Interval chart">
 <div class="section-heading">
 <h2>Interval chart</h2>
+<label><input id="follow" type="checkbox" checked> Follow playback</label>
 <label>
 <input id="ghosts" type="checkbox" checked> Automatic evidence</label>
 </div>
 <div class="chart-stage">
 <canvas id="chart" tabindex="0" aria-label="Chart editor. Click a note to select it. Shift click an empty lane to add a tap. Use the note form for exact times.">
 </canvas>
+<input id="chart-position" type="range" min="0" max="1" step="any" value="0" aria-label="Chart time position" title="Chart position. Scroll the chart to move through this play.">
 <div id="playhead">
 </div>
 </div>
-<p class="hint">Solid: manual review · Faint: automatic evidence<br>Click to select. Shift-click to add. Delete removes a selected manual note.</p>
+<p id="chart-window" class="hint"></p>
+<p class="hint">Solid: manual review · Faint: automatic evidence<br>Scroll to move through the play. Click to select. Shift-click to add. Delete removes a selected manual note.</p>
 <div class="tools">
 <button id="undo">Undo</button>
 <button id="redo">Redo</button>

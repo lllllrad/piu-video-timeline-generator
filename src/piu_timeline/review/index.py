@@ -170,6 +170,12 @@ class ReportIndex:
             return {'rows': [json.loads(row[0]) for row in rows], 'total': total,
                     'next_offset': offset + limit if offset + limit < total else None}
 
+    def chart(self):
+        """Load every compact chart object, excluding native trajectories and proofs."""
+        with sqlite3.connect(self.path) as db:
+            rows = db.execute("select summary from rows where kind in ('notes','holds') order by kind,id")
+            return {'rows': [json.loads(row[0]) for row in rows]}
+
     def detail(self, identity):
         with sqlite3.connect(self.path) as db:
             row = db.execute('select detail from rows where id=?', (identity,)).fetchone()
