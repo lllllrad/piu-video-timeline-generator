@@ -174,7 +174,16 @@ controls. The seek bar is limited to the selected segment and uses original reco
 milliseconds in the clock. Playback stops at the segment end; Play there restarts the segment.
 Chart scrolling pauses playback and seeks the recording to the fixed judgment line.
 Playback speed changes only browser playback. Source files and PTS are preserved.
-**Follow playback** keeps the current source time on a fixed judgment line, eight pixels below
-the 30-pixel lane header (one rendered note height). All chart objects are already in memory.
+**Follow playback** keeps the current source time on a fixed judgment line, one rendered note height below
+the 30-pixel lane header. All chart objects are already in memory.
 Manual chart navigation releases following; enable the checkbox or start playback to resume. Frame steps pause
 playback. Looping retains the interval selected when the loop was enabled, even as the chart follows.
+
+
+## Directional notes and spacing
+
+The shared DCM package draws diagonal Pump arrows and a diamond center for both pads.
+Hold bodies connect actual known head/tail symbols; censored endpoints remain unresolved.
+**Note spacing** sets pixels per original recording second. Increasing it separates nearby
+notes without editing source time, BPM or review truth. The judgment-line offset follows
+rendered symbol height. DCM Studio exposes the same scale in its timeline controls.

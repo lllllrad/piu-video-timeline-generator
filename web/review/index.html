@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Play review</title>
 <link rel="stylesheet" href="/style.css">
-<script type="importmap">{"imports":{"@piu/chart-editor":"/shared/model.js","@piu/chart-editor/canvas":"/shared/canvas.js"}}</script>
+<script type="importmap">{"imports":{"@piu/chart-editor":"/shared/model.js","@piu/chart-editor/canvas":"/shared/canvas.js","@piu/chart-editor/glyphs":"/shared/glyphs.js"}}</script>
 <script type="module" src="/app.js">
 </script>
 </head>
@@ -34,6 +34,7 @@
 <button id="next-window" title="Next interval (Shift+Right)">Next interval</button>
 <button id="at-playhead">At playhead</button>
 <label>View <select id="zoom"><option value="custom" disabled>Custom interval</option><option value="5">5 seconds</option><option value="10" selected>10 seconds</option><option value="20">20 seconds</option><option value="60">60 seconds</option></select></label>
+<label>Note spacing <input id="spacing" type="number" min="20" max="1000" step="1" value="160" aria-label="Note display spacing" title="Pixels per recording second"><span>px / second</span></label>
 <label>Saved review <select id="reviews">
 <option value="">New interval</option>
 </select>

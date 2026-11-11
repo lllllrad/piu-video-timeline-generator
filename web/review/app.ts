@@ -1,3 +1,4 @@
+import {displaySeconds,noteGlyphSize} from '@piu/chart-editor/glyphs';
 import {editReview,validateReview,type ReviewDocument,type ReviewNote} from '@piu/chart-editor';
 import {chartPoint,drawChart,type ChartView} from '@piu/chart-editor/canvas';
 import {installPlayer} from './player.js';
@@ -44,20 +45,27 @@ async function showWindow(range:[number,number],panning=false){
  if(!panning){clearTimeout(panTimer);panTimer=undefined;panTarget=null;}
  input('from').value=String(range[0]);input('to').value=String(range[1]);await loadWindow();
 }
-function anchorOffset(){return (coverage()[1]-coverage()[0])*8/Math.max(1,canvas.clientHeight-30);}
+function glyphSize(){return noteGlyphSize(Math.max(1,(canvas.clientWidth-64)/(meta?.layout.lanes.length??10)));}
+function anchorOffset(span=coverage()[1]-coverage()[0]){return span*glyphSize()/Math.max(1,canvas.clientHeight-30);}
+function syncSpacing(){
+ if(!meta||!review)return;
+ const span=coverage()[1]-coverage()[0],preset=[5,10,20,60].find(value=>Math.abs(value-span)<.000001);
+ select('zoom').value=preset?String(preset):'custom';
+ if(document.activeElement!==input('spacing'))input('spacing').value=String(Math.round((canvas.clientHeight-30)/span));
+}
 function panWindow(current:readonly[number,number],direction:number):[number,number]{
  const span=current[1]-current[0],time=Math.max(meta.start_seconds,Math.min(meta.end_seconds,current[0]+anchorOffset()+span*direction));
  return [time-anchorOffset(),time-anchorOffset()+span];
 }
 function panTo(range:[number,number]){
- stopFollow();video.pause();panTarget=range;input('chart-position').value=String(range[0]+anchorOffset());
+ stopFollow();video.pause();panTarget=range;input('chart-position').value=String(range[0]+anchorOffset(range[1]-range[0]));
  if(panTimer!==undefined)return;
  panTimer=setTimeout(guarded(async()=>{
   panTimer=undefined;const target=panTarget;if(!target)return;const run=++generation;
   followRange=target;windowRange=moveWindow(target,bounds(),0);
   input('from').value=String(windowRange[0]);input('to').value=String(windowRange[1]);
   video.currentTime=Math.max(meta.start_seconds,Math.min(meta.end_seconds,target[0]+anchorOffset()));
-  paint();$('load').setAttribute('aria-busy','true');
+  syncSpacing();paint();$('load').setAttribute('aria-busy','true');
   try{await loadRows(0);if(run===generation)renderReview();}
   finally{if(run===generation)$('load').removeAttribute('aria-busy');if(panTarget===target)panTarget=null;}
  }),70);
@@ -121,7 +129,7 @@ async function loadWindow(){
   position.disabled=Number(position.min)===Number(position.max);position.step='any';
   if(!panTarget)position.value=String(Math.min(meta.end_seconds,start+anchorOffset()));
   position.setAttribute('aria-valuetext',`${start.toFixed(3)} to ${end.toFixed(3)} recording seconds`);
-  await loadRows(0);renderReview();paint();
+  await loadRows(0);renderReview();syncSpacing();paint();
   $<HTMLButtonElement>('previous-window').disabled=start<=meta.start_seconds;
   $<HTMLButtonElement>('next-window').disabled=end>=meta.end_seconds;
  }finally{if(run===generation)$('load').removeAttribute('aria-busy');}
@@ -186,7 +194,7 @@ async function refreshFrame(){
 }
 function updateFollowing(){
  if(!meta||!review||!input('follow').checked)return;
- const span=coverage()[1]-coverage()[0],offset=span*8/Math.max(1,canvas.clientHeight-30),start=video.currentTime-offset;
+ const span=coverage()[1]-coverage()[0],offset=anchorOffset(span),start=video.currentTime-offset;
  followRange=[start,start+span];windowRange=moveWindow(followRange,bounds(),0);
  for(const [id,value]of [['from',windowRange[0]],['to',windowRange[1]]] as const)if(document.activeElement!==input(id))input(id).value=value.toFixed(6);
  input('chart-position').value=String(video.currentTime);
@@ -230,7 +238,7 @@ async function boot(){
  const chart=await api('/api/chart');automatic=chart.rows;observations=automatic.map(autoNote).filter((n):n is ReviewNote=>n!==null);
  $('title').textContent=`${meta.song??'Unknown song'} · ${meta.chart??'Unknown chart'}`;
  $('subtitle').textContent=`Segment ${meta.segment_number??''} · source-bound interval review`;
- input('from').value=String(meta.start_seconds);input('to').value=String(Math.min(meta.end_seconds,meta.start_seconds+10));
+ input('from').value=String(meta.start_seconds);input('to').value=String(Math.min(meta.end_seconds,meta.start_seconds+Math.min(10,displaySeconds(Math.max(1,canvas.clientHeight-30),160))));
  for(let lane=0;lane<meta.layout.lanes.length;lane++)select('lane').add(new Option(`${lane+1} · ${['DL','UL','C','UR','DR'][lane%5]}`,String(lane)));
  windowRange=[Number(input('from').value),Number(input('to').value)];
  review=blank();showNote(null);await listReviews();await loadWindow();video.currentTime=coverage()[0];
@@ -241,6 +249,15 @@ $('load').onclick=guarded(()=>{stopFollow();clearTimeout(panTimer);panTimer=unde
 $('at-playhead').onclick=guarded(()=>showWindow(zoomWindow(video.currentTime,coverage()[1]-coverage()[0],bounds())));
 $('previous-window').onclick=guarded(()=>showWindow(moveWindow(coverage(),bounds(),-1)));
 $('next-window').onclick=guarded(()=>showWindow(moveWindow(coverage(),bounds(),1)));
+input('spacing').onchange=guarded(()=>{
+ const pixels=Number(input('spacing').value);
+ if(!Number.isFinite(pixels)||pixels<20||pixels>1000)throw Error('Choose note spacing from 20 to 1000 pixels per second.');
+ const span=Math.min(meta.end_seconds-meta.start_seconds,120,displaySeconds(Math.max(1,canvas.clientHeight-30),pixels));
+ const time=Math.max(meta.start_seconds,Math.min(meta.end_seconds,video.currentTime)),start=time-anchorOffset(span),range:[number,number]=[start,start+span];
+ if(input('follow').checked){
+  windowRange=moveWindow(range,bounds(),0);updateFollowing();syncSpacing();paint();renderReview();
+ }else panTo(range);
+});
 select('zoom').onchange=guarded(()=>showWindow(zoomWindow((coverage()[0]+coverage()[1])/2,Number(select('zoom').value),bounds())));
 $('review-window').onclick=guarded(()=>showWindow(review.coverage));
 $('new').onclick=guarded(()=>{if(dirty&&!confirm('Discard unsaved review changes?'))return;reviewId=uuid();review=blank();history=[];future=[];dirty=false;showNote(null);renderReview();});
@@ -328,7 +345,7 @@ $('play-toggle').onclick=guarded(async()=>{if(video.paused){if(video.currentTime
 video.onpause=()=>{$('play-toggle').textContent='Play';if(meta&&review){void loadRows(0).catch(e=>error(e.message));renderReview();}};
 video.onplay=()=>{clearTimeout(panTimer);panTimer=undefined;panTarget=null;input('follow').checked=true;$('play-toggle').textContent='Pause';trackPlayback();};video.ontimeupdate=updatePlayhead;video.onseeking=updatePlayhead;video.onseeked=guarded(async()=>{updateFollowing();updatePlayhead();await refreshFrame();});
 video.onerror=()=>error('The browser cannot decode this original recording. Try a browser with support for its codec; the source is never transcoded.');
-new ResizeObserver(paint).observe(canvas);
+new ResizeObserver(()=>{syncSpacing();paint();}).observe(canvas);
 window.addEventListener('keydown',e=>{
  if(!meta||!review||e.defaultPrevented)return;
  const target=e.target as HTMLElement,editing=target.closest('input,textarea,select,[contenteditable=true]');

@@ -40,7 +40,7 @@ try{
  await page.locator('#chart').focus();await page.keyboard.press('Space');
  await page.waitForFunction(()=>!document.querySelector('video').paused);
  await page.waitForTimeout(400);
- if(Math.abs(await page.locator('#playhead').evaluate(e=>parseFloat(e.style.top))-38)>2)throw Error('Playback does not follow the fixed judgment line');
+ if(Math.abs(await page.locator('#playhead').evaluate(e=>parseFloat(e.style.top))-(30+Number(await page.locator('#chart').getAttribute('data-note-size'))))>2)throw Error('Playback does not follow the fixed judgment line');
  await page.keyboard.press('Space');await page.waitForFunction(()=>document.querySelector('video').paused);
  const beforeFrame=await page.locator('video').evaluate(v=>v.currentTime);
  await page.keyboard.press('ArrowRight');await page.waitForFunction(t=>document.querySelector('video').currentTime>t,beforeFrame);
@@ -53,7 +53,7 @@ try{
  const scrolled=Number(await page.locator('#from').inputValue());
  const chartHeight=await page.locator('#chart').evaluate(e=>e.clientHeight);
  const scrolledTime=await page.locator('video').evaluate(v=>v.currentTime);
- if(Math.abs(scrolledTime-(scrolled+span*8/(chartHeight-30)))>.01)throw Error('Chart scroll did not seek to its judgment line');
+ if(Math.abs(scrolledTime-(scrolled+span*Number(await page.locator('#chart').getAttribute('data-note-size'))/(chartHeight-30)))>.01)throw Error('Chart scroll did not seek to its judgment line');
  const wheelSpan=Number(await page.locator('#to').inputValue())-Number(await page.locator('#from').inputValue());
  if(Math.abs(wheelSpan-span)>.00001)throw Error('Chart scrolling changed zoom');
  await page.locator('#chart-position').focus();await page.keyboard.press('End');
@@ -130,6 +130,11 @@ try{
  mkdirSync('.local/editor/artifacts',{recursive:true});
  const workspace=await page.evaluate(()=>({height:document.documentElement.scrollHeight,viewport:innerHeight}));
  if(workspace.height>workspace.viewport+1)throw Error('Desktop workspace scrolls the recording out of view');
+ const spacingAnchor=await page.locator('video').evaluate(v=>v.currentTime);
+ await page.locator('#spacing').fill('180');await page.locator('#spacing').press('Tab');
+ await page.waitForFunction(()=>(/** @type {HTMLSelectElement} */(document.querySelector('#zoom'))).value==='custom'&&!document.querySelector('#load').hasAttribute('aria-busy'));
+ const density=await page.locator('#chart').evaluate(e=>(e.clientHeight-30)/(Number((/** @type {HTMLInputElement} */(document.querySelector('#to'))).value)-Number((/** @type {HTMLInputElement} */(document.querySelector('#from'))).value)));
+ if(Math.abs(density-180)>.1||Math.abs(await page.locator('video').evaluate(v=>v.currentTime)-spacingAnchor)>.01)throw Error('Display spacing changed the recording anchor or used the wrong scale');
  await page.screenshot({path:'.local/editor/artifacts/desktop.png',fullPage:true});
  await page.setViewportSize({width:1100,height:900});await page.screenshot({path:'.local/editor/artifacts/compact.png',fullPage:true});
  const reportPage=await browser.newPage({viewport:{width:1280,height:900}});

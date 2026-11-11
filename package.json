@@ -20,6 +20,6 @@
   },
   "packageManager": "pnpm@11.10.0",
   "dependencies": {
-    "@piu/chart-editor": "file:.local/editor/piu-chart-editor-a9c17cc1069e.tgz"
+    "@piu/chart-editor": "file:.local/editor/piu-chart-editor-35817de29e2c.tgz"
   }
 }
