@@ -16,3 +16,15 @@ test('interval comparison excludes automatic targets outside reviewed coverage a
  assert.match(compareInterval(d,[wrong]),/0\/1 known heads matched/);
  assert.match(compareInterval(d,[{...wrong,id:'inside',start_seconds:10,end_seconds:10}]),/1\/1 known heads matched/);
 });
+
+import {inspectWindow,moveWindow,zoomWindow} from '../../web/review/navigation.ts';
+test('inspection navigation clamps to original play bounds without changing reviewed coverage',()=>{
+ const truth=document(),before=structuredClone(truth);
+ assert.deepEqual(moveWindow([12,17],[10,30],-1),[10,15]);
+ assert.deepEqual(moveWindow([25,30],[10,30],1),[25,30]);
+ assert.deepEqual(zoomWindow(29,5,[10,30]),[25,30]);
+ assert.deepEqual(zoomWindow(10,60,[10,30]),[10,30]);
+ assert.throws(()=>inspectWindow(9,15,[10,30]),/inside this play/);
+ assert.throws(()=>inspectWindow(0,121,[0,200]),/120 seconds/);
+ assert.deepEqual(truth,before);
+});

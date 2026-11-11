@@ -186,3 +186,70 @@ video{max-height:50vh}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important}
 }
+
+/* Desktop workspace keeps recording, chart and review independently reachable. */
+body{height:100dvh;
+display:grid;
+grid-template-areas:"heading" "message" "navigation" "workspace" "footer";
+grid-template-rows:auto auto auto minmax(0,1fr) auto;
+overflow:hidden}
+header{grid-area:heading;
+padding:12px 20px}
+#error{grid-area:message}
+nav{grid-area:navigation;
+padding:10px 20px;
+gap:8px}
+nav label{font-size:.78rem}
+main{grid-area:workspace;
+min-height:0}
+main>section,aside{min-height:0}
+.recording,.chart{display:flex;
+flex-direction:column;
+overflow:hidden}
+.recording>h2,.recording>.tools,.recording>.hint,.recording>output,.video-wrap,.section-heading{flex-shrink:0}
+video{max-height:32vh}
+.observation-list{min-height:70px;
+max-height:none;
+flex:1}
+.chart-stage{height:auto;
+min-height:180px;
+flex:1}
+.chart>.hint{margin-top:10px}
+aside{overflow-y:auto;
+overscroll-behavior:contain;
+scroll-padding:12px}
+#save{position:sticky;
+top:0;
+z-index:2}
+footer{grid-area:footer;
+padding:7px 20px}
+.shortcut-help{display:inline-block;
+margin:0 16px 0 0;
+padding:0;
+border:0;
+vertical-align:top}
+.shortcut-help summary{font-weight:500}
+.shortcut-help p{max-width:90ch}
+[aria-busy=true]#load{opacity:.65}
+[aria-pressed=true]#loop{background:#2c443d;
+border-color:var(--accent)}
+@media(max-width:1150px){
+body{height:auto;
+display:block;
+overflow:visible}
+main{min-height:calc(100vh - 180px)}
+.recording,.chart{height:calc(100dvh - 230px);
+min-height:550px}
+aside{overflow:visible}
+#save{position:static}
+}
+@media(max-width:700px){
+.recording,.chart{height:auto;
+min-height:0}
+.observation-list{max-height:35vh;
+flex:auto}
+.chart-stage{height:65vh;
+flex:auto;
+min-height:360px}
+video{max-height:45vh}
+}

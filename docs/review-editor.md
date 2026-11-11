@@ -123,3 +123,20 @@ host. Screenshots and `browser-result.json` stay under `.local/editor/artifacts/
 smoke interval is clearly marked as an unreviewed test draft. The test checks keyboard-only
 consecutive note creation, selection, correction and deletion as well as weighted ticks,
 scroll changes, saved values, bounded channel queries and original-media Range responses.
+
+## Inspection controls
+
+Desktop keeps the recording, chart and independently scrolling review panel in one viewport.
+The observation list pages forward and backward without loading a complete analysis.
+**Previous interval**, **Next interval**, **At playhead**, and the view-size selector only change
+the inspection window. Typing bounds does not change the chart until **Inspect interval** succeeds.
+**Show review interval** returns to saved truth coverage; navigating never expands that coverage.
+Comparisons are withheld when the view omits truth or automatic evidence is capped.
+
+Click an automatic chart object to reveal its original saved evidence and recording position.
+Copying remains an explicit draft operation. Clicking empty chart space seeks the recording;
+Shift-click adds a manual tap. The exact-time form remains available for keyboard editing.
+Space toggles playback, Left/Right step original observed frames, Shift+Left/Right move the
+window, Ctrl/Cmd+S saves, and Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z undo/redo. Native input controls
+retain ordinary typing and selection shortcuts. Undo changes draft content without rewinding
+the saved revision. A save response never discards edits made while that save was in flight.
