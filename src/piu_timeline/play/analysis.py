@@ -257,13 +257,13 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                             'No missed press is inferred from a combo reset or an unreadable counter.']}
 
 
-def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_skin, display_delay_ms):
+def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_skin, display_delay_ms, effect_changed=False):
     """Reuse physical observations; optionally rebuild beats and their associations."""
     from piu_timeline.play.presentation import prepare_report,refresh_registration
     from piu_timeline.play.report import write_report
     from piu_timeline.play.holds.analysis import augment_holds
     refresh_fields=('judgment_cache','hold_analysis','visual_channels','association_view_format',
-                    'matches','conflicted_matches','coverage','skin_detector')
+                    'matches','conflicted_matches','coverage','skin_detector','effect_reference','effect_images')
     previous_refresh={k:cached.get(k)for k in refresh_fields}
     if coordinates is not None:
         print('Reconstructing beat rows from saved coordinates; no frame replay, decoding or OCR.',flush=True)
@@ -278,7 +278,7 @@ def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_sk
     cached = augment_holds(cached, final)
     prepared=prepare_report(cached,final/'report.html',final)
     write_report(prepared,final/'report.html',final,prepared_path=final/'report-data.json')
-    if coordinates is not None or {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
+    if effect_changed or coordinates is not None or {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
         updated = final / 'analysis.refresh-build.json'
         updated.write_text(json.dumps(cached, ensure_ascii=False, indent=2) + '\n')
         updated.replace(final/'analysis.json')
@@ -326,6 +326,7 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
     from piu_timeline.play.presentation import prepare_report,refresh_registration
     from piu_timeline.play.report import write_report
     prepared=execute(pending,'inspection',lambda:prepare_report(result,pending/'report.html',final),('report-data.json',))
+    (pending/'analysis.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
     execute(pending,'render',lambda:write_report(prepared,pending/'report.html',final,prepared_path=pending/'report-data.json'),('report.html',))
     from piu_timeline.play.stages import publish
     backup=publish(pending,final)
@@ -341,6 +342,8 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
 def run(source, segment_number=1, force=False, **options):
     """Select saved refresh, saved-frame refit or fresh acquisition under the segment lock."""
     from piu_timeline.play.fonts import cache_current as digit_cache_current
+    effect_reference=options.pop('effect_reference',None);clear_effect=options.pop('clear_effect_reference',False)
+    from piu_timeline.play.effect_images import select as select_effect, verify as verify_effect
     directory = LOCAL_DATA / source_id(source)
     analysis = directory / 'analysis/analysis.json'
     if not analysis.is_file():
@@ -349,6 +352,7 @@ def run(source, segment_number=1, force=False, **options):
     segments = document.get('segments', [])
     if not 1 <= segment_number <= len(segments):
         raise ValueError(f'--segment must be between 1 and {len(segments)}')
+    if effect_reference is not None:verify_effect({**document,'segment_number':segment_number},Path(effect_reference).resolve(),geometry=False)
     from piu_timeline.play.skins.replay import selected_bank, detector_contract
     note_skin = selected_bank(directory, segment_number, options.get('note_skin'))
     if note_skin is None:
@@ -369,7 +373,8 @@ def run(source, segment_number=1, force=False, **options):
         can_refit = False
         donor=final
         if previous.is_file() and not force:
-            cached = json.loads(previous.read_text())
+            cached = select_effect(json.loads(previous.read_text()),effect_reference,clear_effect)
+            if cached.get('effect_reference'):verify_effect(cached,Path(cached['effect_reference']),geometry=False)
             stat = Path(document['media']['path']).stat()
             same_source = ((stat.st_size, stat.st_mtime_ns) == (cached['media']['size_bytes'], cached['media']['mtime_ns'])
                            and cached['media'] == document['media'])
@@ -384,7 +389,7 @@ def run(source, segment_number=1, force=False, **options):
             from piu_timeline.play.coordinate_replay import applicable,refresh,metadata_matches
             metadata_current=metadata_matches(cached,segments[segment_number-1],
                     result_reference(segments[segment_number-1],options.get('player')),options.get('display_delay_ms',0))
-            if producers_current and metadata_current and applicable(cached,TIMING_FORMAT):
+            if producers_current and metadata_current and applicable(cached,TIMING_FORMAT) and effect_reference is None and not clear_effect:
                 refreshed=refresh(cached,final,segment_number,options.get('display_delay_ms',0),document['media'])
                 if refreshed is not None:return refreshed
             beat_ready=beat_current(cached,final)if upstream_current else False
@@ -399,7 +404,7 @@ def run(source, segment_number=1, force=False, **options):
                          or judgment_observations_current(cached,root,final))):
                 return refresh_saved_play(cached, final, coordinates=coordinates,
                                           judgments_current=judgments_current, note_skin=note_skin,
-                                          display_delay_ms=options.get('display_delay_ms',0))
+                                          display_delay_ms=options.get('display_delay_ms',0),effect_changed=effect_reference is not None or clear_effect)
         pending = root / f'segment-{segment_number:03}.build-{uuid.uuid4().hex[:8]}'
         if can_refit:shutil.copytree(donor,pending)
         elif not force and document.get('media'):
@@ -414,6 +419,7 @@ def run(source, segment_number=1, force=False, **options):
             result=execute(pending,'native-observations',lambda:analyze_play(document,segments[segment_number-1],pending,**options),('frames.jsonl',))
             tracked=execute(pending,'tracking',lambda:replay(result,pending,load_bank(note_skin)),('tracking.json',))
             result={**result,**tracked,'timing_format':TIMING_FORMAT}
+        result=select_effect(result,effect_reference,clear_effect)
         return finish_play(result, pending, final, segment_number,
                            options.get('display_delay_ms',0), document['media'])
 
@@ -450,12 +456,16 @@ def main():
     selection.add_argument('--all', action='store_true', help='Analyze every saved play and write an HTML index')
     parser.add_argument('--player', choices=('p1', 'p2'))
     parser.add_argument('--layout', type=Path)
+    parser.add_argument('--effect-reference',type=Path,help='Source/segment-bound RGB effect reference results.json')
+    parser.add_argument('--clear-effect-reference',action='store_true',help='Disable saved effect-image selection')
     parser.add_argument('--note-skin', type=Path, help='Local RGB note-skin bank manifest')
     parser.add_argument('--start', type=float, help='Absolute local playback seconds inside the segment')
     parser.add_argument('--duration', type=float)
     parser.add_argument('--width', type=int, default=650)
     parser.add_argument('--display-delay-ms', type=float, default=0)
     args = parser.parse_args()
+    if args.effect_reference and (args.all or args.clear_effect_reference):
+        parser.error('--effect-reference requires one segment and cannot be combined with --clear-effect-reference')
     if args.all and (args.start is not None or args.duration is not None):
         parser.error('--all cannot be combined with --start or --duration')
     if not 320 <= args.width <= 1300:
@@ -465,7 +475,7 @@ def main():
     if not math.isfinite(args.display_delay_ms) or abs(args.display_delay_ms) > 500:
         parser.error('--display-delay-ms must be finite and between -500 and 500')
     try:
-        options = dict(force=args.force, player=args.player,
+        options = dict(force=args.force, player=args.player, effect_reference=args.effect_reference,clear_effect_reference=args.clear_effect_reference,
                        layout=json.loads(args.layout.read_text()) if args.layout else None,
                        start=args.start, duration=args.duration, width=args.width, display_delay_ms=args.display_delay_ms,
                        **({'note_skin':args.note_skin} if args.note_skin else {}))

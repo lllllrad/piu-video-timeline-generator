@@ -149,6 +149,8 @@ def layer_manifest(directory):
                      'appearance-features.npz', 'evidence/judgments/features-v3.npz'],
         'frame_observations': ['frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
         'interpretations': ['object-interpretation.json', 'head-registration.json', 'skin-role-evidence.json', 'body-risk-evidence.json', 'holds.json', 'visual-channels.json'],
+        'effect_image_pixels': ['effect-images/acquisition/capture.json','effect-images/acquisition/pixels.rgb','effect-images/acquisition/exclusions.bin'],
+        'effect_image_observations': ['effect-images/events.json','effect-images/observations.jsonl','effect-images/associations.json'],
         'native_measurements': ['native-stages/hold-geometry.json', 'native-stages/processing.json', 'native-stages/note-types.json', 'native-stages/risk-proofs.json', 'native-stages/configured-processing.json'],
         'sustained_state': ['hold-state-input.json', 'derived-stages/hold-state.json'],
         'coordinates': ['coordinates.json'],

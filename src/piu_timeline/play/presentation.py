@@ -19,6 +19,14 @@ def prepare_report(data,path,final_directory=None):
         data=json.loads(view.read_text())
     finally:
         view.unlink(missing_ok=True)
+    from piu_timeline.play.effect_images import augment as effect_images
+    summary=effect_images(data,path.parent)
+    if summary:
+        source['effect_images']=summary
+        source.setdefault('visual_channels',{})['effect_images']=data['visual_channels']['effect_images']
+    else:
+        source.pop('effect_images',None)
+        source.get('visual_channels',{}).pop('effect_images',None)
     from piu_timeline.play.observations.inspector import snapshot
     data['inspector_artifacts'] = snapshot(source, path.parent)
     artifacts = {'visual-support.json': data.get('visual_support'),

@@ -28,6 +28,7 @@ def write_summary(data,directory):
     """Publish index fields from the prepared view, without running inference."""
     summary={key:data.get(key)for key in ('coverage','combo_readable_fraction','play_analysis_version')}
     summary['counts']={key:len(data.get(key) or [])for key in ('notes','matches','combo_events','judgment_events')}
+    if data.get('effect_images'):summary['effect_images']=data['effect_images']
     summary['start_seconds']=data.get('start_seconds')
     summary['end_seconds']=data.get('end_seconds')
     summary['warnings']=[]

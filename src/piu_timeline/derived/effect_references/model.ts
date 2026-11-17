@@ -1,26 +1,33 @@
 /** RGB-only reference modeling. Source observation clocks never become input clocks. */
+import {regions} from './regions.ts';
+import {evolution,changes} from './temporal.ts';
 export const stages = [0, .033, .067, .100, .150, .200, .250];
 export const policy = {maxError: .10, minVisible: .65, minStages: 5, minContributors: 3,
-  ambiguityMargin: .005, maxSaturatedFraction: .85};
+  ambiguityMargin: .005, maxSaturatedFraction: .85, maxRawError: .14,
+  minOrderMargin: .01, minTransitions: 3, minReferenceChange: .02};
 export type Frame = {offset:number; pts:number; time:number; crop:number[]; envelopes:number[][]};
 export type Event = {id:string; kind:number; lane:number; marker:number; frames:Frame[]};
-export type Patch = {rgb:Uint8Array; visible:Uint8Array; frame?:Frame};
+export type Patch = {rgb:Uint8Array; visible:Uint8Array; frame?:Frame; imageOutliers?:unknown[]};
 export type Capture = {events:Event[]; pixels:Uint8Array; exclusions:Uint8Array};
-export type Fit = {error:number; offset:number; dx:number; dy:number; patches:Patch[];
+export type Fit = {score:number; rawError:number; transition:ReturnType<typeof evolution>; error:number; offset:number; dx:number; dy:number; patches:Patch[];
   alternatives:{error:number; offset:number; dx:number; dy:number}[]};
 export function median(values:number[]) {
   if(!values.length)return null;
   const v=values.slice().sort((a,b)=>a-b), i=Math.floor(v.length/2);
   return v.length%2?v[i]:(v[i-1]+v[i])/2;
 }
+const pixelCache=new WeakMap<Capture,Map<string,Patch>>();
 export function patch(capture:Capture, frame:Frame, dx=0, dy=0):Patch {
+  const key=`${frame.offset}:${dx}:${dy}`;
+  if(!pixelCache.has(capture))pixelCache.set(capture,new Map());
+  const cache=pixelCache.get(capture);if(cache.has(key))return cache.get(key);
   const rgb=new Uint8Array(39*39*3), visible=new Uint8Array(39*39);
   for(let y=0;y<39;y++)for(let x=0;x<39;x++) {
     const from=frame.offset*47*47+(y+4+dy)*47+x+4+dx, to=y*39+x;
     visible[to]=capture.exclusions[from]?0:1;
     for(let c=0;c<3;c++)rgb[to*3+c]=capture.pixels[from*3+c];
   }
-  return {rgb,visible,frame};
+  const result={rgb,visible,frame};cache.set(key,result);return result;
 }
 export function reason(p:Patch) {
   let count=0, saturated=0;
@@ -49,17 +56,25 @@ export function compare(a:Patch,b:Patch) {
 }
 export function align(capture:Capture,event:Event,reference:Patch[]):Fit|null {
   const options:Omit<Fit,'alternatives'>[]=[];
-  for(const offset of [-.067,-.050,-.033,-.017,0,.017,.033,.050,.067])
+  const offsets=[-.067,-.050,-.033,-.017,0,.017,.033,.050,.067];
+  for(const f of event.frames) {
+    const dt=f.time-event.marker;
+    if(dt>=-.134&&dt<=.15&&!offsets.some(t=>Math.abs(t-dt)<.001))offsets.push(dt);
+  }
+  for(const offset of offsets)
     for(const dy of [-2,0,2])for(const dx of [-2,0,2]) {
-      const patches=sequence(capture,event,offset,dx,dy);
+      const raw=sequence(capture,event,offset,dx,dy);
+      const patches=raw.map((p,i)=>p&&reference[i]&&!reason(p)&&!reason(reference[i])?regions(p,reference[i]).patch:p);
       const errors=patches.map((p,i)=>compare(p,reference[i])).filter(e=>e!==null);
+      const rawErrors=raw.map((p,i)=>compare(p,reference[i])).filter(e=>e!==null);
       if(errors.length<policy.minStages)continue;
-      options.push({error:errors.reduce((a,b)=>a+b,0)/errors.length,offset,dx,dy,patches});
+      const error=errors.reduce((a,b)=>a+b,0)/errors.length,transition=evolution(patches.map(p=>p&&!reason(p)?p:null),reference.map(p=>p&&!reason(p)?p:null));
+      options.push({error,score:error+.3*(transition.error??0),rawError:rawErrors.length?rawErrors.reduce((a,b)=>a+b,0)/rawErrors.length:1,transition,offset,dx,dy,patches});
     }
-  options.sort((a,b)=>a.error-b.error);
+  options.sort((a,b)=>a.score-b.score);
   if(!options.length)return null;
   const best=options[0];
-  return {...best,alternatives:options.filter(o=>o.error<=best.error+policy.ambiguityMargin)
+  return {...best,alternatives:options.filter(o=>o.score<=best.score+policy.ambiguityMargin)
     .map(({error,offset,dx,dy})=>({error,offset,dx,dy}))};
 }
 export function aggregate(patches:Patch[]) {
@@ -74,4 +89,9 @@ export function aggregate(patches:Patch[]) {
 }
 export function disjoint(a:Event,b:Event) {
   const pts=new Set(a.frames.map(f=>f.pts));return !b.frames.some(f=>pts.has(f.pts));
+}
+
+/** Image transitions are possible alignment anchors, not certified effect or input onsets. */
+export function changeCandidates(capture:Capture,event:Event) {
+ return changes(event.frames.map(f=>patch(capture,f)));
 }

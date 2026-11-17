@@ -94,6 +94,11 @@ separate and downloadable; selecting evidence does not rerun inference.
 See [the interval editor](docs/review-editor.md), [execution contracts](docs/analysis-stage-contracts.md)
 and [play analysis](docs/play-analysis.md).
 
+Optional source-bound effect animation references can be selected with
+`just play VIDEO --segment 1 --effect-reference PATH/results.json`. The play report
+links frame positions, phase alternatives and note corroboration candidates; see
+[effect images in play analysis](docs/play-effect-images.md).
+
 Saved-data modeling and report consumers run in TypeScript; Python handles media,
 OCR and native image evidence. Registered coordinates and prepared report data
 are reusable independently of beat reconstruction and HTML rendering. See

@@ -1,8 +1,9 @@
 /** Saved-RGB reference extraction: node .../cli.ts CAPTURE_JSON NEW_OUTPUT_DIR. */
 import {mkdirSync,writeFileSync} from 'node:fs';
-import {resolve,relative,sep} from 'node:path';
+import {resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {aggregate,align,compare,disjoint,median,policy,reason,sequence,stages} from './model.ts';
+import {aggregate,align,compare,disjoint,median,policy,reason,sequence,stages,changeCandidates} from './model.ts';
+import {accepted as eligible,variants,recognize} from './bank.ts';
 import {stringifyData} from '../json.ts';
 import {load,png,hash} from './io.ts';
 import type {Fit,Patch} from './model.ts';
@@ -21,14 +22,14 @@ export function run(input:string,output:string) {
       .filter(s=>s.patches.filter(p=>p&&!reason(p)).length>=policy.minStages);
     // Medoid choice uses training images alone; held-out frames cannot influence it.
     const ranked=candidates.map(seed=>({seed,score:median(train.filter(e=>e!==seed.event)
-      .map(e=>align(capture,e,seed.patches)?.error).filter(e=>e!=null))??Infinity})).sort((a,b)=>a.score-b.score);
+      .map(e=>{const es=sequence(capture,e).map((p,i)=>compare(p,seed.patches[i])).filter(x=>x!==null);return es.length>=policy.minStages?median(es):null;}).filter(e=>e!=null))??Infinity})).sort((a,b)=>a.score-b.score);
     if(!ranked.length) {
       groups.push({kind,status:'no_clean_seed',excluded:events.map(e=>({id:e.id,reason:'insufficient_unoccluded_or_unsaturated_stages'}))});continue;
     }
     const seed=ranked[0].seed,accepted:{id:string;fit:Fit}[]=[],excluded=[];
     for(const e of train) {
       const fit=align(capture,e,seed.patches);
-      if(!fit||fit.error>policy.maxError)excluded.push({id:e.id,reason:fit?'large_RGB_alignment_error':'insufficient_visible_stages',error:fit?.error??null});
+      if(!eligible(fit))excluded.push({id:e.id,reason:!fit?'insufficient_visible_stages':fit.rawError>policy.maxRawError?'large_raw_RGB_alignment_error':'large_RGB_alignment_error',error:fit?.error??null,raw_error:fit?.rawError??null});
       else accepted.push({id:e.id,fit});
     }
     for(const rejected of excluded) {
@@ -58,25 +59,37 @@ export function run(input:string,output:string) {
         visible_mask:Array.from(p.visible)});
     }
     const consensus:Patch[]=stages.map((_,i)=>aggregate(accepted.map(a=>a.fit.patches[i])));
+    const actualVariants=variants(accepted.map(a=>({id:a.id,patches:a.fit.patches})));
+    const variantFiles=actualVariants.map((v,index)=>({id:v.id,training_support:v.support,files:v.patches.map((p,stage)=>{
+      if(!p)return null;const file=`kind-${kind}-variant-${index}-stage-${stage}.png`;png(resolve(output,file),p);
+      return {file,sha256:hash(resolve(output,file)),frame:p.frame,visible_mask:Array.from(p.visible)};
+    })}));
+    const references=[{id:'consensus',patches:consensus},...actualVariants];
     const validation=test.map(e=>{
       if(!train.every(t=>disjoint(e,t)))return {id:e.id,status:'training_frame_overlap'};
-      const fit=align(capture,e,consensus);
-      return {id:e.id,status:!fit?'insufficient_visible_stages':fit.error>policy.maxError?'large_RGB_alignment_error':'image_correspondence_only',
-        error:fit?.error??null,offset:fit?.offset??null,alternatives:fit?.alternatives??[]};
+      const recognition=recognize(capture,e,references),fit=recognition.best?.fit;
+      return {id:e.id,status:recognition.status,error:fit?.error??null,raw_error:fit?.rawError??null,
+        offset:fit?.offset??null,alternatives:fit?.alternatives??[],reference:recognition.best?.reference,
+        transition:fit?.transition,order_margin:recognition.order_margin,reverse_score:recognition.reverse_score,
+        constant_score:recognition.constant_score,reference_alternatives:recognition.alternatives,
+        image_change_candidates:changeCandidates(capture,e),
+        frames:fit?.patches.map(p=>({source:p?.frame??null,image_outlier_regions:p?.imageOutliers??[]}))};
     });
     groups.push({kind,status:files.some(f=>f.status==='candidate_reference')?'candidate_bank':'insufficient_consensus',
-      seed:seed.event.id,accepted:accepted.map(a=>({id:a.id,error:a.fit.error,offset:a.fit.offset,translation:[a.fit.dx,a.fit.dy],
-        alternatives:a.fit.alternatives,frames:a.fit.patches.map(p=>({frame:p?.frame??null,exclusion:p?reason(p):'missing_native_stage'}))})),
+      seed:seed.event.id,variants:variantFiles,accepted:accepted.map(a=>({id:a.id,error:a.fit.error,raw_error:a.fit.rawError,transition:a.fit.transition,offset:a.fit.offset,translation:[a.fit.dx,a.fit.dy],
+        alternatives:a.fit.alternatives,frames:a.fit.patches.map(p=>({frame:p?.frame??null,image_outlier_regions:p?.imageOutliers??[],exclusion:p?reason(p):'missing_native_stage'}))})),
       excluded,files,validation});
   }
-  const implementation_sha256=Object.fromEntries(['cli.ts','model.ts','io.ts'].map(name=>[name,hash(fileURLToPath(new URL(name,import.meta.url)))]));
-  const result={schema:1,implementation_sha256,input:resolve(input),capture_sha256:hash(input),source:manifest.source,source_identity:manifest.source_identity,
+  const implementation_sha256=Object.fromEntries(['cli.ts','model.ts','io.ts','bank.ts','regions.ts','temporal.ts'].map(name=>[name,hash(fileURLToPath(new URL(name,import.meta.url)))]));
+  const result={schema:2,implementation_sha256,input:resolve(input),capture_sha256:hash(input),source:manifest.source,source_identity:manifest.source_identity,
     policy,stages,groups,limits:[
       'Experimental candidate images; no effect-onset or physical-input calibration; not automatically published to the production analyzer.',
       'Source bindings do not certify a named skin. Banks from different captures remain separate.',
       'Note/body envelopes are conservative approximate exclusions, not verified opacity or layer order. Occlusion alone never excludes an entire event if enough visible stages remain.',
       'Thresholds are configurable code policy, not calibrated probabilities. Saturated frames cannot establish distinct phases.',
       'Consensus is synthetic median imagery; actual representatives retain source PTS and crop. Checkerboard means unsupported pixels, not inferred artwork.',
+      'Residual-based image outlier regions are possible contamination, not independently proven occlusion; at most 20% extra support is excluded. Raw RGB residual remains gated.',
+      'Image-change brackets are candidate alignment anchors, not certified effect onsets. Ordered matches need transition evidence and a margin against reversed/constant sequences.',
       'Alignment ambiguity is retained. Stage labels are relative to a source marker, never button ages.']};
   writeFileSync(resolve(output,'results.json'),stringifyData(result)+'\n');
   const escape=(v:unknown)=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
@@ -88,7 +101,9 @@ export function run(input:string,output:string) {
     html+=`<p>${group.accepted.length} accepted training windows; ${group.excluded.length} excluded. Consensus / actual representative:</p><table>`;
     for(const f of group.files)html+=`<tr><td>Stage ${f.stage}</td><td>${f.file?`<img src="${f.file}">`:escape(f.reason)}</td><td>${f.actual?`<img src="${f.actual.file}">`:''}</td></tr>`;
     html+='</table><h3>Excluded training windows</h3><table>'+group.excluded.map(e=>`<tr><td>${escape(e.id)}: ${escape(e.reason)} (${e.error??'no fit'})</td><td>${e.preview?`<img src="${e.preview}">`:''}</td></tr>`).join('')+'</table>';
-    html+='<p>Validation: '+escape(JSON.stringify(group.validation.map(v=>({id:v.id,status:v.status,error:v.error}))))+'</p>';
+    html+='<h3>Training-only actual RGB variants</h3>';
+    for(const variant of group.variants)html+='<p>'+escape(variant.id)+'; support '+variant.training_support+'</p>'+variant.files.filter(Boolean).map(f=>`<img src="${f.file}">`).join('');
+    html+='<h3>Validation: appearance and phase are separate</h3><table><tr><th>Case</th><th>Status</th><th>RGB / raw</th><th>Offset</th><th>Order margin</th></tr>'+group.validation.map(v=>`<tr><td>${escape(v.id)}</td><td>${escape(v.status)}</td><td>${v.error?.toFixed(3)??'—'} / ${v.raw_error?.toFixed(3)??'—'}</td><td>${v.offset?.toFixed(3)??'—'}</td><td>${v.order_margin?.toFixed(3)??'—'}</td></tr>`).join('')+'</table>';
   }
   writeFileSync(resolve(output,'report.html'),html);
   return result;

@@ -40,25 +40,51 @@ PTS. Output retains input identity, implementation hashes, policy, accepted/reje
 source frames, alternative alignments, visibility masks and contributor counts.
 Original crops stay in the capture even when rejected for reference generation.
 
-## Exclusion and consensus policy
+## Exclusion, alignment and consensus policy
 
-The current exploratory policy is exported from
-`derived/effect_references/model.ts`; its values are not calibrated confidence.
+The exported `policy` in `derived/effect_references/model.ts` contains exploratory
+thresholds, not calibrated confidence values.
 
 - Exclude observed note/body bounding envelopes from RGB comparisons. These are
   conservative approximate bounds, not verified opaque pixels or layer order.
 - Require at least 65% jointly visible pixels in a compared stage. Reject stages
   with over 85% nearly white visible pixels because shared light gives little
   distinct appearance information.
-- Fit at least five of seven marker-relative stages, with bounded temporal shifts
-  and local translations. Never substitute a distant frame or silently clamp a
-  missing endpoint. Keep fits within 0.005 of the best as alternatives.
-- Exclude a training sequence from consensus if its mean visible RGB error exceeds
-  0.10, or if fewer than five stages can be compared. Partial overlap alone does
-  not discard an otherwise usable sequence.
+- Search actual captured frame positions between approximately -134 and +150 ms
+  relative to the receptor-light marker, together with the original offset grid.
+  Preserve observed RGB-change brackets as possible alignment anchors. A marker
+  and a change bracket are not certified effect onsets or physical input times.
+- Fit at least five of seven stages. Missing or distant frames cannot complete a
+  sequence. Local translation remains bounded to two pixels in each direction.
+- Detect local RGB residual outliers in six-pixel tiles. A tile must differ much
+  more than the typical residual; exclude no more than 20% extra pixels. This is
+  a bounded contamination hypothesis, not independently measured occlusion. Broad
+  appearance disagreement cannot be removed by this rule. Keep excluded regions
+  and raw residuals in the result.
+- Require mean retained RGB error at most 0.10 and mean original visible RGB
+  error at most 0.14. Changes between consecutive RGB stages contribute to the
+  alignment score, so appearance and evolution both affect registration.
 - Require at least three accepted visible contributors at each consensus pixel.
   Unsupported pixels remain unknown and appear as checkerboard. A stage with
   insufficient supported area is not emitted as a usable candidate reference.
+
+## Multiple actual-image references and phase evidence
+
+Select up to three actual RGB sequence variants using training images alone.
+Each variant requires at least three nearby training sequences with enough
+comparable stages. Consensus and actual variants compete during held-out image
+retrieval; all selected files, masks and original frame identities remain
+reviewable. Reference selection never consults test outcomes.
+
+A match is `appearance_only_phase_unresolved` unless it also has at least three
+valid RGB-change comparisons, sufficient reference change, a score advantage
+above 0.01 over reversed and constant-stage controls, and only one source-frame
+start among near-best temporal alternatives. A qualifying match becomes
+`ordered_image_correspondence`; that status still does not establish a calibrated
+effect age or physical input time. Different references and temporal alternatives
+are retained. Native timestamps determine whether starts are distinct; no fixed
+FPS is used for that decision. Rebrightening can yield multiple change candidates,
+which remain unresolved rather than being forced into a unique input event.
 
 A median consensus can contain pixels never rendered together. The accompanying
 actual representative is the closest eligible original crop; its mask and source
@@ -68,8 +94,9 @@ Do not interpret checkerboard as effect transparency or reconstruct hidden pixel
 Training and evaluation use every third event within each direction as a test
 candidate. Test windows sharing any source PTS with a training window are excluded
 from validation. They never contribute to the seed or consensus. A low held-out
-RGB residual establishes image correspondence only; phase ambiguity, renewed
-flashes, unknown effect onset and unverified native occlusion remain unresolved.
+RGB residual establishes image correspondence only. Phase-order controls expose
+ambiguity; renewed flashes, unknown effect onset and unverified native occlusion
+can still remain unresolved.
 
 ## Required review
 
@@ -80,3 +107,11 @@ not sufficient evidence for timing. Production integration still requires
 onset-aware sequence validation, reliable visible-region support and independent
 cross-video event tests. Skin-specific variants must remain distinct when their
 images disagree.
+
+## Using references in play analysis
+
+Schema 2 sequence results can be explicitly selected with
+`just play SOURCE --segment N --effect-reference PATH/results.json`.
+See [play effect images](play-effect-images.md) for source binding, complete
+light-candidate acquisition, bounded full-play search and informational note
+corroboration. Selecting a reference does not calibrate physical button timing.

@@ -86,6 +86,7 @@ th{font-weight:500}.scroll{overflow:auto}.stale{color:#f2b8b5;border-left:4px so
 <table><tbody>${metrics.map(([label,v])=>`<tr><th scope="row">${label}</th><td>${value(v)}</td></tr>`).join('')}</tbody></table>
 <h2>Warnings</h2><p>${summary?.warning_count==null?'This summary records no warning count.':`${escape(String(summary.warning_count))} saved warnings.`} Showing ${warnings.length} representative records, capped at 30. Missing times remain unavailable.</p>
 ${warnings.length?`<div class="scroll"><table><thead><tr><th>Reason / check</th><th>Lane</th><th>Start seconds</th><th>End seconds</th></tr></thead><tbody>${warningRows}</tbody></table></div>`:'<p>No warning examples available in this summary.</p>'}
+${summary?.effect_images?`<h2>Effect images</h2><p><a href="effect-images/report.html">Inspect frame positions, phase alternatives and note candidates</a></p><p>${value(JSON.stringify(summary.effect_images.counts))}</p>`:''}
 <h2>Detailed review</h2><p><a id="editor" href="http://127.0.0.1:4180/${escape(query)}">Open interval editor</a> · <a id="recording" href="${escape(media)}">Original recording</a></p>
 <p>The editor provides video, chart evidence and saved corrections. Start it with <code>${command}</code>. Use <code>--host ADDRESS</code> for a different bind address, then open that address in your browser.</p>
 <p>Original media and timestamps are preserved. This page embeds only the bounded summary above.</p></main>
