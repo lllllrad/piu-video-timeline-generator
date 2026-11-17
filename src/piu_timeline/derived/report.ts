@@ -33,8 +33,13 @@ export function renderFile(dataPath:string,outputPath:string,song:string,chart:s
 }
 
 export function index(entries): string {
-  const rows = entries.map(({number, song, chart, summary}) => {
+  const rows = entries.map(({number, song, chart, summary, skin}) => {
     const title = escape(`${song || 'Unknown song'} · ${chart || 'Unknown chart'}`), directory = `segment-${String(number).padStart(3, '0')}`;
+    if (skin && skin.status !== 'selected') {
+      // A result retained under an unresolved note skin is stale; its metrics are not current evidence.
+      const note = `Stale result — unresolved note skin${skin.reason ? ` (${escape(String(skin.reason))})` : ''}`;
+      return `<tr class="stale"><td>${number}</td><td><a href="${directory}/report.html">${title}</a></td><td colspan="7">${note}</td></tr>`;
+    }
     const c = summary?.coverage;
     const cells = c ? [`<a href="${directory}/report.html">${title}</a>`, c.visible_note_heads, c.long_notes ?? 0, c.timed_note_heads, c.matched_combo_updates,
       c.judgment_only_note_heads ?? 0, `${Math.round(100 * summary.combo_readable_fraction)}%`, summary.play_analysis_version] : [title, ...Array(7).fill('Unavailable')];
@@ -42,8 +47,9 @@ export function index(entries): string {
   });
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Play evidence inspector</title><style>body{font:16px/1.6 system-ui;max-width:1200px;margin:40px auto;padding:20px;background:#101719;color:#e5efeb}
-a{color:#9cddbe}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #314448}.scroll{overflow:auto}</style>
+a{color:#9cddbe}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #314448}.scroll{overflow:auto}tr.stale td{color:#f2b8b5}</style>
 <h1>Play evidence inspector</h1><p>Each play compares visible note trajectories with observed combo and judgment refreshes. A chord is one judged row and may contain several heads. Counts are partial reconstruction, not a complete chart or physical switch measurement. Open a play for excluded motion and unassigned counter evidence.</p>
+<p>Rows marked <span style="color:#f2b8b5">stale</span> were reconstructed before a note skin was selected and remain unresolved; their counts are withheld rather than shown as a normal result.</p>
 <div class="scroll"><table><thead><tr><th>Segment</th><th>Play</th><th>Reconstructed heads</th><th>Long notes</th><th>Heads with tap timing</th><th>Matched combo refreshes</th><th>Judgment-only timed heads</th><th>Readable counter frames</th><th>Analyzer version</th></tr></thead><tbody>${rows.join('')}</tbody></table></div></html>`;
 }
 
@@ -60,22 +66,25 @@ export function renderShellFile(dataPath:string,outputPath:string,song:string,ch
  const query=`?source=${encodeURIComponent(source)}&segment=${segment}`;
  const command=escape(`just editor '${source.replaceAll("'","'\"'\"'")}' --segment ${segment}`);
  const c=summary?.coverage??{};
- const metrics=[['Visible note heads',c.visible_note_heads],['Long notes',c.long_notes],['Heads with tap timing',c.timed_note_heads],
+ const skin=summary?.skin,stale=!!skin&&skin.status!=='selected';
+ const skinLabel=skin?(skin.status==='selected'?(skin.selection?`${skin.selection.skin}/${skin.selection.revision}`:'selected'):`unresolved${skin.reason?` (${skin.reason})`:''}`):null;
+ const metrics=[['Note skin',skinLabel],['Visible note heads',c.visible_note_heads],['Long notes',c.long_notes],['Heads with tap timing',c.timed_note_heads],
   ['Matched combo updates',c.matched_combo_updates],['Judgment-only timed heads',c.judgment_only_note_heads],
   ['Readable counter frames',typeof summary?.combo_readable_fraction==='number'?`${(100*summary.combo_readable_fraction).toFixed(1)}%`:null],
   ['Recognition / exclusion warnings',summary?.warning_count],['Analyzer version',summary?.play_analysis_version]];
+ const banner=stale?`<p class="stale" role="alert"><strong>Stale result.</strong> The note skin is unresolved${skin.reason?` (${escape(String(skin.reason))})`:''}. These metrics come from an earlier reconstruction built before a skin was selected and are not current evidence. Re-run <code>just play</code> for this segment once a note skin is available.</p>`:'';
  const warnings=summary?.warnings??[];
  const warningRows=warnings.map(w=>`<tr><td>${value(w.reason??w.check)}</td><td>${value(w.lane==null?null:w.lane+1)}</td><td>${value(w.visible_start_seconds??w.start_seconds)}</td><td>${value(w.visible_end_seconds??w.end_seconds)}</td></tr>`).join('');
  const body=`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title} · Play report</title><style>body{font:16px/1.6 system-ui;background:#101719;color:#e7efed;max-width:1000px;margin:40px auto;padding:24px}
 a{color:#a9dec2;text-underline-offset:3px}code{background:#192226;padding:4px;overflow-wrap:anywhere}h1{font-size:26px}h2{font-size:20px;margin-top:36px}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}td,th{padding:10px;text-align:left;border-bottom:1px solid #314448}
-th{font-weight:500}.scroll{overflow:auto}::selection{background:#a9dec2;color:#101719}:focus-visible{outline:2px solid #a9dec2;outline-offset:4px}</style>
-<main><h1>${title}</h1><p>Original recording interval: ${value(summary?.start_seconds)}–${value(summary?.end_seconds)} seconds.</p>
+th{font-weight:500}.scroll{overflow:auto}.stale{color:#f2b8b5;border-left:4px solid #f2b8b5;padding-left:12px}::selection{background:#a9dec2;color:#101719}:focus-visible{outline:2px solid #a9dec2;outline-offset:4px}</style>
+<main><h1>${title}</h1>${banner}<p>Original recording interval: ${value(summary?.start_seconds)}–${value(summary?.end_seconds)} seconds.</p>
 <p>This report opens without an editor server. Counts describe partial automatic reconstruction; they are not recognition accuracy or independently reviewed chart truth.</p>
 <h2>Analysis summary</h2>${summary?'':'<p>Summary unavailable. Regenerate this report from the prepared analysis to populate the summary.</p>'}
 <table><tbody>${metrics.map(([label,v])=>`<tr><th scope="row">${label}</th><td>${value(v)}</td></tr>`).join('')}</tbody></table>
-<h2>Warnings</h2><p>${value(summary?.warning_count)} saved warnings. Showing ${warnings.length} representative records, capped at 30. Missing times remain unavailable.</p>
+<h2>Warnings</h2><p>${summary?.warning_count==null?'This summary records no warning count.':`${escape(String(summary.warning_count))} saved warnings.`} Showing ${warnings.length} representative records, capped at 30. Missing times remain unavailable.</p>
 ${warnings.length?`<div class="scroll"><table><thead><tr><th>Reason / check</th><th>Lane</th><th>Start seconds</th><th>End seconds</th></tr></thead><tbody>${warningRows}</tbody></table></div>`:'<p>No warning examples available in this summary.</p>'}
 <h2>Detailed review</h2><p><a id="editor" href="http://127.0.0.1:4180/${escape(query)}">Open interval editor</a> · <a id="recording" href="${escape(media)}">Original recording</a></p>
 <p>The editor provides video, chart evidence and saved corrections. Start it with <code>${command}</code>. Use <code>--host ADDRESS</code> for a different bind address, then open that address in your browser.</p>

@@ -77,7 +77,8 @@ Models are downloaded on first use into `.local/cache/paddleocr/`; pinned model 
 After `just auto`, play analysis identifies a compatible image bank from the
 active candidates in the separate skin repository. Explicit `just skins select`
 profiles or `--note-skin PATH` take precedence. Unknown or ambiguous skins fail
-with retained image evidence; existing reports remain readable:
+with retained image evidence; existing reports remain readable but are marked stale with an
+unresolved note skin in the overview and report:
 
 ```sh
 just play VIDEO --segment 1

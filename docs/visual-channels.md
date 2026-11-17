@@ -252,88 +252,14 @@ last displayed word is not copied across the update. Reports identify this
 association as `aggregate_counter_with_exclusive_lane_onsets` and retain each
 onset's source PTS.
 
+## Animation measurement and timing limits
+
+See [judgment and receptor animation timing](animation-timing.md#animation-measurement-and-timing-limits).
+
 ## Judgment animation refreshes
 
-Aligned combo and word refreshes may share a timing family, but retain their
-own row capacities. A counter increment of two does not turn a single word
-refresh into a two-row observation. Count plausible alternatives separately for
-each source's own bracket and distance: a single word with two plausible rows
-remains ambiguous even beside an aggregate counter. A word can independently
-support a tap during a hold only with the existing unique-row and lane-onset or
-processing proof; the aggregate counter is not consumed as a single tap.
+See [judgment animation refreshes](animation-timing.md#judgment-animation-refreshes).
 
-A repeated word can relaunch through several small growth steps. Compare a
-continuous run of native word boxes over at most 75 ms, requiring two width
-growth steps of at least 3%, total width growth over 10% and area growth over
-25%, with consistent horizontal/vertical scale. Unknown reads, capture gaps
-over 35 ms and substantial shrinkage break the run. Confirm the relaunched
-size with another readable frame; one-frame size glitches remain insufficient.
-Keep the entire interval from before the first growth step through detection,
-rather than claiming an exact animation onset inside it. Moving notes touching
-the word remain a required negative case for the word reader and tracker.
-
-A clear blank run spanning at least 100 ms remains evidence after subsequent
-unknown frames. Returning to the same word can therefore establish reappearance
-without a label change or size growth. Clear samples must be no more than 50 ms
-apart to complete that run; unknown or missing frames cannot complete it. Retain
-the witnessed `blank_observation_range` on the event and bracket reappearance
-from the last clear read through the first returning word. A resulting bracket
-over 100 ms remains excluded as `judgment_observation_gap`; the unknown interval
-is never removed from its uncertainty. Readable return consumes the blank proof,
-so a persistent word cannot repeatedly create events.
-
-Word recognition and refresh tracking have independent cache dependencies.
-A tracker upgrade replays the saved timestamped word observations and rebuilds
-associations. It does not require OCR, pixel recognition or video decoding.
-
-A delayed counter read retains its entire native observation bracket. A narrower
-word refresh inside that bracket can establish synchronization even when their
-upper endpoints differ by more than 25 ms, provided each bracket overlaps only
-that one eligible refresh on the other channel and the relation preserves event
-order. A counter-owned row cannot take an already owned word or a word whose
-timing also fits another visible row. Independent lane-supported associations
-remain separate evidence. The existing 100 ms counter and 50 ms word span limits still apply.
-Competing overlaps do not supply this additional proof. Original brackets remain
-unchanged; synchronization cannot turn a wide counter bracket into a precise
-input timestamp. Acquisition and word-recognition caches remain reusable when
-this association rule changes.
-
-After independent lane-onset or processing evidence recovers a counter-owned
-row, label association checks the observed word refreshes again. The original
-mutually unique synchronized-bracket rules still apply, including competing
-unassigned words/counters and existing ownership. Only one row (possibly a
-chord) with a single counter increment is eligible. This label-only step never
-moves notes or changes input brackets. A persistent readable word without a
-measured refresh does not supply this evidence; separate post-counter frame
-proof still requires its usual multiple distinct source frames.
-
-A synchronized counter/word pair may already belong to part of a visible chord.
-The remaining heads can share it only when every compatible head has the exact
-same reconstructed target and a distinct lane, every head is a confirmed tap
-with restored bounded timing, and no hold risk, alternative refresh, competing
-row or processing contradiction remains. Existing owners must belong to that
-same row and already own both channels. A nearby stagger is a different row.
-Retain original target uncertainty and both display brackets; this completes
-row ownership without asserting a separately observed lane onset. The reported
-row size includes existing and newly connected heads, including when word
-recovery establishes the pair in a later association generation.
-
-An already assigned neighboring row can stop competing for another refresh
-only when its separate synchronized counter/word pair has an exclusive lane
-onset or independently observed disappearance. Original PTS must validate that
-physical bracket. At least four co-observed positions over 65 ms in fitted
-native coordinate blocks must separate the rows beyond both positional errors.
-Source-bound image measurements must jointly exclude zero separation; missing
-or conflicting coordinate bounds do not establish a different row.
-Observed height order must agree with target and disjoint display order.
-Unknown types, shared onsets, missing source frames and hold risk keep the
-competition unresolved. `fixed_refresh_rows` retains the conditional ownership,
-physical bracket and native separation samples; source timing bounds, display
-brackets and prior associations remain unchanged.
-
-Known hold caps retain native appearance samples without becoming separate
-presses. [Hold cap coverage](hold-cap-coverage.md) describes their bounded use
-in corroborating an otherwise missing image region.
 
 ## Note type evidence and contradictions
 

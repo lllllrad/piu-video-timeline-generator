@@ -1,9 +1,27 @@
 """Bounded standalone evidence reports and an explicit legacy inspector renderer."""
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import quote
 from uuid import uuid4
+
+
+def skin_state(root,number):
+    """Saved per-segment skin decision; a report retained under an unresolved skin is stale."""
+    path=Path(root)/'skin-selections'/f'segment-{number:03}.json'
+    if not path.is_file():return None
+    decision=json.loads(path.read_text()).get('decision')or {}
+    status=decision.get('status')
+    if status=='selected':return {'status':'selected','selection':decision.get('selection')}
+    if status:return {'status':status,'reason':decision.get('reason')}
+    return None
+
+
+def segment_skin(directory):
+    """Resolve the skin decision for a `segment-NNN` directory, ignoring other layouts."""
+    match=re.fullmatch(r'segment-(\d+)',Path(directory).name)
+    return skin_state(Path(directory).parent,int(match.group(1)))if match else None
 
 
 def write_summary(data,directory):
@@ -20,6 +38,10 @@ def write_summary(data,directory):
         for warning in warnings[:max(0,30-len(summary['warnings']))]:
             summary['warnings'].append({key:warning[key][:240]if isinstance(warning[key],str)else warning[key]for key in
                 ('reason','check','lane','visible_start_seconds','visible_end_seconds','start_seconds','end_seconds')if key in warning})
+    # A newly generated report is always backed by a selected skin; record it so the index
+    # and report never present an unresolved-skin reconstruction as current evidence.
+    skin=segment_skin(directory)
+    if skin is not None and skin['status']=='selected':summary['skin']=skin
     path=directory/'report-summary.json'
     pending=path.with_name(f'.report-summary.{uuid4().hex}.tmp')
     try:
@@ -55,6 +77,39 @@ def write_report(data,path,final_directory=None,*,prepared_path=None,legacy=Fals
     return path
 
 
+def _surface_stale(directory,document,segment,number,summary,skin):
+    """Mark a retained summary and standalone report as stale under an unresolved skin.
+
+    Presentation only: it never touches native analysis evidence or recognition warnings.
+    """
+    from piu_timeline.derived import call
+    if summary is None:return summary  # no report to mark
+    patched={**summary,'skin':skin}
+    # Pre-gate summaries omit the recording interval; the segment metadata is authoritative for it.
+    for key in ('start_seconds','end_seconds'):
+        if patched.get(key)is None and segment.get(key)is not None:patched[key]=segment[key]
+    if patched==summary:return summary  # already surfaced
+    summary=patched
+    path=directory/'report-summary.json'
+    pending=path.with_name(f'.report-summary.{uuid4().hex}.tmp')
+    try:
+        pending.write_text(json.dumps(summary,ensure_ascii=False)+'\n',encoding='utf-8')
+        pending.replace(path)
+    finally:
+        pending.unlink(missing_ok=True)
+    report=directory/'report.html'
+    if report.is_file():
+        media=quote(os.path.relpath(document['media']['path'],directory),safe='/')
+        pending=report.with_name(f'.report.{uuid4().hex}.tmp')
+        try:
+            call('report.renderShellFile',str(directory/'report-data.json'),str(pending),
+                 segment.get('song')or 'Unknown song',segment.get('chart')or 'Unknown chart',media,summary)
+            pending.replace(report)
+        finally:
+            pending.unlink(missing_ok=True)
+    return summary
+
+
 def write_index(document,root):
     """Render prepared summaries; incomplete reports never trigger inference."""
     from piu_timeline.derived import call
@@ -71,8 +126,13 @@ def write_index(document,root):
             try:
                 saved=write_summary(json.loads(prepared.read_text()),summary.parent)if summary.with_name('report.html').is_file()else None
             except FileNotFoundError:saved=None  # A producer may be promoting this directory.
+        skin=skin_state(root,number)
+        if skin is not None and skin['status']!='selected':
+            # Existing stale artifacts predate the skin gate and carry no skin field; surface
+            # the unresolved decision in the retained summary and standalone report too.
+            saved=_surface_stale(summary.parent,document,segment,number,saved,skin)
         entries.append({'number':number,'song':segment.get('song'),'chart':segment.get('chart'),
-                        'summary':saved})
+                        'summary':saved,'skin':skin})
     path=root/'index.html'
     pending=path.with_name(f'.index.{uuid4().hex}.tmp')
     try:
