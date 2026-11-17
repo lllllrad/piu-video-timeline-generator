@@ -344,3 +344,10 @@ See [measuring scroll-speed changes](development-replay.md#measuring-scroll-spee
 ## Bounded warning review
 
 See [bounded warning review](development-replay.md#bounded-warning-review).
+
+## Effect reference experiments
+
+Use the [reusable RGB effect extraction tool](effect-reference-extraction.md) to
+capture original-PTS crops and build candidate animations in TypeScript. Saved
+captures support repeated modeling without decoding again; outputs remain under
+`.local/` and are not automatically installed in the play analyzer.

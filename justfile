@@ -104,3 +104,11 @@ editor *args:
 # Run Chromium review tests with all browser dependencies inside a container.
 editor-browser *args:
     python3 scripts/editor/browser.py "$@"
+
+# Acquire original-PTS RGB windows; output must be a new directory under .local.
+_effect-capture *args:
+    sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.effect_capture "$@"
+
+# Model and review saved RGB windows without decoding the recording again.
+_effect-references capture output:
+    sh scripts/run.sh node src/piu_timeline/derived/effect_references/cli.ts '{{capture}}' '{{output}}'

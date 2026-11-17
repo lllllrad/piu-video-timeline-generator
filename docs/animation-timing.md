@@ -26,8 +26,8 @@ Brightness-threshold bounds can grow, shrink or remain unchanged at different
 animation ages; changing the threshold changes the measured contour. A clipped
 crop can also conceal expansion. A radius, area or bounding-box width alone is
 not a validated animation clock. Different visible effect styles require
-separate shape references; a selected note-image bank alone does not calibrate
-the receptor effect.
+separate shape references bound to the active note skin and effect revision.
+Existing cap/body images do not supply missing effect references or phase timing.
 
 Gold-effect contour measurements remain under visual review. The exploratory
 warm/white threshold and post-effect background subtraction have not established
@@ -39,8 +39,10 @@ error measurements are not recognition accuracy and must not enable inference.
 
 Compare original enlarged frames with every proposed contour before measuring
 size. Identify the same visible structure across frames: central artwork, thin
-rays and diffuse bloom need separate definitions. Reject contaminated or clipped
-regions and retain ambiguous boundaries. Later frames used as a background must
+rays and diffuse bloom need separate definitions. Mask only positively established
+occluded or clipped regions, retain the remaining visible support, and preserve
+ambiguous boundaries. Overlap is an expected acquisition condition, not a reason
+to discard an entire frame or event. Later frames used as a background must
 actually show the relevant lane without its effect, with compatible background
 content. An absent body detection is not proof of an isolated tap. Visible
 rebrightening during a connected hold does not establish a new physical press.
@@ -62,6 +64,60 @@ brackets, retaining ambiguous phases and failures. Estimating physical switch
 time additionally needs independent display-latency calibration. The current
 bounded review supports restart detection, not calibrated subframe timing from
 size. See [the stored channels and implementation policy](visual-channels.md#animation-measurement-and-timing-limits).
+
+## Skin-specific localization with overlap
+
+The intended timing evidence is a sequence of localized effect structures, not
+the bounding box of every connected bright pixel. Bind effect references to the
+selected skin/revision, direction, render geometry and phase convention. A gold
+effect and a gray receptor's illumination need different appearance models;
+their different outlines are expected, not detector failures by themselves.
+Keep uncertain skin/phase alternatives explicit instead of mixing their shapes.
+
+For each original frame, localize the reference's anchor and positively observed
+landmarks in game-crop coordinates. Preserve the distinction between the fixed
+receptor origin and moving/expanding structures inside the effect. Measure phase
+from those structures' positions, scale, shape and brightness history. Neither a
+whole-component centroid nor an assumed receptor center replaces an observed
+effect position. A stationary effect can still supply appearance-phase evidence;
+an unchanged origin alone does not identify its age.
+
+Use independently observed moving-head/body geometry, neighboring effect
+hypotheses and foreground overlays to describe which comparison pixels are
+unavailable. An overlap hypothesis is not a proven layer order: mixed pixels
+with unknown composition remain unknown. Do not subtract a predicted note as if
+its original pixels were observed, fill a hidden ray, or use target/input success
+to choose a convenient segmentation. If several origins or phases fit the
+visible support, retain all of them. Missing geometry cannot certify absence of
+an occluder. Visible compatible parts remain useful even when another part is
+obscured; complete occlusion cannot supply a new measured position.
+
+Retain at least these fields separately from inferred input associations:
+
+| Frame evidence | Required meaning |
+| --- | --- |
+| Original frame identity and PTS/playback time | Exact source timeline; no phase snapping or retiming |
+| Skin/effect reference and phase candidates | Actual content binding and unresolved appearance alternatives |
+| Origin, landmark coordinates and coordinate bounds | Observed spatial evidence in declared game-crop/reference coordinates |
+| Compared, occluded and unknown regions | Visible support plus the observed owner/reason of each excluded region |
+| Shape/brightness residuals and competing fits | Evidence for localization, not a success score selected by later timing |
+| Instance/reset alternatives | Temporal continuity versus a possible new rendered effect |
+
+Only independently supported phase-age ranges may map frame positions to an
+effect-onset range. Across a continuing instance, compatible frame constraints
+can narrow that range; conflicting frames must retain competing instances or a
+failure instead of forcing an intersection. Repeated captures, plateaus and
+occluded landmarks limit the gain in precision. Preserve the frame measurements
+when changing phase or display-delay models. Effect-onset constraints can then
+corroborate existing note-processing and popup timing; conversion to physical
+switch time still needs its separately validated delay model.
+
+The 300-window contour audit demonstrates limitations of its generic threshold
+extractor. It does not establish that overlapping frames or different skins are
+unusable for timing. Its crop/brightness flags are review context, not automatic
+whole-case exclusions or recognition-accuracy labels. A successor needs to test
+skin-specific localization on visible support and report timing performance
+separately for clear, partially occluded, ambiguous and fully hidden frames.
 
 ## Animation measurement and timing limits
 
@@ -177,3 +233,11 @@ brackets and prior associations remain unchanged.
 Known hold caps retain native appearance samples without becoming separate
 presses. [Hold cap coverage](hold-cap-coverage.md) describes their bounded use
 in corroborating an otherwise missing image region.
+
+## Reusable RGB reference experiments
+
+The [effect reference extraction tool](effect-reference-extraction.md) now saves
+original-PTS RGB crops and conservative note/body exclusion envelopes, then models
+candidate reference sequences in TypeScript. It excludes insufficiently visible,
+saturated or high-error comparisons and retains rejected evidence for review.
+These candidate banks are not installed in the production timing analyzer.
