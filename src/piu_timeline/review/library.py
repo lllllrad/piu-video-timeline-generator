@@ -9,8 +9,9 @@ from piu_timeline.review.store import ReviewStore
 
 
 class ReviewLibrary:
-    def __init__(self, root):
+    def __init__(self, root, window_root=None):
         self.root = Path(root).resolve()
+        self.window_root = Path(window_root).resolve() if window_root is not None else None
         self.lock = Lock()
         self.cache = {}
         self.catalog_until = 0
@@ -22,7 +23,12 @@ class ReviewLibrary:
         if monotonic() < self.catalog_until:
             return self.catalog_cache
         sources = []
-        for directory in sorted(self.root.iterdir()) if self.root.is_dir() else []:
+        directories = sorted(self.root.iterdir()) if self.root.is_dir() else []
+        if self.window_root is not None:
+            primary_names = {directory.name for directory in directories}
+            directories.extend(directory for directory in sorted(self.window_root.glob('play-window-*'))
+                               if directory.name not in primary_names)
+        for directory in directories:
             if not directory.is_dir() or directory.is_symlink():
                 continue
             analysis = directory / 'analysis/analysis.json'
@@ -63,7 +69,10 @@ class ReviewLibrary:
         number = int(segment) if segment is not None else (self.default_segment if source == self.default_source else segments[0]['number'])
         if number not in {item['number'] for item in segments}:
             raise FileNotFoundError('No prepared analysis for this segment')
-        directory = self.root / source / 'play' / f'segment-{number:03}'
+        source_directory = self.root / source
+        if not source_directory.is_dir() and self.window_root is not None:
+            source_directory = self.window_root / source
+        directory = source_directory / 'play' / f'segment-{number:03}'
         prepared = directory / 'report-data.json'
         stamp = signature(prepared)
         key = (source, number)
@@ -71,7 +80,7 @@ class ReviewLibrary:
             saved = self.cache.get(key)
             if saved is None or saved[0] != stamp:
                 index = ReportIndex(build(prepared, directory / 'review/index.sqlite'))
-                metadata = {**index.metadata(), 'source_id': source}
+                metadata = {**index.metadata(), 'source_id': source, 'ucs_draft': (directory/'chart.ucs').is_file()}
                 store = ReviewStore(directory / 'review/intervals', metadata)
                 saved = (stamp, (index, store, metadata, Path(metadata['media']['path']), directory))
                 if len(self.cache) >= 8:

@@ -166,7 +166,7 @@ def handler_for(index, store, assets, segment, bind_host=None, library=None):
             elif parsed.path == '/artifact':
                 relative = arg('path', '')
                 target = (segment / relative).resolve()
-                if not relative or not target.is_relative_to(segment.resolve()) or target.suffix not in ('.json', '.jsonl', '.png', '.npz'):
+                if not relative or not target.is_relative_to(segment.resolve()) or target.suffix not in ('.json', '.jsonl', '.png', '.npz', '.ucs'):
                     raise ValueError('Invalid evidence artifact')
                 self.file(target)
             else:
@@ -213,11 +213,12 @@ def main():
     assets = ROOT / '.local/editor/app'
     if not (assets / 'index.html').is_file():
         parser.error('Build the shared editor first: just editor-build')
-    library = ReviewLibrary(LOCAL_DATA)
+    library = ReviewLibrary(LOCAL_DATA, ROOT/'.local/reports')
     catalog = library.catalog()
     if not catalog:
         parser.error('No prepared plays found; run play analysis first')
-    library.default_source = source_id(args.source) if args.source else catalog[0]['id']
+    library.default_source = (args.source if any(item['id'] == args.source for item in catalog)
+                              else source_id(args.source) if args.source else catalog[0]['id'])
     chosen = next((item for item in catalog if item['id'] == library.default_source), None)
     if chosen is None:
         parser.error('No prepared plays for the selected video')

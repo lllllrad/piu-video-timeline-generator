@@ -1,36 +1,7 @@
 /** Pure HTML presentation. The input document has already been analyzed. */
-import {readFileSync,statSync,openSync,readSync,writeSync,closeSync} from 'node:fs';
+import {readFileSync,statSync,openSync,writeSync,closeSync} from 'node:fs';
 import {basename,dirname} from 'node:path';
-import {StringDecoder}from 'node:string_decoder';
-const resource = name => readFileSync(new URL(`../play/${name}`, import.meta.url), 'utf8');
-const template = resource('report.html').replace('__STYLE__', () => resource('report.css') + '\n' + resource('inspector/workspace.css'))
-  .replace('__SCRIPT__', () => ['report-evidence.js', 'inspector/warning-groups.js', 'inspector/navigation.js', 'inspector/provenance.js', 'inspector/overlay.js', 'report.js'].map(resource).join('\n'));
 const escape = (value: string) => value.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;'}[c]));
-
-export function render(dataJSON: string, song: string, chart: string, media: string): string {
-  const parts = {TITLE: escape(`${song} · ${chart}`), MEDIA: escape(media),
-    DATA: dataJSON.replace(/[<>&]/g, c => ({'<': '\\u003c', '>': '\\u003e', '&': '\\u0026'}[c]))};
-  return template.replace(/__(TITLE|MEDIA|DATA)__/g, (_match, name) => parts[name]);
-}
-
-/** Copy prepared JSON into HTML in bounded chunks; no analysis or giant JS string. */
-export function renderFile(dataPath:string,outputPath:string,song:string,chart:string,media:string):void{
-  const [before,after]=template.split('__DATA__').map(part=>part.replace(/__(TITLE|MEDIA)__/g,
-    (_match,name)=>name==='TITLE'?escape(`${song} · ${chart}`):escape(media)));
-  const source=openSync(dataPath,'r');let target:number;
-  const bytes=Buffer.alloc(65536),decoder=new StringDecoder('utf8');
-  const write=(text:string)=>{
-    const encoded=Buffer.from(text);let offset=0;
-    while(offset<encoded.length)offset+=writeSync(target,encoded,offset,encoded.length-offset);
-  };
-  const safe=(text:string)=>text.replace(/[<>&]/g,c=>({'<':'\\u003c','>':'\\u003e','&':'\\u0026'}[c]));
-  try{
-    target=openSync(outputPath,'wx');
-    write(before);
-    for(;;){const count=readSync(source,bytes,0,bytes.length,null);if(!count)break;write(safe(decoder.write(bytes.subarray(0,count))));}
-    write(safe(decoder.end()));write(after);
-  }finally{closeSync(source);if(target!==undefined)closeSync(target);}
-}
 
 export function index(entries): string {
   const rows = entries.map(({number, song, chart, summary, skin}) => {
@@ -87,9 +58,9 @@ th{font-weight:500}.scroll{overflow:auto}.stale{color:#f2b8b5;border-left:4px so
 <h2>Warnings</h2><p>${summary?.warning_count==null?'This summary records no warning count.':`${escape(String(summary.warning_count))} saved warnings.`} Showing ${warnings.length} representative records, capped at 30. Missing times remain unavailable.</p>
 ${warnings.length?`<div class="scroll"><table><thead><tr><th>Reason / check</th><th>Lane</th><th>Start seconds</th><th>End seconds</th></tr></thead><tbody>${warningRows}</tbody></table></div>`:'<p>No warning examples available in this summary.</p>'}
 ${summary?.effect_images?`<h2>Effect images</h2><p><a href="effect-images/report.html">Inspect frame positions, phase alternatives and note candidates</a></p><p>${value(JSON.stringify(summary.effect_images.counts))}</p>`:''}
-<h2>Detailed review</h2><p><a id="editor" href="http://127.0.0.1:4180/${escape(query)}">Open interval editor</a> · <a id="recording" href="${escape(media)}">Original recording</a></p>
+<h2>Detailed review</h2><p><a id="editor" href="http://127.0.0.1:4180/${escape(query)}">Open interval editor</a> · <a id="recording" href="${escape(media)}">Original recording</a>${summary?.ucs_draft ? ' · <a href="chart.ucs">UCS draft</a>' : ''}</p>
 <p>The editor provides video, chart evidence and saved corrections. Start it with <code>${command}</code>. Use <code>--host ADDRESS</code> for a different bind address, then open that address in your browser.</p>
 <p>Original media and timestamps are preserved. This page embeds only the bounded summary above.</p></main>
-<script>if(location.protocol==='http:'||location.protocol==='https:'){document.getElementById('editor').href='/'+${JSON.stringify(query).replace(/</g,'\\u003c')};document.getElementById('recording').href='/media'+${JSON.stringify(query).replace(/</g,'\\u003c')};}</script></html>`;
+<script>if((location.protocol==='http:'||location.protocol==='https:')&&location.pathname==='/report.html'){document.getElementById('editor').href='/'+${JSON.stringify(query).replace(/</g,'\\u003c')};document.getElementById('recording').href='/media'+${JSON.stringify(query).replace(/</g,'\\u003c')};}</script></html>`;
  const target=openSync(outputPath,'wx');try{const bytes=Buffer.from(body);let offset=0;while(offset<bytes.length)offset+=writeSync(target,bytes,offset,bytes.length-offset);}finally{closeSync(target);}
 }

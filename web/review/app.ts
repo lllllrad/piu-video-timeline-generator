@@ -234,6 +234,8 @@ async function boot(){
  $<HTMLAnchorElement>('report-link').href=scoped('/report.html');
 
  meta=await api('/api/meta');
+ const draft=$<HTMLAnchorElement>('ucs-draft');
+ draft.href=scoped('/artifact?path=chart.ucs');draft.hidden=!meta.ucs_draft;
  video.src=scoped('/media');video.currentTime=meta.start_seconds;
  const chart=await api('/api/chart');automatic=chart.rows;observations=automatic.map(autoNote).filter((n):n is ReviewNote=>n!==null);
  $('title').textContent=`${meta.song??'Unknown song'} · ${meta.chart??'Unknown chart'}`;

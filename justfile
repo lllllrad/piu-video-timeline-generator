@@ -77,6 +77,10 @@ _evaluate +args:
 _relabel +args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.relabel "$@"
 
+# Inspect native observations for one playback window without publishing a play.
+_play-window +args:
+    sh scripts/run.sh .venv/bin/python scripts/play_window.py "$@"
+
 # Refresh completed play caches, optionally acquiring missing plays or watching promotions.
 _replay *args:
     sh scripts/run.sh .venv/bin/python -m piu_timeline.tools.replay "$@"

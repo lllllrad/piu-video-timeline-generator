@@ -167,7 +167,12 @@ class ReviewTest(unittest.TestCase):
             directory = root / source / 'play' / f'segment-{number:03}'
             directory.mkdir(parents=True)
             (directory / 'report-data.json').write_text(json.dumps({**self.data, 'segment_number': number}))
-        library = ReviewLibrary(root)
+        reports = self.root/'reports'
+        window = reports/'play-window-example'/'play'/'segment-013'
+        window.mkdir(parents=True)
+        (window/'report-data.json').write_text(json.dumps({**self.data, 'segment_number': 13}))
+        (window/'chart.ucs').write_text(':Format=1\nX....\n')
+        library = ReviewLibrary(root, reports)
         library.default_source, library.default_segment = 'video-a', 1
         server = ThreadingHTTPServer(('127.0.0.1', 0), handler_for(None, None, self.root, None, library=library))
         thread = Thread(target=server.serve_forever, daemon=True)
@@ -178,7 +183,10 @@ class ReviewTest(unittest.TestCase):
                 return json.load(response)
         try:
             catalog = get('/api/library')['sources']
-            self.assertEqual([(s['id'], len(s['segments'])) for s in catalog], [('video-a', 2), ('video-b', 1)])
+            self.assertEqual([(s['id'], len(s['segments'])) for s in catalog], [('video-a', 2), ('video-b', 1), ('play-window-example', 1)])
+            self.assertTrue(get('/api/meta?source=play-window-example&segment=13')['ucs_draft'])
+            with urlopen(base+'/artifact?source=play-window-example&segment=13&path=chart.ucs') as response:
+                self.assertEqual(response.read(), b':Format=1\nX....\n')
             selected = get('/api/meta?source=video-a&segment=2')
             self.assertEqual(selected['segment_number'], 2)
             self.assertEqual(get('/api/meta?source=video-b')['source_id'], 'video-b')

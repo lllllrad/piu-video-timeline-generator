@@ -48,24 +48,25 @@ def current(data,directory):
     return data.get('beat_timing',{}).get('contract')=={'format':FORMAT,'reference':reference(data,directory)}
 
 
-def prepare_reference(data,directory):
+def prepare_reference(data,directory,*,excerpt=False):
     """Prepare audio-only alignment before beat inference, without policy gates.
 
     Reference/current checks remain read-only. Failed preparation is retained
     as a diagnostic on this build, not retried by a cache-current check.
     """
     ref=reference(data,directory)
+    options = {'excerpt': True} if excerpt else {}
     if ref.get('reason')=='official_timing_or_chart_identity_missing':
         from piu_timeline.charts.reference import prepare
         try:
-            prepare(data,Path(directory))
+            prepare(data,Path(directory),**options)
         except (OSError,ValueError,KeyError,subprocess.SubprocessError)as error:
             return {'status':'failed','reason':str(error)}
         return {'status':'prepared','method':'official_song_reference'}
     if ref.get('reason')!='verified_song_alignment_missing':return None
     from piu_timeline.charts.audio import prepare_alignment
     try:
-        prepare_alignment(data,Path(directory),json.loads(Path(ref['metadata_path']).read_text()),ref['ucs_index'])
+        prepare_alignment(data,Path(directory),json.loads(Path(ref['metadata_path']).read_text()),ref['ucs_index'],**options)
     except (OSError,ValueError,KeyError,subprocess.SubprocessError) as error:
         return {'status':'failed','reason':str(error)}
     return {'status':'prepared','method':'reference_audio_translation'}
@@ -77,9 +78,9 @@ def validate_physical(data,directory):
     return data
 
 
-def prepare_input(data,directory):
+def prepare_input(data,directory,*,excerpt=False):
     """External reference preparation owns I/O; beat inference receives file references."""
-    preparation=prepare_reference(data,directory)
+    preparation=prepare_reference(data,directory,**({'excerpt':True} if excerpt else {}))
     from piu_timeline.play.observations.artifacts import save_input
     save_input(Path(directory)/'beat-reference.json',{'schema':1,'reference':reference(data,directory),'preparation':preparation})
     call('beatFiles.prepare',str(Path(directory).resolve()))

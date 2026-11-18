@@ -1,4 +1,4 @@
-"""Bounded standalone evidence reports and an explicit legacy inspector renderer."""
+"""Bounded standalone evidence reports."""
 import json
 import os
 import re
@@ -28,6 +28,7 @@ def write_summary(data,directory):
     """Publish index fields from the prepared view, without running inference."""
     summary={key:data.get(key)for key in ('coverage','combo_readable_fraction','play_analysis_version')}
     summary['counts']={key:len(data.get(key) or [])for key in ('notes','matches','combo_events','judgment_events')}
+    summary['ucs_draft'] = data.get('inspector_artifacts', {}).get('chart', {}).get('registration', {}).get('status') == 'draft'
     if data.get('effect_images'):summary['effect_images']=data['effect_images']
     summary['start_seconds']=data.get('start_seconds')
     summary['end_seconds']=data.get('end_seconds')
@@ -53,7 +54,7 @@ def write_summary(data,directory):
     return summary
 
 
-def write_report(data,path,final_directory=None,*,prepared_path=None,legacy=False):
+def write_report(data,path,final_directory=None,*,prepared_path=None):
     """Render prepared view data only; never inspect observations or infer timing."""
     from piu_timeline.derived import call
     final_directory=Path(final_directory or path.parent)
@@ -67,10 +68,9 @@ def write_report(data,path,final_directory=None,*,prepared_path=None,legacy=Fals
                 json.dump(data,stream,ensure_ascii=False,allow_nan=False)
         summary=write_summary(data,path.parent)
         arguments=[str(prepared),str(pending),data.get('song') or 'Unknown song',data.get('chart') or 'Unknown chart',media]
-        if not legacy:arguments.append(summary)
-        call('report.renderFile' if legacy else 'report.renderShellFile',*arguments)
+        call('report.renderShellFile', *arguments, summary)
         pending.replace(path)
-        if not legacy and owns_prepared:
+        if owns_prepared:
             prepared.replace(path.with_name('report-data.json'))
     finally:
         pending.unlink(missing_ok=True)

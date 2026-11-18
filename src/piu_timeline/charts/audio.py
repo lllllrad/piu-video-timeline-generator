@@ -64,7 +64,7 @@ def align_features(reference, observed):
             'windows': windows, 'accepted_windows': len(agreed), 'rate': 1}
 
 
-def align(data, reference_path):
+def align(data, reference_path, *, excerpt=False):
     start, end = data['start_seconds'], data['end_seconds']
     if not all(math.isfinite(value) for value in (start, end)) or not 8 <= end-start <= 900:
         raise ValueError('Audio alignment needs a bounded 8..900 second gameplay interval')
@@ -73,7 +73,15 @@ def align(data, reference_path):
     expected = data['media']
     if (before.st_size, before.st_mtime_ns) != (expected['size_bytes'], expected['mtime_ns']):
         raise ValueError('Source identity differs from saved play evidence')
-    result = align_features(features(reference_path), features(source, start, end-start))
+    reference, observed = features(reference_path), features(source, start, end-start)
+    if excerpt:
+        result = align_features(observed, reference)
+        result['offset_seconds'] *= -1
+        for window in result['windows']:
+            window['offset_seconds'] *= -1
+            window['excerpt_start_seconds'] = window.pop('reference_start_seconds')
+    else:
+        result = align_features(reference, observed)
     after = source.stat()
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
         raise ValueError('Source changed during audio alignment')
@@ -81,7 +89,7 @@ def align(data, reference_path):
     return result
 
 
-def prepare_alignment(data, directory, metadata, code, client=None):
+def prepare_alignment(data, directory, metadata, code, client=None, *, excerpt=False):
     """Reuse a verified origin or prepare one source-bound audio translation."""
     from piu_timeline.charts.official import write_json
     directory=Path(directory)
@@ -105,11 +113,13 @@ def prepare_alignment(data, directory, metadata, code, client=None):
     _, music, _ = (client or Client()).template(code)
     contract = {'media': identity, 'start_seconds': data['start_seconds'], 'end_seconds': data['end_seconds'],
                 'ucs_index': code, 'reference_audio_sha256': sha256(music.read_bytes()).hexdigest()}
+    if excerpt:
+        contract['excerpt'] = True
     cache = directory / 'chart-policy-alignment.json'
     if cache.is_file():
         saved = json.loads(cache.read_text())
         if saved.get('contract') == contract:
             return saved['alignment']
-    result = align(data, music)
+    result = align(data, music, excerpt=True) if excerpt else align(data, music)
     write_json(cache, {'contract': contract, 'alignment': result})
     return result

@@ -1,5 +1,27 @@
 # Regeneration and replay maintenance
 
+## Review a bounded play window
+
+```sh
+PIU_SKIN_JOBS=8 just _play-window 4MyMJse0L0g 13 59:11.138 59:49.733
+```
+
+Start and end accept absolute playback seconds, `MM:SS.sss`, or `HH:MM:SS.sss`.
+The half-open window runs through native observation, tracking, coordinate
+registration, physical and musical timing, judgment and hold evidence, UCS
+transcription, and the interval review editor. A standalone summary links to that editor. It uses the play's saved
+layout, skin bank and digit templates. Musical timing aligns the excerpt's
+audio against the official reference. If timing or placement is unresolved,
+the report retains the failure evidence. Each run publishes its own inspector
+and available UCS draft under `.local/reports/play-window-*/`; the chart
+repository receives no draft registration. Start `just editor` to open the
+window from the source selector, inspect its automatic chart and download its
+UCS draft.
+
+Use `--observations-only` to save the native trace under `.local/runs/`. Pass
+`--reuse-native RUN_DIRECTORY` to use that trace for a full report of the same
+source, segment and interval.
+
 ## Full local regeneration
 
 ```sh

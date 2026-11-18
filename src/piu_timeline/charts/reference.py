@@ -29,7 +29,7 @@ def retained(data,directory,repository,code):
     return saved
 
 
-def prepare(data,directory,repository=None,client=None,code=None):
+def prepare(data,directory,repository=None,client=None,code=None,*,excerpt=False):
     from piu_timeline.charts.data import default_repository,resolve_code
     from piu_timeline.charts.localized import prepare as prepare_names
     from piu_timeline.charts.audio import prepare_alignment
@@ -50,7 +50,7 @@ def prepare(data,directory,repository=None,client=None,code=None):
         if timing.is_file()and timing.read_bytes()!=content:
             raise ValueError('Saved official timing differs from the downloaded template; preserve and review it')
         if not timing.is_file():atomic_write(timing,content)
-    alignment=prepare_alignment(data,Path(directory),{},code,client=provider)
+    alignment=prepare_alignment(data,Path(directory),{},code,client=provider,**({'excerpt':True} if excerpt else {}))
     result={'contract':{'format':FORMAT,'source':source(data),'ucs_index':code,
                         'timing_sha256':sha256(content).hexdigest(),
                         'reference_audio_sha256':sha256(music.read_bytes()).hexdigest()},

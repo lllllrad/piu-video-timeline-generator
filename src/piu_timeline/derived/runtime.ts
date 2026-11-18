@@ -68,7 +68,7 @@ const operations = {
   tracks,
   frameTracking,
   speed,
-  report: {renderFile:report.renderFile,renderShellFile:report.renderShellFile,index:report.index},
+  report: {renderShellFile:report.renderShellFile,index:report.index},
   chartPhase,
   chartAssertions,
   chartDraft,

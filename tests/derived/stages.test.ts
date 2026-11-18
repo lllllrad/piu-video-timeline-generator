@@ -8,7 +8,6 @@ import {grid, parse, text} from '../../src/piu_timeline/derived/charts/ucs.ts';
 import {transcribe} from '../../src/piu_timeline/derived/charts/transcription.ts';
 import {reconstruct as reconstructStage} from '../../src/piu_timeline/derived/beats/stage.ts';
 import {beatView as reconstruct,beatRequest,type BeatViewInput as BeatInput} from './fixtures.ts';
-import {render} from '../../src/piu_timeline/derived/report.ts';
 import type {Interval} from '../../src/piu_timeline/derived/types.ts';
 import {parseData, stringifyData} from '../../src/piu_timeline/derived/json.ts';
 import {associate} from '../../src/piu_timeline/derived/association.ts';
@@ -81,14 +80,6 @@ test('derived CLI preserves an existing output when its input is invalid', () =>
     assert.equal(run().status, 1);
     assert.equal(readFileSync(output, 'utf8'), before);
   } finally { rmSync(directory, {recursive: true, force: true}); }
-});
-
-test('rendering accepts opaque analysis JSON without rounding source identity or allowing script injection', () => {
-  const data = '{"media":{"mtime_ns":1780000000000000001},"song":"</script><img>"}';
-  const html = render(data, '</title><img>', 'S20', 'source%20file.mkv');
-  assert.ok(html.includes('1780000000000000001'));
-  assert.ok(!html.includes('<img>'));
-  assert.ok(html.includes('\\u003c/script\\u003e'));
 });
 
 test('zero is a measured chart time and keeps its place before later rows', () => {

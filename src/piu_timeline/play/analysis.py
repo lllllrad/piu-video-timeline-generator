@@ -128,7 +128,7 @@ def refit_saved(previous, output, segment, display_delay_ms, note_skin=None):
 
 
 def analyze_play(document, segment, output, player=None, layout=None, start=None, duration=None,
-                 width=650, display_delay_ms=0, note_skin=None):
+                 width=650, display_delay_ms=0, note_skin=None, *, digit_templates=None):
     if note_skin is None:
         raise ValueError('Image note-skin bank required; select one with just skins select or --note-skin')
     from piu_timeline.play.skins.bank import load_bank
@@ -161,9 +161,16 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     except ValueError as error:
         raise ValueError(f'{error}. Calibration frame: {preview.resolve()}') from error
     (output / 'layout.json').write_text(json.dumps(layout, indent=2) + '\n')
-    print('Learning combo digit templates (at most 32 small OCR images)...', flush=True)
     (output / 'evidence').mkdir(exist_ok=True)
-    digits, bootstrap = bootstrap_digits(record, roi, start, end, layout, output / 'evidence', width=width)
+    if digit_templates is None:
+        print('Learning combo digit templates (at most 32 small OCR images)...', flush=True)
+        digits, bootstrap = bootstrap_digits(record, roi, start, end, layout, output / 'evidence', width=width)
+    else:
+        print('Using saved digit shapes for this recording.', flush=True)
+        digits = DigitReader.load(digit_templates)
+        counts = {digit: len(sources) for digit, sources in digits.sources.items()}
+        bootstrap = {'ocr_images': 0, 'digit_templates': str(digit_templates),
+                     'template_counts': counts, 'missing_digits': [digit for digit, count in counts.items() if count < 2]}
     combo,times=ComboTracker(),[]
     from piu_timeline.play.skins.held import BodyAtReceptor
     from piu_timeline.play.skins.detector import SkinDetector
@@ -283,16 +290,16 @@ def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_sk
     return final / 'report.html'
 
 
-def musical_stages(result,directory):
+def musical_stages(result,directory,*,excerpt=False):
     """Schedule native validation, external reference preparation and musical inference."""
     from piu_timeline.play.stages import execute
     from piu_timeline.play.beats.timing import validate_physical,prepare_input
     result=execute(directory,'native-interval-validation',lambda:validate_physical(result,directory),('native-timing.json',))
-    result=execute(directory,'musical-reference',lambda:prepare_input(result,directory),('beat-input.json',))
+    result=execute(directory,'musical-reference',lambda:prepare_input(result,directory,**({'excerpt':True} if excerpt else {})),('beat-input.json',))
     return execute(directory,'musical-timing',lambda:apply_beats(result,directory),('beat-result.json',))
 
 
-def finish_play(result, pending, final, segment_number, display_delay_ms, source_media, *, registered_coordinates=False):
+def finish_play(result, pending, final, segment_number, display_delay_ms, source_media, *, registered_coordinates=False, review_window=False):
     """Run derived stages, prepare/render the inspector, then atomically publish."""
     from piu_timeline.play.stages import execute
     result['segment_number']=segment_number
@@ -308,7 +315,7 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
         result=execute(pending,'coordinate-artifact',lambda:save_coordinates(result,pending),('coordinates.json',))
     from piu_timeline.play.stages import physical_timing
     result=execute(pending,'physical-timing',lambda:physical_timing(result,pending),('physical-timing.json',))
-    result=musical_stages(result,pending)
+    result=musical_stages(result,pending,**({'excerpt':True} if review_window else {}))
     result=execute(pending,'counter-association',lambda:reassociate_beats(result,display_delay_ms,pending),('counter-associations.json',))
     result=execute(pending,'judgment-association',lambda:augment_judgments(result,pending))
     from piu_timeline.play.holds.analysis import augment_holds
@@ -324,12 +331,18 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
         result['native_frame_workspace'] = 'disposable'
     prepared=execute(pending,'inspection',lambda:prepare_report(result,pending/'report.html',final),('report-data.json',))
     (pending/'analysis.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
-    execute(pending,'render',lambda:write_report(prepared,pending/'report.html',final,prepared_path=pending/'report-data.json'),('report.html',))
+    if review_window:
+        from piu_timeline.play.window import prepare_draft
+        execute(pending, 'chart-draft', lambda: prepare_draft(result, prepared, pending), ('chart-registration.json',))
+    execute(pending,'render',lambda:write_report(prepared,pending/'report.html',final,
+            prepared_path=pending/'report-data.json'),('report.html',))
     from piu_timeline.play.observations.trace import retire
     if retire_workspace:
         execute(pending,'retire-frame-workspace',lambda:retire(pending),('frame-workspace.json',))
     from piu_timeline.play.stages import publish
     backup=publish(pending,final)
+    if review_window:
+        return final/'report.html'
     from piu_timeline.storage import prune_history
     prune_history(final,backup,source_media)
     from piu_timeline.charts.data import auto_register
