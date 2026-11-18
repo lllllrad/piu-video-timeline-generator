@@ -9,9 +9,9 @@ source or a quota used to manufacture matches.
 
 | Channel | Native observations | Derived events / units |
 | --- | --- | --- |
-| `popup` | Combo values/confidence in `frames.jsonl`; word label, confidence, box and blank/unknown state in `judgments.jsonl` | Separate combo changes and word refreshes, with their original display brackets and source PTS |
+| `popup` | Combo values/confidence in the saved popup channel; word label, confidence, box and blank/unknown state in `judgments.jsonl` | Separate combo changes and word refreshes, with their original display brackets and source PTS |
 | `receptors` | Per-lane white fraction and known/unknown light state in `hold-frames.jsonl` | State runs and confirmed off-to-on transitions; persistent light is not repeated input |
-| `motion` | Every detected lane/position in `frames.jsonl`; fitted and excluded trajectories in `analysis.json` | Tracks, target estimates and exclusions, including unassigned tracks |
+| `motion` | Detected lanes and positions in the saved motion channel; fitted and excluded trajectories in `analysis.json` | Tracks, target estimates and exclusions, including unassigned tracks |
 | `processing` | Spatial lane-color, white and visibility masks around receptors in `processing-features.npz` | Per-head persistence samples, bounded disappearance, passage beyond the target, or explicit unresolved state; hold endpoints remain separate |
 
 Each channel has its own counts. These units are not interchangeable. Chords
@@ -358,7 +358,7 @@ the acquisition thresholds.
 | Layer | Artifacts | May depend on |
 | --- | --- | --- |
 | Pixel features | `native-features/`, `processing-features.npz`, `appearance-features.npz`, judgment feature cache | Source identity, original timestamps, crop geometry and declared measurement thresholds |
-| Frame observations | `frames.base.jsonl`, `frames.jsonl`, `judgments.jsonl`, `hold-frames.jsonl` | Pixel features and recognition/detection rules |
+| Frame observations | `frames.combo-baseline.jsonl`, `visual-channels.json`, `judgments.jsonl`, `hold-frames.jsonl` | Pixel features and recognition/detection rules |
 | Channel interpretations | Receptor state runs, trajectories, persistence events, note types and hold geometry | Frame observations and explicit geometric rules |
 | Associations | Chart targets, popup ownership, inferred input brackets, policies and warnings | Channel interpretations, timing reference and chart metadata |
 | Presentation | HTML, SVG and compact observation tables | Saved evidence and associations |

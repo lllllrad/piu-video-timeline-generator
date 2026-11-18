@@ -350,7 +350,7 @@ Older analyses without this pixel cache decode the counter strip once and retain
 updates; incompatible source/region contracts or corrupted arrays fail explicitly. A
 recovered value must lie between the nearest original counter readings, within a nondecreasing gap
 of at most 250 ms and ten increments. Existing readable values, note detections and source PTS are
-preserved. `frames.base.jsonl` retains the observations before recovery; accepted additions have
+preserved. `frames.combo-baseline.jsonl` retains the counter readings and original times before recovery; accepted additions have
 `combo_recovered: true`. A digit needs examples from distinct source timestamps; repeated glyphs or
 resized variants from one source do not count as independent confirmation. Native gameplay frames
 then use color components, visual tracking and digit-template comparisons, without neural OCR on
@@ -361,7 +361,8 @@ FFmpeg streams frames without an FPS filter. Original integer PTS and filter tim
 Outputs stay under the ignored `.local/` directory:
 
 - `analysis.json`: native tracks, crossing estimates, combo brackets, matches, exclusions and the separate `hold_analysis` reconstruction;
-- `frames.jsonl`: native source PTS, playback time, note detections and counter observations per frame;
+- `visual-channels.json`: compact observations with original source PTS, playback time, detected positions and counter readings;
+- `frames.combo-baseline.jsonl`: original counter readings and timestamps before refinement;
 - `counter-pixels.npz`: exact RGB counter crops and original timestamps for recovery and font updates without another video pass;
 - `layout.json`, `preview.png`: geometry and its original source image;
 - `calibration/`: additional source frames and a temporal median when needed;
@@ -372,10 +373,11 @@ Outputs stay under the ignored `.local/` directory:
 - `recognition-warnings.json`: unresolved recognition items, scoped chart exceptions and independently accounted hold fragments.
 
 Changing source metadata, play bounds, geometry, resolution, player or song/chart invalidates the
-observation cache. Compatible saved native observations can be refitted after a tracking/association
-change or latency-correction change without decoding or OCR. A counter-reader upgrade may decode
-only the small counter region and must match every saved source PTS; force a complete rebuild with
-`--force`. This feature is experimental: verify representative frames and report coverage before
+observation cache. Legacy snapshots with compatible native frames can be refitted.
+Published plays retire the working frame trace after their required stages complete.
+Changes that require native frame observations reacquire them from the original
+recording. Saved file stages can still run from their own inputs. Use `--force` for
+a complete rebuild. This feature is experimental: verify representative frames and report coverage before
 drawing conclusions about a player.
 
 ## Cache compatibility

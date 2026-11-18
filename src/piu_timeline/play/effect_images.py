@@ -83,8 +83,9 @@ def augment(data, directory):
     path = Path(path).resolve()
     verify(data, path)
     from piu_timeline.play.observations.artifacts import producer
+    note_input = 'visual-channels.json' if (directory/'visual-channels.json').is_file() else 'frames.jsonl'
     acquisition = {'media': data['media'], 'game_roi': data['game_roi'], 'layout': data['layout'],
-                   'traces': {name: signature(directory/name) for name in ('frames.jsonl', 'hold-frames.jsonl')},
+                   'traces': {name: signature(directory/name) for name in (note_input, 'hold-frames.jsonl')},
                    'producer': producer('tools/effect_capture.py', 'play/frames.py')}
     target = directory/'effect-images'
     target.mkdir(exist_ok=True)

@@ -1,5 +1,9 @@
 /** Source-bound image observations for play; no training on evaluated play cues. */
-import {readFileSync,writeFileSync,mkdirSync,existsSync,openSync,writeSync,closeSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,existsSync,createReadStream,createWriteStream,renameSync,rmSync} from 'node:fs';
+import {createHash,randomUUID} from 'node:crypto';
+import {Readable} from 'node:stream';
+import {pipeline} from 'node:stream/promises';
+import {createGzip} from 'node:zlib';
 import {resolve,basename} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseData,stringifyData} from '../json.ts';
@@ -15,16 +19,26 @@ export function binding(reference,query) {
  if(!numberOf(reference.manifest.segment)||numberOf(reference.manifest.segment)!==numberOf(query.segment))throw new Error('Effect reference belongs to another segment; skin compatibility is unverified');
  if(query.selection!=='all_light_candidates')throw new Error('Play effect observations require all candidate windows, not sampled reference windows');
 }
+async function traceHash(path: string): Promise<string> {
+ const digest=createHash('sha256');
+ for await(const block of createReadStream(path))digest.update(block);
+ return digest.digest('hex');
+}
+
+function* traceLines(rows: readonly unknown[]) {
+ for(const row of rows)yield stringifyData(row)+'\n';
+}
+
 export async function analyze(referencePath:string,capturePath:string,inputPath:string,output:string) {
  const bank=referenceBank(referencePath),{capture,manifest}=load(capturePath),data=parseData(readFileSync(inputPath,'utf8'));
  binding(bank,manifest);mkdirSync(output,{recursive:true});
  const producer=Object.fromEntries(['model.ts','bank.ts','regions.ts','temporal.ts','play.ts','play_bank.ts','play_search.ts','play_measure.ts','play_pool.ts','play_worker.ts'].map(f=>[f,hash(fileURLToPath(new URL(f,import.meta.url)))]));
  const contract={format:PLAY_FORMAT,reference:hash(referencePath),capture:hash(capturePath),producer};
- const measurementPath=resolve(output,'events.json'),tracePath=resolve(output,'observations.jsonl');
+ const measurementPath=resolve(output,'events.json'),tracePath=resolve(output,'observations.jsonl.gz');
  let measured;
  if(existsSync(measurementPath)&&existsSync(tracePath)) {
   const saved=parseData(readFileSync(measurementPath,'utf8'));
-  if(stringifyData(saved.contract)===stringifyData(contract)&&saved.trace_sha256===hash(tracePath))measured=saved;
+  if(stringifyData(saved.contract)===stringifyData(contract)&&saved.trace_sha256===await traceHash(tracePath))measured=saved;
  }
  if(!measured) {
   const events=[],rows=[];
@@ -32,9 +46,14 @@ export async function analyze(referencePath:string,capturePath:string,inputPath:
    events.push(result.event);rows.push(...result.rows);
   }
   rows.sort((a,b)=>a.playback_seconds-b.playback_seconds||a.lane-b.lane);
-  const fd=openSync(tracePath,'w');
-  try {for(const row of rows)writeSync(fd,stringifyData(row)+'\n');}finally {closeSync(fd);}
-  measured={contract,trace_sha256:hash(tracePath),events,frame_observations:rows.length};
+  const temporary=tracePath+'.'+randomUUID()+'.pending';
+  try {
+   await pipeline(Readable.from(traceLines(rows)),createGzip({level:1}),createWriteStream(temporary,{flags:'wx'}));
+   measured={contract,trace_sha256:await traceHash(temporary),events,frame_observations:rows.length};
+   renameSync(temporary,tracePath);
+  } finally {
+   rmSync(temporary,{force:true});
+  }
   writeFileSync(measurementPath,stringifyData(measured)+'\n');
  }
  const associations=links(data,measured.events);
@@ -46,7 +65,7 @@ export async function analyze(referencePath:string,capturePath:string,inputPath:
  const association={format:PLAY_FORMAT,producer_sha256:hash(fileURLToPath(new URL('play_links.ts',import.meta.url))),measurement_sha256:hash(measurementPath),input_sha256:hash(inputPath),associations};
  writeFileSync(resolve(output,'associations.json'),stringifyData(association)+'\n');
  const summary={format:PLAY_FORMAT,reference:resolve(referencePath),reference_sha256:hash(referencePath),counts,
-  report:'effect-images/report.html',observations:'effect-images/observations.jsonl',events:'effect-images/events.json',associations:'effect-images/associations.json',
+  report:'effect-images/report.html',observations:'effect-images/observations.jsonl.gz',events:'effect-images/events.json',associations:'effect-images/associations.json',
   scope:'Light-cue image observations; unobserved frames are not measured. Appearance and image-order evidence do not establish physical input times.'};
  writeFileSync(resolve(output,'summary.json'),stringifyData(summary)+'\n');
  const byEvent=new Map<string,ReturnType<typeof links>[number]>(associations.map(a=>[a.event,a]));
@@ -58,7 +77,7 @@ export async function analyze(referencePath:string,capturePath:string,inputPath:
   '<h1>Play effect image evidence</h1>'+
   '<p>'+escape(summary.scope)+'</p>'+
   '<p>'+
-  '<a href="../report.html">Play report</a> · <a href="events.json">Sequence observations</a> · <a href="observations.jsonl">Per-frame positions and stage alternatives</a> · <a href="associations.json">Note and popup candidates</a>'+
+  '<a href="../report.html">Play report</a> · <a href="events.json">Sequence observations</a> · <a href="observations.jsonl.gz" download>Per-frame positions and stage alternatives</a> · <a href="associations.json">Note and popup candidates</a>'+
   '</p>'+
   '<p>'+escape(JSON.stringify(counts))+'</p>'+
   '<p>Search uses sampled RGB proposals followed by full-resolution validation; ordered statuses remain candidates within that search. Positions use the receptor prior and local RGB translation. Reference stages are marker-relative, not calibrated effect ages. RGB outlier regions are possible contamination, not verified opacity. No target, physical input, grade or existing popup assignment is changed.</p>'+

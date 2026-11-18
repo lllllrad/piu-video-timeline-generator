@@ -182,7 +182,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     with (output / 'frames.jsonl').open('w') as trace:
         decoded=decode_frames(record,start,end,roi,width)
         for pts, playback, image, skin_observations in classified_frames(decoded,skin_bank,layout,width,round(width*roi[3]/roi[2])):
-            possible_hold=body_at_receptor(skin_observations)
+            risk_causes = body_at_receptor.explain(skin_observations)
             notes=[o for o in skin_observations if o['role']!='hold_body']
             crop = crop_region(image, layout['combo_roi'])
             counter_pixels.append(pts,playback,crop)
@@ -201,7 +201,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
             times.append(playback); observed += 1; known += value is not None
             trace.write(json.dumps(publish({'source_pts_seconds': pts, 'playback_seconds': playback,
                                     'notes': notes, 'skin_observations':skin_observations,
-                                    'possible_hold_or_dense_stack':possible_hold, 'combo': value, 'combo_confidence': confidence, 'combo_read_mode': digits.last_mode},output,centers)) + '\n')
+                                    'possible_hold_or_dense_stack':bool(risk_causes), 'body_risk_causes':risk_causes, 'combo': value, 'combo_confidence': confidence, 'combo_read_mode': digits.last_mode},output,centers)) + '\n')
             if observed % 300 == 0:
                 print(f'  {observed} native frames, {playback-start:.1f}/{end-start:.1f}s, combo readable {known/observed:.0%}', flush=True)
     if not times:
@@ -247,7 +247,7 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                             'No missed press is inferred from a combo reset or an unreadable counter.']}
 
 
-def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_skin, display_delay_ms, effect_changed=False):
+def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_skin, display_delay_ms, effect_changed=False, workspace_retired=False):
     """Reuse physical observations; optionally rebuild beats and their associations."""
     from piu_timeline.play.presentation import prepare_report,refresh_registration
     from piu_timeline.play.report import write_report
@@ -265,7 +265,8 @@ def refresh_saved_play(cached, final, *, coordinates, judgments_current, note_sk
         cached = augment_judgments(cached,final)
     if note_skin is not None:
         cached['skin_detector']={**cached['skin_detector'],'bank_path':note_skin}
-    cached = augment_holds(cached, final)
+    if not workspace_retired:
+        cached = augment_holds(cached, final)
     prepared=prepare_report(cached,final/'report.html',final)
     write_report(prepared,final/'report.html',final,prepared_path=final/'report-data.json')
     if effect_changed or coordinates is not None or {k:cached.get(k)for k in refresh_fields}!=previous_refresh:
@@ -318,9 +319,15 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
     (pending / 'analysis.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     from piu_timeline.play.presentation import prepare_report,refresh_registration
     from piu_timeline.play.report import write_report
+    retire_workspace = bool(result.get('visual_channels', {}).get('timeline', {}).get('frames'))
+    if retire_workspace:
+        result['native_frame_workspace'] = 'disposable'
     prepared=execute(pending,'inspection',lambda:prepare_report(result,pending/'report.html',final),('report-data.json',))
     (pending/'analysis.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
     execute(pending,'render',lambda:write_report(prepared,pending/'report.html',final,prepared_path=pending/'report-data.json'),('report.html',))
+    from piu_timeline.play.observations.trace import retire
+    if retire_workspace:
+        execute(pending,'retire-frame-workspace',lambda:retire(pending),('frame-workspace.json',))
     from piu_timeline.play.stages import publish
     backup=publish(pending,final)
     from piu_timeline.storage import prune_history
@@ -372,6 +379,8 @@ def run(source, segment_number=1, force=False, **options):
             same_source = ((stat.st_size, stat.st_mtime_ns) == (cached['media']['size_bytes'], cached['media']['mtime_ns'])
                            and cached['media'] == document['media'])
             same_settings = observation_settings_match(cached,document,segments[segment_number-1],expected_start,expected_end,options)
+            from piu_timeline.play.observations.trace import retired
+            workspace_retired = retired(final)
             can_refit = (same_source and same_settings
                          and cached.get('native_frame_format',NATIVE_FRAME_FORMAT)==NATIVE_FRAME_FORMAT
                          and all(key in cached for key in ('layout','analysis_height','frame_count'))
@@ -382,15 +391,28 @@ def run(source, segment_number=1, force=False, **options):
             from piu_timeline.play.coordinate_replay import applicable,refresh,metadata_matches
             metadata_current=metadata_matches(cached,segments[segment_number-1],
                     result_reference(segments[segment_number-1],options.get('player')),options.get('display_delay_ms',0))
-            if producers_current and metadata_current and applicable(cached,TIMING_FORMAT) and effect_reference is None and not clear_effect:
+            if (workspace_retired and upstream_current and metadata_current
+                    and digit_cache_current(cached,final,LOCAL_DATA)):
+                from piu_timeline.tools.replay import current
+                if current(previous, check_skin=False):
+                    if effect_reference is not None or clear_effect:
+                        return refresh_saved_play(cached, final, coordinates=None, judgments_current=True,
+                                                  note_skin=note_skin, display_delay_ms=options.get('display_delay_ms',0),
+                                                  effect_changed=True, workspace_retired=True)
+                    from piu_timeline.charts.data import auto_register
+                    from piu_timeline.play.presentation import refresh_registration
+                    auto_register(cached, final)
+                    refresh_registration(cached, final)
+                    return final/'report.html'
+            if not workspace_retired and producers_current and metadata_current and applicable(cached,TIMING_FORMAT) and effect_reference is None and not clear_effect:
                 refreshed=refresh(cached,final,segment_number,options.get('display_delay_ms',0),document['media'])
                 if refreshed is not None:return refreshed
             beat_ready=beat_current(cached,final)if upstream_current else False
             coordinates=None
-            if upstream_current and not beat_ready:
+            if not workspace_retired and upstream_current and not beat_ready:
                 from piu_timeline.play.stages import load_coordinates
                 coordinates=load_coordinates(cached,final)
-            if (upstream_current and (beat_ready or coordinates is not None)
+            if (not workspace_retired and upstream_current and (beat_ready or coordinates is not None)
                     and metadata_current
                     and digit_cache_current(cached,final,LOCAL_DATA)
                     and ((judgments_current := judgment_cache_current(cached,root,final))

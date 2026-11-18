@@ -63,7 +63,7 @@ windows, ambiguity, note candidates and these downloadable artifacts:
 | `effect-images/acquisition/pixels.rgb` | Deduplicated 47 x 47 RGB crop evidence |
 | `effect-images/acquisition/exclusions.bin` | Conservative native exclusion envelopes |
 | `effect-images/events.json` | Sequence decisions and measurement dependencies |
-| `effect-images/observations.jsonl` | Per-window native-frame positions and reference-stage candidates |
+| `effect-images/observations.jsonl.gz` | Per-window native-frame positions and reference-stage candidates |
 | `effect-images/associations.json` | Note/popup candidates and unresolved relationships |
 | `effect-images/summary.json` | Bounded report fields and artifact links |
 
@@ -110,7 +110,8 @@ windows, association time changed from 2.105 s to 0.029 s with identical output.
 Projecting the saved association request reduced 16,399,312 bytes to 171,134 bytes
 while preserving all 3,063 associations. These are local component measurements,
 not whole-play speed estimates or recognition-accuracy validation. Large original
-`frames.jsonl`/`frames.base.jsonl` snapshots retain their existing storage contract.
+Published plays use the saved visual channel projection for effect exclusion positions. The
+working `frames.jsonl` can be retired after play analysis.
 
 Native hold endpoint pairing also groups eligible tails by lane and reuses each
 endpoint's observed-position table. Pair ordering and temporal continuity checks

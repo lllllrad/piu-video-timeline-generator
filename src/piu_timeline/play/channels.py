@@ -150,7 +150,7 @@ def layer_manifest(directory):
         'frame_observations': ['frames.combo-baseline.jsonl', 'frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
         'interpretations': ['object-interpretation.json', 'head-registration.json', 'skin-role-evidence.json', 'body-risk-evidence.json', 'holds.json', 'visual-channels.json'],
         'effect_image_pixels': ['effect-images/acquisition/capture.json','effect-images/acquisition/pixels.rgb','effect-images/acquisition/exclusions.bin'],
-        'effect_image_observations': ['effect-images/events.json','effect-images/observations.jsonl','effect-images/associations.json'],
+        'effect_image_observations': ['effect-images/events.json','effect-images/observations.jsonl.gz','effect-images/associations.json'],
         'native_measurements': ['native-stages/hold-geometry.json', 'native-stages/processing.json', 'native-stages/note-types.json', 'native-stages/risk-proofs.json', 'native-stages/configured-processing.json'],
         'sustained_state': ['hold-state-input.json', 'derived-stages/hold-state.json'],
         'coordinates': ['coordinates.json'],
@@ -160,9 +160,12 @@ def layer_manifest(directory):
         'analysis_view': ['analysis.json', 'timing-reconstruction.json'],
         'presentation': ['presentation-input.json', 'inspection-result.json', 'derived-stages/manifest.json', 'report-data.json', 'report-summary.json', 'report.html'],
     }
+    available = {name: (directory/name).is_file() for names in artifacts.values() for name in names}
+    if '.build-' in directory.name:
+        available['frames.jsonl'] = False
     return {'source': 'analysis.json#/media',
             'artifacts': artifacts,
-            'available': {name: (directory/name).is_file() for names in artifacts.values() for name in names},
+            'available': available,
             'dependencies': {'object_roles':['frames.jsonl','chart-policy.json'],
                              'head_registration':['interpreted_head_trajectory','appearance-features.npz'],
                              'skin_role_clearance':['matched_cap_images','native-features/manifest.json','note-skins.json'],

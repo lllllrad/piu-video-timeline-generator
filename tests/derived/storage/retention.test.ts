@@ -17,6 +17,18 @@ function workspace(t):string {
   t.after(()=>rmSync(path,{recursive:true,force:true}));return path;
 }
 
+test('a completed frame retirement permits pruning only with durable outputs',t=>{
+  const root=workspace(t),final=join(root,'segment-001'),previous=join(root,'segment-001.previous-00000001');
+  snapshot(final,2);snapshot(previous,1);
+  renameSync(join(final,'frames.base.jsonl'),join(final,'frames.combo-baseline.jsonl'));
+  rmSync(join(final,'frames.jsonl'));
+  writeFileSync(join(final,'frame-workspace.json'),'{"schema":1,"state":"retired"}');
+  writeFileSync(join(final,'report-data.json'),'{}');
+  assert.deepEqual(prune(final,previous).removed,[]);
+  writeFileSync(join(final,'coordinates.json'),'{}');
+  assert.deepEqual(prune(final,previous).removed,[previous]);
+});
+
 test('repeated publication retains current native evidence and removes all superseded snapshots',t=>{
   const root=workspace(t),final=join(root,'segment-001'),media=join(root,'original.mkv');
   writeFileSync(media,'original media');snapshot(final,0);

@@ -35,8 +35,11 @@ def prepare(data, directory):
         frames = retained(source, path)
     if path.is_file() and data.get('frame_count', len(frames)) != len(frames):
         raise ValueError('Presentation frames differ from the retained source timeline')
+    artifact_names = ('hold-frames.jsonl', 'judgments.jsonl', 'processing-features.npz', 'appearance-features.npz')
+    if data.get('native_frame_workspace') != 'disposable':
+        artifact_names += ('frames.jsonl',)
     native = {'native_body_risk_available': native_body_risk_available(source),
-              'source_artifacts': files(directory, ('frames.jsonl', 'hold-frames.jsonl', 'judgments.jsonl', 'processing-features.npz', 'appearance-features.npz')),
+              'source_artifacts': files(directory, artifact_names),
               'pre_hold_proofs': risk_proofs(source, directory), 'occluders': note_occluders(source.get('layout', {})),
               'frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'combo', 'combo_confidence') if k in f} for f in frames],
               'visibility_frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'notes') if k in f}

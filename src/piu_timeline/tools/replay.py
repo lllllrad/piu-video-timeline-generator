@@ -57,10 +57,13 @@ def child_environment(jobs):
     return environment
 
 
-def current(path):
+def current(path, *, check_skin=True):
     """Check derived artifact contracts without decoding, OCR or cache writes."""
+    from piu_timeline.play.observations.trace import retired
+    if not retired(path.parent) and not path.with_name('frames.jsonl').is_file():
+        return False
     if not all(path.with_name(name).is_file() for name in
-               ('frames.jsonl', 'report.html', 'recognition-warnings.json', 'timing-ranges.json',
+               ('report.html', 'recognition-warnings.json', 'timing-ranges.json',
                 'timing-reconstruction.json','beat-timing.json')):
         return False
     from piu_timeline.play.continuity import FORMAT as VISIBILITY_FORMAT
@@ -72,7 +75,7 @@ def current(path):
     if not call('presentation.current', str(path.parent)):
         return False
     from piu_timeline.play.skins.replay import configuration_current
-    if not configuration_current(data,path.parent.parent.parent,int(path.parent.name.removeprefix('segment-'))):
+    if check_skin and not configuration_current(data,path.parent.parent.parent,int(path.parent.name.removeprefix('segment-'))):
         return False
     from piu_timeline.play.object_roles import current as objects_current
     if not objects_current(data,path.parent):return False
@@ -146,9 +149,10 @@ def discover(root, sources=(), segments=(), acquire=False):
                 continue  # A producer may still be promoting this metadata.
             numbers = range(1, count+1)
         else:
-            numbers = [int(p.parent.name.removeprefix('segment-'))
-                       for p in (source/'play').glob('segment-[0-9][0-9][0-9]/frames.jsonl')
-                       if p.with_name('analysis.json').is_file()]
+            from piu_timeline.play.observations.trace import retired
+            numbers = [int(p.name.removeprefix('segment-'))
+                       for p in (source/'play').glob('segment-[0-9][0-9][0-9]')
+                       if (p/'analysis.json').is_file() and ((p/'frames.jsonl').is_file() or retired(p))]
         selected.extend((source.name, number) for number in sorted(numbers) if not segments or number in segments)
     order = {name:i for i,name in enumerate(sources)}
     return sorted(selected, key=lambda item:(order.get(item[0], len(order)), item))

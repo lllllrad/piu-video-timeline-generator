@@ -55,7 +55,10 @@ def derive(data,native,bank):
         time,pts=frame['playback_seconds'],frame['source_pts_seconds']
         if not all(math.isfinite(v)for v in(time,pts))or previous is not None and(time<=previous[0]or pts<=previous[1]):
             raise ValueError('Native risk frames need increasing original PTS')
-        previous=time,pts;causes=held.explain(frame['skin_observations'])
+        previous=time,pts
+        causes = frame.get('body_risk_causes')
+        if causes is None:
+            causes = held.explain(frame['skin_observations'])
         if bool(causes)!=frame['possible_hold_or_dense_stack']:raise ValueError('Reconstructed risk differs from native flag')
         if not causes:continue
         if intervals and time-intervals[-1][1]<.1:intervals[-1][1]=time

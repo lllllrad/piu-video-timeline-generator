@@ -144,9 +144,10 @@ def refresh(data, output, path):
                 raise ValueError('Skin image replay differs from original PTS')
             observations=merge_observations(native,observations,reused)
             observations=account(observations,detector.by_sampling,data['analysis_width'],data['analysis_height'])
+            risk_causes = at_receptor.explain(observations)
             native.update(notes=[o for o in observations if o['role'] != 'hold_body'],
                           skin_observations=observations,
-                          possible_hold_or_dense_stack=at_receptor(observations))
+                          possible_hold_or_dense_stack=bool(risk_causes), body_risk_causes=risk_causes)
             validate_native_frame(native,len(data['layout']['lanes']))
             stream.write(json.dumps(publish(native,output,centers)) + '\n')
             count += 1

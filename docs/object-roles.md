@@ -72,12 +72,11 @@ original uncertainty. Receptor and popup acquisition remain independent.
 
 ## Artifacts and replay
 
-`frames.base.jsonl`, `frames.jsonl`, `hold-frames.jsonl` and feature masks retain
-all source observations. `object-interpretation.json` records each interpreted
+The pending `frames.jsonl` contains source detections. Published motion channels
+retain lane positions and original times. `object-interpretation.json` records each interpreted
 head observation with its original PTS, frame-local detection index, lane,
 full native detection and owning effect IDs. `holds.json` retains interpreted
-body observations under `decorative_body_observations`. Raw channel views
-continue to expose the original candidates.
+body observations under `decorative_body_observations`. Saved channel views expose the original detected positions.
 
 Derived track indices can change when artwork is separated. They are not source
 identifiers. Source time and frame-local observation identity provide the link

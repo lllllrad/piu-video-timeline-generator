@@ -37,9 +37,11 @@ export function prune(finalPath:string,newPrevious:string|null=null,protectedPat
   const final=resolve(finalPath),name=basename(final),parent=dirname(final);
   if(!/^(?:analysis|segment-\d{3})$/.test(name))throw new Error('Retention requires a canonical analysis directory');
   const play=name.startsWith('segment-');
-  const required=play?['analysis.json','frames.jsonl','report.html']:['analysis.json'];
+  const required=play?['analysis.json','report.html']:['analysis.json'];
   const baseline=!play||['frames.combo-baseline.jsonl','frames.base.jsonl'].some(part=>file(join(final,part)));
-  if(!baseline||!directory(final)||!required.every(part=>file(join(final,part)))||!manifest(final,validatedManifest)) {
+  const observations=!play||file(join(final,'frames.jsonl'))||
+    ['frame-workspace.json','report-data.json','coordinates.json'].every(part=>file(join(final,part)));
+  if(!observations||!baseline||!directory(final)||!required.every(part=>file(join(final,part)))||!manifest(final,validatedManifest)) {
     return {removed:[],kept:[],reason:'Canonical result or immutable native baseline is incomplete'};
   }
   const pattern=new RegExp(`^${name}\\.(previous|build)-[a-f0-9]+$`);

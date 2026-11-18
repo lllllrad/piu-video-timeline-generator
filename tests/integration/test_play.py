@@ -177,9 +177,29 @@ class PlayIntegrationTest(unittest.TestCase):
             self.assertNotIn('notes',data)
             data=track_analysis(data,root/'out')
             self.assertNotIn('matches',data)
+            tracked = data
             data=physical_analysis(data,root/'out')
             self.assertGreater(len(data['matches']),0, (data['combo_readable_fraction'],data['combo_events'],[(n['status'],n.get('reason'),n.get('target_seconds'),n['points']) for n in data['notes']]))
             match=data['matches'][0]
             self.assertAlmostEqual(match['target_seconds'],.8,delta=.03)
             self.assertGreater(match['raw_offset_upper_ms'],0)
+
+            # Publish the same measured play through the normal stage sequence.
+            from piu_timeline.derived import call
+            from piu_timeline.play.analysis import finish_play
+            pending = root/'segment-001.build-abcdef01'
+            (root/'out').rename(pending)
+            final = root/'segment-001'
+            with patch('piu_timeline.play.judgments.learn_models',return_value=[]), \
+                    patch('piu_timeline.charts.data.auto_register'):
+                report = finish_play(tracked, pending, final, 1, 0, record)
+            self.assertTrue(report.is_file())
+            self.assertFalse((final/'frames.jsonl').exists())
+            self.assertFalse((final/'comparison-evidence').exists())
+            self.assertTrue((final/'frames.combo-baseline.jsonl').is_file())
+            self.assertTrue(call('presentation.current', str(final)))
+            from piu_timeline.tools.replay import current
+            self.assertTrue(current(final/'analysis.json', check_skin=False))
+            published = json.loads((final/'analysis.json').read_text())
+            self.assertEqual(len(published['visual_channels']['timeline']['frames']), 60)
             self.assertEqual((video.stat().st_size,video.stat().st_mtime_ns),before)

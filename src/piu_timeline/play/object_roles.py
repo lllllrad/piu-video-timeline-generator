@@ -84,7 +84,7 @@ def filter_frames(data,frames,bodies=False):
         skipped=skipped_frame(frame['playback_seconds'],candidates)
         if skipped:
             result.append({**frame,('bodies'if bodies else'notes'):[], 'skin_observations':[],
-                           'possible_hold_or_dense_stack':False,'non_playable_effects':skipped})
+                           'possible_hold_or_dense_stack':False,'body_risk_causes':[], 'non_playable_effects':skipped})
             continue
         kept=[]
         for observation in frame.get('bodies'if bodies else'notes',[]):

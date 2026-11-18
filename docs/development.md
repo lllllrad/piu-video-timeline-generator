@@ -225,7 +225,8 @@ just _replay --acquire --watch
 just _audit --sources VIDEO_ID --segments 12 14
 ```
 
-Replay defaults to completed canonical plays with saved native frames. It
+Replay defaults to completed canonical plays with saved native frames or a
+retired frame workspace. It
 checks artifact contracts and source identity before calling the public play
 command for outdated results. `--acquire` also includes metadata plays without
 saved observations; `--watch` discovers later promotions every 30 seconds.

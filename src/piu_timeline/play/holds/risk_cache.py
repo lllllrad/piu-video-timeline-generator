@@ -36,8 +36,10 @@ def prepare(data,directory):
     from piu_timeline.play.object_roles import filter_frames
     try:
         from piu_timeline.play.observations.trace import stream_frames
-        with stream_frames(trace, data['frame_count'], comparisons=True) as frames:
-            interpreted=(filter_frames(data,[frame])[0] for frame in frames)
+        from piu_timeline.play.observations.skin_results import restore
+        with stream_frames(trace, data['frame_count']) as frames:
+            interpreted = (filter_frames(data, [frame if 'body_risk_causes' in frame else restore(frame, directory)])[0]
+                           for frame in frames)
             result=derive(data,interpreted,load_bank(data['skin_detector']['bank_path']))
     except (OSError,ValueError,KeyError)as error:
         result={'status':'failed','frames':[],'warnings':[{'reason':'native_body_risk_evidence_unavailable',

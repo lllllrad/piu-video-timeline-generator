@@ -1,3 +1,4 @@
+import {gunzipSync} from 'node:zlib';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,statSync,rmSync} from 'node:fs';
@@ -39,12 +40,12 @@ test('saved play measurement is reusable while note links change; corrupt RGB is
  t.after(()=>{if(previous===undefined)delete process.env.PIU_EFFECT_JOBS;else process.env.PIU_EFFECT_JOBS=previous;});
  const out=join(root,'results'),result=await analyze(reference,query.path,request,out);
  assert.equal(result.counts.candidate_windows,3);assert.equal(result.counts.frame_observations,102);
- const rows=readFileSync(join(out,'observations.jsonl'),'utf8').trim().split('\n').map(l=>JSON.parse(l));
+ const rows=gunzipSync(readFileSync(join(out,'observations.jsonl.gz'))).toString('utf8').trim().split('\n').map(l=>JSON.parse(l));
  assert.equal(rows[0].source_pts_seconds,100);assert.equal(rows.at(-1).source_pts_seconds,104+33/60);
  assert.ok(rows.every(r=>r.origin_pixels.length===2));
  process.env.PIU_EFFECT_JOBS='2';const parallel=join(root,'parallel');
  await analyze(reference,query.path,request,parallel);
- for(const file of ['events.json','observations.jsonl','associations.json'])assert.equal(readFileSync(join(parallel,file),'utf8'),readFileSync(join(out,file),'utf8'));
+ for(const file of ['events.json','observations.jsonl.gz','associations.json'])assert.deepEqual(readFileSync(join(parallel,file)),readFileSync(join(out,file)));
  const before=statSync(join(out,'events.json'),{bigint:true}).mtimeNs;
  notes.push({...notes[0],target_seconds:.21});writeFileSync(request,JSON.stringify({notes,hold_analysis:{holds:[]}}));
  await analyze(reference,query.path,request,out);

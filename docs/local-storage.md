@@ -1,22 +1,21 @@
 # Local storage and analysis history
 
-Original recordings live under `.local/data/SOURCE/raw/`. Native observation
-traces, original source PTS, counter crops and pixel caches live beside each
-current play result under `play/segment-NNN/`. Preserve these for later analysis
-without reacquiring video. Image banks are versioned in the separate data
-repository. Generated HTML and derived stage artifacts are reproducible consumers.
-Promotion updates complete JSON path values atomically without reserializing
-numerical observations. Files with no affected paths retain their exact bytes
-and modification times; original media paths and JSON object keys stay unchanged.
+Original recordings live under `.local/data/SOURCE/raw/`. Current play results
+under `play/segment-NNN/` retain original source PTS, registered coordinates,
+hold and role measurements, counter crops, and pixel feature caches. Image
+banks are versioned in the separate data repository. Promotion updates complete
+JSON path values atomically without reserializing numerical observations. Files
+with no affected paths retain their exact bytes and modification times.
 
-Native observations are structured text, not compressed video. A frame can carry
-several positive patterns and alternatives with independent region errors and
-coordinates. Repeated comparisons and broad sampling expansions can produce
-large JSON traces. A refit stages a complete copy of the existing analysis;
-`frames.jsonl`, its immutable `frames.base.jsonl` baseline, derived JSON and HTML
-can therefore occupy space in both the staged and current results. Failed work
-can leave another copy. Disk requirements must account for these copies rather
-than the size of the recording alone.
+The pending play build uses `frames.jsonl` for native observations. Image
+comparisons are stored in compressed, content-addressed files. After all frame
+consumers and report rendering succeed, the build removes `frames.jsonl` and the temporary `comparison-evidence/` files.
+The registered coordinates, support and conflict results remain available.
+`frames.combo-baseline.jsonl` holds the original counter fields and source
+timestamps. Legacy snapshots with `frames.base.jsonl` remain readable.
+A rebuild that requires retired frame observations reacquires them from the
+original recording. Saved file stages and report rendering use their own
+published inputs.
 
 ## Automatic retention
 
@@ -27,8 +26,8 @@ and cached play refreshes also apply retention. Unrelated segments, original
 media and human-named directories are outside its scope. Symlink directories
 are never followed for deletion.
 
-Failed analysis does not trigger retention. A play without its saved native trace,
-immutable baseline or report also keeps its history. Original recording paths,
+Failed analysis does not trigger retention. A play keeps its history unless its baseline and report are present together
+with either a native trace or a completed frame retirement and saved coordinates. Original recording paths,
 including symlink targets, protect containing directories from removal.
 
 Publication remains protected by the source/segment writer lock. A shared

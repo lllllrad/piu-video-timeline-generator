@@ -7,16 +7,26 @@ import json,tempfile
 from pathlib import Path
 from unittest.mock import patch
 from piu_timeline.play.stages import execute,publish
+from piu_timeline.play.observations.trace import retire,retired
 results=[]
 with tempfile.TemporaryDirectory()as tmp:
  root=Path(tmp)
  for fail in (False,True):
-  parent=root/str(fail);parent.mkdir();pending=parent/'segment-001.build-new';pending.mkdir();final=parent/'segment-001';final.mkdir()
+  parent=root/str(fail);parent.mkdir();pending=parent/'segment-001.build-abcdef01';pending.mkdir();final=parent/'segment-001';final.mkdir()
   (final/'report.html').write_text('previous report')
+  (final/'frames.jsonl').write_text('previous trace')
   (pending/'analysis.json').write_text('{}')
   execute(pending,'coordinates',lambda:(pending/'coordinates.json').write_text('{}'),('coordinates.json',))
   before=json.loads((pending/'pipeline-status.json').read_text())
   (pending/'report.html').write_text('new report')
+  (pending/'report-data.json').write_text('{}')
+  (pending/'comparison-evidence').mkdir()
+  row={'playback_seconds':1.125,'source_pts_seconds':71.125,
+       'comparison_evidence':{'path':'comparison-evidence/a.json.gz','sha256':'proof'}}
+  (pending/'frames.jsonl').write_text(json.dumps({**row,'notes':[]})+'\n')
+  execute(pending,'retire-frame-workspace',lambda:retire(pending),('frame-workspace.json',))
+  assert not (pending/'frames.jsonl').exists() and retired(pending)
+  assert not (pending/'comparison-evidence').exists()
   rename=Path.rename
   def promote(path,target):
    if fail and path==pending:raise OSError('injected publication failure')
@@ -24,6 +34,7 @@ with tempfile.TemporaryDirectory()as tmp:
   with patch.object(Path,'rename',promote):
    try:publish(pending,final)
    except OSError:pass
+  assert (final/'frames.jsonl').is_file()==fail
   status=json.loads(((pending if fail else final)/'pipeline-status.json').read_text())
   results.append({'between':before['status'],'stage':before['stage_status'],'after':status['status'],'report':(final/'report.html').read_text(),'publication':status['stages']['publication']['status']})
  pending=root/'missing-output';pending.mkdir()

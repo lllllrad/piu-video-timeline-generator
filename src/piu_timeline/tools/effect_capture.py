@@ -51,13 +51,27 @@ def capture(directory, output, limit, *, data=None):
         for index in range(max(0, i-8), min(len(trace), i+26)):
             desired.setdefault(index, []).append(n)
     notes = {}
-    with (directory/'frames.jsonl').open() as stream:
-        for i, line in enumerate(stream):
-            if i in desired:
-                row = json.loads(line)
-                if abs(row['source_pts_seconds']-trace[i]['source_pts_seconds']) > 1e-6:
+    frames = directory/'frames.jsonl'
+    motion = data.get('visual_channels', {}).get('motion', {}).get('observations')
+    if motion is None:
+        from piu_timeline.play.observations.trace import stream_frames
+        with stream_frames(frames) as records:
+            for i, row in enumerate(records):
+                if i not in desired:
+                    continue
+                if i >= len(trace) or abs(row['source_pts_seconds']-trace[i]['source_pts_seconds']) > 1e-6:
                     raise ValueError('Note timeline differs from receptor timeline')
                 notes[i] = row.get('notes', [])
+    else:
+        from piu_timeline.play.observations.records import retained
+        rows = retained(data, frames)
+        for i in desired:
+            if i >= len(rows):
+                continue
+            row = rows[i]
+            if any(abs(row[key]-trace[i][key]) > 1e-6 for key in ('source_pts_seconds', 'playback_seconds')):
+                raise ValueError('Note timeline differs from receptor timeline')
+            notes[i] = row['notes']
     if set(notes) != set(desired):
         raise ValueError('Missing source-bound note frames for exclusion acquisition')
     source = Path(data['media']['path'])

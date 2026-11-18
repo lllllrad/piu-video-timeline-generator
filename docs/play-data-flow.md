@@ -61,10 +61,16 @@ anchor conventions, typed views and consumer permissions.
 
 ## Data boundaries
 
+Image comparison files are working inputs to native interpretation, including
+coordinate remeasurement, hold geometry and skin clearance. Published artifacts
+carry measured positions, role and connectivity results, and source-bound
+proofs for later timing and review. The complete comparison searches and the
+working frame trace expire with a successful build.
+
 | Stage | Code ownership | Principal stored data |
 | --- | --- | --- |
 | Metadata | `metadata/`, `vision/`, `workflow.py` | Song/chart/player identity, segment bounds, stage-result OCR |
-| Pixel and frame acquisition | `play/observations/`, `play/frames.py`, `play/skins/`, `play/holds/features.py`, `play/judgments.py` | `frames.base.jsonl`, `frames.jsonl`, `judgments.jsonl`, `hold-frames.jsonl`, feature masks and manifests |
+| Pixel and frame acquisition | `play/observations/`, `play/frames.py`, `play/skins/`, `play/holds/features.py`, `play/judgments.py` | `frames.combo-baseline.jsonl`, temporary `frames.jsonl`, `judgments.jsonl`, `hold-frames.jsonl`, feature masks and manifests |
 | Object/track/coordinate interpretation | `play/object_roles.py`, `play/tracking.py`, `play/head_registration.py`; TypeScript `derived/registration.ts`, `derived/tracks.ts`, `derived/clocks.ts` | Original detections, `tracking.json`, interpreted tracks and native coordinate registration |
 | Physical crossing | `derived/stages/physical_timing.ts` | `physical-timing.json`: displacement, clocks, crossing ranges and failures |
 | Physical interval validation | `derived/stages/native_timing.ts`, `derived/native_gaps.ts` | `native-timing.json`: physical interval validation and owned timing updates |
