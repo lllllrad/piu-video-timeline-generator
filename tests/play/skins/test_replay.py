@@ -121,7 +121,8 @@ class SkinReplayTest(unittest.TestCase):
                 metadata=refresh(data,root,bank/'bank.json')
             updated=[json.loads(line)for line in (root/'frames.jsonl').read_text().splitlines()]
             self.assertFalse((root/'frames.outline.jsonl').exists())
-            self.assertEqual((root/'frames.base.jsonl').read_text(),(root/'frames.jsonl').read_text())
+            from piu_timeline.play.observations.counter_baseline import FIELDS, baseline_frames
+            self.assertEqual(list(baseline_frames(root)), [{k: row[k] for k in FIELDS if k in row} for row in frames])
             for old,new in zip(frames,updated,strict=True):
                 self.assertEqual({k:new[k]for k in old if k!='notes'},{k:v for k,v in old.items()if k!='notes'})
                 self.assertEqual(new['notes'][0]['role'],'tap')

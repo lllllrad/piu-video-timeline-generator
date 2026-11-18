@@ -63,13 +63,13 @@ def collect_native(data, directory, frames, native):
                 raise ValueError('Judgment channel differs from native frame timeline')
             words.append(word)
             word_counts[word.get('label') or ('blank' if word.get('blank') else 'unknown')] += 1
-    baseline_path = directory/'frames.base.jsonl'
+    from piu_timeline.play.observations.counter_baseline import baseline_frames, baseline_path
+    baseline_trace = baseline_path(directory)
     if native and all('baseline_combo'in f for f in native):
         baseline=[{'playback_seconds':f['playback_seconds'],'source_pts_seconds':f['source_pts_seconds'],
                    'combo':f['baseline_combo'],'combo_confidence':f.get('baseline_combo_confidence')}for f in native]
     else:
-        baseline=[{key:frame.get(key)for key in ('source_pts_seconds','playback_seconds','combo','combo_confidence')}
-                  for frame in read_frames(baseline_path)]if baseline_path.is_file()else native
+        baseline=list(baseline_frames(directory)) if baseline_trace.is_file() else native
     if len(baseline) != len(native) or any(
             any(abs(a[k]-b[k]) > 1e-6 for k in ('source_pts_seconds', 'playback_seconds'))
             for a,b in zip(native, baseline, strict=True)):
@@ -120,7 +120,7 @@ def collect_native(data, directory, frames, native):
                       'judgment_trace': 'judgments.jsonl', 'frames': len(native),
                       'combo_readable_frames': sum(f.get('combo') is not None for f in native),
                       'judgment_frame_counts': dict(word_counts),
-                      'baseline_trace': 'frames.base.jsonl' if baseline_path.is_file() else 'frames.jsonl',
+                      'baseline_trace': baseline_trace.name,
                       'observation_fields': ['combo','combo_confidence','judgment','judgment_confidence','blank',
                                              'combo_read_mode','combo_recovered','baseline_combo','baseline_combo_confidence'],
                       'observations': [[f.get('combo'),f.get('combo_confidence'),w.get('label'),w.get('confidence'),w.get('blank'),
@@ -147,7 +147,7 @@ def layer_manifest(directory):
         'pixel_acquisition': ['counter-pixels.npz'],
         'features': ['native-features/manifest.json', 'processing-features.npz',
                      'appearance-features.npz', 'evidence/judgments/features-v3.npz'],
-        'frame_observations': ['frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
+        'frame_observations': ['frames.combo-baseline.jsonl', 'frames.base.jsonl', 'frames.jsonl', 'judgments.jsonl', 'hold-frames.jsonl'],
         'interpretations': ['object-interpretation.json', 'head-registration.json', 'skin-role-evidence.json', 'body-risk-evidence.json', 'holds.json', 'visual-channels.json'],
         'effect_image_pixels': ['effect-images/acquisition/capture.json','effect-images/acquisition/pixels.rgb','effect-images/acquisition/exclusions.bin'],
         'effect_image_observations': ['effect-images/events.json','effect-images/observations.jsonl','effect-images/associations.json'],
@@ -180,7 +180,7 @@ def layer_manifest(directory):
 def augment_channels(data, directory, frames=None):
     """Rebuild associations from retained pixels; invalidate independently of OCR."""
     from piu_timeline.play.holds.analysis import fingerprint
-    inputs = ('frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz','counter-pixels.npz','native-features/manifest.json')
+    inputs = ('frames.combo-baseline.jsonl', 'frames.base.jsonl','frames.jsonl','judgments.jsonl','hold-frames.jsonl','processing-features.npz','appearance-features.npz','counter-pixels.npz','native-features/manifest.json')
     from piu_timeline.play.holds.analysis import notes_identity
     from piu_timeline.play.observations.artifacts import file_identities
     values={key:data.get(key)for key in ('media','layout','analysis_height','combo_events','judgment_events',

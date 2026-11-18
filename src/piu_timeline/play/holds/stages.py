@@ -15,9 +15,7 @@ def geometry(data, directory, frames, reconstruct):
     from piu_timeline.play.holds.features import feature_contract
     fields = ('notes', 'layout', 'analysis_width', 'analysis_height', 'game_roi', 'start_seconds',
               'scroll_motion', 'head_registration', 'object_interpretation', 'skin_detector', 'skin_role_evidence')
-    native_path = directory/'frames.base.jsonl'
-    if not native_path.is_file():
-        native_path = directory/'frames.jsonl'
+    native_path = directory/'frames.jsonl'
     image=bool(data.get('skin_detector'))
     values={k:data[k]for k in fields if k in data}
     if image:

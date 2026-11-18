@@ -41,7 +41,8 @@ class CounterPixelsTest(unittest.TestCase):
         self.assertEqual(updated[1]['combo_read_mode'],'contrast_template')
         for before,after in zip(records,updated,strict=True):
             for key in ('source_pts_seconds','playback_seconds','notes'):self.assertEqual(after[key],before[key])
-        self.assertEqual((self.directory/'frames.base.jsonl').read_text(),original)
+        from piu_timeline.play.observations.counter_baseline import FIELDS, baseline_frames
+        self.assertEqual(list(baseline_frames(self.directory)), [{k: row[k] for k in FIELDS if k in row} for row in records])
 
     def setUp(self):
         self.temporary=tempfile.TemporaryDirectory()

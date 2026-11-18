@@ -12,6 +12,8 @@ def retained(data,directory):
     from piu_timeline.play.channels import CHANNEL_FORMAT
     if binding.get('format')!=CHANNEL_FORMAT:return None
     names=('frames.jsonl','frames.base.jsonl')
+    if (directory/'frames.combo-baseline.jsonl').is_file():
+        names+=('frames.combo-baseline.jsonl',)
     if any(binding.get('traces',{}).get(name)!=signature for name,signature in files(directory,names).items()):return None
     previous=read_analysis_header(analysis)
     fields=('media','layout','analysis_width','analysis_height','game_roi','frame_count')

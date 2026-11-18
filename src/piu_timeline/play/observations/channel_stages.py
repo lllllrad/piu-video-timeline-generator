@@ -29,7 +29,7 @@ def derived_motion_contract():
 def note_types(data, directory, native, frames, observe):
     source = {k: v for k, v in measurement_data(data).items() if k not in ('scroll_motion', 'scroll_pause_model', 'scroll_speed_model')}
     source['hold_analysis'].pop('holds')
-    baseline = 'frames.base.jsonl' if (directory/'frames.base.jsonl').is_file() else 'frames.jsonl'
+    baseline = 'frames.jsonl'
     inputs = {'data': source,
               'frames': [{k: f[k] for k in ('playback_seconds', 'source_pts_seconds', 'bodies', 'color_connections') if k in f} for f in frames],
               'native': files(directory, (baseline,)),

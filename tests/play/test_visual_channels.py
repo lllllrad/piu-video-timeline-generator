@@ -80,7 +80,8 @@ class VisualChannelTest(unittest.TestCase):
 
     def test_counter_baseline_does_not_retain_unrelated_native_image_payloads(self):
         import weakref
-        from piu_timeline.play.channels import read_frames
+        from contextlib import contextmanager
+        from piu_timeline.play.observations.trace import stream_frames
         class ImagePayload:
             pass
         with tempfile.TemporaryDirectory()as temporary:
@@ -89,15 +90,21 @@ class VisualChannelTest(unittest.TestCase):
             (directory/'frames.base.jsonl').touch()
             live=weakref.WeakSet()
             def source(path):
-                if path.name!='frames.base.jsonl':
-                    yield from read_frames(path);return
                 for i,frame in enumerate(frames):
                     # At most the last yielded raw frame may still be alive.
                     # Collecting full image-bearing baseline records fails here.
                     self.assertLessEqual(len(live),1)
                     payload=ImagePayload();live.add(payload)
                     yield {**frame,'combo':100+i,'combo_confidence':.97,'image_payload':payload}
-            with patch('piu_timeline.play.channels.read_frames',side_effect=source):
+            @contextmanager
+            def stream(path):
+                if path.name == 'frames.base.jsonl':
+                    yield source(path)
+                else:
+                    with stream_frames(path) as records:
+                        yield records
+
+            with patch('piu_timeline.play.observations.counter_baseline.stream_frames',side_effect=stream):
                 channels=collect(data,directory,frames)
             self.assertEqual(len(live),0)
             values=channels['popup']['observations']

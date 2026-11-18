@@ -43,23 +43,9 @@ def refresh_counter_observations(cached, output, replace_font=False):
     from itertools import zip_longest
     digits = DigitReader.load(output / 'evidence/digit-templates.npz')
     trace = output / 'frames.jsonl'
-    base = output / 'frames.base.jsonl'
-    if not base.is_file():
-        baseline = trace
-        # Older refinement output did not keep a baseline sidecar. Recover its
-        # immutable pre-refinement trace from the retained atomic-build backup.
-        if cached.get('frame_observation_version',2) >= 3:
-            number = cached['segment_number']
-            for previous in sorted(output.parent.glob(f'segment-{number:03}.previous-*/analysis.json')):
-                saved = json.loads(previous.read_text())
-                if (saved.get('frame_observation_version',2) == 2
-                        and all(saved.get(key)==cached.get(key) for key in
-                                ('media','start_seconds','end_seconds','analysis_width','layout'))):
-                    baseline = previous.parent / 'frames.jsonl'
-                    break
-        shutil.copyfile(baseline,base)
-    with base.open()as stream:
-        frames = [json.loads(line) for line in stream]
+    from piu_timeline.play.observations.counter_baseline import baseline_frames, save_baseline
+    save_baseline(output, cached)
+    frames = list(baseline_frames(output))
     prior,following = [],[None]*len(frames)
     known_before = known_after = None
     for frame in frames:
@@ -75,7 +61,7 @@ def refresh_counter_observations(cached, output, replace_font=False):
     from piu_timeline.play.counter_pixels import counter_crops
     crops = counter_crops(cached,output)
     with updated.open('w') as target:
-        for i,(frame,decoded) in enumerate(zip_longest(frames,crops)):
+        for i,(frame,decoded) in enumerate(zip_longest(baseline_frames(output, full=True),crops)):
             if frame is None or decoded is None:
                 raise ValueError('Counter refresh frame count differs from saved native observations')
             pts,seconds,crop = decoded
@@ -309,6 +295,9 @@ def finish_play(result, pending, final, segment_number, display_delay_ms, source
     """Run derived stages, prepare/render the inspector, then atomically publish."""
     from piu_timeline.play.stages import execute
     result['segment_number']=segment_number
+    from piu_timeline.play.observations.counter_baseline import LEGACY, save_baseline
+    save_baseline(pending, result)
+    (pending/LEGACY).unlink(missing_ok=True)
     if not registered_coordinates:
         result=execute(pending,'object-interpretation',lambda:interpret_objects(result,pending,display_delay_ms))
         from piu_timeline.play.head_registration import measure_coordinates

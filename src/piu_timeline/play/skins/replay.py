@@ -3,7 +3,6 @@ import json
 from hashlib import sha256
 import math
 from pathlib import Path
-import shutil
 from itertools import zip_longest
 from contextlib import closing, nullcontext
 
@@ -158,5 +157,6 @@ def refresh(data, output, path):
     if count != data['frame_count'] or (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
         raise ValueError('Source identity or native frame count changed during skin replay')
     target.replace(trace)
-    shutil.copy2(trace, output / 'frames.base.jsonl')
+    from piu_timeline.play.observations.counter_baseline import save_baseline
+    save_baseline(output, data)
     return detector_metadata(path, bank)

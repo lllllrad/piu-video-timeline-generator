@@ -121,14 +121,16 @@ class PlayCacheTest(unittest.TestCase):
             updated=[json.loads(line) for line in (output/'frames.jsonl').read_text().splitlines()]
             self.assertEqual([f['combo'] for f in updated],[100,None,100,100,101,101,None,102])
             self.assertEqual(reader.read.call_count,3)
-            self.assertEqual((output/'frames.base.jsonl').read_text(),trace)
+            from piu_timeline.play.observations.counter_baseline import FIELDS, baseline_frames
+            self.assertEqual(list(baseline_frames(output)), [{k: row[k] for k in FIELDS if k in row} for row in frames])
             self.assertEqual([f['source_pts_seconds'] for f in updated],[f['source_pts_seconds'] for f in frames])
             reader.read.reset_mock(side_effect=True)
             reader.read.side_effect=[(102,.95),(100,.95),(101,.95)]
             with patch.object(play.DigitReader,'load',return_value=reader),patch('piu_timeline.play.counter_pixels.decode_frames',side_effect=AssertionError('must use saved pixels')):
                 play.refresh_counter_observations(cached,output)
             self.assertEqual([json.loads(line) for line in (output/'frames.jsonl').read_text().splitlines()],updated)
-            self.assertEqual((output/'frames.base.jsonl').read_text(),trace)
+            from piu_timeline.play.observations.counter_baseline import FIELDS, baseline_frames
+            self.assertEqual(list(baseline_frames(output)), [{k: row[k] for k in FIELDS if k in row} for row in frames])
 
     def test_compatible_observations_refit_without_decode_or_ocr(self):
         with tempfile.TemporaryDirectory() as temporary:
