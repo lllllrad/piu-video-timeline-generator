@@ -181,7 +181,8 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     combo,times=ComboTracker(),[]
     from piu_timeline.play.skins.held import BodyAtReceptor
     from piu_timeline.play.skins.detector import SkinDetector
-    body_at_receptor=BodyAtReceptor(SkinDetector(skin_bank,layout,width,round(width*roi[3]/roi[2])))
+    detector=SkinDetector(skin_bank,layout,width,round(width*roi[3]/roi[2]))
+    body_at_receptor=BodyAtReceptor(detector)
     from piu_timeline.play.skins.replay import detector_metadata
     from piu_timeline.play.skins.pipeline import classified_frames
     observed, known, previous_mask, previous_read = 0, 0, None, (None, 0.0)
@@ -189,6 +190,9 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
     from piu_timeline.play.counter_pixels import CounterPixelWriter
     counter_pixels=CounterPixelWriter({'media':record,'start_seconds':start,'end_seconds':end,
                                       'game_roi':list(roi),'analysis_width':width,'layout':layout},output)
+    from piu_timeline.play.observations.skin_results import publish
+    from piu_timeline.play.skins.frame_centers import FrameCenters
+    centers=FrameCenters(detector)
     with (output / 'frames.jsonl').open('w') as trace:
         decoded=decode_frames(record,start,end,roi,width)
         for pts, playback, image, skin_observations in classified_frames(decoded,skin_bank,layout,width,round(width*roi[3]/roi[2])):
@@ -209,9 +213,9 @@ def analyze_play(document, segment, output, player=None, layout=None, start=None
                 digits.train(crop, value, source=pts)
                 last_adapted = value
             times.append(playback); observed += 1; known += value is not None
-            trace.write(json.dumps({'source_pts_seconds': pts, 'playback_seconds': playback,
+            trace.write(json.dumps(publish({'source_pts_seconds': pts, 'playback_seconds': playback,
                                     'notes': notes, 'skin_observations':skin_observations,
-                                    'possible_hold_or_dense_stack':possible_hold, 'combo': value, 'combo_confidence': confidence, 'combo_read_mode': digits.last_mode}) + '\n')
+                                    'possible_hold_or_dense_stack':possible_hold, 'combo': value, 'combo_confidence': confidence, 'combo_read_mode': digits.last_mode},output,centers)) + '\n')
             if observed % 300 == 0:
                 print(f'  {observed} native frames, {playback-start:.1f}/{end-start:.1f}s, combo readable {known/observed:.0%}', flush=True)
     if not times:

@@ -79,3 +79,42 @@ channel is also exposed as `visual_channels.effect_images`. These fields do not
 change target times, raw offsets, grades, existing event ownership or coverage.
 `physical_input_range` stays null. The observations provide inspectable supporting
 evidence while display/input delay and ambiguous phases remain unresolved.
+
+## Performance and concurrency
+
+Plays still run sequentially. Independent effect windows use up to eight Node
+worker threads by default. `PIU_EFFECT_JOBS=1..32` overrides the effect pool;
+otherwise it follows `PIU_SKIN_JOBS`, then the available-CPU default capped at
+eight. RGB and exclusion bytes are shared read-only between workers. Each worker
+has a bounded one-window task, and the coordinator restores source event order
+before stable frame sorting. A worker failure aborts measurement and terminates
+the remaining workers. Changing concurrency alone does not invalidate cached
+measurements or change their numerical meaning.
+
+Association queries use inclusive lane/time indexes and preserve original note,
+popup and event ordering. Per-frame JSONL is written incrementally rather than
+building a second full serialized copy. Python attaches note links through a
+reverse index instead of rescanning every relation for every note.
+
+`inspection-performance.json` records elapsed time and completion/failure for
+native input preparation, evidence compaction, frame loading, configured pixel
+measurement, derived inspection, materialization, JSON reading and effect
+analysis. These diagnostics do not participate in evidence or cache identity.
+The remaining large inspection JSON files and temporally dependent hold/tracking
+steps are not made parallel by the effect pool.
+
+A local saved-data comparison on 2026-11-18 measured 32 RGB windows at 16.77 s
+with one worker and 7.96 s with eight workers (including pool startup and pixel
+sharing). Full event and per-frame outputs were identical. For 3,063 image
+windows, association time changed from 2.105 s to 0.029 s with identical output.
+Projecting the saved association request reduced 16,399,312 bytes to 171,134 bytes
+while preserving all 3,063 associations. These are local component measurements,
+not whole-play speed estimates or recognition-accuracy validation. Large original
+`frames.jsonl`/`frames.base.jsonl` snapshots retain their existing storage contract.
+
+Native hold endpoint pairing also groups eligible tails by lane and reuses each
+endpoint's observed-position table. Pair ordering and temporal continuity checks
+remain unchanged; the state-dependent hold pipeline still runs in source order.
+
+See [native frame results](native-frame-results.md) for the stage boundary that
+keeps full image comparison searches out of ordinary tracking input.

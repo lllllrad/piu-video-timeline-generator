@@ -13,6 +13,7 @@ from piu_timeline.play.skins.sampling import weights,models
 from piu_timeline.play.skins.subfeatures import account
 from piu_timeline.play.skins.coordinates import registered_comparison
 from piu_timeline.play.skins.detector import SkinDetector
+from piu_timeline.play.observations.skin_results import restore
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.replay import refresh,detector_metadata
 from piu_timeline.play.skins.reuse import reusable_groups
@@ -84,7 +85,8 @@ for changed in ('body','caps'):
   with patch.object(replay,'decode_frames',return_value=iter([(native['source_pts_seconds'],1/60,rgb)])),patch.object(replay,'classified_frames',side_effect=serial),redirect_stdout(io.StringIO()):
    refresh(data,root,new/'bank.json')
   actual=json.loads((root/'frames.jsonl').read_text())
-  assert actual['skin_observations']==SkinDetector(new_bank,layout,90,150).detect(rgb)
+  assert all('alternatives'not in o for o in actual['skin_observations'])
+  assert restore(actual,root)['skin_observations']==SkinDetector(new_bank,layout,90,150).detect(rgb)
   assert actual['combo']==42 and media.read_bytes()==b'original recording'
   replays[changed]=any(o.get('cap_subfeature')for o in actual['skin_observations'])
 print(json.dumps({'weights':weights(2,1.5,.5).tolist(),'maximum_rgb_error':error,

@@ -13,17 +13,18 @@ from piu_timeline.play.skins.detector import FORMAT, SkinDetector
 from piu_timeline.play.skins.held import FORMAT as HELD_FORMAT, BodyAtReceptor
 from piu_timeline.play.skins.pipeline import classified_frames
 from piu_timeline.play.observations.cache import validate_native_frame
+from piu_timeline.play.observations.skin_results import FORMAT as RESULT_FORMAT
 
 
 def detector_contract(path):
-    return None if path is None else {'bank': load_bank(path)['contract'], 'detector': FORMAT, 'held_body':HELD_FORMAT}
+    return None if path is None else {'bank': load_bank(path)['contract'], 'detector': FORMAT, 'held_body':HELD_FORMAT,'frame_results':RESULT_FORMAT}
 
 
 def detector_metadata(path, bank=None):
     bank = bank or load_bank(path)
     represented = {(t['lane_kind'], t['role']) for t in bank['templates']
                    if t['role']!='tap' or t['tap_clearance']}
-    return {'contract': {'bank': bank['contract'], 'detector': FORMAT, 'held_body':HELD_FORMAT},
+    return {'contract': {'bank': bank['contract'], 'detector': FORMAT, 'held_body':HELD_FORMAT,'frame_results':RESULT_FORMAT},
             'bank_path': str(Path(path).resolve()), 'registration_reviewed': False,
             'reference_images': len(bank['templates']),
             'registered_native_cap_templates':len(bank['anchor_registrations']),
@@ -120,6 +121,9 @@ def refresh(data, output, path):
     detector=SkinDetector(bank,data['layout'],data['analysis_width'],data['analysis_height'])
     at_receptor=BodyAtReceptor(detector)
     from piu_timeline.play.skins.subfeatures import account
+    from piu_timeline.play.skins.frame_centers import FrameCenters
+    from piu_timeline.play.observations.skin_results import publish, restore
+    centers=FrameCenters(detector)
     count,last = 0,None
     lifetime=closing(decoded)if decoded is not None else nullcontext()
     with trace.open() as source, target.open('w') as stream, lifetime:
@@ -127,7 +131,7 @@ def refresh(data, output, path):
         for line, frame in paired:
             if line is None or decoded is not None and frame is None:
                 raise ValueError('Skin image replay differs from native frame count')
-            native = json.loads(line)
+            native = restore(json.loads(line),output)
             stamp=(native['source_pts_seconds'],native['playback_seconds'])
             if not all(math.isfinite(t)for t in stamp)or last is not None and any(a<=b for a,b in zip(stamp,last)):
                 raise ValueError('Skin replay source timestamps must be finite and increasing')
@@ -145,7 +149,7 @@ def refresh(data, output, path):
                           skin_observations=observations,
                           possible_hold_or_dense_stack=at_receptor(observations))
             validate_native_frame(native,len(data['layout']['lanes']))
-            stream.write(json.dumps(native) + '\n')
+            stream.write(json.dumps(publish(native,output,centers)) + '\n')
             count += 1
             if count % 600 == 0:
                 phase='Skin observation reinterpretation'if decoded is None else'Skin image replay'

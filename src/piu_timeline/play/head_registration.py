@@ -130,8 +130,9 @@ def measure_coordinates(data,directory):
         if 'coordinate_measurement_contract'in data and all('coordinate_measurements'in note for note in data['notes']):
             registration=from_tracks(data)
         else:
-            with (directory/'frames.jsonl').open()as stream:
-                registration=measure_images(data,(json.loads(line)for line in stream))
+            from piu_timeline.play.observations.trace import stream_frames
+            with stream_frames(directory/'frames.jsonl', data.get('frame_count'), comparisons=True) as stream:
+                registration=measure_images(data,stream)
         (directory/'head-registration.json').write_text(json.dumps(registration)+'\n')
         source={**data,'notes':[{k:v for k,v in note.items()if k!='coordinate_measurements'}for note in data['notes']]}
         return project_registered({**source,'head_registration':measurement_view(registration)})

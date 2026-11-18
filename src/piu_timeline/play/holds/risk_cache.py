@@ -36,7 +36,7 @@ def prepare(data,directory):
     from piu_timeline.play.object_roles import filter_frames
     try:
         from piu_timeline.play.observations.trace import stream_frames
-        with stream_frames(trace, data['frame_count']) as frames:
+        with stream_frames(trace, data['frame_count'], comparisons=True) as frames:
             interpreted=(filter_frames(data,[frame])[0] for frame in frames)
             result=derive(data,interpreted,load_bank(data['skin_detector']['bank_path']))
     except (OSError,ValueError,KeyError)as error:

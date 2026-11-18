@@ -41,7 +41,7 @@ def observe(data, native):
             image = matches[0]
             role = image['role']
             for observed_role in image.get('conflicting_roles',[role]):
-                proof=next((p for p in [image,*image.get('alternatives',[])]
+                proof=next((p for p in [image,*image.get('role_results',image.get('alternatives',[]))]
                             if p.get('template_role',p['role'])==observed_role
                             and p.get('classification_status','full_pattern')in('full_pattern','cap_role_pattern','conflict')),image)
                 obscured=clearance_occlusions(proof,references,data['layout'],data['analysis_width'],height)if observed_role=='tap'and references else []

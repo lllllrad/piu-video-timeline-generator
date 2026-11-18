@@ -32,15 +32,20 @@ def image_pairs(data, native, roles, references, cap_references, lengths,body_re
     width = data['analysis_width']
     spacing = (data['layout']['lanes'][1]['x'] - data['layout']['lanes'][0]['x']) * width
     proposals, heads, tails = [], defaultdict(set), defaultdict(set)
+    tails_by_lane = defaultdict(list)
+    endpoints = {}
+    for index, note in enumerate(data['notes']):
+        if roles[index] in ({'hold_start'}, {'hold_end'}):
+            endpoints[index] = dict(detection_points(note))
+        if roles[index] == {'hold_end'}:
+            tails_by_lane[note['lane']].append((index, note))
     for head, first in enumerate(data['notes']):
         if roles[head] != {'hold_start'}:
             continue
-        before = dict(detection_points(first))
+        before = endpoints[head]
         regions=lane_regions(data,first['lane'])
-        for tail, last in enumerate(data['notes']):
-            if roles[tail] != {'hold_end'} or last['lane'] != first['lane']:
-                continue
-            after = dict(detection_points(last))
+        for tail, last in tails_by_lane[first['lane']]:
+            after = endpoints[tail]
             proof, missing = [], []
             for time in sorted(before.keys() & after.keys()):
                 a, b = before[time], after[time]

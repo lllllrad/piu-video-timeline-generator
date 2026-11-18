@@ -104,9 +104,7 @@ def augment(data, directory):
         finally:
             if pending.exists():
                 shutil.rmtree(pending)
-    fields = ('notes', 'matches', 'judgment_events', 'hold_analysis')
-    request = {k: data.get(k) for k in fields}
-    request['visual_channels'] = {'processing': data.get('visual_channels', {}).get('processing', {})}
+    request = link_input(data)
     request_path = target/'play-input.json'
     request_path.write_text(json.dumps(request, ensure_ascii=False)+'\n')
     print('Matching play RGB against source-bound effect references.', flush=True)
@@ -122,9 +120,38 @@ def augment(data, directory):
     data.setdefault('visual_channels', {})['effect_images'] = {**summary, 'available': True}
     from piu_timeline.play.channels import layer_manifest
     data['visual_channels']['layers']=layer_manifest(directory)
+    candidates, corroboration = {}, {}
+    for relation in relations:
+        for index in {c['note'] for c in relation['candidates']}:
+            candidates.setdefault(index, []).append(relation['event'])
+        if relation['status'] == 'unique_tap_image_candidate':
+            index = relation['candidates'][0]['note']
+            corroboration.setdefault(index, []).append(relation['event'])
     for i, note in enumerate(data.get('notes', [])):
-        note['effect_image_candidates'] = [a['event'] for a in relations if any(c['note'] == i for c in a['candidates'])]
+        note['effect_image_candidates'] = candidates.get(i, [])
     for match in data.get('matches', []):
-        match['effect_image_corroboration'] = [a['event'] for a in relations
-            if a['status'] == 'unique_tap_image_candidate' and a['candidates'][0]['note'] == match['note']]
+        match['effect_image_corroboration'] = corroboration.get(match['note'], [])
     return summary
+
+
+def link_input(data):
+    """Pass association fields only; native image evidence stays in acquisition."""
+    def fields(record, names):
+        return {key: record[key] for key in names if key in record}
+    notes = []
+    for note in data.get('notes', []):
+        value = fields(note, ('lane', 'note_type', 'visible_start_seconds', 'visible_end_seconds'))
+        points = note.get('points') or []
+        if points:
+            value['points'] = [points[0], points[-1]]
+        notes.append(value)
+    holds = data.get('hold_analysis') or {}
+    return {'notes': notes,
+            'judgment_events': [fields(event, ('lower_seconds', 'upper_seconds', 'label'))
+                                for event in data.get('judgment_events', [])],
+            'hold_analysis': {'holds': [fields(hold, ('lane', 'start_range', 'end_range'))
+                                        for hold in holds.get('holds', [])],
+                              'unresolved_tracks': [fields(track, ('lane', 'visible_start_seconds', 'end_range'))
+                                                    for track in holds.get('unresolved_tracks', [])]},
+            'visual_channels': {'processing': {'notes': [fields(note, ('note', 'status')) for note in
+                                 data.get('visual_channels', {}).get('processing', {}).get('notes', [])]}}}

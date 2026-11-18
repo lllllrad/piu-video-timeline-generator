@@ -5,7 +5,7 @@ def role_image(image):
     """Retain exactly the first comparison used for each reported role."""
     alternatives=[]
     for role in image.get('conflicting_roles',[image['role']]):
-        proof=next((p for p in [image,*image.get('alternatives',[])]
+        proof=next((p for p in [image,*image.get('role_results',image.get('alternatives',[]))]
                     if p.get('template_role',p['role'])==role
                     and p.get('classification_status','full_pattern')in('full_pattern','cap_role_pattern','conflict')),image)
         if proof is not image and all(proof is not p for p in alternatives):alternatives.append(proof)

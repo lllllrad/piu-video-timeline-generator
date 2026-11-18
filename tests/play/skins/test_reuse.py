@@ -9,6 +9,7 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
+from piu_timeline.play.observations.skin_results import restore
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.detector import SkinDetector
 from piu_timeline.play.skins.replay import detector_metadata,refresh
@@ -46,8 +47,9 @@ class ImageReuseTest(unittest.TestCase):
             with patch.object(replay,'decode_frames',return_value=iter([(31.,1.,rgb)])),patch.object(replay,'classified_frames',side_effect=body_only):
                 data['skin_detector']=refresh(data,root,new/'bank.json')
             actual=json.loads((root/'frames.jsonl').read_text());expected=SkinDetector(new_bank,layout,200,300).detect(rgb)
-            self.assertEqual(actual['skin_observations'],expected)
-            self.assertEqual(actual['notes'],frames[0]['notes'])
+            self.assertEqual(restore(actual,root)['skin_observations'],expected)
+            self.assertTrue(all('alternatives' not in image for image in actual['skin_observations']))
+            self.assertEqual(restore(actual,root)['notes'],frames[0]['notes'])
             self.assertEqual(actual['combo'],42)
             self.assertFalse(actual['possible_hold_or_dense_stack'])
             manifest=json.loads((new/'bank.json').read_text());manifest['source_annotation']='reviewed pixels unchanged'
@@ -61,7 +63,7 @@ class ImageReuseTest(unittest.TestCase):
             with patch.object(replay,'decode_frames',side_effect=AssertionError('Unchanged image acquisition must be reused')):
                 refresh(data,root,reviewed/'bank.json')
             repeated=json.loads((root/'frames.jsonl').read_text())
-            self.assertEqual(repeated['skin_observations'],previous)
+            self.assertEqual(restore(repeated,root)['skin_observations'],previous)
             self.assertEqual(source.read_bytes(),b'original media')
 
     def test_missing_observations_and_corrupt_timestamps_fail_without_replacing_the_trace(self):

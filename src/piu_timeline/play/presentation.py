@@ -8,19 +8,25 @@ from uuid import uuid4
 def prepare_report(data,path,final_directory=None):
     from piu_timeline.play.observations.presentation import prepare
     from piu_timeline.derived import call
-    request_path=prepare(data,path.parent)
+    from piu_timeline.play.observations.performance import step
+    with step(path.parent, 'prepare-native-input'):
+        request_path=prepare(data,path.parent)
     source = data
-    call('presentation.prepareFile',str(request_path),str(path.parent),
-         str(path.with_name('inspection-result.json')))
+    with step(path.parent, 'derive-inspection'):
+        call('presentation.prepareFile',str(request_path),str(path.parent),
+             str(path.with_name('inspection-result.json')))
     view=path.with_name(f'.inspection-view.{uuid4().hex}.json')
     try:
-        call('presentation.materializeFiles',str(path.with_name('presentation-input.json')),
-             str(path.with_name('inspection-result.json')),str(view))
-        data=json.loads(view.read_text())
+        with step(path.parent, 'materialize-inspection'):
+            call('presentation.materializeFiles',str(path.with_name('presentation-input.json')),
+                 str(path.with_name('inspection-result.json')),str(view))
+        with step(path.parent, 'read-inspection'):
+            data=json.loads(view.read_text())
     finally:
         view.unlink(missing_ok=True)
     from piu_timeline.play.effect_images import augment as effect_images
-    summary=effect_images(data,path.parent)
+    with step(path.parent, 'effect-images'):
+        summary=effect_images(data,path.parent)
     if summary:
         source['effect_images']=summary
         source.setdefault('visual_channels',{})['effect_images']=data['visual_channels']['effect_images']

@@ -42,7 +42,7 @@ def prepare(data,directory):
             raise ValueError('Native clearance features differ from source or geometry')
         if manifest['frame_count']!=data['frame_count']:raise ValueError('Native clearance frame count differs')
         from piu_timeline.play.observations.trace import stream_frames
-        with stream_frames(directory/'frames.jsonl', data['frame_count']) as frames:
+        with stream_frames(directory/'frames.jsonl', data['frame_count'], comparisons=True) as frames:
             interpreted=(filter_frames(data,[frame])[0] for frame in frames)
             result=derive(data,interpreted,read_chunks(native,manifest),load_bank(data['skin_detector']['bank_path']),profile)
     except (OSError,ValueError,KeyError)as error:

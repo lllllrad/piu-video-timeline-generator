@@ -20,6 +20,7 @@ def risk_proofs(data, directory):
 
 
 def prepare(data, directory):
+    from piu_timeline.play.observations.performance import step
     from piu_timeline.play.observations.warnings import presentation_source
     from piu_timeline.play.support import visual_support
     from piu_timeline.charts.policy import attach_regions
@@ -27,9 +28,11 @@ def prepare(data, directory):
     from piu_timeline.play.screen_regions import note_occluders
     from piu_timeline.play.object_roles import filter_frames
     from piu_timeline.play.observations.records import retained
-    source = attach_regions({**presentation_source(data, directory), 'visual_support': visual_support(data)}, directory)
+    with step(directory, 'compact-native-evidence'):
+        source = attach_regions({**presentation_source(data, directory), 'visual_support': visual_support(data)}, directory)
     path = directory/'frames.jsonl'
-    frames = retained(source, path)
+    with step(directory, 'read-retained-frames'):
+        frames = retained(source, path)
     if path.is_file() and data.get('frame_count', len(frames)) != len(frames):
         raise ValueError('Presentation frames differ from the retained source timeline')
     native = {'native_body_risk_available': native_body_risk_available(source),
@@ -57,7 +60,8 @@ def prepare(data, directory):
                     'producer': producer('play/observations/presentation.py', 'play/processing/__init__.py', 'play/processing/templates.py', 'play/processing/poses.py',
                                          'play/processing/motion.py', 'play/processing/passage.py')}
         def measure():
-            result = observe_processing(view, pixel_path)
+            with step(directory, 'configured-processing-pixels'):
+                result = observe_processing(view, pixel_path)
             for note in result['notes']:
                 note['id'] = 'processing:'+str(note['note'])
             return result

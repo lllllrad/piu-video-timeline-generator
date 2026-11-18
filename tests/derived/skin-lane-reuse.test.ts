@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 import cv2
 from tests.play.skins import scenes
+from piu_timeline.play.observations.skin_results import restore
 from piu_timeline.play.skins.bank import load_bank
 from piu_timeline.play.skins.detector import SkinDetector
 from piu_timeline.play.skins.replay import refresh,detector_metadata
@@ -58,7 +59,8 @@ with tempfile.TemporaryDirectory()as tmp:
    refresh(data,root,new/'bank.json')
   actual=[json.loads(line)for line in (root/'frames.jsonl').read_text().splitlines()]
   results.append({'scale':scale,'reused':reused,'selected':selected,
-   'exact_full_equivalence':[f['skin_observations']for f in actual]==expected,
+   'exact_full_equivalence':[restore(f,root)['skin_observations']for f in actual]==expected,
+   'small_results':all('alternatives'not in o for f in actual for o in f['skin_observations']),
    'before_caps':[len(f['notes'])for f in frames],'after_caps':[len(f['notes'])for f in actual],
    'preserved':[ {k:f[k]for k in ('source_pts_seconds','playback_seconds','combo')}for f in actual],
    'original':[ {k:f[k]for k in ('source_pts_seconds','playback_seconds','combo')}for f in frames],
@@ -75,6 +77,7 @@ for(const r of results)test(`a cap update reacquires occlusion-dependent caps an
  assert.deepEqual([...new Set(r.selected.map(([kind])=>kind))].sort(),[0,1,2,3,4]);
  assert.deepEqual(r.before_caps,[8,8,8]);assert.deepEqual(r.after_caps,[11,11,11]);
  assert.deepEqual(r.changed_lanes,[4,9]);
+ assert.equal(r.small_results,true);
  assert.equal(r.exact_full_equivalence,true,'including alternatives, bodies and recomputed cap-subfeature ownership');
  assert.deepEqual(r.preserved,r.original);assert.equal(r.source_preserved,true);
 });

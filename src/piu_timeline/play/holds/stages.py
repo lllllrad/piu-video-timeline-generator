@@ -42,7 +42,7 @@ def geometry(data, directory, frames, reconstruct):
         if data.get('skin_detector'):
             from piu_timeline.play.skins.holds import measure_connections
             from piu_timeline.play.observations.trace import stream_frames
-            with stream_frames(native_path, data.get('frame_count')) as native:
+            with stream_frames(native_path, data.get('frame_count'), comparisons=True) as native:
                 interpreted=(filter_frames(data,[frame])[0]for frame in native)
                 image_connections=measure_connections(data,interpreted,unresolved)
             return {'image_connections':image_connections,'unresolved_tracks':unresolved}

@@ -23,6 +23,9 @@ class FrameCenters:
         return self.positions([image])[0]
 
     def positions(self,images):
+        from piu_timeline.play.observations.skin_results import positions
+        resolved=positions(images,self.bank)
+        if resolved is not None:return resolved
         from piu_timeline.derived import call
         requests=[self.prepare(image)for image in images]
         localized=call('skinLocalization.resolveMany',requests)if requests else[]
