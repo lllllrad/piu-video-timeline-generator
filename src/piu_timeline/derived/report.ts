@@ -61,6 +61,17 @@ ${summary?.effect_images?`<h2>Effect images</h2><p><a href="effect-images/report
 <h2>Detailed review</h2><p><a id="editor" href="http://127.0.0.1:4180/${escape(query)}">Open interval editor</a> · <a id="recording" href="${escape(media)}">Original recording</a>${summary?.ucs_draft ? ' · <a href="chart.ucs">UCS draft</a>' : ''}</p>
 <p>The editor provides video, chart evidence and saved corrections. Start it with <code>${command}</code>. Use <code>--host ADDRESS</code> for a different bind address, then open that address in your browser.</p>
 <p>Original media and timestamps are preserved. This page embeds only the bounded summary above.</p></main>
-<script>if((location.protocol==='http:'||location.protocol==='https:')&&location.pathname==='/report.html'){document.getElementById('editor').href='/'+${JSON.stringify(query).replace(/</g,'\\u003c')};document.getElementById('recording').href='/media'+${JSON.stringify(query).replace(/</g,'\\u003c')};}</script></html>`;
+<script>if(location.protocol==='http:'||location.protocol==='https:'){
+ const query=${JSON.stringify(query).replace(/</g,'\\u003c')};
+ const editor=document.getElementById('editor');
+ if(location.pathname==='/report.html'){
+  editor.href='/'+query;
+  document.getElementById('recording').href='/media'+query;
+ }else{
+  const url=new URL(editor.href);
+  url.hostname=location.hostname;
+  editor.href=url.href;
+ }
+}</script></html>`;
  const target=openSync(outputPath,'wx');try{const bytes=Buffer.from(body);let offset=0;while(offset<bytes.length)offset+=writeSync(target,bytes,offset,bytes.length-offset);}finally{closeSync(target);}
 }

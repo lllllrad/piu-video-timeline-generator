@@ -22,6 +22,18 @@ Use `--observations-only` to save the native trace under `.local/runs/`. Pass
 `--reuse-native RUN_DIRECTORY` to use that trace for a full report of the same
 source, segment and interval.
 
+For a targeted dense-tap experiment, append `--tap-recheck START END LANE`
+with absolute playback times and a one-based lane. The recheck uses the
+saved head detections and decodes only the requested recheck interval. It
+records tap-type evidence when exposed cap pixels support a tap and refute
+every tested hold-start and hold-end variant of the selected skin. A
+surviving hold variant leaves the cap unresolved.
+
+For an empty lane in a dense stack, append `--cap-recheck START END LANE`.
+Repeat the option for multiple intervals or lanes. The experimental search
+uses the selected skin's exposed cap bands and requires confirmation in
+adjacent source frames. Recovered observations keep an unresolved note type.
+
 ## Full local regeneration
 
 ```sh

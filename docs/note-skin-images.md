@@ -91,6 +91,33 @@ cannot distinguish a tap from a hold boundary. Missing or mismatching context re
 `classification_status: cap_only`. Failed connection comparisons on endpoint
 images work the same way. Unknown context does not assert a tap or a background
 gap. Its reason and all region comparisons remain in the source observation.
+### Diagnosing missing dense stacks
+
+A pose is a source-frame crop of an appearance in the selected skin. Sampling
+phases describe pixel-grid alignment of that crop. A matching pose in one
+lane does not establish the appearance of every observed cap in the frame.
+
+In `4MyMJse0L0g`, segment 13, the original frames at 59:37.467 and 59:38.267
+provide a dense-stack regression. The head comparison in the missed lanes
+exceeded its error limit by about two to three times, and widening the lane search
+left the best match near the expected lane center. In the same frame, the
+matched control lane was near one tenth of the limit. The missed shapes
+contained interleaved borders of neighboring notes. An exposed 8-pixel
+band matched a reference already in the selected skin in both frames. For
+`C`, the best exposed bands in the missed P2 lane matched the same pose as
+the detected P1 lane at each timestamp (`2-tap-pose-12` and `2-tap-pose-15`,
+respectively). This demonstrates that adding a pose is unnecessary for
+those two P2 observations.
+
+The window review command accepts `--cap-recheck START END LANE` for a
+bounded experiment. It searches an otherwise empty lane using measured
+cap bands from the selected skin. A candidate needs unique positive
+observations in three consecutive original frames and at least three
+supported heads in the lane. It retains the compared pixel runs and source
+PTS. This evidence recovers positions while leaving the cap role unresolved.
+Test an empty lane and a normally detected lane as controls before applying
+the technique to another recording.
+
 See [overlapping note observations](note-skin-overlap.md) for partial-cap proof.
 
 Use the declared full-game reference grid for uniform image transforms, with

@@ -33,7 +33,13 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--observations-only', action='store_true')
     mode.add_argument('--reuse-native', type=Path, metavar='RUN_DIRECTORY')
+    parser.add_argument('--tap-recheck', nargs=3, action='append', default=[],
+                        metavar=('START', 'END', 'LANE'), help='Recheck dense tap types in an explicit playback interval and 1-based lane')
+    parser.add_argument('--cap-recheck', nargs=3, action='append', default=[],
+                        metavar=('START', 'END', 'LANE'), help='Recheck missing caps in an explicit playback interval and 1-based lane')
     args = parser.parse_args()
+    if args.observations_only and (args.tap_recheck or args.cap_recheck):
+        parser.error('Rechecks require a full review run')
     if args.segment < 1 or args.start >= args.end:
         parser.error('Provide a positive segment number and an increasing playback interval')
 
@@ -90,12 +96,26 @@ def main():
         from piu_timeline.play.stages import execute
         from piu_timeline.play.tracking import replay
         bank = load_bank(result['skin_detector']['bank_path'])
+        for start, end, lane in args.cap_recheck:
+            lo, hi, number = playback_seconds(start), playback_seconds(end), int(lane)
+            if not (args.start <= lo < hi <= args.end and 1 <= number <= len(result['layout']['lanes'])):
+                raise ValueError('Cap recheck must stay within the review window and layout')
+            from piu_timeline.play.skins.partial_caps import recheck
+            found = execute(output, 'partial-cap-recheck', lambda: recheck(result, output, bank, lo, hi, number-1))
+            print(f'{found} supported partial cap observations recovered in lane {number}', flush=True)
+        for start, end, lane in args.tap_recheck:
+            lo, hi, number = playback_seconds(start), playback_seconds(end), int(lane)
+            if not (args.start <= lo < hi <= args.end and 1 <= number <= len(result['layout']['lanes'])):
+                raise ValueError('Tap recheck must stay within the review window and layout')
+            from piu_timeline.play.skins.dense_taps import recheck
+            found = execute(output, 'dense-tap-recheck', lambda: recheck(result, output, bank, lo, hi, number-1))
+            print(f'{found} tap cap observations recovered', flush=True)
         tracked = execute(output, 'tracking', lambda: replay(result, output, bank), ('tracking.json',))
         report = finish_play({**result, **tracked, 'timing_format': TIMING_FORMAT}, output, final,
                              args.segment, result['display_delay_correction_ms'], result['media'],
                              review_window=True)
         print(report)
-    except (KeyError, OSError, ValueError) as error:
+    except (argparse.ArgumentTypeError, KeyError, OSError, ValueError) as error:
         parser.error(str(error))
 
 
