@@ -2,9 +2,11 @@
   "coordinate_artifact": {"schema": 4, "producer": "file_bound_coordinates_without_clocks_or_associations"},
   "frame_tracking": {
     "schema": 1,
-    "revision": 11,
+    "revision": 12,
     "coordinates": "measured_centers_or_identical_reference_anchors",
     "assignment": "mutually_unique_compatible_edges_with_deferred_native_approach_validation",
+    "dense_sampled_identity": "ordered_mutually_unique_edges_supported_by_independent_lane_raster_motion",
+    "sampled_lane_transfer_tolerance_pixels": 1,
     "order": "complete_sampled_scene_with_no_boundary_replacement_or_known_occlusion",
     "maximum_speed_spacing_per_second": 30,
     "history_frames": 6,

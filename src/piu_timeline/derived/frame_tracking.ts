@@ -202,6 +202,47 @@ function uniqueEdges(edges:boolean[][]):Edge[]{
   row.filter(Boolean).length===1&&edges.filter(r=>r[j]).length===1?[[i,j] as Edge]:[]));
 }
 
+function exactSample(o:Observation, time:number) {
+ return o.time===time&&o.coordinateSampling==='sampled_image_grid'&&o.center?.uncertaintyPixels===0&&Number.isFinite(o.sourcePtsSeconds);
+}
+
+/** Consecutive raster samples can differ by one pixel even under shared motion. */
+function sampledLaneConnections(
+ tracks:Track[],detections:Detection[],witnesses:Edge[],lane:number,from:number,time:number,geometry:RecordData,
+) {
+ const adjacent=(a:Observation,b:Observation)=>exactSample(a,from)&&exactSample(b,time)&&
+  Math.abs((b.sourcePtsSeconds-a.sourcePtsSeconds)-(time-from))<=1e-6;
+ const references=witnesses.flatMap(([i,j])=>{
+  const t=tracks[i],a=t.observations.at(-1),b=detections[j].observation;
+  if(t.lane===lane||t.observations.length<3||!adjacent(a,b))return [];
+  return [{lane:t.lane,fromSourcePtsSeconds:a.sourcePtsSeconds,toSourcePtsSeconds:b.sourcePtsSeconds,
+   displacementPixels:a.center.yPixels-b.center.yPixels}];
+ });
+ if(!references.length)return [];
+ const radius=contracts.frame_tracking.sampled_lane_transfer_tolerance_pixels,lo=Math.max(...references.map(r=>r.displacementPixels-radius)),
+  hi=Math.min(...references.map(r=>r.displacementPixels+radius));
+ if(lo>hi)return [];
+ const travel=Math.max(Math.abs(lo),Math.abs(hi)),half=geometry.capHeightPixels/2,margin=half+travel,
+  x=geometry.layout.lanes[lane].x*geometry.width,
+  top=geometry.layout.receptor_y*geometry.height+margin,
+  bottom=(geometry.layout.note_y_max??.95)*geometry.height-margin;
+ const visible=(y:number)=>top<y&&y<bottom&&!(geometry.occluders??[]).some(({rect:r})=>
+  x+half>r[0]*geometry.width&&x-half<(r[0]+r[2])*geometry.width&&
+  y+travel>r[1]*geometry.height&&y-travel<(r[1]+r[3])*geometry.height);
+ const prior=tracks.flatMap((t,i)=>t.lane===lane&&exactSample(t.observations.at(-1),from)?[i]:[]),
+  current=detections.flatMap((d,j)=>d.lane===lane&&exactSample(d.observation,time)?[j]:[]);
+ const pairs=uniqueEdges(prior.map(i=>current.map(j=>{
+  const a=tracks[i].observations.at(-1),b=detections[j].observation,delta=a.center.yPixels-b.center.yPixels;
+  return adjacent(a,b)&&compatibleRole(tracks[i],detections[j])&&visible(a.center.yPixels)&&visible(b.center.yPixels)&&
+   lo-1e-9<=delta&&delta<=hi+1e-9;
+ }))).map(([i,j])=>[prior[i],current[j]]as Edge);
+ if(pairs.length<2||pairs.some(([i,j],k)=>pairs.slice(k+1).some(([a,b])=>
+  (tracks[i].observations.at(-1).center.yPixels-tracks[a].observations.at(-1).center.yPixels)*
+   (detections[j].observation.center.yPixels-detections[b].observation.center.yPixels)<=0)))return [];
+ return pairs.map(([track,detection])=>({track,detection,method:'independent_lane_sampled_displacement',
+  fromSeconds:from,toSeconds:time,displacementRangePixels:[lo,hi],references}));
+}
+
 /** Complete sampled constellations need no exact common sprite displacement. */
 function sampledConstellation(tracks:Track[],detections:Detection[],time:number,spacing:number,geometry:RecordData|null):{lanes:Set<number>;pairs:Edge[];persistent:Set<number>}{
  const latest=Math.max(...tracks.map(t=>t.observations.at(-1).time));
@@ -305,6 +346,9 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
    reference.pairs.some(([a,b])=>a===i&&b===j):compatible(t,d,time,spacing,m)))));
  for(const edge of uniqueEdges(adjacentTables[0]))if(adjacentTables.every(table=>uniqueEdges(table).some(([i,j])=>i===edge[0]&&j===edge[1])))adjacentPairs.push(edge);
  const gapMotion=new Map(tracks.flatMap((t,i)=>isGap(t)?[[i,gapDisplacement(i,tracks,detections,adjacentPairs,time)] as const]:[]));
+ const sampledWitnesses=sampled&&geometry&&!motion.length&&adjacentInterval>0&&adjacentInterval<=.05+1e-6
+  ?uniqueEdges(tracks.map(t=>detections.map(d=>!isGap(t)&&compatible(t,d,time,spacing,new Map())))):[];
+ const sampledConnections:ReturnType<typeof sampledLaneConnections>=[];
  const matches:Edge[]=[],uncertainTracks=new Set<number>(),uncertainDetections=new Set<number>(),ambiguities:Edge[]=[];
  for(const lane of new Set([...tracks,...detections].map(x=>x.lane))){
   const a=tracks.flatMap((t,i)=>t.lane===lane?[i]:[]),b=detections.flatMap((d,i)=>d.lane===lane?[i]:[]);
@@ -320,6 +364,17 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
   const forcedByModel=tables.map(uniqueEdges);
   const forced=forcedByModel[0].filter(([i,j])=>forcedByModel.every(edges=>edges.some(([a,b])=>a===i&&b===j)));
   const edges=a.map((_,i)=>b.map((_,j)=>tables.some(edges=>edges[i][j])||search.some(edges=>edges[i][j])));
+  if(sampledWitnesses.length&&!constellation.has(lane)){
+   const connections=sampledLaneConnections(tracks,detections,sampledWitnesses,lane,latestObservation,time,geometry);
+   if(connections.every(({track,detection})=>!forced.some(([i,j])=>
+    (a[i]===track||b[j]===detection)&&(a[i]!==track||b[j]!==detection)))){
+    for(const proof of connections){
+     const i=a.indexOf(proof.track),j=b.indexOf(proof.detection);
+     if(forced.some(([x,y])=>x===i&&y===j))continue;
+     forced.push([i,j]);sampledConnections.push(proof);
+    }
+   }
+  }
   for(const [i,j]of forced){
    matches.push([a[i],b[j]]);
    const measured=gapMotion.get(a[i]);
@@ -334,7 +389,8 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
  }
  if(!step){
   const fromSeconds=Math.max(...tracks.map(t=>t.observations.at(-1).time)),dt=time-fromSeconds;
-  const pairs=matches.filter(([i])=>tracks[i].observations.at(-1).time===fromSeconds);
+  const supported=new Set(sampledConnections.map(p=>p.track));
+  const pairs=matches.filter(([i])=>tracks[i].observations.at(-1).time===fromSeconds&&!supported.has(i));
   if(pairs.length&&0<dt&&dt<=.05+1e-6){
    const intervals=pairs.map(([i,j])=>displacement(tracks[i].observations.at(-1),detections[j].observation)).filter(Boolean);
    const lo=Math.max(...intervals.map(r=>r[0])),hi=Math.min(...intervals.map(r=>r[1]));
@@ -347,7 +403,7 @@ export function assign(tracks:Track[],detections:Detection[],time:number,spacing
   visible_start_seconds:measured.fromSeconds,visible_end_seconds:time,
   displacement_range_pixels:[measured.pixels-measured.uncertaintyPixels,measured.pixels+measured.uncertaintyPixels],
   source_cadence_limit_pixels:limit,interpretation:'measured_image_translation_without_engine_time_assumption'}]:[];
- return {gapConnections,translationAlternatives:alternatives,cadenceWarnings,matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step,
+ return {gapConnections,sampledConnections,translationAlternatives:alternatives,cadenceWarnings,matches,ambiguousTracks:[...uncertainTracks],ambiguousDetections:[...uncertainDetections],ambiguities,measuredDisplacement:measured,step,
   constellationReference:constellation.size?{method:'complete_sampled_source_constellation',
    recording_seconds:[Math.max(...tracks.map(t=>t.observations.at(-1).time)),time],participating_lanes:[...constellation],
    observations:'tracking-observations.json'}:null};

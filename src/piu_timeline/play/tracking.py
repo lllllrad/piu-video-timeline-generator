@@ -106,7 +106,7 @@ class NoteTracker:
             self.active[i].tracking_observations=[o for k,o in enumerate(history)
                 if seconds-o['time']<=CONTRACTS['frame_tracking']['identity_history_seconds']+1e-6
                 or k>=len(history)-CONTRACTS['frame_tracking']['history_frames']]
-            for proof in assignment['gapConnections']:
+            for proof in (*assignment['gapConnections'], *assignment['sampledConnections']):
                 if proof['track']==i:self.active[i].tracking_connections.append({**proof,'source_pts_seconds':source_pts})
             self.active[i].missed = 0
             for warning in assignment['cadenceWarnings']:

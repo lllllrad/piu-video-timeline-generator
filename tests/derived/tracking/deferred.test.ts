@@ -66,6 +66,23 @@ test('persistent visible order resolves a complete dense sampled scene without m
  assert.deepEqual(r.matches,[[0,0],[1,1],[2,2],[3,3]]);
  assert.equal(r.constellationReference.method,'complete_sampled_source_constellation');
 });
+test('an independent adjacent lane keeps two dense heads linked when a third goes missing',()=>{
+ const time=1+1/60;
+ const reference={lane:0,maximumGapSeconds:.12,observations:[sample(.967,238),sample(.983,237),sample(1,236)]};
+ const heads=[86.5,100.5,114.5].map(y=>({lane:1,maximumGapSeconds:.12,observations:[sample(1,y)]}));
+ const detections=[{lane:0,observation:sample(time,235.25)},
+  ...[99.5,113.5].map(y=>({lane:1,observation:sample(time,y)}))];
+ const geometry={...visibility,occluders:[{id:'hud',rect:[.15,.33,.25,.1]}]};
+ const result=assign([reference,...heads],detections,time,38.5,[],[],geometry);
+ assert.deepEqual(result.matches,[[0,0],[2,1],[3,2]]);
+ assert.deepEqual(result.sampledConnections.map(p=>[p.track,p.detection]),[[2,1],[3,2]]);
+ assert.equal(result.sampledConnections[0].references[0].fromSourcePtsSeconds,81);
+ assert.equal(result.step.pixels,.75);
+ assert.deepEqual(assign(heads,detections.slice(1),time,38.5,[],[],geometry).sampledConnections,[]);
+ const hidden={...geometry,occluders:[{id:'hud',rect:[.15,.2,.25,.13]}]};
+ assert.deepEqual(assign([reference,...heads],detections,time,38.5,[],[],hidden).sampledConnections,[]);
+});
+
 test('simultaneous processing and new entry cannot masquerade as a full repeating scene',()=>{
  const time=1+1/60,ys=Array.from({length:11},(_,i)=>50+30*i),
  tracks=[0,1].flatMap(lane=>ys.map(y=>({lane,maximumGapSeconds:.12,observations:[sample(1,y,'tap')]}))),
